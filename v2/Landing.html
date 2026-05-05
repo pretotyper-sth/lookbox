@@ -246,7 +246,8 @@
 
     /* Two-column layout: phone left, copy right — matches other left-aligned sections */
     .wardrobe-layout { display: grid; grid-template-columns: 360px 1fr; gap: 64px; align-items: center; margin-top: 40px; }
-    @media (max-width: 820px) { .wardrobe-layout { grid-template-columns: 1fr; gap: 28px; justify-items: start; } .wardrobe-layout .wardrobe-copy { order: -1; } }
+    @media (max-width: 820px) { .wardrobe-layout { grid-template-columns: 1fr; gap: 28px; justify-items: center; } .wardrobe-layout .wardrobe-copy { order: -1; } }
+    @media (max-width: 480px) { .phone { width: min(320px, calc(100vw - 48px)); } }
     .wardrobe-copy .s-label { color: rgba(212,185,140,0.7); }
     .wardrobe-copy .s-title { color: #fff; margin-top: 8px; }
     .wardrobe-copy .s-sub { color: rgba(255,255,255,0.55); margin-top: 14px; max-width: 480px; }
@@ -255,7 +256,7 @@
     .wardrobe-copy .feat-dot { width: 6px; height: 6px; border-radius: 50%; background: #D4B98C; margin-top: 8px; flex-shrink: 0; }
     .wardrobe-copy .feat strong { color: #fff; font-weight: 700; display: block; margin-bottom: 2px; font-size: 14.5px; }
 
-    .phone-stage { perspective: 1400px; }
+    .phone-stage { perspective: 1400px; display: flex; justify-content: center; }
     .phone {
       width: 320px; flex-shrink: 0;
       background: #0A0A0C;
