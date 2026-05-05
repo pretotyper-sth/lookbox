@@ -16,7 +16,7 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, 'v2')
 DATA_DIR   = os.environ.get('DATA_DIR', BASE_DIR)
 DB_PATH    = os.path.join(DATA_DIR, 'tracker.db')
-BLOCKLIST  = os.path.join(BASE_DIR, 'ip_blocklist.txt')
+BLOCKLIST  = os.path.join(DATA_DIR, 'ip_blocklist.txt')
 DASH_PW    = os.environ.get('DASHBOARD_PASSWORD', 'lookbox2026')
 
 app = Flask(__name__, static_folder=None)
