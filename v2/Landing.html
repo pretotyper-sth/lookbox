@@ -765,6 +765,11 @@
       </div>
     </div>
     <button class="modal-confirm-btn" id="modalConfirmBtn" onclick="confirmPlan()">예약하기</button>
+    <div id="desktopCopyBox" style="display:none;margin-top:16px;padding:14px 16px;background:rgba(196,168,130,0.08);border:1px solid rgba(196,168,130,0.25);border-radius:12px;text-align:center;">
+      <p style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:10px;">카카오페이 결제는 모바일에서만 가능해요.<br>링크를 복사해 카카오톡으로 보내세요.</p>
+      <button id="copyLinkBtn" onclick="copyPayLink()" style="background:#C4A882;color:#1C1C1C;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;width:100%;">링크 복사하기</button>
+      <p id="copyDoneMsg" style="display:none;margin-top:8px;font-size:12px;color:#C4A882;">복사됐어요! 카카오톡에 붙여넣기 하세요 😊</p>
+    </div>
     <p class="modal-assurance">입금 후 48시간 내 입력하신 연락처로 방문 일정을 안내해드려요</p>
   </div>
 </div>
@@ -877,6 +882,9 @@
   function closePlanPicker(e) {
     if (!e || e.target === document.getElementById('planOverlay')) {
       document.getElementById('planOverlay').classList.remove('open');
+      document.getElementById('desktopCopyBox').style.display = 'none';
+      document.getElementById('copyDoneMsg').style.display = 'none';
+      document.getElementById('copyLinkBtn').textContent = '링크 복사하기';
     }
   }
   function validateName(val) {
@@ -927,8 +935,24 @@
   function confirmPlan() {
     if (!_selectedPlan) return;
     _track('confirm_btn_click', {plan: _selectedPlan});
-    window.open(PLAN_URLS[_selectedPlan], '_blank');
-    closePlanPicker();
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.open(PLAN_URLS[_selectedPlan], '_blank');
+      closePlanPicker();
+    } else {
+      document.getElementById('desktopCopyBox').style.display = 'block';
+      document.getElementById('copyDoneMsg').style.display = 'none';
+    }
+  }
+  function copyPayLink() {
+    const url = PLAN_URLS[_selectedPlan];
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      document.getElementById('copyDoneMsg').style.display = 'block';
+      document.getElementById('copyLinkBtn').textContent = '복사 완료 ✓';
+    }).catch(() => {
+      prompt('아래 링크를 복사하세요', url);
+    });
   }
 </script>
 </body>
