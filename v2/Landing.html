@@ -769,7 +769,6 @@
     <div id="desktopCopyBox" style="display:none;margin-top:16px;padding:16px;background:#FAF7F3;border:1px solid rgba(196,168,130,0.35);border-radius:12px;text-align:center;">
       <p style="font-size:13px;color:#6B5E4E;line-height:1.6;margin-bottom:12px;">카카오페이 결제는 모바일에서만 가능해요.</p>
       <button id="copyLinkBtn" onclick="copyPayLink()" style="background:#C4A882;color:#1C1C1C;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;letter-spacing:-0.2px;">링크 복사하기</button>
-      <p id="copyDoneMsg" style="display:none;margin-top:10px;font-size:12px;color:#8B6B46;font-weight:600;">복사됐어요! 카카오톡에 붙여넣기 하세요 😊</p>
     </div>
   </div>
 </div>
@@ -883,7 +882,6 @@
     if (!e || e.target === document.getElementById('planOverlay')) {
       document.getElementById('planOverlay').classList.remove('open');
       document.getElementById('desktopCopyBox').style.display = 'none';
-      document.getElementById('copyDoneMsg').style.display = 'none';
       document.getElementById('copyLinkBtn').textContent = '링크 복사하기';
     }
   }
@@ -941,14 +939,12 @@
       closePlanPicker();
     } else {
       document.getElementById('desktopCopyBox').style.display = 'block';
-      document.getElementById('copyDoneMsg').style.display = 'none';
     }
   }
   function copyPayLink() {
     const url = PLAN_URLS[_selectedPlan];
     if (!url) return;
     navigator.clipboard.writeText(url).then(() => {
-      document.getElementById('copyDoneMsg').style.display = 'block';
       document.getElementById('copyLinkBtn').textContent = '복사 완료 ✓';
     }).catch(() => {
       prompt('아래 링크를 복사하세요', url);
