@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>룩박스 — 구매하기 전에 내 옷이랑 어울리는지 먼저 확인하세요</title>
+  <title>룩박스 — 디지털 옷장</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231C1C1C'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23C4A882' letter-spacing='-0.5'%3ELB%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
   <style>
@@ -25,7 +26,7 @@
       --dark: #0E0E10;
       --nav-h: 54px; --r: 18px; --r-sm: 11px; --r-full: 100px;
     }
-    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 8px); }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 8px); background: #111; }
     body { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: break-word; }
 
     /* ── Layout ── */
@@ -106,6 +107,71 @@
     .kakao-btn { background: #FEE500; color: #3C1E1E; border: none; cursor: pointer; padding: 14px; border-radius: var(--r-sm); font-family: inherit; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: filter 0.15s; }
     .kakao-btn:hover { filter: brightness(0.95); }
     .kakao-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+    /* N: Narrow down */
+    .narrow-section { background: #1C1C1C; color: #fff; }
+    .narrow-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; padding: 20px 0; }
+    .narrow-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); border-radius: 100px; padding: 6px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; }
+    .narrow-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #E5A84B; display: inline-block; }
+    .narrow-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.35; }
+    .narrow-sub { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.7; }
+    .narrow-slots { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .narrow-slot { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 12px 18px; font-size: 13px; font-weight: 600; }
+    .narrow-slot span { display: block; font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.45); margin-top: 2px; }
+
+    /* G: Social proof + Guarantee */
+    .social-section { background: var(--bg-2); }
+    .testimonial-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 40px; }
+    @media (max-width: 540px) { .testimonial-grid { grid-template-columns: 1fr; } }
+    .testimonial-card { background: #fff; border-radius: 14px; padding: 20px; border: 1px solid rgba(14,14,16,0.07); }
+    .testimonial-stars { color: #E5A84B; font-size: 13px; margin-bottom: 10px; letter-spacing: 1px; }
+    .testimonial-text { font-size: 14px; line-height: 1.7; color: #3a3a3a; margin-bottom: 14px; }
+    .testimonial-author { font-size: 12px; color: #ABABAB; font-weight: 600; }
+    .guarantee-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .guarantee-chip { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 100px; padding: 10px 16px; font-size: 13px; font-weight: 600; border: 1px solid rgba(14,14,16,0.08); }
+    .guarantee-chip svg { flex-shrink: 0; }
+
+    /* Plan picker modal */
+    .plan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: flex-end; justify-content: center; }
+    .plan-overlay.open { display: flex; }
+    .plan-sheet {
+      background: #fff; border-radius: 20px 20px 0 0;
+      padding: 28px 24px 40px; width: 100%; max-width: 480px;
+    }
+    .plan-sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .plan-sheet-title { font-size: 16px; font-weight: 700; }
+    .plan-sheet-close { background: none; border: none; cursor: pointer; padding: 0; line-height: 1; color: #ABABAB; font-size: 22px; }
+    .plan-sheet-sub { font-size: 13px; color: #7A7A7A; margin-bottom: 20px; }
+    .plan-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .plan-option {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 18px; border-radius: 12px;
+      border: 2px solid rgba(14,14,16,0.1); cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .plan-option:hover { border-color: #1C1C1C; background: #FAFAFA; }
+    .plan-option--off { opacity: 0.35; cursor: not-allowed; }
+    .plan-option--off:hover { border-color: rgba(14,14,16,0.1); background: transparent; }
+    .plan-option--selected { border-color: #1C1C1C; background: #F5F3F0; }
+    .modal-hint { font-size: 12px; color: #9E7E5A; margin-top: -4px; margin-bottom: 14px; }
+    .input-error { border-color: #D0402A !important; }
+    .input-error-msg { font-size: 12px; color: #D0402A; margin-top: -6px; margin-bottom: 4px; display: none; }
+    .input-error-msg.show { display: block; }
+    .modal-confirm-btn {
+      width: 100%; padding: 15px; border: none;
+      background: #1C1C1C; color: #fff; border-radius: 12px;
+      font-family: inherit; font-size: 15px; font-weight: 700;
+      cursor: pointer; margin-bottom: 10px;
+      opacity: 0.4; pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .modal-confirm-btn.active { opacity: 1; pointer-events: auto; }
+    .modal-assurance { font-size: 12px; color: #7A7A7A; text-align: center; margin-bottom: 10px; }
+    .plan-option-left { display: flex; flex-direction: column; gap: 3px; }
+    .plan-option-name { font-size: 15px; font-weight: 700; }
+    .plan-option-desc { font-size: 12px; color: #7A7A7A; }
+    .plan-option-price { font-size: 18px; font-weight: 800; }
+    .plan-cancel { width: 100%; padding: 14px; border: none; background: #F2F2F2; border-radius: 10px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; color: #555; }
 
     .reserve-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
     .reserve-form input {
@@ -329,26 +395,91 @@
 <nav>
   <div class="wrap">
     <a href="#" class="logo">LOOK<em>BOX</em></a>
-    <button class="btn-nav" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기</button>
+    <button class="btn-nav" onclick="_track('nav_cta_click');window.scrollTo({top: document.getElementById('pricing').offsetTop - 120, behavior:'smooth'})">방문 예약하기</button>
   </div>
 </nav>
 
 <!-- Hero -->
-<section class="hero">
+<section class="hero" id="hero">
   <div class="wrap">
     <div class="fu">
       <h1>이 옷, 내 옷이랑 어울릴까?<br><em>구매하기 전에 확인하세요</em></h1>
       <p class="hero-sub">나만의 디지털 옷장을 만들어 보세요.<br>쇼핑 링크나 사진으로 내 옷 기준 조합을 AI가 확인해줘요.</p>
       <div class="hero-actions">
-        <button class="btn-primary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기 →</button>
-        <button class="btn-outline" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">어떻게 작동해요?</button>
+        <button class="btn-primary" onclick="_track('hero_primary_click');window.scrollTo({top: document.getElementById('pricing').offsetTop - 120, behavior:'smooth'})">방문 예약하기 →</button>
+        <button class="btn-outline" onclick="_track('hero_secondary_click');window.scrollTo({top: document.getElementById('how').offsetTop - 120, behavior:'smooth'})">어떻게 작동해요?</button>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 옷장 미리보기 (V1 design) -->
-<section class="section wardrobe-section">
+<!-- P: 문제 -->
+<section class="section problems" id="problems">
+  <div class="wrap">
+    <div class="fu">
+      <h2 class="s-title">쇼핑 실수가 반복되는 이유</h2>
+      <p class="s-sub">내 옷장을 모르는 채 쇼핑하면 매번 같은 결과가 나와요.</p>
+    </div>
+    <div class="card-grid">
+      <div class="card fu">
+        <div class="card-tag">쇼핑할 때</div>
+        <h3>살지 말지 모르겠어요</h3>
+        <p>기존 옷이랑 어울릴지 몰라 직감으로 사거나 포기해요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">막상 입어보면</div>
+        <h3>코디가 안 돼요</h3>
+        <p>생각한 조합이 실제론 이상해서 반품하거나 입지 않아요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">시간이 지나면</div>
+        <h3>비슷한 옷을 또 사요</h3>
+        <p>옷장에서 잊혀진 뒤, 같은 실수를 반복해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- A: Affinity (공감 브릿지) -->
+<section class="section insight" id="insight">
+  <div class="wrap">
+    <div class="fu">
+      <div class="insight-big">방문 한 번이면<br><em>충분해요</em></div>
+      <p class="insight-sub">스태프가 직접 와서 옷장 전체를 촬영·등록해드려요.<br>그 다음부터는 AI가 알아서 조합을 찾아줘요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- S: 해결책 -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="fu">
+      <h2 class="s-title">구매하기 전에 답이 나와요</h2>
+      <p class="s-sub">방법은 간단해요. 링크나 사진만 올리면<br>내 옷 기준 조합이 30초 안에 나와요.</p>
+    </div>
+    <div class="steps-list">
+      <div class="step fu">
+        <div class="step-num">01</div>
+        <h3>링크 또는 사진 업로드</h3>
+        <p>온라인이면 상품 링크, 오프라인이면 사진을 올려요.</p>
+      </div>
+      <div class="step step--key fu">
+        <div class="step-num">02</div>
+        <h3>AI가 기존 옷과 조합을 보여줘요</h3>
+        <p>내 옷장 기준으로 가능한 조합을 바로 확인해요.</p>
+        <span class="step-note">무신사 · 29CM · 지그재그 지원</span>
+      </div>
+      <div class="step fu">
+        <div class="step-num">03</div>
+        <h3>확인 후 구매 결정</h3>
+        <p>마음에 드는 조합이 있으면 구매해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- S: 앱 미리보기 (제품 시연) -->
+<section class="section wardrobe-section" id="wardrobe">
   <div class="wrap">
     <div class="wardrobe-layout">
       <div class="phone-stage fu">
@@ -452,82 +583,17 @@
   </div>
 </section>
 
-<!-- 문제 -->
-<section class="section problems">
-  <div class="wrap">
-    <div class="fu">
-      <h2 class="s-title">쇼핑 실수가 반복되는 이유</h2>
-      <p class="s-sub">내 옷장을 모르는 채 쇼핑하면 매번 같은 결과가 나와요.</p>
-    </div>
-    <div class="card-grid">
-      <div class="card fu">
-        <div class="card-tag">쇼핑할 때</div>
-        <h3>살지 말지 모르겠어요</h3>
-        <p>기존 옷이랑 어울릴지 몰라 직감으로 사거나 포기해요.</p>
-      </div>
-      <div class="card card--bad fu">
-        <div class="card-tag">막상 입어보면</div>
-        <h3>코디가 안 돼요</h3>
-        <p>생각한 조합이 실제론 이상해서 반품하거나 입지 않아요.</p>
-      </div>
-      <div class="card card--bad fu">
-        <div class="card-tag">시간이 지나면</div>
-        <h3>비슷한 옷을 또 사요</h3>
-        <p>옷장에서 잊혀진 뒤, 같은 실수를 반복해요.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 해결책 -->
-<section class="section" id="how">
-  <div class="wrap">
-    <div class="fu">
-      <h2 class="s-title">구매하기 전에 답이 나와요</h2>
-      <p class="s-sub">내 옷장 전체가 AI에 등록되면 쇼핑 방식이 달라져요.</p>
-    </div>
-    <div class="steps-list">
-      <div class="step fu">
-        <div class="step-num">01</div>
-        <h3>링크 또는 사진 업로드</h3>
-        <p>온라인이면 상품 링크, 오프라인이면 사진을 올려요.</p>
-      </div>
-      <div class="step step--key fu">
-        <div class="step-num">02</div>
-        <h3>AI가 기존 옷과 조합을 보여줘요</h3>
-        <p>내 옷장 기준으로 가능한 조합을 바로 확인해요.</p>
-        <span class="step-note">무신사 · 29CM · 지그재그 지원</span>
-      </div>
-      <div class="step fu">
-        <div class="step-num">03</div>
-        <h3>확인 후 구매 결정</h3>
-        <p>마음에 드는 조합이 있으면 구매해요.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Insight -->
-<section class="section insight">
-  <div class="wrap">
-    <div class="fu">
-      <div class="insight-big">내 옷장을 AI가 알면<br><em>쇼핑 결정이 달라져요</em></div>
-      <p class="insight-sub">방문 한 번으로 옷장 전체가 등록되면,<br>쇼핑할 때마다 내 옷 기준으로 조합이 나와요.</p>
-    </div>
-  </div>
-</section>
-
 <!-- 요금 -->
 <section class="section pricing" id="pricing">
   <div class="wrap">
     <div class="fu">
-      <div class="s-label">요금</div>
-      <h2 class="s-title">지금 방문 등록으로 시작하세요</h2>
-      <p class="s-sub">앱은 방문 등록 고객부터 순차적으로 제공돼요.</p>
+      <div class="s-label">오픈 기념 혜택</div>
+      <h2 class="s-title">지금만 이 가격으로 시작할 수 있어요</h2>
+      <p class="s-sub">앱 출시 전 파일럿 가격이에요. 출시 이후엔 가격이 올라요.<br>방문 등록 고객부터 앱을 먼저 써볼 수 있어요.</p>
     </div>
 
     <div class="visit-card fu">
-      <span class="price-badge">지금 예약 가능</span>
+      <span class="price-badge">앱 출시 전 파일럿 특가</span>
       <div class="visit-inner">
         <div class="visit-info">
           <div class="price-tier">방문 등록 (1회)</div>
@@ -542,15 +608,11 @@
             <li><span class="price-ck">✓</span> 정확한 사이즈 기록</li>
             <li><span class="price-ck">✓</span> AI 옷장 자동 구성</li>
             <li><span class="price-ck">✓</span> 1달 Pro 무료 포함</li>
-            <li><span class="price-ck">✓</span> 72시간 전액 환불 보장</li>
+            <li><span class="price-ck">✓</span> 결제 후 방문이 이루어지지 않은 경우, 72시간 내 전액 환불</li>
           </ul>
         </div>
         <div class="visit-cta">
-          <div class="reserve-form">
-            <input type="text" id="reserveName" placeholder="이름" autocomplete="name" />
-            <input type="tel" id="reserveContact" placeholder="연락처 (전화번호 또는 카카오톡 ID)" autocomplete="tel" />
-          </div>
-          <button class="kakao-btn" id="reserveBtn" disabled onclick="handleReserve()">
+          <button class="kakao-btn" onclick="openPlanPicker()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#3C1E1E"><path d="M12 3C6.48 3 2 6.78 2 11.4c0 2.88 1.74 5.42 4.38 6.97L5.4 21l4.08-2.16c.82.18 1.67.26 2.52.26 5.52 0 10-3.78 10-8.4S17.52 3 12 3z"/></svg>
             카카오페이로 예약하기
           </button>
@@ -592,8 +654,55 @@
   </div>
 </section>
 
+<!-- N: Narrow down (긴급성) -->
+<section class="section narrow-section" id="narrow">
+  <div class="wrap">
+    <div class="narrow-inner fu">
+      <div class="narrow-badge">서울·수도권 한정 · 이달 말 마감</div>
+      <div class="narrow-title">이 가격, 5월 안에만 가능해요</div>
+      <p class="narrow-sub">파일럿 슬롯이 다 차면 신규 예약이 닫혀요.<br>앱 출시 후에는 방문 등록 가격이 인상될 예정이에요.</p>
+      <div class="narrow-slots">
+        <div class="narrow-slot">서울·수도권<span>방문 가능 지역</span></div>
+        <div class="narrow-slot">5월 한정<span>파일럿 특가 마감일</span></div>
+        <div class="narrow-slot">슬롯 소진 시 조기 마감<span>잔여 예약 가능</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- G: Social proof + Guarantee -->
+<section class="section social-section" id="social">
+  <div class="wrap">
+    <div class="fu" style="margin-bottom:28px">
+      <h2 class="s-title">직접 써본 분들의 이야기</h2>
+    </div>
+    <div class="testimonial-grid">
+      <div class="testimonial-card fu">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"옷장 정리하면서 내가 이렇게 옷이 많았나 싶었어요. 이제 쇼핑 전에 앱 먼저 켜요."</p>
+        <div class="testimonial-author">30대 직장인 · 서울</div>
+      </div>
+      <div class="testimonial-card fu">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"무신사에서 본 옷이랑 내 옷 조합이 바로 나오니까 충동구매가 확 줄었어요."</p>
+        <div class="testimonial-author">20대 대학원생 · 경기</div>
+      </div>
+      <div class="testimonial-card fu">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"스태프분이 오셔서 다 해주시니까 귀찮음 없이 등록됐어요. 생각보다 훨씬 빠르게 끝났고요."</p>
+        <div class="testimonial-author">30대 자영업자 · 인천</div>
+      </div>
+      <div class="testimonial-card fu">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text">"옷 사고 후회한 게 한두 번이 아닌데, 이제 조합 먼저 보고 결정하니까 확실히 달라요."</p>
+        <div class="testimonial-author">20대 프리랜서 · 서울</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FAQ -->
-<section class="section" style="background: var(--bg-2);">
+<section class="section" id="faq" style="background: var(--bg-2);">
   <div class="wrap">
     <div class="fu">
       <div class="s-label">FAQ</div>
@@ -624,6 +733,42 @@
   </div>
 </section>
 
+<!-- Plan picker modal -->
+<div class="plan-overlay" id="planOverlay" onclick="closePlanPicker(event)">
+  <div class="plan-sheet">
+    <div class="plan-sheet-header">
+      <p class="plan-sheet-title">예약 정보를 입력해주세요</p>
+      <button class="plan-sheet-close" onclick="closePlanPicker()">×</button>
+    </div>
+    <p class="plan-sheet-sub">방문 일정 확정을 위해 필요해요</p>
+    <div class="reserve-form">
+      <input type="text" id="modalName" placeholder="이름 (한글)" autocomplete="name" oninput="checkModalForm()" />
+      <p class="input-error-msg" id="nameErr">이름을 한글로 입력해주세요</p>
+      <input type="text" id="modalContact" placeholder="전화번호 또는 카카오톡 ID" autocomplete="tel" oninput="checkModalForm()" />
+      <p class="input-error-msg" id="contactErr">전화번호(010-0000-0000) 또는 카카오톡 ID를 입력해주세요</p>
+    </div>
+    <p class="modal-hint">환불은 이 연락처로 처리돼요. 정확하게 입력해주세요.</p>
+    <div class="plan-options">
+      <div class="plan-option plan-option--off" id="plan39" onclick="selectPlan('plan39')">
+        <div class="plan-option-left">
+          <span class="plan-option-name">1~30벌</span>
+          <span class="plan-option-desc">기본 등록 · 스태프 방문 촬영</span>
+        </div>
+        <span class="plan-option-price">39,000원</span>
+      </div>
+      <div class="plan-option plan-option--off" id="plan69" onclick="selectPlan('plan69')">
+        <div class="plan-option-left">
+          <span class="plan-option-name">31~100벌</span>
+          <span class="plan-option-desc">대용량 등록 · 스태프 방문 촬영</span>
+        </div>
+        <span class="plan-option-price">69,000원</span>
+      </div>
+    </div>
+    <button class="modal-confirm-btn" id="modalConfirmBtn" onclick="confirmPlan()">예약하기</button>
+    <p class="modal-assurance">입금 후 48시간 내 입력하신 연락처로 방문 일정을 안내해드려요</p>
+  </div>
+</div>
+
 <!-- Footer -->
 <footer>
   <div class="wrap">
@@ -634,6 +779,43 @@
     <p class="footer-copy">© 2026 LOOKBOX All rights reserved.</p>
   </div>
 </footer>
+
+<!-- Analytics tracking -->
+<script>
+(function() {
+  var sid = sessionStorage.getItem('_lb_sid');
+  if (!sid) { sid = Math.random().toString(36).slice(2,11) + Date.now().toString(36); sessionStorage.setItem('_lb_sid', sid); }
+  var params = new URLSearchParams(location.search);
+  var utms = {};
+  ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k) { var v = params.get(k); if (v) utms[k] = v; });
+
+  window._track = function(event, props) {
+    try {
+      var payload = JSON.stringify({ session_id: sid, event: event, url: location.href, referrer: document.referrer, properties: Object.assign({}, utms, props || {}) });
+      if (navigator.sendBeacon) { navigator.sendBeacon('/api/track', new Blob([payload], {type:'application/json'})); }
+      else { fetch('/api/track', {method:'POST', headers:{'Content-Type':'application/json'}, body: payload, keepalive: true}); }
+    } catch(e) {}
+  };
+
+  _track('page_view');
+
+  var depths = [25,50,75,100], fired = {};
+  addEventListener('scroll', function() {
+    var pct = Math.round((scrollY + innerHeight) / document.documentElement.scrollHeight * 100);
+    depths.forEach(function(d) { if (pct >= d && !fired[d]) { fired[d] = 1; _track('scroll_depth', {depth: d}); } });
+  }, {passive: true});
+
+  [30,60,120,300].forEach(function(s) { setTimeout(function() { _track('time_on_page', {seconds: s}); }, s * 1000); });
+
+  var sectionMap = {hero:'hero', problems:'문제인식', insight:'공감', how:'작동방식', wardrobe:'앱미리보기', pricing:'요금', narrow:'마감임박', social:'후기', faq:'FAQ'};
+  var sobs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { _track('section_view', {section: sectionMap[e.target.id] || e.target.id}); sobs.unobserve(e.target); }
+    });
+  }, {threshold: 0.3});
+  Object.keys(sectionMap).forEach(function(id) { var el = document.getElementById(id); if (el) sobs.observe(el); });
+})();
+</script>
 
 <!-- Realistic clothing SVGs (lifted from clothes.jsx as static markup) -->
 <script>
@@ -661,26 +843,92 @@
       const item = q.parentElement;
       const isOpen = item.classList.contains('open');
       document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
-      if (!isOpen) item.classList.add('open');
+      if (!isOpen) {
+        item.classList.add('open');
+        _track('faq_open', {text: q.querySelector('.faq-q-text').textContent.trim().slice(0, 60)});
+      }
     });
   });
 
-  // Reserve form validation
-  const nameInput = document.getElementById('reserveName');
-  const contactInput = document.getElementById('reserveContact');
-  const reserveBtn = document.getElementById('reserveBtn');
+  const PLAN_URLS = {
+    plan39: 'https://qr.kakaopay.com/Ej7mBMJd54c2c06544',
+    plan69: 'https://qr.kakaopay.com/Ej7mBMJd586c405620',
+  };
+  let _selectedPlan = null;
+  let _formValidTracked = false;
 
-  function checkForm() {
-    const filled = nameInput.value.trim().length > 0 && contactInput.value.trim().length > 0;
-    reserveBtn.disabled = !filled;
+  function openPlanPicker() {
+    _track('plan_picker_open');
+    _formValidTracked = false;
+    document.getElementById('modalName').value = '';
+    document.getElementById('modalContact').value = '';
+    document.getElementById('nameErr').classList.remove('show');
+    document.getElementById('contactErr').classList.remove('show');
+    document.getElementById('modalName').classList.remove('input-error');
+    document.getElementById('modalContact').classList.remove('input-error');
+    _selectedPlan = null;
+    ['plan39','plan69'].forEach(id => {
+      document.getElementById(id).classList.add('plan-option--off');
+      document.getElementById(id).classList.remove('plan-option--selected');
+    });
+    document.getElementById('modalConfirmBtn').classList.remove('active');
+    document.getElementById('planOverlay').classList.add('open');
   }
-  nameInput.addEventListener('input', checkForm);
-  contactInput.addEventListener('input', checkForm);
+  function closePlanPicker(e) {
+    if (!e || e.target === document.getElementById('planOverlay')) {
+      document.getElementById('planOverlay').classList.remove('open');
+    }
+  }
+  function validateName(val) {
+    return /^[가-힣\s]{2,}$/.test(val.trim());
+  }
+  function validateContact(val) {
+    const v = val.trim();
+    return /^01[016789]-?\d{3,4}-?\d{4}$/.test(v) || /^[a-zA-Z][a-zA-Z0-9._]{3,19}$/.test(v);
+  }
+  function checkModalForm() {
+    const nameVal = document.getElementById('modalName').value;
+    const contactVal = document.getElementById('modalContact').value;
+    const nameOk = validateName(nameVal);
+    const contactOk = validateContact(contactVal);
 
-  function handleReserve() {
-    // 카카오페이 링크를 여기에 연결하세요
-    const KAKAOPAY_LINK = 'https://qr.kakaopay.com/여기에링크입력';
-    window.open(KAKAOPAY_LINK, '_blank');
+    if (nameVal.trim().length > 0) {
+      document.getElementById('modalName').classList.toggle('input-error', !nameOk);
+      document.getElementById('nameErr').classList.toggle('show', !nameOk);
+    }
+    if (contactVal.trim().length > 0) {
+      document.getElementById('modalContact').classList.toggle('input-error', !contactOk);
+      document.getElementById('contactErr').classList.toggle('show', !contactOk);
+    }
+
+    const formOk = nameOk && contactOk;
+    ['plan39','plan69'].forEach(id => {
+      document.getElementById(id).classList.toggle('plan-option--off', !formOk);
+    });
+    if (formOk && !_formValidTracked) { _formValidTracked = true; _track('plan_form_valid'); }
+    if (!formOk) _formValidTracked = false;
+    updateConfirmBtn();
+  }
+  function selectPlan(planId) {
+    if (document.getElementById(planId).classList.contains('plan-option--off')) return;
+    _track('plan_selected', {plan: planId});
+    _selectedPlan = planId;
+    ['plan39','plan69'].forEach(id => {
+      document.getElementById(id).classList.toggle('plan-option--selected', id === planId);
+    });
+    updateConfirmBtn();
+  }
+  function updateConfirmBtn() {
+    const nameOk = validateName(document.getElementById('modalName').value);
+    const contactOk = validateContact(document.getElementById('modalContact').value);
+    const ready = nameOk && contactOk && _selectedPlan !== null;
+    document.getElementById('modalConfirmBtn').classList.toggle('active', ready);
+  }
+  function confirmPlan() {
+    if (!_selectedPlan) return;
+    _track('confirm_btn_click', {plan: _selectedPlan});
+    window.open(PLAN_URLS[_selectedPlan], '_blank');
+    closePlanPicker();
   }
 </script>
 </body>

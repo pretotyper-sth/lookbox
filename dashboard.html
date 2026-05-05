@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LOOKBOX Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f11;--card:#17171b;--border:rgba(255,255,255,0.07);
+  --text:#e2e2e2;--muted:rgba(255,255,255,0.38);
+  --brand:#C4A882;--green:#4ade80;--yellow:#facc15;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',sans-serif;font-size:13px;line-height:1.5}
+
+/* Header */
+.hd{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.logo{font-size:15px;font-weight:700;letter-spacing:-0.5px}
+.logo em{color:var(--brand);font-style:normal}
+.live{display:flex;align-items:center;gap:5px;background:rgba(74,222,128,0.1);color:var(--green);padding:3px 8px;border-radius:100px;font-size:11px;font-weight:600}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.ts{font-size:11px;color:var(--muted)}
+
+/* Layout */
+.main{padding:18px 24px;max-width:1280px;margin:0 auto}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.g2b{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2,.g2b{grid-template-columns:1fr}}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.ct{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px}
+.cv{font-size:30px;font-weight:700;line-height:1}
+.cs{font-size:11px;color:var(--muted);margin-top:3px}
+.green{color:var(--green)}
+.brand{color:var(--brand)}
+.yellow{color:var(--yellow)}
+
+/* Funnel */
+.fn-row{display:grid;grid-template-columns:180px 1fr 64px 56px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)}
+.fn-row:last-child{border-bottom:none}
+.fn-label{font-size:12px}
+.fn-bg{background:rgba(255,255,255,0.05);border-radius:4px;height:9px;overflow:hidden}
+.fn-fill{height:100%;border-radius:4px;background:var(--brand);transition:width .5s ease}
+.fn-n{font-size:13px;font-weight:600;text-align:right}
+.fn-pct{font-size:11px;color:var(--muted);text-align:right}
+.fn-key .fn-label{color:var(--green);font-weight:700}
+.fn-key .fn-fill{background:var(--green)}
+.fn-key .fn-n{color:var(--green)}
+
+/* Event feed */
+.feed{max-height:400px;overflow-y:auto}
+.feed::-webkit-scrollbar{width:3px}
+.feed::-webkit-scrollbar-thumb{background:var(--border)}
+.er{display:grid;grid-template-columns:1fr 60px 70px;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);align-items:center}
+.er:last-child{border-bottom:none}
+.en{font-weight:600;font-size:12px}
+.en.key{color:var(--green)}
+.et{font-size:10px;color:var(--muted);text-align:right}
+.bdg{display:inline-block;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:600}
+.m{background:rgba(196,168,130,.15);color:var(--brand)}
+.d{background:rgba(255,255,255,.06);color:var(--muted)}
+
+/* Bar rows */
+.br{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bl{font-size:12px;width:110px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bb{flex:1;background:rgba(255,255,255,.05);border-radius:4px;height:7px}
+.bf{height:100%;border-radius:4px;background:var(--brand)}
+.bc{font-size:12px;font-weight:600;width:28px;text-align:right;flex-shrink:0}
+
+.st{font-size:15px;font-weight:700;margin-bottom:12px}
+.empty{color:var(--muted);font-size:12px;padding:16px 0;text-align:center}
+canvas{max-height:130px}
+
+/* IP modal */
+.btn-ip{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn-ip:hover{background:rgba(255,255,255,.12)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.ip-modal{background:#1e1e23;border:1px solid var(--border);border-radius:16px;padding:24px;width:420px;max-width:95vw}
+.ip-modal h2{font-size:15px;font-weight:700;margin-bottom:4px}
+.ip-modal p{font-size:12px;color:var(--muted);margin-bottom:16px}
+.ip-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:14px}
+.ip-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.05);border-radius:8px;padding:7px 10px;font-size:13px;font-family:monospace}
+.ip-del{background:none;border:none;color:rgba(248,113,113,.7);cursor:pointer;font-size:16px;line-height:1;padding:0 2px}
+.ip-del:hover{color:#f87171}
+.ip-add-row{display:flex;gap:8px}
+.ip-input{flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;font-family:monospace;outline:none}
+.ip-input:focus{border-color:rgba(255,255,255,.25)}
+.btn-add{background:var(--brand);color:#111;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn-add:hover{opacity:.85}
+.btn-myip{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;margin-bottom:10px;width:100%}
+.btn-myip:hover{background:rgba(255,255,255,.12)}
+.ip-close{float:right;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="logo">LOOK<em>BOX</em> Analytics</div>
+    <div class="live"><span class="dot"></span>LIVE</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="ts" id="ts">—</div>
+    <button class="btn-ip" onclick="openIpModal()">이벤트 제외 IP</button>
+  </div>
+</div>
+
+<!-- IP blocklist modal -->
+<div class="overlay" id="ipOverlay" onclick="if(event.target===this)closeIpModal()">
+  <div class="ip-modal">
+    <button class="ip-close" onclick="closeIpModal()">×</button>
+    <h2>이벤트 제외 IP</h2>
+    <p>등록된 IP에서 발생한 이벤트는 수집되지 않아요. 접속은 정상적으로 가능해요.</p>
+    <button class="btn-myip" onclick="addMyIp()">현재 내 IP 추가</button>
+    <div class="ip-list" id="ipList"><div class="empty">—</div></div>
+    <div class="ip-add-row">
+      <input class="ip-input" id="ipInput" placeholder="123.456.789.0" onkeydown="if(event.key==='Enter')addIp()"/>
+      <button class="btn-add" onclick="addIp()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Top metrics -->
+  <div class="g4">
+    <div class="card"><div class="ct">오늘 방문자</div><div class="cv" id="m-pv">—</div></div>
+    <div class="card"><div class="ct">지금 접속 중</div><div class="cv green" id="m-active">—</div><div class="cs">최근 5분</div></div>
+    <div class="card"><div class="ct">오늘 전환</div><div class="cv brand" id="m-conv">—</div><div class="cs">예약하기 클릭</div></div>
+    <div class="card"><div class="ct">전환율 (오늘)</div><div class="cv" id="m-rate">—</div></div>
+  </div>
+
+  <!-- Funnel -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="st">핵심 전환 퍼널 <span style="font-size:11px;font-weight:400;color:var(--muted)">전체 기간 · 순방문자 기준</span></div>
+    <div id="funnel"><div class="empty">데이터 로딩 중…</div></div>
+  </div>
+
+  <!-- Hourly + Feed -->
+  <div class="g2">
+    <div class="card">
+      <div class="st">오늘 시간대별 방문</div>
+      <canvas id="hourly"></canvas>
+    </div>
+    <div class="card">
+      <div class="st">실시간 이벤트</div>
+      <div class="feed" id="feed"><div class="empty">—</div></div>
+    </div>
+  </div>
+
+  <!-- UTM + Device + Plan -->
+  <div class="g3">
+    <div class="card">
+      <div class="st">유입 출처 (UTM)</div>
+      <div id="utms"><div class="empty">UTM 없음 (직접 방문)</div></div>
+    </div>
+    <div class="card">
+      <div class="st">디바이스</div>
+      <div id="devices"></div>
+    </div>
+    <div class="card">
+      <div class="st">플랜 선택</div>
+      <div id="plans"><div class="empty">—</div></div>
+    </div>
+  </div>
+
+  <!-- Scroll + Sections -->
+  <div class="g2b">
+    <div class="card">
+      <div class="st">스크롤 도달률</div>
+      <div id="scroll"><div class="empty">—</div></div>
+    </div>
+    <div class="card">
+      <div class="st">섹션 도달 (순방문)</div>
+      <div id="sections"><div class="empty">—</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const FUNNEL = [
+  {key:'page_view',        label:'1. 페이지 방문',    key_event: false},
+  {key:'plan_picker_open', label:'2. 요금 모달 열기',  key_event: false},
+  {key:'plan_form_valid',  label:'3. 폼 작성 완료',   key_event: false},
+  {key:'plan_selected',    label:'4. 플랜 선택',      key_event: false},
+  {key:'confirm_btn_click',label:'5. 예약하기 클릭 ★', key_event: true},
+];
+const EV_LABELS = {
+  page_view:'페이지 방문', plan_picker_open:'모달 열기', plan_form_valid:'폼 완성',
+  plan_selected:'플랜 선택', confirm_btn_click:'예약하기 클릭',
+  hero_primary_click:'히어로 CTA', hero_secondary_click:'어떻게 작동해요?',
+  nav_cta_click:'내브 CTA', modal_close:'모달 닫기',
+  scroll_depth:'스크롤', section_view:'섹션 진입', faq_open:'FAQ 클릭', time_on_page:'체류',
+};
+const KEY_EVENTS = new Set(['confirm_btn_click','plan_picker_open','plan_selected']);
+const PLAN_LABELS = {plan39:'1~30벌 (39,000원)', plan69:'31~100벌 (69,000원)'};
+const DEV_LABELS  = {mobile:'모바일', desktop:'데스크탑', tablet:'태블릿'};
+
+let hChart = null;
+
+function rel(dt) {
+  const s = (Date.now() - new Date(dt+'Z').getTime()) / 1000;
+  if (s < 60) return `${~~s}s 전`;
+  if (s < 3600) return `${~~(s/60)}m 전`;
+  return `${~~(s/3600)}h 전`;
+}
+
+function bars(items, lk, ck) {
+  if (!items?.length) return '<div class="empty">데이터 없음</div>';
+  const max = Math.max(...items.map(i => i[ck]), 1);
+  return items.map(i => `<div class="br">
+    <div class="bl" title="${i[lk]||''}">${i[lk]||'(없음)'}</div>
+    <div class="bb"><div class="bf" style="width:${~~(i[ck]/max*100)}%"></div></div>
+    <div class="bc">${i[ck]}</div>
+  </div>`).join('');
+}
+
+function render(d) {
+  const rate = d.today.visitors > 0 ? ((d.today.conversions/d.today.visitors)*100).toFixed(1)+'%' : '0%';
+  document.getElementById('m-pv').textContent    = d.today.visitors;
+  document.getElementById('m-active').textContent = d.active_now;
+  document.getElementById('m-conv').textContent  = d.today.conversions;
+  document.getElementById('m-rate').textContent  = rate;
+
+  // Funnel
+  const top = d.funnel.page_view || 1;
+  document.getElementById('funnel').innerHTML = FUNNEL.map(f => {
+    const n = d.funnel[f.key] || 0;
+    const pct = ~~(n/top*100);
+    return `<div class="fn-row${f.key_event?' fn-key':''}">
+      <div class="fn-label">${f.label}</div>
+      <div class="fn-bg"><div class="fn-fill" style="width:${pct}%"></div></div>
+      <div class="fn-n">${n.toLocaleString()}</div>
+      <div class="fn-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  // Feed
+  document.getElementById('feed').innerHTML = d.recent.map(e => {
+    let props = {}; try { props = JSON.parse(e.properties||'{}'); } catch {}
+    const label = EV_LABELS[e.event_name] || e.event_name;
+    const detail = e.event_name==='scroll_depth' ? ` ${props.depth}%`
+      : e.event_name==='plan_selected' ? ` (${PLAN_LABELS[props.plan]||props.plan||''})`
+      : e.event_name==='section_view'  ? ` (${props.section||''})`
+      : e.event_name==='time_on_page'  ? ` ${props.seconds}s`
+      : e.event_name==='faq_open'      ? ` "${(props.text||'').slice(0,30)}"`
+      : '';
+    return `<div class="er">
+      <div><span class="en${KEY_EVENTS.has(e.event_name)?' key':''}">${label}${detail}</span></div>
+      <div style="text-align:right"><span class="bdg ${e.device==='mobile'?'m':'d'}">${e.device||'?'}</span></div>
+      <div class="et">${rel(e.created_at)}</div>
+    </div>`;
+  }).join('') || '<div class="empty">이벤트 없음</div>';
+
+  // Hourly chart
+  const hrs  = Array.from({length:24}, (_,i) => String(i).padStart(2,'0'));
+  const hmap = {}; (d.hourly||[]).forEach(r => hmap[r.hr]=r.cnt);
+  const hdata = hrs.map(h => hmap[h]||0);
+  if (hChart) { hChart.data.datasets[0].data = hdata; hChart.update(); }
+  else {
+    const ctx = document.getElementById('hourly').getContext('2d');
+    hChart = new Chart(ctx, {
+      type:'bar',
+      data:{labels:hrs, datasets:[{data:hdata, backgroundColor:'rgba(196,168,130,.55)', borderRadius:3}]},
+      options:{responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:'rgba(255,255,255,.28)',font:{size:9}},grid:{display:false}},
+          y:{ticks:{color:'rgba(255,255,255,.28)',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}}
+        }
+      }
+    });
+  }
+
+  // UTMs
+  document.getElementById('utms').innerHTML = bars(d.utms, 'utm_source', 'cnt');
+
+  // Devices
+  const devs = (d.devices||[]).map(x => ({...x, device: DEV_LABELS[x.device]||x.device}));
+  document.getElementById('devices').innerHTML = bars(devs, 'device', 'cnt');
+
+  // Plans
+  const plans = (d.plans||[]).map(x => ({...x, plan: PLAN_LABELS[x.plan]||x.plan}));
+  document.getElementById('plans').innerHTML = bars(plans, 'plan', 'cnt');
+
+  // Scroll
+  const sc = (d.scroll||[]).map(x => ({...x, depth: `${x.depth}%`}));
+  document.getElementById('scroll').innerHTML = bars(sc, 'depth', 'cnt');
+
+  // Sections
+  document.getElementById('sections').innerHTML = bars(d.sections||[], 'sec', 'cnt');
+
+  document.getElementById('ts').textContent = `마지막 갱신: ${new Date().toLocaleTimeString('ko-KR')} (5초 자동)`;
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/dashboard/data');
+    if (r.ok) render(await r.json());
+  } catch(e) {}
+}
+
+load();
+setInterval(load, 5000);
+
+// ── IP Modal ──────────────────────────────────────────────────
+async function openIpModal() {
+  document.getElementById('ipOverlay').classList.add('open');
+  await loadIps();
+}
+function closeIpModal() {
+  document.getElementById('ipOverlay').classList.remove('open');
+}
+async function loadIps() {
+  const r = await fetch('/api/blocklist');
+  const d = await r.json();
+  const list = document.getElementById('ipList');
+  if (!d.ips.length) { list.innerHTML = '<div class="empty">차단된 IP 없음</div>'; return; }
+  list.innerHTML = d.ips.map(ip => `
+    <div class="ip-row">
+      <span>${ip}</span>
+      <button class="ip-del" onclick="delIp('${ip}')" title="삭제">×</button>
+    </div>`).join('');
+}
+async function addIp() {
+  const input = document.getElementById('ipInput');
+  const ip = input.value.trim();
+  if (!ip) return;
+  await fetch('/api/blocklist', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ip})});
+  input.value = '';
+  await loadIps();
+}
+async function delIp(ip) {
+  await fetch(`/api/blocklist/${ip}`, {method:'DELETE'});
+  await loadIps();
+}
+async function addMyIp() {
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const {ip} = await r.json();
+    document.getElementById('ipInput').value = ip;
+    await addIp();
+  } catch(e) { alert('IP 조회 실패. 직접 입력해주세요.'); }
+}
+</script>
+</body>
+</html>
