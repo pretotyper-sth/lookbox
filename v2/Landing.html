@@ -840,11 +840,19 @@
   /* Category tabs are display-only — no click handler */
 
   /* Reveal + FAQ (preserved) */
+  function revealFu() {
+    document.querySelectorAll('.fu:not(.in)').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight + 40) el.classList.add('in');
+    });
+  }
   const obs = new IntersectionObserver(
     es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); }),
-    { threshold: 0.05 }
+    { threshold: 0 }
   );
   document.querySelectorAll('.fu').forEach(el => obs.observe(el));
+  window.addEventListener('scroll', revealFu, { passive: true });
+  revealFu();
   document.querySelectorAll('.faq-q').forEach(q => {
     q.addEventListener('click', () => {
       const item = q.parentElement;
