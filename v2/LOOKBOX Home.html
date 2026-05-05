@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<title>LOOKBOX · Home</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Pretendard', -apple-system, system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="clothes.jsx"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="variations.jsx"></script>
+
+<script type="text/babel">
+
+const DEFAULTS = /*EDITMODE-BEGIN*/{
+  "columns": 3,
+  "dark": false,
+  "accent": "#0E0E10",
+  "density": "normal",
+  "variation": "all"
+}/*EDITMODE-END*/;
+
+const PHONE_W = 360;
+const PHONE_H = 760;
+
+function PhoneFrame({ children }) {
+  return (
+    <IOSDevice width={PHONE_W} height={PHONE_H}>
+      <div style={{ position: 'absolute', inset: 0, paddingTop: 50 }}>
+        {children}
+      </div>
+    </IOSDevice>
+  );
+}
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(DEFAULTS);
+  const { columns, dark, accent, density, variation } = tweaks;
+
+  const VARIATIONS = [
+    { id: 'v1', label: 'V1 · Minimal Grid', sub: '깔끔한 격자, 가장 기본', Cmp: V1MinimalGrid },
+    { id: 'v2', label: 'V2 · Magazine', sub: '에디토리얼 톤, 피처 카드', Cmp: V2Magazine },
+    { id: 'v3', label: 'V3 · Sectioned', sub: '카테고리별 섹션 + 컬러칩', Cmp: V3Sectioned },
+    { id: 'v4', label: 'V4 · List + Meta', sub: '메타데이터·통계 풍부', Cmp: V4List },
+    { id: 'v5', label: 'V5 · Curation', sub: 'AI 큐레이션 + 코디 (참고 이미지 톤)', Cmp: V5Curation },
+  ];
+
+  const visible = variation === 'all' ? VARIATIONS : VARIATIONS.filter(v => v.id === variation);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection
+          id="lookbox-home"
+          title="LOOKBOX · Home"
+          subtitle="디지털 옷장 앱의 홈 화면 — 5가지 방향성">
+          {visible.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={PHONE_W} height={PHONE_H}>
+              <PhoneFrame>
+                <v.Cmp dark={dark} columns={columns} accent={accent} density={density}/>
+              </PhoneFrame>
+            </DCArtboard>
+          ))}
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="View"/>
+        <TweakSelect label="변형" value={variation} onChange={v => setTweak('variation', v)}
+          options={[
+            { value: 'all', label: '전체 (5개)' },
+            { value: 'v1', label: 'V1 · Minimal Grid' },
+            { value: 'v2', label: 'V2 · Magazine' },
+            { value: 'v3', label: 'V3 · Sectioned' },
+            { value: 'v4', label: 'V4 · List + Meta' },
+            { value: 'v5', label: 'V5 · Curation' },
+          ]}/>
+        <TweakSection label="Theme"/>
+        <TweakToggle label="다크 모드" value={dark} onChange={v => setTweak('dark', v)}/>
+        <TweakColor label="강조 색상" value={accent} onChange={v => setTweak('accent', v)}/>
+        <TweakSection label="Layout"/>
+        <TweakRadio label="그리드 컬럼" value={columns} onChange={v => setTweak('columns', Number(v))}
+          options={[{value: 2, label: '2'}, {value: 3, label: '3'}, {value: 4, label: '4'}]}/>
+        <TweakRadio label="카드 밀도" value={density} onChange={v => setTweak('density', v)}
+          options={[{value: 'minimal', label: '최소'}, {value: 'normal', label: '기본'}, {value: 'rich', label: '풍부'}]}/>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

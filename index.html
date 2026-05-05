@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>룩박스 — 사기 전에 내 옷이랑 어울리는지 먼저 확인하세요</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { overflow-x: hidden; max-width: 100%; }
+    :root {
+      --bg: #FEFCF8; --bg-2: #FFF5F1; --surf: #FFFFFF;
+      --accent: #FF5F3A; --accent-lt: #FFF1EE; --accent-dk: #E04827;
+      --ink: #1A1A1A; --ink-2: #444444; --muted: #909090;
+      --border: #EDE9E3; --dark: #141414;
+      --nav-h: 54px; --r: 18px; --r-sm: 11px; --r-full: 100px;
+    }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 8px); }
+    body { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: break-word; }
+
+    /* ── Layout ── */
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 18px; }
+    .section { padding: 64px 0; }
+
+    /* ── Nav ── */
+    nav { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--nav-h); background: rgba(254,252,248,0.94); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+    nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 16px; font-weight: 900; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
+    .logo em { color: var(--accent); font-style: normal; }
+    .btn-nav { background: var(--accent); color: #fff; border: none; cursor: pointer; padding: 9px 18px; border-radius: var(--r-sm); font-family: inherit; font-size: 13px; font-weight: 700; transition: background 0.15s; }
+    .btn-nav:hover { background: var(--accent-dk); }
+
+    /* ── Buttons ── */
+    .btn-primary { background: var(--accent); color: #fff; border: none; cursor: pointer; padding: 15px 28px; border-radius: var(--r-sm); font-family: inherit; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; transition: background 0.15s, transform 0.1s; }
+    .btn-primary:hover { background: var(--accent-dk); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-outline { background: transparent; color: var(--ink-2); border: 1.5px solid var(--border); cursor: pointer; padding: 14px 28px; border-radius: var(--r-sm); font-family: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; width: 100%; transition: border-color 0.15s; }
+    .btn-outline:hover { border-color: var(--ink); }
+
+    /* ── Labels ── */
+    .s-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+    .s-title { font-size: clamp(24px, 6vw, 42px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.44; margin-bottom: 10px; }
+    .s-sub { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── Hero ── */
+    .hero { padding-top: calc(var(--nav-h) + 52px); padding-bottom: 60px; }
+    .hero-chip { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); background: var(--accent-lt); padding: 5px 12px; border-radius: var(--r-full); margin-bottom: 22px; }
+    .hero h1 { font-size: clamp(30px, 8vw, 64px); font-weight: 800; line-height: 1.28; letter-spacing: -2px; margin-bottom: 16px; }
+    .hero h1 em { color: var(--accent); font-style: normal; }
+    .hero-sub { font-size: 14px; color: var(--ink-2); line-height: 1.75; margin-bottom: 30px; max-width: 100%; word-break: keep-all; }
+    .hero-actions { display: flex; flex-direction: column; gap: 10px; }
+    .hero-note { font-size: 11px; color: var(--muted); margin-top: 12px; }
+
+    /* ── Problem ── */
+    .problems { background: var(--bg-2); }
+    .card-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 36px; }
+    .card { background: var(--surf); border-radius: var(--r); padding: 24px 20px; border: 1px solid var(--border); }
+    .card-tag { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .card h3 { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.35; margin-bottom: 6px; }
+    .card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .card--bad { border-color: rgba(255,95,58,0.2); background: #FFF8F6; }
+    .card--bad .card-tag { color: var(--accent); }
+
+    /* ── Steps ── */
+    .steps-list { display: flex; flex-direction: column; gap: 0; margin-top: 36px; }
+    .step { background: var(--surf); border-radius: var(--r); padding: 22px 20px; border: 1px solid var(--border); margin-bottom: 10px; }
+    .step:last-child { margin-bottom: 0; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--accent-lt); border-radius: var(--r-sm); font-size: 11px; font-weight: 800; color: var(--accent); margin-bottom: 12px; }
+    .step h3 { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; line-height: 1.35; }
+    .step p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .step--key { background: var(--accent-lt); border-color: rgba(255,95,58,0.2); }
+    .step--key .step-num { background: rgba(255,95,58,0.15); }
+    .step-note { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(255,95,58,0.1); padding: 3px 9px; border-radius: var(--r-full); max-width: 100%; word-break: keep-all; }
+
+    /* ── Insight dark ── */
+    .insight { background: var(--dark); color: #fff; }
+    .insight .s-label { color: rgba(255,255,255,0.25); }
+    .insight-big { font-size: clamp(26px, 6vw, 52px); font-weight: 800; letter-spacing: -2px; line-height: 1.38; }
+    .insight-big em { color: var(--accent); font-style: normal; }
+    .insight-sub { font-size: 14px; color: rgba(255,255,255,0.4); line-height: 1.75; margin-top: 18px; max-width: 100%; word-break: keep-all; }
+
+    /* ── Pricing ── */
+    .pricing { background: var(--surf); }
+    .price-badge { position: absolute; top: -12px; left: 20px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 12px; border-radius: var(--r-full); letter-spacing: 0.5px; }
+    .price-tier { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; }
+    .price-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 10px; }
+    .price-row { display: flex; align-items: baseline; gap: 3px; margin-bottom: 4px; }
+    .price-amt { font-size: 36px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+    .price-per { font-size: 13px; color: var(--muted); }
+    .price-desc { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+    .price-feats { list-style: none; margin-bottom: 22px; }
+    .price-feats li { font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+    .price-feats li:last-child { border-bottom: none; }
+    .price-ck { color: var(--accent); flex-shrink: 0; }
+    .price-sub { margin-top: 10px; font-size: 11px; color: var(--muted); text-align: center; }
+    .kakao-btn { background: #FEE500; color: #3C1E1E; border: none; cursor: pointer; padding: 14px; border-radius: var(--r-sm); font-family: inherit; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: filter 0.15s; }
+    .kakao-btn:hover { filter: brightness(0.95); }
+
+    /* ── Visit card ── */
+    .visit-card { border-radius: var(--r); padding: 28px 22px; border: 2px solid rgba(255,95,58,0.3); background: var(--surf); position: relative; margin-top: 36px; }
+    .visit-cta { margin-top: 20px; }
+
+    /* ── Coming soon plans ── */
+    .coming-section { margin-top: 40px; }
+    .coming-divider { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .coming-divider::before, .coming-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .coming-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .coming-card { border-radius: var(--r); padding: 20px 16px; border: 1px solid var(--border); background: var(--bg); display: flex; flex-direction: column; }
+    .coming-feats { flex: 1; }
+    .coming-card--dark { background: var(--dark); border-color: var(--dark); }
+    .coming-tag { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+    .coming-card--dark .coming-tag { color: rgba(255,255,255,0.25); }
+    .coming-name { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+    .coming-card--dark .coming-name { color: #fff; }
+    .coming-price { font-size: 20px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+    .coming-card--dark .coming-price { color: #fff; }
+    .coming-feats { list-style: none; margin-bottom: 14px; }
+    .coming-feats li { font-size: 12px; color: var(--muted); padding: 5px 0; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+    .coming-card--dark .coming-feats li { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.07); }
+    .coming-feats li:last-child { border-bottom: none; }
+    .coming-soon-badge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg-2); padding: 3px 10px; border-radius: var(--r-full); letter-spacing: 0.5px; }
+    .coming-card--dark .coming-soon-badge { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.3); }
+
+    /* ── FAQ ── */
+    .faq-list { margin-top: 32px; }
+    .faq-item { border-bottom: 1px solid var(--border); }
+    .faq-q { font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 0; user-select: none; line-height: 1.5; word-break: keep-all; }
+    .faq-q-text { flex: 1; min-width: 0; }
+    .faq-q::after { content: '+'; font-size: 20px; font-weight: 300; color: var(--muted); flex-shrink: 0; transition: transform 0.2s; }
+    .faq-item.open .faq-q::after { transform: rotate(45deg); }
+    .faq-a { font-size: 13px; color: var(--muted); line-height: 1.8; max-height: 0; overflow: hidden; transition: max-height 0.3s, padding-bottom 0.3s; word-break: keep-all; }
+    .faq-item.open .faq-a { max-height: 280px; padding-bottom: 18px; }
+
+    /* ── Footer ── */
+    footer { background: #111; color: rgba(255,255,255,0.28); padding: 28px 0; }
+    footer .wrap { display: flex; flex-direction: column; gap: 10px; }
+    .footer-top { display: flex; justify-content: space-between; align-items: center; }
+    .logo-f { color: rgba(255,255,255,0.65); font-size: 14px; font-weight: 900; text-decoration: none; letter-spacing: -0.5px; }
+    .logo-f em { color: var(--accent); font-style: normal; }
+    .footer-copy { font-size: 11px; color: rgba(255,255,255,0.18); }
+    footer a { color: rgba(255,255,255,0.28); text-decoration: none; font-size: 12px; }
+    footer a:hover { color: rgba(255,255,255,0.55); }
+
+    /* ── Scroll animation ── */
+    .fu { opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .fu.in { opacity: 1; transform: none; }
+
+    /* ── Desktop ── */
+    @media (min-width: 768px) {
+      .wrap { padding: 0 28px; }
+      .section { padding: 96px 0; }
+      .hero { padding-top: calc(var(--nav-h) + 88px); padding-bottom: 88px; }
+      .hero-actions { flex-direction: row; align-items: center; }
+      .btn-primary, .btn-outline { width: auto; }
+      .card-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 48px; }
+      .steps-list { flex-direction: row; gap: 16px; margin-top: 48px; }
+      .step { margin-bottom: 0; flex: 1; }
+      .visit-inner { display: grid; grid-template-columns: 1fr 260px; gap: 40px; align-items: start; }
+      .visit-cta { margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="wrap">
+    <a href="#" class="logo">LOOK<em>BOX</em></a>
+    <button class="btn-nav" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="wrap">
+    <div class="fu">
+      <span class="hero-chip">AI 옷장 어드바이저</span>
+      <h1>이 옷, 내 옷이랑 어울릴까?<br><em>사기 전에 확인하세요</em></h1>
+      <p class="hero-sub">나만의 디지털 옷장을 만들어 보세요.<br>쇼핑 링크나 사진으로 내 옷 기준 조합을 AI가 확인해줘요.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기 →</button>
+        <button class="btn-outline" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">어떻게 작동해요?</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 문제 -->
+<section class="section problems">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">이런 경험 있으신가요</div>
+      <h2 class="s-title">쇼핑 실수가 반복되는 이유</h2>
+      <p class="s-sub">내 옷장을 모르는 채 쇼핑하면 매번 같은 결과가 나와요.</p>
+    </div>
+    <div class="card-grid">
+      <div class="card fu">
+        <div class="card-tag">쇼핑할 때</div>
+        <h3>살지 말지 모르겠어요</h3>
+        <p>기존 옷이랑 어울릴지 몰라 직감으로 사거나 포기해요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">막상 입어보면</div>
+        <h3>코디가 안 돼요</h3>
+        <p>생각한 조합이 실제론 이상해서 반품하거나 입지 않아요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">시간이 지나면</div>
+        <h3>비슷한 옷을 또 사요</h3>
+        <p>옷장에서 잊혀진 뒤, 같은 실수를 반복해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 해결책 -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">룩박스가 바꾸려는 것</div>
+      <h2 class="s-title">사기 전에 답이 나와요</h2>
+      <p class="s-sub">내 옷장 전체가 AI에 등록되면 쇼핑 방식이 달라져요.</p>
+    </div>
+    <div class="steps-list">
+      <div class="step fu">
+        <div class="step-num">01</div>
+        <h3>링크 또는 사진 업로드</h3>
+        <p>온라인이면 상품 링크, 오프라인이면 사진을 올려요.</p>
+      </div>
+      <div class="step step--key fu">
+        <div class="step-num">02</div>
+        <h3>AI가 기존 옷과 조합을 보여줘요</h3>
+        <p>내 옷장 기준으로 가능한 조합을 바로 확인해요.</p>
+        <span class="step-note">무신사 · 29CM · 지그재그 지원</span>
+      </div>
+      <div class="step fu">
+        <div class="step-num">03</div>
+        <h3>확인 후 구매 결정</h3>
+        <p>마음에 드는 조합이 있으면 구매해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Insight -->
+<section class="section insight">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">핵심</div>
+      <div class="insight-big">내 옷장을 AI가 알면<br><em>쇼핑 결정이 달라져요</em></div>
+      <p class="insight-sub">방문 한 번으로 옷장 전체가 등록되면,<br>쇼핑할 때마다 내 옷 기준으로 조합이 나와요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 요금 -->
+<section class="section pricing" id="pricing">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">요금</div>
+      <h2 class="s-title">지금 방문 등록으로 시작하세요</h2>
+      <p class="s-sub">앱은 방문 등록 고객부터 순차적으로 제공돼요.</p>
+    </div>
+
+    <!-- 방문 등록 - 메인 카드 -->
+    <div class="visit-card fu">
+      <span class="price-badge">지금 예약 가능</span>
+      <div class="visit-inner">
+        <div class="visit-info">
+          <div class="price-tier">방문 등록 (1회)</div>
+          <div class="price-name">전문 등록 서비스</div>
+          <div class="price-row">
+            <div class="price-amt">39,000</div>
+            <div class="price-per">원~</div>
+          </div>
+          <div class="price-desc">30벌 기준 · 100벌은 ₩69,000</div>
+          <ul class="price-feats">
+            <li><span class="price-ck">✓</span> 스태프 방문 촬영·분류·등록</li>
+            <li><span class="price-ck">✓</span> 정확한 사이즈 기록</li>
+            <li><span class="price-ck">✓</span> AI 옷장 자동 구성</li>
+            <li><span class="price-ck">✓</span> 1달 Pro 무료 포함</li>
+            <li><span class="price-ck">✓</span> 72시간 전액 환불 보장</li>
+          </ul>
+        </div>
+        <div class="visit-cta">
+          <button class="kakao-btn" onclick="alert('카카오페이 QR 또는 송금 링크를 연결하세요')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#3C1E1E"><path d="M12 3C6.48 3 2 6.78 2 11.4c0 2.88 1.74 5.42 4.38 6.97L5.4 21l4.08-2.16c.82.18 1.67.26 2.52.26 5.52 0 10-3.78 10-8.4S17.52 3 12 3z"/></svg>
+            카카오페이로 예약하기
+          </button>
+          <p class="price-sub">결제 후 24시간 내 방문 일정 확정 · 서울·수도권</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 앱 플랜 - 출시 예정 -->
+    <div class="coming-section fu">
+      <div class="coming-divider">앱 출시 후 이용 가능</div>
+      <div class="coming-grid">
+        <div class="coming-card">
+          <div class="coming-tag">기본 앱</div>
+          <div class="coming-name">직접 시작</div>
+          <div class="coming-price">무료</div>
+          <ul class="coming-feats">
+            <li><span class="price-ck">✓</span> 직접 촬영·업로드</li>
+            <li><span class="price-ck">✓</span> 로컬 기기 저장</li>
+            <li><span class="price-ck">✓</span> 텍스트 조합 250원/건</li>
+            <li><span class="price-ck">✓</span> 이미지 조합 500원/건</li>
+          </ul>
+          <span class="coming-soon-badge">방문 예약자 우선 오픈</span>
+        </div>
+        <div class="coming-card coming-card--dark">
+          <div class="coming-tag">Pro 구독</div>
+          <div class="coming-name">Pro</div>
+          <div class="coming-price">₩9,900<span style="font-size:12px; font-weight:400; opacity:0.45;">/월</span></div>
+          <ul class="coming-feats">
+            <li><span class="price-ck">✓</span> 클라우드 저장 포함</li>
+            <li><span class="price-ck">✓</span> 이미지 조합 30건/월</li>
+            <li><span class="price-ck">✓</span> 데일리 코디 추천</li>
+            <li><span class="price-ck">✓</span> 조합 결과 저장·즐겨찾기</li>
+          </ul>
+          <span class="coming-soon-badge">출시 예정</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" style="background: var(--bg-2);">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">FAQ</div>
+      <h2 class="s-title">자주 묻는 질문</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">어떤 쇼핑몰 링크를 지원하나요?</span></div>
+        <div class="faq-a">무신사, 29CM, 지그재그, W컨셉 등 주요 국내 쇼핑몰을 지원해요. 오프라인 옷은 사진이나 택 사진을 직접 올릴 수 있어요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">직접 업로드와 방문 등록의 차이가 뭔가요?</span></div>
+        <div class="faq-a">직접 업로드는 본인이 사진 찍어 올리는 무료 방식이에요. 방문 등록은 스태프가 체계적으로 촬영·분류하고 사이즈까지 기록해줘요. 1달 Pro 구독 모델이 무료로 제공돼요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">방문하면 제가 뭘 해야 하나요?</span></div>
+        <div class="faq-a">아무것도 안 하셔도 돼요. 스태프가 방문해 촬영·분류·등록을 전부 처리해드려요. 약 1~2시간 소요됩니다.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">방문 가능 지역이 어디인가요?</span></div>
+        <div class="faq-a">현재 서울 및 수도권 위주로 운영 중이에요. 그 외 지역은 lookbox.official@gmail.com으로 문의해 주세요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">개인정보와 옷 사진은 어떻게 관리되나요?</span></div>
+        <div class="faq-a">모든 이미지는 암호화되어 개인 계정에만 저장돼요. 제3자와 공유되지 않으며 언제든 삭제가 가능해요.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <a href="#" class="logo-f">LOOK<em>BOX</em></a>
+      <a href="privacy.html">개인정보처리방침</a>
+    </div>
+    <p class="footer-copy">© 2026 LOOKBOX All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+  const obs = new IntersectionObserver(
+    es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); }),
+    { threshold: 0.05 }
+  );
+  document.querySelectorAll('.fu').forEach(el => obs.observe(el));
+  document.querySelectorAll('.faq-q').forEach(q => {
+    q.addEventListener('click', () => {
+      const item = q.parentElement;
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>룩박스 — 구매하기 전에 내 옷이랑 어울리는지 먼저 확인하세요</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { overflow-x: hidden; max-width: 100%; }
+    :root {
+      /* Tone-matched to LOOKBOX app: warm cream paper, soft beige surfaces, espresso-brown accent */
+      --bg: #FAF8F4;
+      --bg-2: #F2EFE8;
+      --surf: #FFFFFF;
+      --accent: #5C3A1E;        /* espresso brown — replaces orange */
+      --accent-lt: #EFE7DA;
+      --accent-dk: #3D2410;
+      --accent-warm: #8E6F40;   /* tan, secondary accent */
+      --ink: #0E0E10;
+      --ink-2: #3A3A3D;
+      --muted: rgba(14,14,16,0.55);
+      --border: #EAE4D6;
+      --dark: #0E0E10;
+      --nav-h: 54px; --r: 18px; --r-sm: 11px; --r-full: 100px;
+    }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 8px); }
+    body { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: break-word; }
+
+    /* ── Layout ── */
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 18px; }
+    .section { padding: 64px 0; }
+
+    /* ── Nav ── */
+    nav { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--nav-h); background: rgba(250,248,244,0.94); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+    nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 16px; font-weight: 900; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
+    .logo em { color: var(--accent); font-style: normal; }
+    .btn-nav { background: var(--ink); color: #fff; border: none; cursor: pointer; padding: 9px 18px; border-radius: var(--r-sm); font-family: inherit; font-size: 13px; font-weight: 700; transition: background 0.15s; }
+    .btn-nav:hover { background: var(--accent-dk); }
+
+    /* ── Buttons ── */
+    .btn-primary { background: var(--ink); color: #fff; border: none; cursor: pointer; padding: 15px 28px; border-radius: var(--r-sm); font-family: inherit; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; transition: background 0.15s, transform 0.1s; }
+    .btn-primary:hover { background: var(--accent-dk); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-outline { background: transparent; color: var(--ink-2); border: 1.5px solid var(--border); cursor: pointer; padding: 14px 28px; border-radius: var(--r-sm); font-family: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; width: 100%; transition: border-color 0.15s; }
+    .btn-outline:hover { border-color: var(--ink); }
+
+    /* ── Labels ── */
+    .s-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-warm); margin-bottom: 10px; }
+    .s-title { font-size: clamp(24px, 6vw, 42px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.44; margin-bottom: 10px; }
+    .s-sub { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── Hero ── */
+    .hero { padding-top: calc(var(--nav-h) + 52px); padding-bottom: 60px; }
+    .hero-chip { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); background: var(--accent-lt); padding: 5px 12px; border-radius: var(--r-full); margin-bottom: 22px; }
+    .hero h1 { font-size: clamp(30px, 8vw, 64px); font-weight: 800; line-height: 1.38; letter-spacing: -2px; margin-bottom: 16px; }
+    .hero h1 em { color: var(--accent); font-style: normal; }
+    .hero-sub { font-size: 14px; color: var(--ink-2); line-height: 1.75; margin-bottom: 30px; max-width: 100%; word-break: keep-all; }
+    .hero-actions { display: flex; flex-direction: column; gap: 10px; }
+    .hero-note { font-size: 11px; color: var(--muted); margin-top: 12px; }
+
+    /* ── Problem ── */
+    .problems { background: var(--bg-2); }
+    .card-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 36px; }
+    .card { background: var(--surf); border-radius: var(--r); padding: 24px 20px; border: 1px solid var(--border); }
+    .card-tag { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .card h3 { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.35; margin-bottom: 6px; }
+    .card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .card--bad { border-color: rgba(92,58,30,0.18); background: #F6F0E4; }
+    .card--bad .card-tag { color: var(--accent); }
+
+    /* ── Steps ── */
+    .steps-list { display: flex; flex-direction: column; gap: 0; margin-top: 36px; }
+    .step { background: var(--surf); border-radius: var(--r); padding: 22px 20px; border: 1px solid var(--border); margin-bottom: 10px; }
+    .step:last-child { margin-bottom: 0; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--accent-lt); border-radius: var(--r-sm); font-size: 11px; font-weight: 800; color: var(--accent); margin-bottom: 12px; }
+    .step h3 { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; line-height: 1.35; }
+    .step p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .step--key { background: var(--accent-lt); border-color: rgba(92,58,30,0.2); }
+    .step--key .step-num { background: rgba(92,58,30,0.15); }
+    .step-note { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(92,58,30,0.1); padding: 3px 9px; border-radius: var(--r-full); max-width: 100%; word-break: keep-all; }
+
+    /* ── Insight dark ── */
+    .insight { background: var(--dark); color: #fff; }
+    .insight .s-label { color: rgba(255,255,255,0.35); }
+    .insight-big { font-size: clamp(26px, 6vw, 52px); font-weight: 800; letter-spacing: -2px; line-height: 1.38; }
+    .insight-big em { color: #D4B98C; font-style: normal; }
+    .insight-sub { font-size: 14px; color: rgba(255,255,255,0.45); line-height: 1.75; margin-top: 18px; max-width: 100%; word-break: keep-all; }
+
+    /* ── Pricing ── */
+    .pricing { background: var(--surf); }
+    .price-badge { position: absolute; top: -12px; left: 20px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 12px; border-radius: var(--r-full); letter-spacing: 0.5px; }
+    .price-tier { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; }
+    .price-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 10px; }
+    .price-row { display: flex; align-items: baseline; gap: 3px; margin-bottom: 4px; }
+    .price-amt { font-size: 36px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+    .price-per { font-size: 13px; color: var(--muted); }
+    .price-desc { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+    .price-feats { list-style: none; margin-bottom: 22px; }
+    .price-feats li { font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+    .price-feats li:last-child { border-bottom: none; }
+    .price-ck { color: var(--accent); flex-shrink: 0; }
+    .price-sub { margin-top: 10px; font-size: 11px; color: var(--muted); text-align: center; }
+    .kakao-btn { background: #FEE500; color: #3C1E1E; border: none; cursor: pointer; padding: 14px; border-radius: var(--r-sm); font-family: inherit; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: filter 0.15s; }
+    .kakao-btn:hover { filter: brightness(0.95); }
+    .kakao-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+    .reserve-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    .reserve-form input {
+      width: 100%; padding: 12px 14px; border-radius: 10px;
+      border: 1.5px solid rgba(14,14,16,0.15); background: #fff;
+      font-family: inherit; font-size: 14px; color: #1C1C1C;
+      outline: none; transition: border-color 0.15s;
+    }
+    .reserve-form input:focus { border-color: rgba(14,14,16,0.5); }
+    .reserve-form input::placeholder { color: #ABABAB; }
+
+    /* ── Visit card ── */
+    .visit-card { border-radius: var(--r); padding: 28px 22px; border: 2px solid rgba(92,58,30,0.3); background: var(--surf); position: relative; margin-top: 36px; }
+    .visit-cta { margin-top: 20px; }
+
+    /* ── Coming soon plans ── */
+    .coming-section { margin-top: 40px; }
+    .coming-divider { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .coming-divider::before, .coming-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .coming-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .coming-card { border-radius: var(--r); padding: 20px 16px; border: 1px solid var(--border); background: var(--bg); display: flex; flex-direction: column; }
+    .coming-feats { flex: 1; }
+    .coming-card--dark { background: var(--dark); border-color: var(--dark); }
+    .coming-tag { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+    .coming-card--dark .coming-tag { color: rgba(255,255,255,0.35); }
+    .coming-name { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+    .coming-card--dark .coming-name { color: #fff; }
+    .coming-price { font-size: 20px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
+    .coming-card--dark .coming-price { color: #fff; }
+    .coming-feats { list-style: none; margin-bottom: 14px; }
+    .coming-feats li { font-size: 12px; color: var(--muted); padding: 5px 0; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+    .coming-card--dark .coming-feats li { color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.07); }
+    .coming-feats li:last-child { border-bottom: none; }
+    .coming-soon-badge { display: block; width: 100%; text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg-2); padding: 5px 10px; border-radius: var(--r-full); letter-spacing: 0.5px; }
+    .coming-card--dark .coming-soon-badge { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.45); }
+
+    /* ── FAQ ── */
+    .faq-list { margin-top: 32px; }
+    .faq-item { border-bottom: 1px solid var(--border); }
+    .faq-q { font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 0; user-select: none; line-height: 1.5; word-break: keep-all; }
+    .faq-q-text { flex: 1; min-width: 0; }
+    .faq-q::after { content: '+'; font-size: 20px; font-weight: 300; color: var(--muted); flex-shrink: 0; transition: transform 0.2s; }
+    .faq-item.open .faq-q::after { transform: rotate(45deg); }
+    .faq-a { font-size: 13px; color: var(--muted); line-height: 1.8; max-height: 0; overflow: hidden; transition: max-height 0.3s, padding-bottom 0.3s; word-break: keep-all; }
+    .faq-item.open .faq-a { max-height: 280px; padding-bottom: 18px; }
+
+    /* ── Footer ── */
+    footer { background: #111; color: rgba(255,255,255,0.35); padding: 28px 0; }
+    footer .wrap { display: flex; flex-direction: column; gap: 10px; }
+    .footer-top { display: flex; justify-content: space-between; align-items: center; }
+    .logo-f { color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 900; text-decoration: none; letter-spacing: -0.5px; }
+    .logo-f em { color: #D4B98C; font-style: normal; }
+    .footer-copy { font-size: 11px; color: rgba(255,255,255,0.22); }
+    footer a { color: rgba(255,255,255,0.35); text-decoration: none; font-size: 12px; }
+    footer a:hover { color: rgba(255,255,255,0.6); }
+
+    /* ── App preview (V1 design embedded) ── */
+    .wardrobe-section { background: var(--dark); position: relative; overflow: hidden; }
+    .wardrobe-section::before {
+      content: ''; position: absolute; top: -120px; left: 50%; transform: translateX(-50%);
+      width: 480px; height: 480px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(212,185,140,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .wardrobe-section .wrap { position: relative; }
+    .wardrobe-section .s-label { color: rgba(212,185,140,0.7); }
+    .wardrobe-section .s-title { color: #fff; }
+    .wardrobe-section .s-sub { color: rgba(255,255,255,0.5); }
+
+    /* Two-column layout: phone left, copy right — matches other left-aligned sections */
+    .wardrobe-layout { display: grid; grid-template-columns: 360px 1fr; gap: 64px; align-items: center; margin-top: 40px; }
+    @media (max-width: 820px) { .wardrobe-layout { grid-template-columns: 1fr; gap: 28px; justify-items: start; } .wardrobe-layout .wardrobe-copy { order: -1; } }
+    .wardrobe-copy .s-label { color: rgba(212,185,140,0.7); }
+    .wardrobe-copy .s-title { color: #fff; margin-top: 8px; }
+    .wardrobe-copy .s-sub { color: rgba(255,255,255,0.55); margin-top: 14px; max-width: 480px; }
+    .wardrobe-copy .features { margin-top: 28px; display: flex; flex-direction: column; gap: 14px; }
+    .wardrobe-copy .feat { display: flex; gap: 12px; align-items: flex-start; color: rgba(255,255,255,0.78); font-size: 14px; line-height: 1.55; }
+    .wardrobe-copy .feat-dot { width: 6px; height: 6px; border-radius: 50%; background: #D4B98C; margin-top: 8px; flex-shrink: 0; }
+    .wardrobe-copy .feat strong { color: #fff; font-weight: 700; display: block; margin-bottom: 2px; font-size: 14.5px; }
+
+    .phone-stage { perspective: 1400px; }
+    .phone {
+      width: 320px; flex-shrink: 0;
+      background: #0A0A0C;
+      border-radius: 44px; padding: 6px;
+      box-shadow:
+        0 50px 100px -20px rgba(0,0,0,0.7),
+        0 30px 60px -30px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(255,255,255,0.06) inset,
+        0 1px 0 rgba(255,255,255,0.08) inset;
+      position: relative;
+    }
+    .phone::before {
+      content: ''; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 100px; height: 26px; background: #0A0A0C; border-radius: 100px; z-index: 5;
+    }
+    .phone-screen {
+      background: #FAF8F4; border-radius: 38px; overflow: hidden;
+      height: 640px; position: relative; display: flex; flex-direction: column;
+    }
+    .phone-scroll { flex: 1; overflow: hidden; }
+
+    /* Outfit hero — overlapping flat-lay on warm cream */
+    .pa-outfit-wrap { padding: 0 16px 16px; position: relative; }
+    .pa-outfit-card {
+      background: #F2EFE8; border-radius: 16px; aspect-ratio: 4 / 3.4;
+      overflow: hidden; position: relative;
+      border: 1px solid rgba(0,0,0,0.04);
+    }
+    .pa-outfit-card img { position: absolute; display: block; }
+
+    /* Pagination dots inside the outfit card */
+    .pa-outfit-dots {
+      position: absolute; left: 0; right: 0; bottom: 10px;
+      display: flex; justify-content: center; gap: 5px; z-index: 10;
+    }
+    .pa-outfit-dots span {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(14,14,16,0.22);
+    }
+    .pa-outfit-dots span.on {
+      background: rgba(14,14,16,0.78); width: 14px; border-radius: 100px;
+    }
+    .pa-fl-top    { width: 68%; left: 16%;  top: -2%;  z-index: 1; }
+    .pa-fl-pants  { width: 52%; left: 0%;   top: 32%;  z-index: 2; }
+    .pa-fl-bag    { width: 40%; right: 6%;  top: 20%;  z-index: 3; }
+    .pa-fl-shoe   { width: 38%; left: 38%;  bottom: 10%; z-index: 4; }
+
+    /* Drag handle pill (matches reference) */
+    .pa-drag {
+      width: 36px; height: 4px; background: rgba(14,14,16,0.18);
+      border-radius: 100px; margin: 4px auto 10px;
+    }
+
+    /* Filter row: settings icon + 모든 옷 dropdown */
+    .pa-filterbar { display: flex; align-items: center; gap: 8px; padding: 0 18px 10px; }
+    .pa-filter-iconbtn {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: #F2EFE8; display: flex; align-items: center; justify-content: center;
+      color: #0E0E10; flex-shrink: 0;
+    }
+    .pa-filter-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11.5px; font-weight: 600; color: #0E0E10;
+      padding: 7px 12px; border-radius: 100px;
+      border: 1px solid rgba(14,14,16,0.12); background: transparent;
+    }
+
+    /* Category tabs — underline style, scrollable */
+    .pa-tabs { display: flex; gap: 18px; padding: 0 20px 10px; overflow-x: auto; scrollbar-width: none; }
+    .pa-tabs::-webkit-scrollbar { display: none; }
+    .pa-tab {
+      font-size: 13px; font-weight: 500; color: rgba(14,14,16,0.42);
+      padding: 6px 0; flex-shrink: 0; white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      pointer-events: none;
+    }
+    .pa-tab.on { color: #0E0E10; font-weight: 700; border-bottom-color: #0E0E10; }
+
+    /* In-phone status bar */
+    .ps-status { display: flex; justify-content: space-between; align-items: center; padding: 14px 26px 8px; position: relative; z-index: 1; }
+    .ps-time { font-size: 13px; font-weight: 700; color: #0E0E10; letter-spacing: -0.2px; }
+    .ps-icons { display: flex; gap: 5px; align-items: center; color: #0E0E10; }
+
+    /* App header */
+    .pa-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px 16px; }
+    .pa-logo { font-size: 17px; font-weight: 900; color: #0E0E10; letter-spacing: -0.4px; }
+    .pa-logo em { font-style: normal; color: #5C3A1E; }
+    .pa-iconrow { display: flex; gap: 12px; color: #0E0E10; }
+
+    /* (category tabs removed per latest direction — grid-only view) */
+
+    /* (filter chips removed) */
+
+    /* Item grid — 4 rows × 3 cols of 12 normalized garment photos */
+    .pa-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 0 16px; }
+    .pa-item { display: flex; }
+    .pa-tile {
+      background: #FFFFFF; border-radius: 10px; aspect-ratio: 1 / 1;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(0,0,0,0.04); overflow: hidden; position: relative;
+    }
+    .pa-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Bottom nav */
+    .pa-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 76px; background: #FFFFFF; border-top: 1px solid rgba(0,0,0,0.06); display: flex; align-items: flex-start; justify-content: space-around; padding-top: 12px; }
+    .pa-nav { display: flex; flex-direction: column; align-items: center; gap: 3px; color: rgba(14,14,16,0.38); }
+    .pa-nav.on { color: #0E0E10; }
+    .pa-nav-label { font-size: 10px; font-weight: 500; }
+    .pa-nav.on .pa-nav-label { font-weight: 600; }
+    .pa-nav-plus { width: 50px; height: 50px; border-radius: 50%; background: #0E0E10; color: #FAF8F4; display: flex; align-items: center; justify-content: center; margin-top: -16px; box-shadow: 0 8px 18px rgba(0,0,0,0.18); }
+
+    /* Phone caption */
+    .phone-caption { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 28px; }
+    .phone-caption-text { font-size: 13px; color: rgba(255,255,255,0.5); text-align: center; }
+    .phone-pills { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .phone-pill { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.08); padding: 6px 12px; border-radius: 100px; border: 1px solid rgba(255,255,255,0.1); letter-spacing: -0.2px; }
+
+    /* ── Scroll animation ── */
+    .fu { opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .fu.in { opacity: 1; transform: none; }
+
+    /* ── Desktop ── */
+    @media (min-width: 768px) {
+      .wrap { padding: 0 28px; }
+      .section { padding: 96px 0; }
+      .hero { padding-top: calc(var(--nav-h) + 88px); padding-bottom: 88px; }
+      .hero-actions { flex-direction: row; align-items: center; }
+      .btn-primary, .btn-outline { width: auto; }
+      .card-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 48px; }
+      .steps-list { flex-direction: row; gap: 16px; margin-top: 48px; }
+      .step { margin-bottom: 0; flex: 1; }
+      .visit-inner { display: grid; grid-template-columns: 1fr 260px; gap: 40px; align-items: start; }
+      .visit-cta { margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="wrap">
+    <a href="#" class="logo">LOOK<em>BOX</em></a>
+    <button class="btn-nav" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="wrap">
+    <div class="fu">
+      <h1>이 옷, 내 옷이랑 어울릴까?<br><em>구매하기 전에 확인하세요</em></h1>
+      <p class="hero-sub">나만의 디지털 옷장을 만들어 보세요.<br>쇼핑 링크나 사진으로 내 옷 기준 조합을 AI가 확인해줘요.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">방문 예약하기 →</button>
+        <button class="btn-outline" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">어떻게 작동해요?</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 옷장 미리보기 (V1 design) -->
+<section class="section wardrobe-section">
+  <div class="wrap">
+    <div class="wardrobe-layout">
+      <div class="phone-stage fu">
+      <div class="phone">
+        <div class="phone-screen">
+          <!-- Status bar -->
+          <div class="ps-status">
+            <span class="ps-time">9:41</span>
+            <div class="ps-icons">
+              <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="6" width="3" height="5" rx="0.5"/><rect x="4" y="4" width="3" height="7" rx="0.5"/><rect x="8" y="2" width="3" height="9" rx="0.5"/><rect x="12" y="0" width="3" height="11" rx="0.5"/></svg>
+              <svg width="15" height="11" viewBox="0 0 15 11" fill="currentColor"><path d="M7.5 2.5C9.8 2.5 11.9 3.4 13.4 4.9L14.8 3.5C12.9 1.7 10.3.5 7.5.5S2.1 1.7.2 3.5L1.6 4.9C3.1 3.4 5.2 2.5 7.5 2.5z"/><path d="M7.5 5.5c1.4 0 2.7.5 3.7 1.4L12.6 5.5C11.2 4.2 9.4 3.5 7.5 3.5S3.8 4.2 2.4 5.5L3.8 6.9C4.8 6 6.1 5.5 7.5 5.5z"/><circle cx="7.5" cy="9.5" r="1.5"/></svg>
+              <svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="22" height="11" rx="3" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="18" height="8" rx="1.5" fill="currentColor"/><path d="M24 4.5v3a1.5 1.5 0 000-3z" fill="currentColor" fill-opacity="0.5"/></svg>
+            </div>
+          </div>
+
+          <!-- App header (logo + GNB icons) -->
+          <div class="pa-header">
+            <div class="pa-logo">LOOK<em>BOX</em></div>
+            <div class="pa-iconrow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            </div>
+          </div>
+
+          <div class="phone-scroll">
+            <!-- Outfit coordination flat-lay (overlapping on white) -->
+            <div class="pa-outfit-wrap">
+              <div class="pa-outfit-card">
+                <img class="pa-fl-top" src="assets/items/outfit-top-polo.png" alt=""/>
+                <img class="pa-fl-pants" src="assets/items/outfit-pants.png" alt=""/>
+                <img class="pa-fl-bag" src="assets/items/outfit-bag.png" alt=""/>
+                <img class="pa-fl-shoe" src="assets/items/outfit-loafer.png" alt=""/>
+                <div class="pa-outfit-dots">
+                  <span class="on"></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category tabs -->
+            <div class="pa-tabs" id="paTabs">
+              <div class="pa-tab on" data-cat="all">전체</div>
+              <div class="pa-tab" data-cat="top">상의</div>
+              <div class="pa-tab" data-cat="bottom">바지</div>
+              <div class="pa-tab" data-cat="outer">아우터</div>
+              <div class="pa-tab" data-cat="shoes">신발</div>
+              <div class="pa-tab" data-cat="bag">가방</div>
+              <div class="pa-tab" data-cat="hat">모자</div>
+            </div>
+
+            <!-- 3-col wardrobe grid -->
+            <div class="pa-grid" id="paGrid">
+              <div class="pa-item" data-cat="bottom"><div class="pa-tile"><img src="assets/items/item-13-shorts.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="top"><div class="pa-tile"><img src="assets/items/item-06-shirt-pink.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="shoes"><div class="pa-tile"><img src="assets/items/item-09-loafer-brown.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="top"><div class="pa-tile"><img src="assets/items/item-11-shirt-check.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="hat"><div class="pa-tile"><img src="assets/items/item-12-cap.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="outer"><div class="pa-tile"><img src="assets/items/item-01-shirt-cream.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="top"><div class="pa-tile"><img src="assets/items/item-04-shirt-black.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="top"><div class="pa-tile"><img src="assets/items/item-05-shirt-beige.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="top"><div class="pa-tile"><img src="assets/items/item-10-polo-grey.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="bottom"><div class="pa-tile"><img src="assets/items/item-07-pants-black.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="bottom"><div class="pa-tile"><img src="assets/items/item-08-pants-brown.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="bag"><div class="pa-tile"><img src="assets/items/item-03-bag-black.png" alt="" loading="lazy"/></div></div>
+              <div class="pa-item" data-cat="shoes"><div class="pa-tile"><img src="assets/items/item-02-sandals.png" alt="" loading="lazy"/></div></div>
+            </div>
+            <div style="height:90px"></div>
+          </div>
+
+          <!-- Bottom nav -->
+          <div class="pa-bottom">
+            <div class="pa-nav on">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></svg>
+              <span class="pa-nav-label">Home</span>
+            </div>
+            <div class="pa-nav">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+              <span class="pa-nav-label">옷장</span>
+            </div>
+            <div class="pa-nav-plus">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
+            <div class="pa-nav">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v6c0 4.4 3.4 8 8 9 4.6-1 8-4.6 8-9V7l-8-4z"/></svg>
+              <span class="pa-nav-label">코디</span>
+            </div>
+            <div class="pa-nav">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="16 8 14 14 8 16 10 10"/></svg>
+              <span class="pa-nav-label">탐색</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="wardrobe-copy fu">
+        <h2 class="s-title">내 옷을 한눈에</h2>
+        <p class="s-sub">앱을 통해 나만의 디지털 옷장을 만들 수 있어요.<br>AI는 옷장 전체를 한 장의 카탈로그처럼 보고,<br>구매하려는 옷과의 조합 및 오늘의 코디를 추천해 줘요.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 문제 -->
+<section class="section problems">
+  <div class="wrap">
+    <div class="fu">
+      <h2 class="s-title">쇼핑 실수가 반복되는 이유</h2>
+      <p class="s-sub">내 옷장을 모르는 채 쇼핑하면 매번 같은 결과가 나와요.</p>
+    </div>
+    <div class="card-grid">
+      <div class="card fu">
+        <div class="card-tag">쇼핑할 때</div>
+        <h3>살지 말지 모르겠어요</h3>
+        <p>기존 옷이랑 어울릴지 몰라 직감으로 사거나 포기해요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">막상 입어보면</div>
+        <h3>코디가 안 돼요</h3>
+        <p>생각한 조합이 실제론 이상해서 반품하거나 입지 않아요.</p>
+      </div>
+      <div class="card card--bad fu">
+        <div class="card-tag">시간이 지나면</div>
+        <h3>비슷한 옷을 또 사요</h3>
+        <p>옷장에서 잊혀진 뒤, 같은 실수를 반복해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 해결책 -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="fu">
+      <h2 class="s-title">구매하기 전에 답이 나와요</h2>
+      <p class="s-sub">내 옷장 전체가 AI에 등록되면 쇼핑 방식이 달라져요.</p>
+    </div>
+    <div class="steps-list">
+      <div class="step fu">
+        <div class="step-num">01</div>
+        <h3>링크 또는 사진 업로드</h3>
+        <p>온라인이면 상품 링크, 오프라인이면 사진을 올려요.</p>
+      </div>
+      <div class="step step--key fu">
+        <div class="step-num">02</div>
+        <h3>AI가 기존 옷과 조합을 보여줘요</h3>
+        <p>내 옷장 기준으로 가능한 조합을 바로 확인해요.</p>
+        <span class="step-note">무신사 · 29CM · 지그재그 지원</span>
+      </div>
+      <div class="step fu">
+        <div class="step-num">03</div>
+        <h3>확인 후 구매 결정</h3>
+        <p>마음에 드는 조합이 있으면 구매해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Insight -->
+<section class="section insight">
+  <div class="wrap">
+    <div class="fu">
+      <div class="insight-big">내 옷장을 AI가 알면<br><em>쇼핑 결정이 달라져요</em></div>
+      <p class="insight-sub">방문 한 번으로 옷장 전체가 등록되면,<br>쇼핑할 때마다 내 옷 기준으로 조합이 나와요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 요금 -->
+<section class="section pricing" id="pricing">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">요금</div>
+      <h2 class="s-title">지금 방문 등록으로 시작하세요</h2>
+      <p class="s-sub">앱은 방문 등록 고객부터 순차적으로 제공돼요.</p>
+    </div>
+
+    <div class="visit-card fu">
+      <span class="price-badge">지금 예약 가능</span>
+      <div class="visit-inner">
+        <div class="visit-info">
+          <div class="price-tier">방문 등록 (1회)</div>
+          <div class="price-name">전문 등록 서비스</div>
+          <div class="price-row">
+            <div class="price-amt">39,000</div>
+            <div class="price-per">원~</div>
+          </div>
+          <div class="price-desc">30벌 기준 · 100벌은 ₩69,000</div>
+          <ul class="price-feats">
+            <li><span class="price-ck">✓</span> 스태프 방문 촬영·분류·등록</li>
+            <li><span class="price-ck">✓</span> 정확한 사이즈 기록</li>
+            <li><span class="price-ck">✓</span> AI 옷장 자동 구성</li>
+            <li><span class="price-ck">✓</span> 1달 Pro 무료 포함</li>
+            <li><span class="price-ck">✓</span> 72시간 전액 환불 보장</li>
+          </ul>
+        </div>
+        <div class="visit-cta">
+          <div class="reserve-form">
+            <input type="text" id="reserveName" placeholder="이름" autocomplete="name" />
+            <input type="tel" id="reserveContact" placeholder="연락처 (전화번호 또는 카카오톡 ID)" autocomplete="tel" />
+          </div>
+          <button class="kakao-btn" id="reserveBtn" disabled onclick="handleReserve()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#3C1E1E"><path d="M12 3C6.48 3 2 6.78 2 11.4c0 2.88 1.74 5.42 4.38 6.97L5.4 21l4.08-2.16c.82.18 1.67.26 2.52.26 5.52 0 10-3.78 10-8.4S17.52 3 12 3z"/></svg>
+            카카오페이로 예약하기
+          </button>
+          <p class="price-sub">결제 후 24시간 내 방문 일정 확정 · 서울·수도권</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="coming-section fu">
+      <div class="coming-divider">앱 출시 후 이용 가능</div>
+      <div class="coming-grid">
+        <div class="coming-card">
+          <div class="coming-tag">기본 앱</div>
+          <div class="coming-name">직접 시작</div>
+          <div class="coming-price">무료</div>
+          <ul class="coming-feats">
+            <li><span class="price-ck">✓</span> 직접 촬영·업로드</li>
+            <li><span class="price-ck">✓</span> 로컬 기기 저장</li>
+            <li><span class="price-ck">✓</span> 텍스트 조합 250원/건</li>
+            <li><span class="price-ck">✓</span> 이미지 조합 500원/건</li>
+          </ul>
+          <span class="coming-soon-badge">방문 예약자 우선 오픈</span>
+        </div>
+        <div class="coming-card coming-card--dark">
+          <div class="coming-tag">Pro 구독</div>
+          <div class="coming-name">Pro</div>
+          <div class="coming-price">₩9,900<span style="font-size:12px; font-weight:400; opacity:0.5;">/월</span></div>
+          <ul class="coming-feats">
+            <li><span class="price-ck">✓</span> 클라우드 저장 포함</li>
+            <li><span class="price-ck">✓</span> 이미지 조합 30건/월</li>
+            <li><span class="price-ck">✓</span> 데일리 코디 추천</li>
+            <li><span class="price-ck">✓</span> 조합 결과 저장·즐겨찾기</li>
+          </ul>
+          <span class="coming-soon-badge">출시 예정</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" style="background: var(--bg-2);">
+  <div class="wrap">
+    <div class="fu">
+      <div class="s-label">FAQ</div>
+      <h2 class="s-title">자주 묻는 질문</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">어떤 쇼핑몰 링크를 지원하나요?</span></div>
+        <div class="faq-a">무신사, 29CM, 지그재그, W컨셉 등 주요 국내 쇼핑몰을 지원해요. 오프라인 옷은 사진이나 택 사진을 직접 올릴 수 있어요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">직접 업로드와 방문 등록의 차이가 뭔가요?</span></div>
+        <div class="faq-a">직접 업로드는 본인이 사진 찍어 올리는 무료 방식이에요. 방문 등록은 스태프가 체계적으로 촬영·분류하고 사이즈까지 기록해줘요. 1달 Pro 구독 모델이 무료로 제공돼요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">방문하면 제가 뭘 해야 하나요?</span></div>
+        <div class="faq-a">아무것도 안 하셔도 돼요. 스태프가 방문해 촬영·분류·등록을 전부 처리해드려요. 약 1~2시간 소요됩니다.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">방문 가능 지역이 어디인가요?</span></div>
+        <div class="faq-a">현재 서울 및 수도권 위주로 운영 중이에요. 그 외 지역은 lookbox.official@gmail.com으로 문의해 주세요.</div>
+      </div>
+      <div class="faq-item fu">
+        <div class="faq-q"><span class="faq-q-text">개인정보와 옷 사진은 어떻게 관리되나요?</span></div>
+        <div class="faq-a">모든 이미지는 암호화되어 개인 계정에만 저장돼요. 제3자와 공유되지 않으며 언제든 삭제가 가능해요.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <a href="#" class="logo-f">LOOK<em>BOX</em></a>
+      <a href="privacy.html">개인정보처리방침</a>
+    </div>
+    <p class="footer-copy">© 2026 LOOKBOX All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- Realistic clothing SVGs (lifted from clothes.jsx as static markup) -->
+<script>
+  const CLOTH_SVG = {
+    shearling: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-sj" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="grnd-sj"><feGaussianBlur stdDeviation="6"/></filter><linearGradient id="sj-body" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#C9BD9F"/><stop offset="0.15" stop-color="#EAE2D2"/><stop offset="0.5" stop-color="#F5EFE2"/><stop offset="0.85" stop-color="#EAE2D2"/><stop offset="1" stop-color="#C9BD9F"/></linearGradient><pattern id="sj-tex" width="3" height="3" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="0.7" fill="#F5EFE2" opacity="0.5"/><circle cx="0.5" cy="2.5" r="0.4" fill="#C9BD9F" opacity="0.3"/></pattern></defs><ellipse cx="100" cy="200" rx="68" ry="6" fill="#000" opacity="0.22" filter="url(#grnd-sj)"/><g filter="url(#sh-sj)"><path d="M48 70 Q40 75 36 92 L30 168 Q30 178 40 180 L62 180 Q66 170 64 158 L60 92 Q58 80 64 74 Z" fill="url(#sj-body)"/><path d="M152 70 Q160 75 164 92 L170 168 Q170 178 160 180 L138 180 Q134 170 136 158 L140 92 Q142 80 136 74 Z" fill="url(#sj-body)"/><path d="M62 64 L52 76 L48 184 Q48 188 52 188 L148 188 Q152 188 152 184 L148 76 L138 64 L120 56 Q110 64 100 64 Q90 64 80 56 Z" fill="url(#sj-body)"/><path d="M62 64 L52 76 L48 184 Q48 188 52 188 L148 188 Q152 188 152 184 L148 76 L138 64 L120 56 Q110 64 100 64 Q90 64 80 56 Z" fill="url(#sj-tex)" opacity="0.4"/><path d="M80 56 L74 70 L92 76 L100 64 Z" fill="#F5EFE2"/><path d="M120 56 L126 70 L108 76 L100 64 Z" fill="#F5EFE2"/><line x1="100" y1="64" x2="100" y2="188" stroke="#C9BD9F" stroke-width="0.6" opacity="0.6"/><line x1="102" y1="68" x2="102" y2="186" stroke="#C9BD9F" stroke-width="0.3" stroke-dasharray="1.5 1" opacity="0.7"/><circle cx="100" cy="88" r="2.4" fill="#B89868"/><circle cx="100" cy="110" r="2.4" fill="#B89868"/><circle cx="100" cy="132" r="2.4" fill="#B89868"/><circle cx="100" cy="154" r="2.4" fill="#B89868"/><circle cx="100" cy="176" r="2.4" fill="#B89868"/><path d="M58 130 L84 128 L86 152 L60 154 Z" fill="none" stroke="#C9BD9F" stroke-width="0.7"/><path d="M58 130 L84 128 L84 138 L58 140 Z" fill="#C9BD9F" opacity="0.18"/><path d="M114 128 L142 130 L140 154 L114 152 Z" fill="none" stroke="#C9BD9F" stroke-width="0.7"/><path d="M114 128 L142 130 L142 140 L114 138 Z" fill="#C9BD9F" opacity="0.18"/></g></svg>`,
+    denimskirt: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-ds" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="grnd-ds"><feGaussianBlur stdDeviation="6"/></filter><linearGradient id="ds-g" x1="0" x2="1"><stop offset="0" stop-color="#1F3148"/><stop offset="0.5" stop-color="#2F4868"/><stop offset="1" stop-color="#1F3148"/></linearGradient></defs><ellipse cx="100" cy="195" rx="64" ry="5" fill="#000" opacity="0.18" filter="url(#grnd-ds)"/><g filter="url(#sh-ds)"><path d="M62 50 L60 64 L42 188 Q42 192 46 192 L154 192 Q158 192 156 188 L138 64 L138 50 Z" fill="url(#ds-g)"/><rect x="62" y="48" width="76" height="16" fill="#1F3148"/><rect x="68" y="46" width="3" height="20" fill="#1F3148"/><rect x="90" y="46" width="3" height="20" fill="#1F3148"/><rect x="110" y="46" width="3" height="20" fill="#1F3148"/><rect x="132" y="46" width="3" height="20" fill="#1F3148"/><circle cx="92" cy="56" r="2.5" fill="#C8A560"/><circle cx="92" cy="56" r="1.8" fill="#A88440"/><path d="M100 64 L100 90" stroke="#C8A560" stroke-width="0.5" stroke-dasharray="2 1.5"/><line x1="62" y1="50" x2="138" y2="50" stroke="#C8A560" stroke-width="0.4" stroke-dasharray="2 1.5"/><line x1="62" y1="62" x2="138" y2="62" stroke="#C8A560" stroke-width="0.4" stroke-dasharray="2 1.5"/><path d="M62 64 L80 64 L72 88 L62 86 Z" fill="none" stroke="#C8A560" stroke-width="0.4" stroke-dasharray="2 1.5"/><path d="M138 64 L120 64 L128 88 L138 86 Z" fill="none" stroke="#C8A560" stroke-width="0.4" stroke-dasharray="2 1.5"/><line x1="100" y1="64" x2="100" y2="190" stroke="#2F4868" stroke-width="0.5" opacity="0.4"/><ellipse cx="100" cy="120" rx="20" ry="40" fill="#5A7896" opacity="0.2"/></g></svg>`,
+    croppedtop: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-ct" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="ct-g" x1="0" x2="1"><stop offset="0" stop-color="#0F0F11"/><stop offset="0.5" stop-color="#2E2E30"/><stop offset="1" stop-color="#0F0F11"/></linearGradient></defs><ellipse cx="100" cy="142" rx="50" ry="4" fill="#000" opacity="0.18"/><g filter="url(#sh-ct)"><path d="M52 70 Q44 80 42 100 L38 130 Q38 138 46 140 L60 138 L62 90 Q58 78 60 72 Z" fill="url(#ct-g)"/><path d="M148 70 Q156 80 158 100 L162 130 Q162 138 154 140 L140 138 L138 90 Q142 78 140 72 Z" fill="url(#ct-g)"/><path d="M60 70 L58 132 L142 132 L140 70 L120 64 Q110 70 100 70 Q90 70 80 64 Z" fill="url(#ct-g)"/><path d="M82 64 Q92 72 100 72 Q108 72 118 64 L118 70 Q108 76 100 76 Q92 76 82 70 Z" fill="#0A0A0C"/><line x1="58" y1="80" x2="142" y2="80" stroke="#3F3F42" stroke-width="0.35" opacity="0.25"/><line x1="58" y1="90" x2="142" y2="90" stroke="#3F3F42" stroke-width="0.35" opacity="0.25"/><line x1="58" y1="100" x2="142" y2="100" stroke="#3F3F42" stroke-width="0.35" opacity="0.25"/><line x1="58" y1="110" x2="142" y2="110" stroke="#3F3F42" stroke-width="0.35" opacity="0.25"/><line x1="58" y1="120" x2="142" y2="120" stroke="#3F3F42" stroke-width="0.35" opacity="0.25"/><line x1="58" y1="128" x2="142" y2="128" stroke="#0A0A0C" stroke-width="1"/></g></svg>`,
+    basictee: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-bt" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="bt-g" x1="0" x2="1"><stop offset="0" stop-color="#D7C8A8" stop-opacity="0.85"/><stop offset="0.5" stop-color="#D7C8A8"/><stop offset="1" stop-color="#D7C8A8" stop-opacity="0.85"/></linearGradient></defs><ellipse cx="100" cy="190" rx="56" ry="5" fill="#000" opacity="0.18"/><g filter="url(#sh-bt)"><path d="M50 70 L42 96 L46 110 L72 108 L70 80 Z" fill="url(#bt-g)"/><path d="M150 70 L158 96 L154 110 L128 108 L130 80 Z" fill="url(#bt-g)"/><path d="M70 68 L66 184 Q66 188 70 188 L130 188 Q134 188 134 184 L130 68 L118 60 Q110 70 100 70 Q90 70 82 60 Z" fill="url(#bt-g)"/><path d="M82 60 Q92 70 100 70 Q108 70 118 60 L116 64 Q108 72 100 72 Q92 72 84 64 Z" fill="#000" opacity="0.18"/><path d="M84 62 Q92 68 100 68 Q108 68 116 62" stroke="#000" stroke-width="0.6" fill="none" opacity="0.25"/></g></svg>`,
+    chelsea: `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-cb" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="cb-g" x1="0.3" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#7A5430"/><stop offset="0.5" stop-color="#5C3A1E"/><stop offset="1" stop-color="#3A2618"/></linearGradient></defs><ellipse cx="110" cy="156" rx="60" ry="6" fill="#000" opacity="0.25"/><g filter="url(#sh-cb)"><path d="M48 142 Q48 154 60 156 L168 154 Q176 152 174 142 L172 138 Q120 138 50 138 Z" fill="#3A2618"/><path d="M68 50 Q66 60 68 70 L70 130 Q70 138 80 138 L156 138 Q170 138 174 130 L172 116 Q160 110 138 110 L138 60 Q138 52 130 50 L80 48 Q70 48 68 50 Z" fill="url(#cb-g)"/><path d="M80 48 L80 56 L96 56 L96 48 Z" fill="#5C3A1E"/><path d="M132 70 Q138 72 140 78 L140 102 Q138 108 132 110 L120 110 L120 70 Z" fill="#8E6F40" opacity="0.85"/><line x1="120" y1="74" x2="138" y2="74" stroke="#5C3A1E" stroke-width="0.4" opacity="0.5"/><line x1="120" y1="82" x2="138" y2="82" stroke="#5C3A1E" stroke-width="0.4" opacity="0.5"/><line x1="120" y1="90" x2="138" y2="90" stroke="#5C3A1E" stroke-width="0.4" opacity="0.5"/><line x1="120" y1="98" x2="138" y2="98" stroke="#5C3A1E" stroke-width="0.4" opacity="0.5"/><path d="M88 60 Q108 56 122 60 L120 78 Q104 74 90 78 Z" fill="#fff" opacity="0.12"/><path d="M52 138 L60 154 L72 154 L70 138 Z" fill="#3A2618"/></g></svg>`,
+    shoulderbag: `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-sb" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="sb-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CFB387"/><stop offset="0.5" stop-color="#B89868"/><stop offset="1" stop-color="#8E6F40"/></linearGradient></defs><ellipse cx="100" cy="170" rx="58" ry="5" fill="#000" opacity="0.18"/><g filter="url(#sh-sb)"><path d="M58 84 Q70 36 100 32 Q130 36 142 84" fill="none" stroke="#8E6F40" stroke-width="4" stroke-linecap="round"/><path d="M58 84 Q70 36 100 32 Q130 36 142 84" fill="none" stroke="#B89868" stroke-width="2" stroke-linecap="round"/><circle cx="58" cy="84" r="4" fill="none" stroke="#A88440" stroke-width="1.5"/><circle cx="142" cy="84" r="4" fill="none" stroke="#A88440" stroke-width="1.5"/><path d="M48 86 Q44 92 44 100 L52 158 Q54 168 64 168 L136 168 Q146 168 148 158 L156 100 Q156 92 152 86 Q120 92 100 90 Q80 92 48 86 Z" fill="url(#sb-g)"/><path d="M50 88 Q80 94 100 92 Q120 94 150 88 L148 96 Q120 102 100 100 Q80 102 52 96 Z" fill="#CFB387" opacity="0.6"/><line x1="100" y1="92" x2="100" y2="166" stroke="#8E6F40" stroke-width="0.5" opacity="0.5"/><path d="M50 96 Q100 110 150 96" fill="none" stroke="#C8A560" stroke-width="0.4" stroke-dasharray="2 1.5" opacity="0.7"/></g></svg>`,
+    blueshirt: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-bs" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="bs-g" x1="0" x2="1"><stop offset="0" stop-color="#A8BBCE"/><stop offset="0.5" stop-color="#C2D2E0"/><stop offset="1" stop-color="#A8BBCE"/></linearGradient></defs><ellipse cx="100" cy="200" rx="62" ry="5" fill="#000" opacity="0.18"/><g filter="url(#sh-bs)"><path d="M50 72 Q42 78 38 96 L34 168 Q34 178 44 180 L62 178 L66 96 Q60 78 62 74 Z" fill="url(#bs-g)"/><path d="M150 72 Q158 78 162 96 L166 168 Q166 178 156 180 L138 178 L134 96 Q140 78 138 74 Z" fill="url(#bs-g)"/><rect x="40" y="170" width="22" height="10" rx="1" fill="#4A6884"/><rect x="138" y="170" width="22" height="10" rx="1" fill="#4A6884"/><path d="M62 68 L54 80 L52 188 Q52 192 56 192 L144 192 Q148 192 148 188 L146 80 L138 68 L120 60 L100 70 L80 60 Z" fill="url(#bs-g)"/><path d="M78 60 L74 76 L92 78 L100 70 Z" fill="#4A6884"/><path d="M122 60 L126 76 L108 78 L100 70 Z" fill="#4A6884"/><rect x="97" y="78" width="6" height="114" fill="#4A6884" opacity="0.4"/><line x1="100" y1="78" x2="100" y2="192" stroke="#4A6884" stroke-width="0.5"/><circle cx="100" cy="92" r="1.4" fill="#F8F6F1" stroke="#4A6884" stroke-width="0.3"/><circle cx="100" cy="112" r="1.4" fill="#F8F6F1" stroke="#4A6884" stroke-width="0.3"/><circle cx="100" cy="132" r="1.4" fill="#F8F6F1" stroke="#4A6884" stroke-width="0.3"/><circle cx="100" cy="152" r="1.4" fill="#F8F6F1" stroke="#4A6884" stroke-width="0.3"/><circle cx="100" cy="172" r="1.4" fill="#F8F6F1" stroke="#4A6884" stroke-width="0.3"/><path d="M66 92 L86 92 L86 110 L66 110 Z" fill="none" stroke="#4A6884" stroke-width="0.5"/><path d="M66 92 L86 92 L84 96 L68 96 Z" fill="#4A6884" opacity="0.2"/></g></svg>`,
+    shorts: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-sh2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="sh2-g" x1="0" x2="1"><stop offset="0" stop-color="#1A1A1C"/><stop offset="0.5" stop-color="#3A3A3D"/><stop offset="1" stop-color="#1A1A1C"/></linearGradient></defs><ellipse cx="100" cy="160" rx="56" ry="5" fill="#000" opacity="0.18"/><g filter="url(#sh-sh2)"><rect x="62" y="60" width="76" height="14" fill="#0F0F11"/><path d="M62 72 L58 84 L52 154 Q52 158 56 158 L94 158 L98 110 L102 110 L106 158 L144 158 Q148 158 148 154 L142 84 L138 72 Z" fill="url(#sh2-g)"/><rect x="52" y="148" width="42" height="10" fill="#0A0A0C" opacity="0.5"/><rect x="106" y="148" width="42" height="10" fill="#0A0A0C" opacity="0.5"/><line x1="100" y1="74" x2="100" y2="110" stroke="#0A0A0C" stroke-width="0.5"/><path d="M64 74 L84 74 L80 92 L64 90 Z" fill="none" stroke="#3A3A3D" stroke-width="0.4"/><path d="M136 74 L116 74 L120 92 L136 90 Z" fill="none" stroke="#3A3A3D" stroke-width="0.4"/><circle cx="91" cy="67" r="1.5" fill="#3A3A3D"/></g></svg>`,
+    hoodie: `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><defs><filter id="sh-gh" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/><feOffset dx="0" dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="gh-g" x1="0" x2="1"><stop offset="0" stop-color="#A8A8A8"/><stop offset="0.5" stop-color="#C9C9C9"/><stop offset="1" stop-color="#A8A8A8"/></linearGradient></defs><ellipse cx="100" cy="200" rx="64" ry="5" fill="#000" opacity="0.18"/><g filter="url(#sh-gh)"><path d="M48 76 Q40 84 36 102 L30 170 Q30 180 40 182 L62 178 L64 100 Q60 88 60 80 Z" fill="url(#gh-g)"/><path d="M152 76 Q160 84 164 102 L170 170 Q170 180 160 182 L138 178 L136 100 Q140 88 140 80 Z" fill="url(#gh-g)"/><rect x="38" y="170" width="22" height="10" fill="#7A7A7A"/><rect x="140" y="170" width="22" height="10" fill="#7A7A7A"/><path d="M70 60 Q100 38 130 60 L132 80 Q120 70 100 70 Q80 70 68 80 Z" fill="url(#gh-g)"/><path d="M84 70 Q100 64 116 70 L114 84 Q100 78 86 84 Z" fill="#7A7A7A" opacity="0.5"/><path d="M58 76 L52 90 L50 190 Q50 194 54 194 L146 194 Q150 194 150 190 L148 90 L142 76 L130 68 Q120 76 100 76 Q80 76 70 68 Z" fill="url(#gh-g)"/><path d="M72 130 Q72 122 80 120 L120 120 Q128 122 128 130 L132 162 Q132 168 124 168 L76 168 Q68 168 68 162 Z" fill="#D9D7D2" opacity="0.4"/><path d="M72 130 Q72 122 80 120 L120 120 Q128 122 128 130 L132 162 Q132 168 124 168 L76 168 Q68 168 68 162 Z" fill="none" stroke="#7A7A7A" stroke-width="0.5"/><line x1="100" y1="124" x2="100" y2="166" stroke="#7A7A7A" stroke-width="0.4" opacity="0.6"/><line x1="92" y1="78" x2="88" y2="106" stroke="#F8F6F1" stroke-width="2" stroke-linecap="round"/><line x1="108" y1="78" x2="112" y2="106" stroke="#F8F6F1" stroke-width="2" stroke-linecap="round"/><circle cx="88" cy="106" r="1.6" fill="#F8F6F1"/><circle cx="112" cy="106" r="1.6" fill="#F8F6F1"/></g></svg>`,
+  };
+  /* Category tabs are display-only — no click handler */
+
+  /* Reveal + FAQ (preserved) */
+  const obs = new IntersectionObserver(
+    es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); }),
+    { threshold: 0.05 }
+  );
+  document.querySelectorAll('.fu').forEach(el => obs.observe(el));
+  document.querySelectorAll('.faq-q').forEach(q => {
+    q.addEventListener('click', () => {
+      const item = q.parentElement;
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+
+  // Reserve form validation
+  const nameInput = document.getElementById('reserveName');
+  const contactInput = document.getElementById('reserveContact');
+  const reserveBtn = document.getElementById('reserveBtn');
+
+  function checkForm() {
+    const filled = nameInput.value.trim().length > 0 && contactInput.value.trim().length > 0;
+    reserveBtn.disabled = !filled;
+  }
+  nameInput.addEventListener('input', checkForm);
+  contactInput.addEventListener('input', checkForm);
+
+  function handleReserve() {
+    // 카카오페이 링크를 여기에 연결하세요
+    const KAKAOPAY_LINK = 'https://qr.kakaopay.com/여기에링크입력';
+    window.open(KAKAOPAY_LINK, '_blank');
+  }
+</script>
+</body>
+</html>
