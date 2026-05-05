@@ -110,24 +110,38 @@ def track():
 @require_auth
 def dash_data():
     today = datetime.now().strftime('%Y-%m-%d')
+    start = request.args.get('start', '')
+    end   = request.args.get('end', today)
+
+    if start:
+        df = "AND date(created_at) BETWEEN ? AND ?"
+        da = (start, end)
+    else:
+        df, da = '', ()
+
     with db() as c:
         def q(sql, *args): return c.execute(sql, args).fetchall()
         def scalar(sql, *args): return c.execute(sql, args).fetchone()[0]
+        def pq(sql, *args): return q(sql + ' ' + df, *args, *da)
+        def ps(sql, *args): return scalar(sql + ' ' + df, *args, *da)
 
-        funnel = {ev: scalar('SELECT COUNT(DISTINCT session_id) FROM events WHERE event_name=?', ev)
+        funnel = {ev: ps('SELECT COUNT(DISTINCT session_id) FROM events WHERE event_name=?', ev)
                   for ev in ['page_view','plan_picker_open','plan_form_valid','plan_selected','confirm_btn_click']}
 
         today_pv   = scalar("SELECT COUNT(DISTINCT session_id) FROM events WHERE event_name='page_view' AND date(created_at)=?", today)
         today_conv = scalar("SELECT COUNT(DISTINCT session_id) FROM events WHERE event_name='confirm_btn_click' AND date(created_at)=?", today)
         active     = scalar("SELECT COUNT(DISTINCT session_id) FROM events WHERE datetime(created_at) >= datetime('now','-5 minutes')")
 
-        recent   = q('SELECT event_name,properties,device,utm_source,session_id,created_at FROM events ORDER BY id DESC LIMIT 50')
-        utms     = q("SELECT utm_source, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND utm_source IS NOT NULL GROUP BY utm_source ORDER BY cnt DESC LIMIT 10")
-        devices  = q("SELECT device, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' GROUP BY device ORDER BY cnt DESC")
-        hourly   = q("SELECT strftime('%H',created_at) hr, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND date(created_at)=? GROUP BY hr ORDER BY hr", today)
-        plans    = q("SELECT properties, COUNT(*) cnt FROM events WHERE event_name='plan_selected' GROUP BY properties ORDER BY cnt DESC")
-        scroll   = q("SELECT json_extract(properties,'$.depth') depth, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='scroll_depth' GROUP BY depth ORDER BY CAST(depth AS INTEGER)")
-        sections = q("SELECT json_extract(properties,'$.section') sec, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='section_view' GROUP BY sec ORDER BY cnt DESC")
+        recent_sql = 'SELECT event_name,properties,device,utm_source,session_id,created_at FROM events'
+        recent_sql += (' WHERE date(created_at) BETWEEN ? AND ?' if start else '') + ' ORDER BY id DESC LIMIT 50'
+        recent   = q(recent_sql, *(da if start else ()))
+        utms     = pq("SELECT utm_source, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND utm_source IS NOT NULL GROUP BY utm_source ORDER BY cnt DESC LIMIT 10")
+        devices  = pq("SELECT device, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' GROUP BY device ORDER BY cnt DESC")
+        hourly_d = end if start else today
+        hourly   = q("SELECT strftime('%H',created_at) hr, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND date(created_at)=? GROUP BY hr ORDER BY hr", hourly_d)
+        plans    = pq("SELECT properties, COUNT(*) cnt FROM events WHERE event_name='plan_selected' GROUP BY properties ORDER BY cnt DESC")
+        scroll   = pq("SELECT json_extract(properties,'$.depth') depth, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='scroll_depth' GROUP BY depth ORDER BY CAST(depth AS INTEGER)")
+        sections = pq("SELECT json_extract(properties,'$.section') sec, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='section_view' GROUP BY sec ORDER BY cnt DESC")
 
     plans_out = []
     for p in plans:
@@ -146,6 +160,14 @@ def dash_data():
         'scroll':   [dict(r) for r in scroll],
         'sections': [dict(r) for r in sections],
     })
+
+@app.route('/api/reset', methods=['POST'])
+@require_auth
+def reset_data():
+    with db() as c:
+        c.execute('DELETE FROM events')
+        c.commit()
+    return jsonify({'ok': True})
 
 # ── Blocklist API ─────────────────────────────────────────────
 @app.route('/api/blocklist', methods=['GET'])
