@@ -132,11 +132,14 @@
     .guarantee-chip svg { flex-shrink: 0; }
 
     /* Plan picker modal */
-    .plan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: flex-end; justify-content: center; }
+    .plan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; align-items: flex-end; justify-content: center; padding: 0 16px; }
     .plan-overlay.open { display: flex; }
     .plan-sheet {
       background: #fff; border-radius: 20px 20px 0 0;
       padding: 28px 24px 40px; width: 100%; max-width: 480px;
+    }
+    @media (max-width: 480px) {
+      .plan-sheet { border-radius: 20px; margin-bottom: 16px; }
     }
     .plan-sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
     .plan-sheet-title { font-size: 16px; font-weight: 700; }
