@@ -5,7 +5,6 @@ LOOKBOX Analytics Server
 
 Landing:   http://localhost:8080
 Dashboard: http://localhost:8080/dashboard  (ID: admin / PW: lookbox2026)
-IP blocklist: ip_blocklist.txt  (한 줄에 IP 하나)
 """
 import os, json, sqlite3, hashlib
 from datetime import datetime
@@ -16,7 +15,6 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, 'v2')
 DATA_DIR   = os.environ.get('DATA_DIR', BASE_DIR)
 DB_PATH    = os.path.join(DATA_DIR, 'tracker.db')
-BLOCKLIST  = os.path.join(DATA_DIR, 'ip_blocklist.txt')
 DASH_PW    = os.environ.get('DASHBOARD_PASSWORD', 'lookbox2026')
 
 app = Flask(__name__, static_folder=None)
@@ -46,14 +44,17 @@ def init_db():
         )''')
         for col in ['event_name','session_id','created_at']:
             c.execute(f'CREATE INDEX IF NOT EXISTS idx_{col} ON events({col})')
+        c.execute('''CREATE TABLE IF NOT EXISTS ip_blocklist (
+            ip TEXT PRIMARY KEY,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
         c.commit()
 
 # ── Helpers ───────────────────────────────────────────────────
 def blocklist():
-    if not os.path.exists(BLOCKLIST):
-        return set()
-    with open(BLOCKLIST) as f:
-        return {l.strip() for l in f if l.strip() and not l.startswith('#')}
+    with db() as c:
+        rows = c.execute('SELECT ip FROM ip_blocklist').fetchall()
+    return {r['ip'] for r in rows}
 
 def client_ip():
     return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
@@ -173,11 +174,9 @@ def reset_data():
 @app.route('/api/blocklist', methods=['GET'])
 @require_auth
 def bl_get():
-    ips = []
-    if os.path.exists(BLOCKLIST):
-        with open(BLOCKLIST) as f:
-            ips = [l.strip() for l in f if l.strip() and not l.startswith('#')]
-    return jsonify({'ips': ips})
+    with db() as c:
+        rows = c.execute('SELECT ip FROM ip_blocklist ORDER BY created_at DESC').fetchall()
+    return jsonify({'ips': [r['ip'] for r in rows]})
 
 @app.route('/api/blocklist', methods=['POST'])
 @require_auth
@@ -185,26 +184,17 @@ def bl_add():
     ip = (request.get_json(silent=True) or {}).get('ip', '').strip()
     if not ip:
         return jsonify({'error': 'IP required'}), 400
-    existing = []
-    if os.path.exists(BLOCKLIST):
-        with open(BLOCKLIST) as f:
-            existing = [l.rstrip('\n') for l in f]
-    if ip not in [l.strip() for l in existing if not l.strip().startswith('#')]:
-        with open(BLOCKLIST, 'a') as f:
-            f.write(f'\n{ip}')
+    with db() as c:
+        c.execute('INSERT OR IGNORE INTO ip_blocklist (ip) VALUES (?)', (ip,))
+        c.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/blocklist/<path:ip>', methods=['DELETE'])
 @require_auth
 def bl_del(ip):
-    if not os.path.exists(BLOCKLIST):
-        return jsonify({'ok': True})
-    with open(BLOCKLIST) as f:
-        lines = f.readlines()
-    with open(BLOCKLIST, 'w') as f:
-        for l in lines:
-            if l.strip() != ip:
-                f.write(l)
+    with db() as c:
+        c.execute('DELETE FROM ip_blocklist WHERE ip=?', (ip,))
+        c.commit()
     return jsonify({'ok': True})
 
 # ── Dashboard & Static ────────────────────────────────────────
@@ -231,6 +221,5 @@ if __name__ == '__main__':
     print(f'\n  LOOKBOX Analytics Server')
     print(f'  Landing:   http://localhost:8080')
     print(f'  Dashboard: http://localhost:8080/dashboard  (PW: {DASH_PW})')
-    print(f'  Blocklist: {BLOCKLIST}\n')
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
