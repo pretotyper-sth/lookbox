@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">LOOKBOX logo</title>
+  <desc id="desc">A simple warm premium LOOKBOX mark combining a box-like wardrobe frame with the LB monogram.</desc>
+  <defs>
+    <linearGradient id="icon-bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B1814"/>
+      <stop offset="0.55" stop-color="#111111"/>
+      <stop offset="1" stop-color="#0A0A0B"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="180" y1="128" x2="844" y2="896" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F0D9B0"/>
+      <stop offset="0.5" stop-color="#C8AA7A"/>
+      <stop offset="1" stop-color="#8F6E3E"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="30" stdDeviation="28" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#icon-bg)"/>
+  <rect x="100" y="118" width="824" height="788" rx="92" fill="none" stroke="url(#gold)" stroke-width="48" filter="url(#soft-shadow)"/>
+  <path d="M286 326H496C504 282 542 252 590 252C600 252 608 259 608 268C608 277 600 284 591 284C559 284 534 302 527 326H738C747 326 754 333 754 342C754 351 747 358 738 358H286C277 358 270 351 270 342C270 333 277 326 286 326Z" fill="#EFE4D2" opacity="0.86"/>
+  <text x="512" y="626" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="310" font-weight="700" letter-spacing="-26" fill="url(#gold)">LB</text>
+</svg>

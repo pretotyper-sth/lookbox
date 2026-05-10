@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOOKBOX Logo Preview</title>
+  <link rel="icon" type="image/svg+xml" href="../v2/assets/brand/lookbox-logo.svg" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif;
+      background: #FAF8F4;
+      color: #0E0E10;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+    main {
+      width: min(960px, 100%);
+      display: grid;
+      gap: 28px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      align-items: center;
+      gap: 32px;
+      padding: 32px;
+      border: 1px solid #EAE4D6;
+      border-radius: 28px;
+      background: #FFFFFF;
+      box-shadow: 0 24px 80px rgba(14, 14, 16, 0.08);
+    }
+    .logo-xl {
+      width: 220px;
+      height: 220px;
+      box-shadow: 0 28px 60px rgba(14, 14, 16, 0.24);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(36px, 7vw, 76px);
+      line-height: 0.95;
+      letter-spacing: -0.07em;
+    }
+    p {
+      margin: 0;
+      color: rgba(14, 14, 16, 0.58);
+      font-size: 16px;
+      line-height: 1.7;
+      word-break: keep-all;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .tile {
+      min-height: 170px;
+      border-radius: 22px;
+      border: 1px solid #EAE4D6;
+      background: #FFFFFF;
+      display: grid;
+      place-items: center;
+      gap: 10px;
+      padding: 20px;
+    }
+    .tile.dark { background: #0E0E10; border-color: #0E0E10; color: #FAF8F4; }
+    .tile.beige { background: #F2EFE8; }
+    .tile img { display: block; }
+    .size-128 { width: 128px; height: 128px; }
+    .size-64 { width: 64px; height: 64px; }
+    .size-32 { width: 32px; height: 32px; }
+    .label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8E6F40;
+    }
+    @media (max-width: 720px) {
+      .hero { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <img class="logo-xl" src="../v2/assets/brand/lookbox-logo.svg" alt="LOOKBOX logo" />
+      <div>
+        <div class="label">LOOKBOX Logo Draft 01</div>
+        <h1>LOOKBOX</h1>
+        <p>인스타 광고와 파비콘에서 같이 쓰기 좋은 정사각형 심볼입니다. 옷장 프레임, 박스 형태, LB 모노그램을 한 번에 읽히도록 단순하게 잡았습니다.</p>
+      </div>
+    </section>
+    <section class="grid" aria-label="Logo size previews">
+      <div class="tile">
+        <img class="size-128" src="../v2/assets/brand/lookbox-logo.svg" alt="128px preview" />
+        <div class="label">128 px</div>
+      </div>
+      <div class="tile beige">
+        <img class="size-64" src="../v2/assets/brand/lookbox-logo.svg" alt="64px preview" />
+        <div class="label">64 px</div>
+      </div>
+      <div class="tile dark">
+        <img class="size-32" src="../v2/assets/brand/lookbox-favicon.svg" alt="32px favicon preview" />
+        <div class="label">Favicon</div>
+      </div>
+      <div class="tile">
+        <img class="size-64" src="../v2/assets/brand/lookbox-logo.svg" alt="Ad icon preview" />
+        <div class="label">Ad Icon</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

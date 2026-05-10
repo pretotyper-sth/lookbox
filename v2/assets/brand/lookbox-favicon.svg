@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LOOKBOX favicon">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#181613"/>
+      <stop offset="1" stop-color="#0E0E10"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="16" y1="12" x2="50" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E8D0A5"/>
+      <stop offset="1" stop-color="#A88A5C"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#bg)"/>
+  <rect x="8" y="9" width="48" height="46" rx="6" fill="none" stroke="url(#gold)" stroke-width="4.2"/>
+  <text x="32" y="41" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="25" font-weight="700" letter-spacing="-2.4" fill="url(#gold)">LB</text>
+</svg>

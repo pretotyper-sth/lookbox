@@ -204,7 +204,7 @@ def bl_del(ip):
 @app.route('/dashboard')
 @require_auth
 def dashboard():
-    return send_from_directory(BASE_DIR, 'dashboard.html')
+    return send_from_directory(os.path.join(BASE_DIR, 'admin'), 'dashboard.html')
 
 @app.route('/')
 def root():
