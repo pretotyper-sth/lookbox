@@ -20,6 +20,7 @@ DASH_PW    = os.environ.get('DASHBOARD_PASSWORD', 'lookbox2026')
 app = Flask(__name__, static_folder=None)
 
 # ── DB ────────────────────────────────────────────────────────
+# init_db() also called at module load so WSGI hosts (PythonAnywhere) initialize the schema.
 def db():
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
@@ -49,6 +50,8 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
         c.commit()
+
+init_db()
 
 # ── Helpers ───────────────────────────────────────────────────
 def blocklist():
@@ -217,7 +220,6 @@ def static_root(path):
     except: abort(404)
 
 if __name__ == '__main__':
-    init_db()
     print(f'\n  LOOKBOX Analytics Server')
     print(f'  Landing:   http://localhost:8080')
     print(f'  Dashboard: http://localhost:8080/dashboard  (PW: {DASH_PW})')
