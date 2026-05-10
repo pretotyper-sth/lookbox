@@ -36,9 +36,8 @@
     /* ── Nav ── */
     nav { position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: var(--nav-h); background: var(--bg); border-bottom: 1px solid var(--border); }
     nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; }
-    .logo { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 900; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
+    .logo { font-size: 16px; font-weight: 900; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
     .logo em { color: var(--accent); font-style: normal; }
-    .logo img { width: 26px; height: 26px; border-radius: 6px; display: block; }
     .btn-nav { background: var(--ink); color: #fff; border: none; cursor: pointer; padding: 9px 12px; border-radius: var(--r-sm); font-family: inherit; font-size: 13px; font-weight: 700; transition: background 0.15s; }
     .btn-nav:hover { background: var(--accent-dk); }
 
@@ -399,7 +398,7 @@
 <!-- Nav -->
 <nav>
   <div class="wrap">
-    <a href="#" class="logo"><img src="assets/brand/lookbox-logo.svg" alt=""/>LOOK<em>BOX</em></a>
+    <a href="#" class="logo">LOOK<em>BOX</em></a>
     <button class="btn-nav" onclick="_track('nav_cta_click');window.scrollTo({top: document.getElementById('pricing').offsetTop - 120, behavior:'smooth'})">방문 예약하기</button>
   </div>
 </nav>
