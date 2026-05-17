@@ -139,7 +139,9 @@ def dash_data():
         recent_sql = 'SELECT event_name,properties,device,utm_source,session_id,created_at FROM events'
         recent_sql += (' WHERE date(created_at) BETWEEN ? AND ?' if start else '') + ' ORDER BY id DESC LIMIT 50'
         recent   = q(recent_sql, *(da if start else ()))
-        utms     = pq("SELECT utm_source, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND utm_source IS NOT NULL GROUP BY utm_source ORDER BY cnt DESC LIMIT 10")
+        utms     = pq("SELECT COALESCE(utm_source,'(직접 방문)') utm_source, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' GROUP BY utm_source ORDER BY cnt DESC LIMIT 10")
+        ad_break = pq("SELECT COALESCE(utm_source,'(직접)') src, COALESCE(utm_campaign,'-') camp, COALESCE(json_extract(properties,'$.utm_content'),'-') content, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND utm_source IS NOT NULL GROUP BY src, camp, content ORDER BY cnt DESC LIMIT 20")
+        payers   = pq("SELECT properties, created_at FROM events WHERE event_name='confirm_btn_click' ORDER BY id DESC LIMIT 50")
         devices  = pq("SELECT device, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' GROUP BY device ORDER BY cnt DESC")
         hourly_d = end if start else today
         hourly   = q("SELECT strftime('%H',created_at) hr, COUNT(DISTINCT session_id) cnt FROM events WHERE event_name='page_view' AND date(created_at)=? GROUP BY hr ORDER BY hr", hourly_d)
@@ -158,6 +160,8 @@ def dash_data():
         'active_now': active,
         'recent':   [dict(r) for r in recent],
         'utms':     [dict(r) for r in utms],
+        'ad_break': [dict(r) for r in ad_break],
+        'payers':   [dict(r) for r in payers],
         'devices':  [dict(r) for r in devices],
         'hourly':   [dict(r) for r in hourly],
         'plans':    plans_out,

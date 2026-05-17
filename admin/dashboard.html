@@ -200,6 +200,18 @@ canvas{max-height:130px}
     </div>
   </div>
 
+  <!-- Ad creative breakdown (source × campaign × content) -->
+  <div class="card" style="margin-top:14px">
+    <div class="st">광고 소재별 유입 (source · campaign · content)</div>
+    <div id="adbreak"><div class="empty">광고 트래픽 없음</div></div>
+  </div>
+
+  <!-- 결제 시도자 (confirm_btn_click form data) -->
+  <div class="card" style="margin-top:14px;border-color:rgba(196,168,130,.4)">
+    <div class="st" style="color:rgba(196,168,130,.95)">★ 결제 시도자 (예약 폼 제출)</div>
+    <div id="payers"><div class="empty">결제 시도 없음</div></div>
+  </div>
+
   <!-- Scroll + Sections -->
   <div class="g2b">
     <div class="card">
@@ -312,6 +324,38 @@ function render(d) {
 
   // UTMs
   document.getElementById('utms').innerHTML = bars(d.utms, 'utm_source', 'cnt');
+
+  // Ad breakdown (source · campaign · content)
+  const adRows = (d.ad_break||[]);
+  if (adRows.length) {
+    const max = Math.max(...adRows.map(r=>r.cnt), 1);
+    document.getElementById('adbreak').innerHTML = adRows.map(r => {
+      const label = `${r.src} · ${r.camp} · ${r.content}`;
+      const pct = Math.round(r.cnt/max*100);
+      return `<div class="br"><div class="bl">${label}</div><div class="bb"><div class="bf" style="width:${pct}%"></div></div><div class="bn">${r.cnt}</div></div>`;
+    }).join('');
+  } else {
+    document.getElementById('adbreak').innerHTML = '<div class="empty">광고 트래픽 없음</div>';
+  }
+
+  // Payers (confirm_btn_click submissions with name+contact)
+  const payers = (d.payers||[]);
+  if (payers.length) {
+    document.getElementById('payers').innerHTML = payers.map(p => {
+      let props = {}; try { props = JSON.parse(p.properties||'{}'); } catch {}
+      const plan = PLAN_LABELS[props.plan] || props.plan || '?';
+      const name = props.name || '(이름 없음)';
+      const contact = props.contact || '(연락처 없음)';
+      const time = rel(p.created_at);
+      return `<div class="er">
+        <div><span class="en key">${name}</span> <span style="opacity:.6">· ${contact}</span></div>
+        <div style="text-align:right"><span class="bdg m" style="background:rgba(196,168,130,.18);color:rgba(255,255,255,.85)">${plan}</span></div>
+        <div class="et">${time}</div>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('payers').innerHTML = '<div class="empty">결제 시도 없음</div>';
+  }
 
   // Devices
   const devs = (d.devices||[]).map(x => ({...x, device: DEV_LABELS[x.device]||x.device}));
