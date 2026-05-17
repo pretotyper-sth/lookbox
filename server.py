@@ -71,6 +71,20 @@ def device(ua):
     if any(x in u for x in ['ipad','tablet']): return 'tablet'
     return 'desktop'
 
+BOT_PATTERNS = (
+    'bot','crawler','spider','curl','wget','python-requests','httpclient',
+    'headlesschrome','phantomjs','puppeteer','playwright','selenium',
+    'facebookexternalhit','meta-externalagent','kakaotalk-scrap','daum',
+    'twitterbot','whatsapp','telegrambot','linkedinbot','slackbot',
+    'discordbot','pinterestbot','redditbot','embed','preview','lighthouse',
+    'gptbot','claudebot','perplexity','anthropic','openai','ccbot',
+)
+
+def is_bot(ua):
+    u = (ua or '').lower()
+    if not u: return True
+    return any(p in u for p in BOT_PATTERNS)
+
 def require_auth(f):
     @wraps(f)
     def wrap(*a, **kw):
@@ -88,10 +102,12 @@ def track():
     ip = client_ip()
     if ip in blocklist():
         return jsonify({'ok': True})
+    ua = request.headers.get('User-Agent', '')
+    if is_bot(ua):
+        return jsonify({'ok': True, 'filtered': 'bot'})
     try:
         data  = request.get_json(silent=True) or {}
         props = data.get('properties', {})
-        ua    = request.headers.get('User-Agent', '')
         with db() as c:
             c.execute('''INSERT INTO events
                 (session_id,event_name,properties,page_url,referrer,user_agent,
