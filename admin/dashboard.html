@@ -278,6 +278,7 @@ function render(d) {
     const label = EV_LABELS[e.event_name] || e.event_name;
     const detail = e.event_name==='scroll_depth' ? ` ${props.depth}%`
       : e.event_name==='plan_selected' ? ` (${PLAN_LABELS[props.plan]||props.plan||''})`
+      : e.event_name==='confirm_btn_click' ? ` (${PLAN_LABELS[props.plan]||props.plan||''}) ${props.name||''} · ${props.contact||''}`
       : e.event_name==='section_view'  ? ` (${props.section||''})`
       : e.event_name==='time_on_page'  ? ` ${props.seconds}s`
       : e.event_name==='faq_open'      ? ` "${(props.text||'').slice(0,30)}"`

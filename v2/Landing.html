@@ -969,7 +969,9 @@
   }
   function confirmPlan() {
     if (!_selectedPlan) return;
-    _track('confirm_btn_click', {plan: _selectedPlan});
+    const name = document.getElementById('modalName').value.trim();
+    const contact = document.getElementById('modalContact').value.trim();
+    _track('confirm_btn_click', {plan: _selectedPlan, name: name, contact: contact});
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
       window.open(PLAN_URLS[_selectedPlan], '_blank');
