@@ -107,6 +107,8 @@
 
     /* ── Insight dark ── */
     .insight { background: var(--dark); color: #fff; }
+    .insight-cta { background: #D4B98C; color: #1A1A1C; margin-top: 28px; max-width: 320px; }
+    .insight-cta:hover { background: #E8CFA3; }
     .insight .s-label { color: rgba(255,255,255,0.35); }
     .insight-big { font-size: clamp(26px, 6vw, 52px); font-weight: 800; letter-spacing: -2px; line-height: 1.38; }
     .insight-big em { color: #D4B98C; font-style: normal; }
@@ -421,7 +423,7 @@
 <nav>
   <div class="wrap">
     <a href="#" class="logo">LOOK<em>BOX</em></a>
-    <button class="btn-nav" onclick="_track('nav_cta_click');window.scrollTo({top: document.getElementById('pricing').offsetTop - 120, behavior:'smooth'})">방문 예약하기</button>
+    <button class="btn-nav" onclick="_track('nav_cta_click');openPlanPicker()">방문 예약하기</button>
   </div>
 </nav>
 
@@ -433,9 +435,10 @@
       <h1>이 옷, 내 옷이랑 어울릴까?<br><em>구매하기 전에 확인하세요</em></h1>
       <p class="hero-sub">나만의 디지털 옷장을 만들어 보세요.<br>쇼핑 링크나 사진으로 내 옷 기준 조합을 AI가 확인해줘요.</p>
       <div class="hero-actions">
-        <button class="btn-primary" onclick="_track('hero_primary_click');window.scrollTo({top: document.getElementById('pricing').offsetTop - 120, behavior:'smooth'})">방문 예약하기 →</button>
+        <button class="btn-primary" onclick="_track('hero_primary_click');openPlanPicker()">방문 예약하기 · 39,000원</button>
         <button class="btn-outline" onclick="_track('hero_secondary_click');window.scrollTo({top: document.getElementById('how').offsetTop - 120, behavior:'smooth'})">어떻게 작동해요?</button>
       </div>
+      <p class="hero-note">스태프 방문 30분 · 1달 Pro 무료 · 72시간 내 환불</p>
     </div>
   </div>
 </section>
@@ -471,8 +474,9 @@
 <section class="section insight" id="insight">
   <div class="wrap">
     <div class="fu">
-      <div class="insight-big">방문 한 번이면<br><em>충분해요</em></div>
-      <p class="insight-sub">스태프가 직접 와서 옷장 전체를 촬영·등록해드려요.<br>그 다음부터는 AI가 알아서 조합을 찾아줘요.</p>
+      <div class="insight-big">방문 한 번이면<br><em>끝나요.</em></div>
+      <p class="insight-sub">스태프가 옷장 전체를 디지털화 — 그 다음은 AI가 알아서.</p>
+      <button class="btn-primary insight-cta" onclick="_track('insight_cta_click');openPlanPicker()">방문 예약 · 39,000원</button>
     </div>
   </div>
 </section>
