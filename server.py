@@ -307,6 +307,7 @@ def remove_bg(input_path, output_path=None, mode='cloth', category=None):
 # 조합/표시용 정규화: 누끼 후 동일 배경(#EFEDE8)에 합성 → 타일 배경과 경계가 사라짐.
 NORM_BG  = (244, 237, 232)  # #EFEDE8
 NORM_DIR = os.path.join(UPLOADS_DIR, '.norm')
+FLAT_DIR = os.path.join(UPLOADS_DIR, '.flat')
 
 def normalized_upload(filename):
     """rembg로 배경 제거 → #EFEDE8 단색에 합성한 정규화본을 캐시 생성. 캐시(또는 폴백) fs 경로 반환."""
@@ -338,6 +339,60 @@ def normalized_upload(filename):
         return cache
     except Exception as e:
         print(f'[norm] 실패({filename}): {type(e).__name__}: {e}', flush=True)
+        return src
+
+def flatlay_upload(filename):
+    """제품컷의 흰 배경 사각형을 카드 배경색으로 맞춘 합성용 캐시."""
+    src = os.path.join(UPLOADS_DIR, filename)
+    if not os.path.exists(src):
+        return None
+    os.makedirs(FLAT_DIR, exist_ok=True)
+    stem = os.path.splitext(filename)[0]
+    cache = os.path.join(FLAT_DIR, stem + '.png')
+    if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(src):
+        return cache
+    try:
+        from PIL import Image
+        from collections import deque
+        img = Image.open(src).convert('RGBA')
+        w, h = img.size
+        px = img.load()
+        bg = NORM_BG
+
+        def is_bg(x, y):
+            r, g, b, a = px[x, y]
+            if a < 16:
+                return True
+            near_white = r >= 244 and g >= 244 and b >= 244
+            near_norm = abs(r - bg[0]) < 18 and abs(g - bg[1]) < 18 and abs(b - bg[2]) < 18
+            return near_white or near_norm
+
+        seen = set()
+        q = deque()
+        for x in range(w):
+            q.append((x, 0)); q.append((x, h - 1))
+        for y in range(h):
+            q.append((0, y)); q.append((w - 1, y))
+
+        while q:
+            x, y = q.popleft()
+            if (x, y) in seen or x < 0 or y < 0 or x >= w or y >= h:
+                continue
+            if not is_bg(x, y):
+                continue
+            seen.add((x, y))
+            q.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+
+        # 배경 후보가 과하게 크면 흰 옷 자체를 지울 수 있어 원본을 유지한다.
+        ratio = len(seen) / float(w * h)
+        if 0.06 <= ratio <= 0.82:
+            for x, y in seen:
+                r, g, b, a = px[x, y]
+                px[x, y] = (bg[0], bg[1], bg[2], a)
+        img.convert('RGB').save(cache, 'PNG')
+        return cache
+    except Exception as e:
+        print(f'[flat] 실패({filename}): {type(e).__name__}: {e}', flush=True)
         return src
 
 def _browser_headers():
@@ -1256,7 +1311,7 @@ def _live_item(row):
         'name': name,
         'category': cat,
         'color': r.get('color') or '뉴트럴',
-        'img': r.get('image_path'),
+        'img': (r.get('image_path') + '?flat=1') if r.get('image_path') else None,
         'status': r.get('status'),
         'brand': r.get('title') or '',
         'size': r.get('size_standard') or '',
@@ -1468,6 +1523,11 @@ def warm_norms():
 
 @app.route('/app/uploads/<path:filename>')
 def app_uploads(filename):
+    if request.args.get('flat'):
+        p = flatlay_upload(filename)
+        if p:
+            d, f = os.path.split(p)
+            return send_from_directory(d, f)
     if request.args.get('norm'):
         p = normalized_upload(filename)
         if p:
