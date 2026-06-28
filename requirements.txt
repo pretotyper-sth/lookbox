@@ -1,1 +1,5 @@
 flask
+openai
+pillow
+beautifulsoup4
+requests
