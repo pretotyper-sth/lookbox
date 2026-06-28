@@ -87,10 +87,15 @@ def init_wardrobe():
             base_id       INTEGER,
             considering_id INTEGER,
             reasoning     TEXT,
+            look_image_path TEXT,
             rating        INTEGER,
             worn          INTEGER DEFAULT 0,
             created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
+        try:
+            c.execute('ALTER TABLE outfits ADD COLUMN look_image_path TEXT')
+        except sqlite3.OperationalError:
+            pass
         c.execute('CREATE INDEX IF NOT EXISTS idx_clothes_status ON clothes(status)')
         c.commit()
 
@@ -308,6 +313,7 @@ def remove_bg(input_path, output_path=None, mode='cloth', category=None):
 NORM_BG  = (244, 237, 232)  # #EFEDE8
 NORM_DIR = os.path.join(UPLOADS_DIR, '.norm')
 FLAT_DIR = os.path.join(UPLOADS_DIR, '.flat')
+LOOKS_DIR = os.path.join(UPLOADS_DIR, '.looks')
 
 def normalized_upload(filename):
     """rembg로 배경 제거 → #EFEDE8 단색에 합성한 정규화본을 캐시 생성. 캐시(또는 폴백) fs 경로 반환."""
@@ -423,6 +429,71 @@ def flatlay_upload(filename):
     except Exception as e:
         print(f'[flat] 실패({filename}): {type(e).__name__}: {e}', flush=True)
         return src
+
+def _source_image_path(image_path):
+    fname = (image_path or '').split('?', 1)[0].rsplit('/', 1)[-1]
+    if not fname:
+        return None
+    p = os.path.join(UPLOADS_DIR, fname)
+    return p if os.path.exists(p) else None
+
+def _look_cache_name(item_ids):
+    key = ','.join(str(i) for i in sorted(item_ids))
+    return hashlib.sha256(key.encode()).hexdigest()[:16] + '.png'
+
+def generate_look_image(combo, item_lookup):
+    """OpenAI로 코디 전체를 한 장의 깨끗한 플랫레이 이미지로 생성하고 캐시한다."""
+    ids = [i for i in combo.get('item_ids', []) if i in item_lookup]
+    if len(ids) < 2 or not OPENAI_IMAGE_AVAILABLE:
+        return None
+    os.makedirs(LOOKS_DIR, exist_ok=True)
+    filename = _look_cache_name(ids)
+    output_path = os.path.join(LOOKS_DIR, filename)
+    public_path = f'/app/uploads/.looks/{filename}'
+    if os.path.exists(output_path):
+        return public_path
+    try:
+        from PIL import Image
+        import base64, io
+        board = Image.new('RGB', (1024, 1024), (244, 237, 232))
+        slots = [(64, 64, 448, 448), (576, 64, 960, 448), (64, 576, 448, 960), (576, 576, 960, 960), (352, 352, 672, 672)]
+        for idx, item_id in enumerate(ids[:5]):
+            item = item_lookup[item_id]
+            src = _source_image_path(item.get('image_path'))
+            if not src:
+                continue
+            img = Image.open(src).convert('RGBA')
+            img.thumbnail((340, 340))
+            x1, y1, x2, y2 = slots[idx]
+            x = x1 + ((x2 - x1) - img.width) // 2
+            y = y1 + ((y2 - y1) - img.height) // 2
+            board.alpha_composite(img, (x, y)) if board.mode == 'RGBA' else board.paste(img, (x, y), img)
+        buf = io.BytesIO()
+        board.save(buf, format='PNG')
+        buf.seek(0)
+        buf.name = 'look-reference.png'
+        prompt = """참고 이미지에 있는 의류만 사용해서 하나의 패션 플랫레이 코디 이미지를 만들어주세요.
+- 배경은 균일한 연한 웜그레이 #EFEDE8 단색.
+- 카드형 썸네일, 액자, 그림자 박스, 라벨, 텍스트, 사람, 마네킹은 모두 제거.
+- 각 옷은 잘리지 않게 전체가 보이도록 자연스럽게 배치.
+- 실제 쇼핑몰 스타일의 깔끔한 제품 플랫레이.
+- 참고 이미지에 없는 새 옷이나 장식은 추가하지 마세요.
+- 세로 4:5 비율."""
+        print(f'[look-img] OpenAI 시작 ids={ids}', flush=True)
+        result = _openai_client.images.edit(
+            model=OPENAI_IMAGE_MODEL,
+            image=buf,
+            prompt=prompt,
+            size='1024x1536',
+            quality=OPENAI_IMAGE_QUALITY,
+        )
+        with open(output_path, 'wb') as fo:
+            fo.write(base64.b64decode(result.data[0].b64_json))
+        print(f'[look-img] OpenAI 성공 → {filename}', flush=True)
+        return public_path
+    except Exception as e:
+        print(f'[look-img] 실패: {type(e).__name__}: {str(e)[:200]}', flush=True)
+        return None
 
 def _browser_headers():
     return {
@@ -1357,7 +1428,7 @@ def _live_outfit(combo):
         'label': mood[:18],
         'mood': mood,
         'itemIds': item_ids,
-        'lookImg': None,
+        'lookImg': combo.get('look_image_path'),
     }
 
 def _set_item_status(ids, status):
@@ -1505,8 +1576,8 @@ def live_coordinate():
     with db() as c:
         for combo in combos:
             cur = c.execute(
-                'INSERT INTO outfits (item_ids, base_id, considering_id, reasoning) VALUES (?,?,?,?)',
-                (json.dumps(combo['item_ids']), None, anchor_id, combo.get('reasoning') or 'AI 추천 코디')
+                'INSERT INTO outfits (item_ids, base_id, considering_id, reasoning, look_image_path) VALUES (?,?,?,?,?)',
+                (json.dumps(combo['item_ids']), None, anchor_id, combo.get('reasoning') or 'AI 추천 코디', None)
             )
             combo['id'] = cur.lastrowid
         c.commit()
@@ -1515,6 +1586,13 @@ def live_coordinate():
         if ids:
             q = ','.join('?' for _ in ids)
             item_rows = c.execute(f'SELECT * FROM clothes WHERE id IN ({q})', ids).fetchall()
+        item_lookup = {r['id']: dict(r) for r in item_rows}
+        for combo in combos:
+            look_path = generate_look_image(combo, item_lookup)
+            if look_path:
+                combo['look_image_path'] = look_path
+                c.execute('UPDATE outfits SET look_image_path=? WHERE id=?', (look_path, combo['id']))
+        c.commit()
     return jsonify({
         'anchor': _live_item(anchor) if anchor else None,
         'items': [_live_item(r) for r in item_rows],
