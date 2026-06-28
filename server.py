@@ -342,13 +342,13 @@ def normalized_upload(filename):
         return src
 
 def flatlay_upload(filename):
-    """제품컷의 흰 배경 사각형을 카드 배경색으로 맞춘 합성용 캐시."""
+    """제품컷의 배경 캔버스를 제거하고 옷만 남긴 합성용 투명 PNG 캐시."""
     src = os.path.join(UPLOADS_DIR, filename)
     if not os.path.exists(src):
         return None
     os.makedirs(FLAT_DIR, exist_ok=True)
     stem = os.path.splitext(filename)[0]
-    cache = os.path.join(FLAT_DIR, stem + '.png')
+    cache = os.path.join(FLAT_DIR, stem + '.v3.png')
     if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(src):
         return cache
     try:
@@ -357,39 +357,68 @@ def flatlay_upload(filename):
         img = Image.open(src).convert('RGBA')
         w, h = img.size
         px = img.load()
-        bg = NORM_BG
 
-        def is_bg(x, y):
+        # 제품컷은 보통 단색 배경 위 중앙에 옷이 있다. 가장자리에서 이어진
+        # 유사 색상 영역만 배경으로 간주해 옷 자체의 흰색은 최대한 보존한다.
+        samples = []
+        for x, y in (
+            (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+            (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
+        ):
+            r, g, b, a = px[x, y]
+            if a >= 16:
+                samples.append((r, g, b))
+        bg = tuple(sum(c[i] for c in samples) // len(samples) for i in range(3)) if samples else NORM_BG
+
+        def color_dist(c1, c2):
+            return sum((c1[i] - c2[i]) ** 2 for i in range(3)) ** 0.5
+
+        def is_bg(x, y, tolerance):
             r, g, b, a = px[x, y]
             if a < 16:
                 return True
-            near_white = r >= 244 and g >= 244 and b >= 244
-            near_norm = abs(r - bg[0]) < 18 and abs(g - bg[1]) < 18 and abs(b - bg[2]) < 18
-            return near_white or near_norm
+            return color_dist((r, g, b), bg) < tolerance
 
-        seen = set()
-        q = deque()
-        for x in range(w):
-            q.append((x, 0)); q.append((x, h - 1))
-        for y in range(h):
-            q.append((0, y)); q.append((w - 1, y))
+        def flood(tolerance):
+            seen = set()
+            q = deque()
+            for x in range(w):
+                q.append((x, 0)); q.append((x, h - 1))
+            for y in range(h):
+                q.append((0, y)); q.append((w - 1, y))
+            while q:
+                x, y = q.popleft()
+                if (x, y) in seen or x < 0 or y < 0 or x >= w or y >= h:
+                    continue
+                if not is_bg(x, y, tolerance):
+                    continue
+                seen.add((x, y))
+                q.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+            return seen
 
-        while q:
-            x, y = q.popleft()
-            if (x, y) in seen or x < 0 or y < 0 or x >= w or y >= h:
-                continue
-            if not is_bg(x, y):
-                continue
-            seen.add((x, y))
-            q.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+        best_seen, best_ratio = set(), 0
+        for tol in (42, 34, 28, 22, 16, 10):
+            seen = flood(tol)
+            ratio = len(seen) / float(w * h)
+            if 0.10 <= ratio <= 0.94:
+                best_seen, best_ratio = seen, ratio
+                break
+            if ratio > best_ratio and ratio < 0.985:
+                best_seen, best_ratio = seen, ratio
 
-        # 배경 후보가 과하게 크면 흰 옷 자체를 지울 수 있어 원본을 유지한다.
-        ratio = len(seen) / float(w * h)
-        if 0.06 <= ratio <= 0.82:
-            for x, y in seen:
+        if best_seen:
+            for x, y in best_seen:
                 r, g, b, a = px[x, y]
-                px[x, y] = (bg[0], bg[1], bg[2], a)
-        img.convert('RGB').save(cache, 'PNG')
+                px[x, y] = (r, g, b, 0)
+
+            bbox = img.getbbox()
+            if bbox:
+                pad = max(8, int(min(w, h) * 0.04))
+                l, t, r, b = bbox
+                img = img.crop((max(0, l - pad), max(0, t - pad), min(w, r + pad), min(h, b + pad)))
+        else:
+            print(f'[flat] no usable background mask for {filename}; using original canvas', flush=True)
+        img.save(cache, 'PNG')
         return cache
     except Exception as e:
         print(f'[flat] 실패({filename}): {type(e).__name__}: {e}', flush=True)
