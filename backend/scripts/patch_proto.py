@@ -16,10 +16,19 @@ EXTRACT = Path(__file__).resolve().parent / "extract_prototype.py"
 # file -> list of (old, new) exact replacements applied once each.
 TWEAKS = {
     "09-app.jsx": [
-        # combo-gate prompt copy: concrete + single line on mobile
+        # combo-gate prompt: friendly explanation first, add button below
         (
-            "          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>옷을 3벌 이상 담으면 조합을 추천받을 수 있어요</p>\n",
-            "          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>상의·하의·신발 등 3벌만 모으면 돼요</p>\n",
+            "        <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>\n"
+            "          <Btn full size=\"lg\" icon=\"plus\" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>\n"
+            "          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>옷을 3벌 이상 담으면 조합을 추천받을 수 있어요</p>\n"
+            "        </div>\n",
+            "        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>\n"
+            "          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>\n"
+            "          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>상의·하의·신발 등 옷을 3벌만 모으면<br />어울리는 조합을 추천해드려요.</p>\n"
+            "          <div style={{ marginTop: 20 }}>\n"
+            "            <Btn full size=\"lg\" icon=\"plus\" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>\n"
+            "          </div>\n"
+            "        </div>\n",
         ),
         # sidebar order: 옷장 > 룩북 > 오늘의 추천 코디
         (

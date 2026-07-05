@@ -434,9 +434,12 @@ function App() {
 
       <AddSheet ctx={ctx} />
       <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
-        <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>
-          <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
-          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>상의·하의·신발 등 3벌만 모으면 돼요</p>
+        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>상의·하의·신발 등 옷을 3벌만 모으면<br />어울리는 조합을 추천해드려요.</p>
+          <div style={{ marginTop: 20 }}>
+            <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
+          </div>
         </div>
       </BottomSheet>
       <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} />
