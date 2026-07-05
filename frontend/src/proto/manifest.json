@@ -14,13 +14,13 @@
     "sandalBlack": "/prototype-assets/sandalBlack.png",
     "skirtWhite": "/prototype-assets/skirtWhite.png",
     "topNavy": "/prototype-assets/topNavy.png",
-    "styleDandy": "/prototype-assets/styleDandy.png",
-    "styleClassic": "/prototype-assets/styleClassic.png",
-    "styleAmekaji": "/prototype-assets/styleAmekaji.png",
-    "styleStreet": "/prototype-assets/styleStreet.png",
-    "styleCasual": "/prototype-assets/styleCasual.png",
-    "styleMinimal": "/prototype-assets/styleMinimal.png",
-    "styleSporty": "/prototype-assets/styleSporty.png",
-    "styleChic": "/prototype-assets/styleChic.png"
+    "styleDandy": "/prototype-assets/styleDandy.jpg",
+    "styleClassic": "/prototype-assets/styleClassic.jpg",
+    "styleAmekaji": "/prototype-assets/styleAmekaji.jpg",
+    "styleStreet": "/prototype-assets/styleStreet.jpg",
+    "styleCasual": "/prototype-assets/styleCasual.jpg",
+    "styleMinimal": "/prototype-assets/styleMinimal.jpg",
+    "styleSporty": "/prototype-assets/styleSporty.jpg",
+    "styleChic": "/prototype-assets/styleChic.jpg"
   }
 }
