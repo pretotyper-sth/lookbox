@@ -22,6 +22,40 @@ const styles = [
   ['office', '오피스', '출근과 미팅에 안전하게'],
 ]
 
+const onboardingStyles = [
+  { id: 'minimal', name: '미니멀', en: 'MINIMAL', desc: '군더더기 없는 기본기', img: '/prototype-assets/style-minimal.png' },
+  { id: 'casual', name: '캐주얼', en: 'CASUAL', desc: '편안한 데일리 무드', img: '/prototype-assets/style-casual.png' },
+  { id: 'sporty', name: '스포티', en: 'SPORTY', desc: '활동적이고 가벼운', img: '/prototype-assets/style-sporty.png' },
+  { id: 'amekaji', name: '아메카지', en: 'AMEKAJI', desc: '빈티지 워크웨어', img: '/prototype-assets/style-amekaji.png' },
+  { id: 'dandy', name: '댄디', en: 'DANDY', desc: '단정한 클래식 신사', img: '/prototype-assets/style-dandy.png' },
+  { id: 'street', name: '스트릿', en: 'STREET', desc: '자유로운 시티 무드', img: '/prototype-assets/style-street.png' },
+  { id: 'chic', name: '시크', en: 'CHIC', desc: '모던하고 절제된', img: '/prototype-assets/style-chic.png' },
+  { id: 'classic', name: '클래식', en: 'CLASSIC', desc: '격식 있는 정통', img: '/prototype-assets/style-classic.png' },
+]
+
+const fits = ['슬림', '레귤러', '오버핏', '상관없음']
+const palettes = [
+  { id: 'mono', name: '모노톤', swatch: ['#1A1A1A', '#8A857C', '#FFFFFF'] },
+  { id: 'earth', name: '어스톤', swatch: ['#7C6748', '#A98C5A', '#D8C7A6'] },
+  { id: 'navy', name: '네이비·블루', swatch: ['#1F2A44', '#3E5A86', '#9FB4D4'] },
+  { id: 'warm', name: '웜 뉴트럴', swatch: ['#B0573C', '#D49A6A', '#EAD9C4'] },
+]
+const personalColors = [
+  { id: 'spring', name: '봄 웜', sub: 'Spring Warm', swatch: ['#FF8C69', '#FFD25A', '#9DCB6A'] },
+  { id: 'summer', name: '여름 쿨', sub: 'Summer Cool', swatch: ['#C9A2C8', '#E8A0B0', '#A8C4DE'] },
+  { id: 'autumn', name: '가을 웜', sub: 'Autumn Warm', swatch: ['#C18A3D', '#A8503A', '#7B7A3A'] },
+  { id: 'winter', name: '겨울 쿨', sub: 'Winter Cool', swatch: ['#C0246B', '#1F2A57', '#3FA7C9'] },
+]
+
+const initialPrefs = {
+  gender: '',
+  age: '',
+  styles: [],
+  fit: '',
+  palettes: [],
+  personalColor: '',
+}
+
 async function api(path, { token, method = 'GET', body, headers } = {}) {
   const isForm = body instanceof FormData
   const res = await fetch(`${API_BASE}${path}`, {
@@ -44,6 +78,8 @@ function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
+  const [signupStep, setSignupStep] = useState(0)
+  const [prefs, setPrefs] = useState(initialPrefs)
   const [tab, setTab] = useState('wardrobe')
   const [items, setItems] = useState([])
   const [outfits, setOutfits] = useState([])
@@ -92,10 +128,22 @@ function App() {
     setAuthError('')
     const action =
       authMode === 'signup'
-        ? supabase.auth.signUp({ email, password })
+        ? supabase.auth.signUp({ email, password, options: { data: { preferences: prefs } } })
         : supabase.auth.signInWithPassword({ email, password })
     const { error } = await action
     if (error) setAuthError(error.message)
+  }
+
+  function startSignup() {
+    setAuthMode('signup')
+    setSignupStep(0)
+    setAuthError('')
+  }
+
+  function startLogin() {
+    setAuthMode('login')
+    setSignupStep(0)
+    setAuthError('')
   }
 
   async function uploadWardrobe(file, status = 'owned') {
@@ -207,30 +255,25 @@ function App() {
 
   if (!session) {
     return (
-      <main className="landing-page">
-        <section className="landing-shell">
-          <div className="landing-brand"><Logo /></div>
-          <HeroPreview />
-          <section className="landing-copy">
-            <span className="eyebrow">AI wardrobe</span>
-            <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
-            <p>사고 싶은 옷이 내 옷장과 어울리는지 먼저 확인하세요. 가진 옷으로 오늘 입을 코디도 추천받을 수 있어요.</p>
-          </section>
-          <form className="auth-form" onSubmit={submitAuth}>
-            <label>이메일</label>
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
-            <label>비밀번호</label>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} />
-            {authError && <div className="error">{authError}</div>}
-            <button type="submit">{authMode === 'signup' ? '가입하고 시작' : '로그인'}</button>
-          </form>
-          <button className="link-button" onClick={() => setAuthMode(authMode === 'signup' ? 'login' : 'signup')}>
-            {authMode === 'signup' ? '이미 계정이 있어요' : '처음이면 가입하기'}
-          </button>
-        </section>
-      </main>
+      <LandingAuth
+        authMode={authMode}
+        setAuthMode={setAuthMode}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        authError={authError}
+        submitAuth={submitAuth}
+        signupStep={signupStep}
+        setSignupStep={setSignupStep}
+        prefs={prefs}
+        setPrefs={setPrefs}
+        startSignup={startSignup}
+        startLogin={startLogin}
+      />
     )
   }
+
 
   return (
     <div className="app-shell">
@@ -319,6 +362,185 @@ function App() {
 
 function Logo() {
   return <div className="logo">LOOK<span>BOX</span></div>
+}
+
+function LandingAuth({
+  authMode,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  authError,
+  submitAuth,
+  signupStep,
+  setSignupStep,
+  prefs,
+  setPrefs,
+  startSignup,
+  startLogin,
+}) {
+  const setPref = (key, value) => setPrefs((prev) => ({ ...prev, [key]: value }))
+  const signupSteps = [
+    {
+      eyebrow: '계정 만들기',
+      title: '이메일로 시작하기',
+      sub: '옷장과 추천 기록을 저장할 계정이 필요해요.',
+      valid: /\S+@\S+\.\S+/.test(email) && password.length >= 6,
+      content: (
+        <div className="auth-form fields-only">
+          <label>이메일</label>
+          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
+          <label>비밀번호</label>
+          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="new-password" />
+          <small className="helper">비밀번호는 6자 이상 입력해주세요.</small>
+        </div>
+      ),
+    },
+    {
+      eyebrow: '기본 정보',
+      title: '나를 알려주세요',
+      sub: '더 잘 맞는 옷을 추천하기 위한 기본 정보예요.',
+      valid: prefs.gender && prefs.age,
+      content: (
+        <div className="onboarding-section">
+          <ChoiceGroup label="성별" options={['여성', '남성', '선택 안 함']} value={prefs.gender} onPick={(v) => setPref('gender', v)} />
+          <ChoiceGroup label="연령대" options={['10대', '20대', '30대', '40대 이상']} value={prefs.age} onPick={(v) => setPref('age', v)} />
+        </div>
+      ),
+    },
+    {
+      eyebrow: '선호 스타일',
+      title: '어떤 무드를 좋아하세요?',
+      sub: '마음에 드는 스타일을 모두 골라주세요.',
+      valid: prefs.styles.length >= 1,
+      content: (
+        <div className="style-card-grid">
+          {onboardingStyles.map((style) => {
+            const selected = prefs.styles.includes(style.id)
+            return (
+              <button
+                className={`style-card ${selected ? 'selected' : ''}`}
+                key={style.id}
+                onClick={() => setPref('styles', selected ? prefs.styles.filter((id) => id !== style.id) : [...prefs.styles, style.id])}
+                type="button"
+              >
+                <img src={style.img} alt="" />
+                <span className="style-en">{style.en}</span>
+                <b>{style.name}</b>
+                <small>{style.desc}</small>
+              </button>
+            )
+          })}
+        </div>
+      ),
+    },
+    {
+      eyebrow: '핏과 컬러',
+      title: '핏과 컬러 취향은요?',
+      sub: '추천 옷의 실루엣과 색감을 맞춰드릴게요.',
+      valid: !!prefs.fit,
+      content: (
+        <div className="onboarding-section">
+          <ChoiceGroup label="선호하는 핏" options={fits} value={prefs.fit} onPick={(v) => setPref('fit', v)} />
+          <SwatchGroup label="퍼스널 컬러" options={personalColors} value={prefs.personalColor} onPick={(v) => setPref('personalColor', v)} />
+          <SwatchGroup label="선호 컬러 팔레트" options={palettes} value={prefs.palettes} multi onPick={(v) => setPref('palettes', v)} />
+        </div>
+      ),
+    },
+  ]
+  const step = signupSteps[signupStep]
+
+  if (authMode === 'signup') {
+    return (
+      <main className="landing-page">
+        <section className="landing-shell onboarding-shell">
+          <div className="landing-brand"><Logo /></div>
+          <span className="eyebrow">{step.eyebrow}</span>
+          <h1 className="onboarding-title">{step.title}</h1>
+          <p className="onboarding-sub">{step.sub}</p>
+          <div className="progress-dots">
+            {signupSteps.map((_, index) => <span className={index <= signupStep ? 'on' : ''} key={index} />)}
+          </div>
+          {step.content}
+          {authError && <div className="error">{authError}</div>}
+          <div className="onboarding-actions">
+            {signupStep > 0 && <button className="secondary" onClick={() => setSignupStep((s) => s - 1)} type="button">이전</button>}
+            {signupStep < signupSteps.length - 1 ? (
+              <button className="primary" disabled={!step.valid} onClick={() => setSignupStep((s) => s + 1)} type="button">다음</button>
+            ) : (
+              <button className="primary" disabled={!step.valid} onClick={submitAuth} type="button">가입하고 시작</button>
+            )}
+          </div>
+          <button className="link-button" onClick={startLogin}>이미 계정이 있어요</button>
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <main className="landing-page">
+      <section className="landing-shell">
+        <div className="landing-brand"><Logo /></div>
+        <HeroPreview />
+        <section className="landing-copy">
+          <span className="eyebrow">AI wardrobe</span>
+          <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
+          <p>사고 싶은 옷이 내 옷장과 어울리는지 먼저 확인하세요. 가진 옷으로 오늘 입을 코디도 추천받을 수 있어요.</p>
+        </section>
+        <form className="auth-form" onSubmit={submitAuth}>
+          <label>이메일</label>
+          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
+          <label>비밀번호</label>
+          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
+          {authError && <div className="error">{authError}</div>}
+          <button type="submit">로그인</button>
+        </form>
+        <button className="link-button" onClick={startSignup}>처음이면 가입하기</button>
+      </section>
+    </main>
+  )
+}
+
+function ChoiceGroup({ label, options, value, onPick }) {
+  return (
+    <div>
+      <div className="field-label">{label}</div>
+      <div className="chip-row">
+        {options.map((option) => (
+          <button className={value === option ? 'on' : ''} key={option} onClick={() => onPick(option)} type="button">{option}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SwatchGroup({ label, options, value, onPick, multi }) {
+  const values = multi ? value || [] : [value]
+  return (
+    <div>
+      <div className="field-label">{label}</div>
+      <div className="swatch-grid">
+        {options.map((option) => {
+          const selected = values.includes(option.id)
+          return (
+            <button
+              className={selected ? 'selected' : ''}
+              key={option.id}
+              onClick={() => {
+                if (!multi) return onPick(option.id)
+                onPick(selected ? values.filter((id) => id !== option.id) : [...values, option.id])
+              }}
+              type="button"
+            >
+              <span className="swatches">{option.swatch.map((color) => <i style={{ background: color }} key={color} />)}</span>
+              <b>{option.name}</b>
+              {option.sub && <small>{option.sub}</small>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function HeroPreview() {

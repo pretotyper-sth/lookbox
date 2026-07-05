@@ -339,6 +339,201 @@ h1 {
   word-break: keep-all;
 }
 
+.onboarding-shell {
+  max-width: 520px;
+}
+
+.onboarding-title {
+  margin: 9px 0 8px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.onboarding-sub,
+.helper {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.progress-dots {
+  display: flex;
+  gap: 5px;
+  margin: 18px 0;
+}
+
+.progress-dots span {
+  width: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.progress-dots span.on {
+  width: 24px;
+  background: var(--ink);
+}
+
+.fields-only {
+  margin-top: 18px;
+}
+
+.onboarding-section {
+  display: grid;
+  gap: 24px;
+  margin-top: 22px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-row button {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chip-row button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: white;
+}
+
+.style-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.style-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  text-align: left;
+  padding: 0;
+}
+
+.style-card.selected {
+  border: 2px solid var(--ink);
+}
+
+.style-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--ivory);
+}
+
+.style-card .style-en {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+.style-card b,
+.style-card small {
+  display: block;
+  padding: 0 12px;
+}
+
+.style-card b {
+  padding-top: 10px;
+  font-size: 14px;
+}
+
+.style-card small {
+  padding-bottom: 12px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+
+.swatch-grid button {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.swatch-grid button.selected {
+  border: 2px solid var(--ink);
+}
+
+.swatches {
+  display: flex;
+  overflow: hidden;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.swatches i {
+  flex: 1;
+}
+
+.swatch-grid b,
+.swatch-grid small {
+  display: block;
+}
+
+.swatch-grid b {
+  font-size: 13px;
+}
+
+.swatch-grid small {
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.onboarding-actions .primary,
+.onboarding-actions .secondary {
+  flex: 1;
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .auth-card {
   width: min(430px, 100%);
   padding: 28px;
