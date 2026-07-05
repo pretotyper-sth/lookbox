@@ -165,16 +165,23 @@ def main():
     # Post-extraction UX/text patches on top of the untouched prototype code.
     patches = {
         "09-app.jsx": [
-            # combo gate: reachable even with an empty wardrobe (shows a prompt)
+            # bind the shared BottomSheet used by the combo gate prompt
+            (
+                "const ReactDOM = window.ReactDOM;\n",
+                "const ReactDOM = window.ReactDOM;\nconst { BottomSheet } = window;\n",
+            ),
+            # gate state
+            (
+                "  const [dailyStyle, setDailyStyle] = useState('dandy');\n",
+                "  const [dailyStyle, setDailyStyle] = useState('dandy');\n"
+                "  const [comboPrompt, setComboPrompt] = useState(false);\n",
+            ),
+            # combo gate: reachable even with an empty wardrobe (opens a prompt)
             (
                 "  const startCombo = () => openAdd('anchor');\n",
                 "  const startCombo = () => openAdd('anchor');\n"
                 "  const comboReady = items.length >= 3;\n"
-                "  const comboGate = () => {\n"
-                "    if (comboReady) return startCombo();\n"
-                "    showToast('옷을 3벌 이상 담으면 조합을 추천받을 수 있어요');\n"
-                "    openAdd('wardrobe');\n"
-                "  };\n",
+                "  const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };\n",
             ),
             ("/> 오늘 코디", "/> 오늘의 추천 코디"),
             (
@@ -184,6 +191,17 @@ def main():
             (
                 "    hasWardrobe: items.length >= 3,\n",
                 "    hasWardrobe: items.length >= 3,\n    comboReady, comboGate,\n",
+            ),
+            # add-clothes prompt popup
+            (
+                "      <AddSheet ctx={ctx} />\n",
+                "      <AddSheet ctx={ctx} />\n"
+                "      <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>\n"
+                "        <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>\n"
+                "          <Btn full size=\"lg\" icon=\"plus\" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>\n"
+                "          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>옷을 3벌 이상 담으면 조합을 추천받을 수 있어요</p>\n"
+                "        </div>\n"
+                "      </BottomSheet>\n",
             ),
         ],
         "04-screens-ab.jsx": [

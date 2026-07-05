@@ -1,6 +1,7 @@
 /* @prototype-ported */
 const React = window.React;
 const ReactDOM = window.ReactDOM;
+const { BottomSheet } = window;
 const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ItemDetailSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
@@ -114,6 +115,7 @@ function App() {
   const [dailyAllowed, setDailyAllowed] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyStyle, setDailyStyle] = useState('dandy');
+  const [comboPrompt, setComboPrompt] = useState(false);
   const [tutorialDone, setTutorialDone] = useState(() => {
     if (isShowcase) return true;
     try { return localStorage.getItem('lb_tutorial_done') === '1'; } catch (e) { return false; }
@@ -201,11 +203,7 @@ function App() {
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false }));
   const startCombo = () => openAdd('anchor');
   const comboReady = items.length >= 3;
-  const comboGate = () => {
-    if (comboReady) return startCombo();
-    showToast('옷을 3벌 이상 담으면 조합을 추천받을 수 있어요');
-    openAdd('wardrobe');
-  };
+  const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };
   const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
   const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
@@ -435,6 +433,12 @@ function App() {
       )}
 
       <AddSheet ctx={ctx} />
+      <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
+        <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>
+          <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
+          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>옷을 3벌 이상 담으면 조합을 추천받을 수 있어요</p>
+        </div>
+      </BottomSheet>
       <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
