@@ -92,7 +92,7 @@ function WardrobeScreen({ ctx }) {
           </div>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>옷장에 옷을 담아보세요</h1>
           <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 260 }}>
-            가진 옷을 모아두면, 사기 전에 어울리는 조합을 미리 확인할 수 있어요.
+            가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
           </p>
           <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
             <Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>옷 추가</Btn>

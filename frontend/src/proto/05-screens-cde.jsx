@@ -194,7 +194,7 @@ function LookbookScreen({ ctx }) {
   if (saved.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <TopBar left={<div style={{ fontWeight: 800, fontSize: 19 }}>룩북</div>} />
+        {!wide && <TopBar left={<div style={{ fontWeight: 800, fontSize: 19, marginTop: 4 }}>룩북</div>} />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="bookmark" size={38} stroke={1.4} />
@@ -213,15 +213,9 @@ function LookbookScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {!wide && <TopBar left={<div style={{ fontWeight: 800, fontSize: 19 }}>룩북</div>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
+      {!wide && <TopBar left={<div style={{ fontWeight: 800, fontSize: 19, marginTop: 4 }}>룩북</div>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
       <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '4px 18px 28px' }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
-        {wide && (
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
-            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>룩북</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>
-          </div>
-        )}
         <div className="lb-grid">
           {saved.map((lk) => <SavedCard key={lk.id} look={lk} onOpen={() => openDetail(lk)} />)}
         </div>

@@ -375,11 +375,11 @@ function App() {
             <button className={'lb-navitem' + (tab === 'wardrobe' && !focused ? ' on' : '')} onClick={() => go('wardrobe')}>
               <Icon name="hanger" size={20} fill={tab === 'wardrobe' && !focused ? 'currentColor' : 'none'} stroke={tab === 'wardrobe' && !focused ? 0 : 1.7} /> 옷장
             </button>
-            <button className={'lb-navitem' + (tab === 'today' && !focused ? ' on' : '')} onClick={() => go('today')}>
-              <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘의 추천 코디
-            </button>
             <button className={'lb-navitem' + (tab === 'lookbook' && !focused ? ' on' : '')} onClick={() => go('lookbook')}>
               <Icon name="bookmark" size={20} fill={tab === 'lookbook' && !focused ? 'currentColor' : 'none'} stroke={tab === 'lookbook' && !focused ? 0 : 1.7} /> 룩북
+            </button>
+            <button className={'lb-navitem' + (tab === 'today' && !focused ? ' on' : '')} onClick={() => go('today')}>
+              <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘의 추천 코디
             </button>
             <button className={'lb-navitem' + (tab === 'mypage' && !focused ? ' on' : '')} onClick={() => go('mypage')}>
               <Icon name="user" size={20} fill={tab === 'mypage' && !focused ? 'currentColor' : 'none'} stroke={tab === 'mypage' && !focused ? 0 : 1.7} /> 마이페이지
@@ -436,7 +436,7 @@ function App() {
       <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
         <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>
           <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
-          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>옷을 3벌 이상 담으면 조합을 추천받을 수 있어요</p>
+          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>상의·하의·신발 등 3벌만 모으면 돼요</p>
         </div>
       </BottomSheet>
       <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} />
