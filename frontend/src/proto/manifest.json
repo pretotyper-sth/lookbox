@@ -1,0 +1,26 @@
+{
+  "order": [
+    "01-tweaks.jsx",
+    "02-shared.jsx",
+    "03-data.jsx",
+    "04-screens-ab.jsx",
+    "05-screens-cde.jsx",
+    "06-today.jsx",
+    "07-onboarding.jsx",
+    "08-mypage.jsx",
+    "09-app.jsx"
+  ],
+  "resources": {
+    "sandalBlack": "/prototype-assets/sandalBlack.png",
+    "skirtWhite": "/prototype-assets/skirtWhite.png",
+    "topNavy": "/prototype-assets/topNavy.png",
+    "styleDandy": "/prototype-assets/styleDandy.png",
+    "styleClassic": "/prototype-assets/styleClassic.png",
+    "styleAmekaji": "/prototype-assets/styleAmekaji.png",
+    "styleStreet": "/prototype-assets/styleStreet.png",
+    "styleCasual": "/prototype-assets/styleCasual.png",
+    "styleMinimal": "/prototype-assets/styleMinimal.png",
+    "styleSporty": "/prototype-assets/styleSporty.png",
+    "styleChic": "/prototype-assets/styleChic.png"
+  }
+}

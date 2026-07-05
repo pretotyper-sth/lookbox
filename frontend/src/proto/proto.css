@@ -1,0 +1,263 @@
+/* ============================================================
+   LOOKBOX — design tokens
+   Warm ivory editorial fashion. Borrows KRAFTON principles only:
+   Pretendard body type, 8pt spacing rhythm, restraint.
+   ============================================================ */
+/*
+Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
+https://github.com/orioncactus/pretendard
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+*/
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 900;
+	font-display: swap;
+	src: local('Pretendard Black'), url(/fonts/227c7b45-e433-4b95-91f3-6572beb9df03.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 800;
+	font-display: swap;
+	src: local('Pretendard ExtraBold'), url(/fonts/de24254b-44f8-468d-ac9b-975a523d6f2c.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 700;
+	font-display: swap;
+	src: local('Pretendard Bold'), url(/fonts/5d01f9a7-fd30-41e0-80e9-b77a7d9906ac.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 600;
+	font-display: swap;
+	src: local('Pretendard SemiBold'), url(/fonts/7bb1e4d3-271b-40e2-968b-e3521c139d21.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 500;
+	font-display: swap;
+	src: local('Pretendard Medium'), url(/fonts/410778ec-7f6d-4db6-9e64-d2820af70926.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 400;
+	font-display: swap;
+	src: local('Pretendard Regular'), url(/fonts/834042cf-1aeb-4690-96ed-3e04191eaa97.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 300;
+	font-display: swap;
+	src: local('Pretendard Light'), url(/fonts/a5c0c4c0-52b9-499c-bce1-61d092e4b039.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 200;
+	font-display: swap;
+	src: local('Pretendard ExtraLight'), url(/fonts/af92f9cd-652c-41db-9e8c-62991be15668.woff2) format('woff2');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 100;
+	font-display: swap;
+	src: local('Pretendard Thin'), url(/fonts/5096e075-5fa0-4aa0-a8b8-cbea0b75e63f.woff2) format('woff2');
+}
+
+
+:root {
+  /* ---- Color ---- */
+  --ivory:      #EFEDE8;   /* page + every garment thumbnail bg → things float */
+  --surface:    #F7F5F0;   /* cards / sheets, a touch lighter than page */
+  --surface-2:  #FBFAF7;
+  --ink:        #1A1A1A;   /* primary text */
+  --ink-2:      #6E6A62;   /* secondary, warm gray */
+  --ink-3:      #A29D93;   /* tertiary / muted */
+  --line:       #E0DCD2;   /* warm hairline */
+  --line-2:     #D3CEC2;
+  --accent:     #1A1A1A;   /* point color — calm dark ink (tweakable) */
+  --accent-ink: #FFFFFF;   /* text on accent */
+  --badge-bg:   #E6E2D9;   /* "옷장에 있음" calm gray badge */
+  --good:       #2F6B4F;   /* added / success, muted green */
+
+  /* ---- Type ---- */
+  --font: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+          'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', Roboto, sans-serif;
+
+  --fs-display: 30px;
+  --fs-h1: 24px;
+  --fs-h2: 19px;
+  --fs-h3: 16px;
+  --fs-body: 15px;
+  --fs-sm: 13px;
+  --fs-xs: 11.5px;
+
+  /* ---- Spacing (8pt) ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s7: 32px; --s8: 40px; --s9: 56px;
+
+  /* ---- Radii ---- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  /* ---- Motion ---- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 240ms;
+
+  /* ---- Elevation (tone, barely any shadow) ---- */
+  --sheet-shadow: 0 -8px 40px rgba(40, 36, 28, 0.14);
+  --pop-shadow: 0 12px 32px rgba(40, 36, 28, 0.12);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--ivory);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; padding: 0; }
+input  { font-family: inherit; }
+img { display: block; max-width: 100%; }
+
+/* numeric + brand */
+.tnum { font-variant-numeric: tabular-nums; }
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* LOOKBOX — interaction / layout / animation CSS */
+
+/* ---- grid (mobile 2-up → denser, more columns on desktop · Pinterest-ish) ---- */
+.lb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 12px;
+}
+@media (min-width: 560px) {
+  .lb-grid { grid-template-columns: repeat(3, 1fr); gap: 20px 14px; }
+}
+@media (min-width: 760px) {
+  .lb-grid { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 22px 15px; }
+}
+
+/* ---- CTA dock (mobile, floats above bottom nav) ---- */
+.lb-cta-dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 30;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--ivory) 62%, color-mix(in srgb, var(--ivory) 0%, transparent));
+  pointer-events: none;
+}
+.lb-cta-dock > * { pointer-events: auto; }
+
+/* ---- skeleton shimmer ---- */
+.lb-skel {
+  background: linear-gradient(100deg, var(--line) 30%, color-mix(in srgb, var(--line) 40%, var(--surface-2)) 50%, var(--line) 70%);
+  background-size: 220% 100%;
+  animation: lb-shimmer 1.25s var(--ease) infinite;
+}
+@keyframes lb-shimmer { from { background-position: 180% 0; } to { background-position: -60% 0; } }
+
+/* ---- entrance (transform-only: content stays visible even if the
+   environment freezes animations at 0%) ---- */
+.lb-anim-in { animation: lb-rise 420ms var(--ease) both; }
+@keyframes lb-rise { from { transform: translateY(10px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lb-anim-in { animation: none; } }
+
+/* ---- press / hover states ---- */
+.lb-btn:active { transform: scale(0.98); }
+.lb-btn:hover { opacity: 0.92; }
+.lb-iconbtn:hover { background: var(--surface); }
+.lb-iconbtn:active { transform: scale(0.94); }
+.lb-chip:active { transform: scale(0.97); }
+.lb-addtile:hover, .lb-drop:hover { background: var(--surface); }
+.lb-save:active { transform: scale(0.96); }
+.lb-savedcard { transition: transform var(--dur) var(--ease); }
+.lb-savedcard:hover { transform: translateY(-2px); }
+.lb-input:focus { border-color: var(--ink-2); }
+.lb-itembtn { transition: transform var(--dur) var(--ease); }
+.lb-itembtn:active { transform: scale(0.97); }
+.lb-itembtn:hover .lb-thumb-hint { opacity: 1; }
+
+/* ---- detail slide transitions ---- */
+.lb-slide-l { animation: lb-slide-l 280ms var(--ease) both; }
+.lb-slide-r { animation: lb-slide-r 280ms var(--ease) both; }
+@keyframes lb-slide-l { from { transform: translateX(24px); } to { transform: none; } }
+@keyframes lb-slide-r { from { transform: translateX(-24px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lb-slide-l, .lb-slide-r { animation: none; } }
+.lb-detail-arrow:hover { background: var(--ivory); }
+
+/* ---- add flow: AI scan ---- */
+.lb-scan { position: relative; overflow: hidden; }
+.lb-scan::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 46%; top: -46%;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 26%, transparent) 55%, transparent);
+  animation: lb-scanline 1.5s var(--ease) infinite;
+}
+@keyframes lb-scanline { from { top: -46%; } to { top: 104%; } }
+@media (prefers-reduced-motion: reduce) { .lb-scan::after { animation: none; opacity: 0.35; top: 30%; } }
+
+/* a detected garment fades + lifts into place as the model isolates it */
+.lb-detect-in { animation: lb-detect 460ms var(--ease) both; }
+@keyframes lb-detect { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lb-detect-in { animation: none; } }
+
+/* selectable detection row */
+.lb-detrow { transition: box-shadow var(--dur) var(--ease), background var(--dur) var(--ease); }
+.lb-detrow:active { transform: scale(0.992); }
+
+/* sheet body becomes scrollable when a step gets tall */
+.lb-sheet-body { max-height: min(76vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+
+/* ---- toast ---- */
+.lb-toast {
+  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%) translateY(8px);
+  z-index: 70; opacity: 0; pointer-events: none;
+  background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 600;
+  padding: 11px 18px; border-radius: var(--r-pill); box-shadow: var(--pop-shadow);
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.lb-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---- app shell ---- */
+.lb-app {
+  position: relative; width: 100%; height: 100%;
+  display: flex; flex-direction: column; overflow: hidden; background: var(--ivory);
+}
+.lb-scroll { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* ---- desktop sidebar ---- */
+.lb-shell-wide { flex-direction: row; }
+.lb-sidebar {
+  width: 248px; flex: none; border-right: 1px solid var(--line);
+  padding: 26px 20px; display: flex; flex-direction: column; gap: 6px;
+}
+.lb-navitem {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: var(--r-md); font-size: 15px; font-weight: 600; color: var(--ink-2);
+  transition: all var(--dur) var(--ease); text-align: left; width: 100%;
+}
+.lb-navitem:hover { background: var(--surface); }
+.lb-navitem.on { background: var(--surface); color: var(--ink); }
+.lb-wide-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lb-wide-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+
+html, body { height: 100%; overflow: hidden; }
+  #root { position: fixed; inset: 0; }
