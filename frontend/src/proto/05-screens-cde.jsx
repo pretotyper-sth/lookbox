@@ -207,7 +207,7 @@ function LookbookScreen({ ctx }) {
             <Btn full size="lg" icon="sparkle" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>
           </div>
           <div aria-hidden="true" style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5, visibility: 'hidden' }}>
-            <Icon name="lock" size={14} /> 3벌부터 데일리 추천이 열려요
+            <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
           </div>
         </div>
       </div>
