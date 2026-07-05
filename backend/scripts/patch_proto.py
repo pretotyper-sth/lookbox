@@ -64,6 +64,26 @@ TWEAKS = {
             "        )}\n",
             "",
         ),
+        # empty lookbook: add an invisible spacer matching the other empty
+        # screens' lock hint line so the icon/heading/button align vertically.
+        (
+            "          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>\n"
+            "            <Btn full size=\"lg\" icon=\"sparkle\" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>\n"
+            "          </div>\n",
+            "          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>\n"
+            "            <Btn full size=\"lg\" icon=\"sparkle\" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>\n"
+            "          </div>\n"
+            "          <div aria-hidden=\"true\" style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5, visibility: 'hidden' }}>\n"
+            "            <Icon name=\"lock\" size={14} /> 3벌부터 데일리 추천이 열려요\n"
+            "          </div>\n",
+        ),
+    ],
+    "06-today.jsx": [
+        # locked-state copy: abbreviated, clean two lines on PC and mobile
+        (
+            "            옷장에 옷이 모이면, 매일 아침 가진 옷만으로 만든 코디를 추천해드려요.",
+            "            옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.",
+        ),
     ],
 }
 

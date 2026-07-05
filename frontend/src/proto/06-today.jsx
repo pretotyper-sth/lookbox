@@ -253,7 +253,7 @@ function TodayScreen({ ctx }) {
           </div>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>오늘의 코디를 받아보세요</h1>
           <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 270 }}>
-            옷장에 옷이 모이면, 매일 아침 가진 옷만으로 만든 코디를 추천해드려요.
+            옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.
           </p>
           <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
             <Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>
