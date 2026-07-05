@@ -329,9 +329,9 @@ function HeroPreview() {
         <small>옷장 기반</small>
       </div>
       <div className="hero-preview-grid">
-        <div className="mini-item shirt" />
-        <div className="mini-item skirt" />
-        <div className="mini-item sandal" />
+        <img src="/prototype-assets/top-navy.png" alt="" />
+        <img src="/prototype-assets/skirt-white.png" alt="" />
+        <img src="/prototype-assets/sandal-black.png" alt="" />
       </div>
     </div>
   )
