@@ -8,6 +8,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -228,8 +229,8 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-- 균일한 웜그레이 #EFEDE8 배경
-- 사람, 마네킹, 텍스트, 로고, 여분 소품 제거
+- 배경은 완전히 투명하게 (배경 완전 제거)
+- 사람, 마네킹, 그림자, 텍스트, 로고, 여분 소품 제거
 - 아이템 전체가 잘리지 않게 중앙 배치
 - 원본 색상과 재질은 유지
 """
@@ -243,6 +244,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             prompt=prompt,
             size="1024x1536",
             quality=OPENAI_IMAGE_QUALITY,
+            background="transparent",
         )
         log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
         return base64.b64decode(result.data[0].b64_json)
@@ -702,9 +704,25 @@ def _store_uploaded_item(user_id: str, raw: bytes, suffix: str, content_type: st
             pass
 
 
-def _fetch_product_image(page_url: str) -> tuple[bytes, str]:
+def _extract_brand(html: str, page_url: str) -> str:
+    patterns = [
+        r'property=["\']product:brand["\'][^>]+content=["\']([^"\']+)["\']',
+        r'property=["\']og:brand["\'][^>]+content=["\']([^"\']+)["\']',
+        r'property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)["\']',
+        r'name=["\']author["\'][^>]+content=["\']([^"\']+)["\']',
+    ]
+    for pat in patterns:
+        m = re.search(pat, html, re.I)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+    host = re.sub(r"^www\.", "", urlparse(page_url).netloc)
+    return host.split(".")[0].upper() if host else ""
+
+
+def _fetch_product_image(page_url: str) -> tuple[bytes, str, str]:
     headers = {"User-Agent": "Mozilla/5.0 (LOOKBOX bot)"}
     html = requests.get(page_url, headers=headers, timeout=15).text
+    brand = _extract_brand(html, page_url)
     match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
     if not match:
         match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
@@ -715,7 +733,7 @@ def _fetch_product_image(page_url: str) -> tuple[bytes, str]:
         img_url = "https:" + img_url
     resp = requests.get(img_url, headers=headers, timeout=15)
     resp.raise_for_status()
-    return resp.content, resp.headers.get("content-type", "image/jpeg")
+    return resp.content, resp.headers.get("content-type", "image/jpeg"), brand
 
 
 @app.get("/api/live/wardrobe")
@@ -751,10 +769,14 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     require_supabase()
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
-    raw, content_type = _fetch_product_image(body.url.strip())
+    raw, content_type, brand = _fetch_product_image(body.url.strip())
     suffix = ".png" if "png" in content_type else ".jpg"
     row = _store_uploaded_item(user.id, raw, suffix, content_type, body.status)
-    return {"items": [live_item_payload(row)], "primary_idx": 0}
+    item = live_item_payload(row)
+    if brand:
+        item["brand"] = brand
+        item["store"] = brand
+    return {"items": [item], "primary_idx": 0}
 
 
 @app.post("/api/live/coordinate")

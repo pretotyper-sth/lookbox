@@ -52,6 +52,21 @@ TWEAKS = {
             "            가진 옷을 모아두면, 사기 전에 어울리는 조합을 미리 확인할 수 있어요.",
             "            가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.",
         ),
+        # register step: keep the extracted image fixed (category chip only
+        # changes the tag), instead of falling back to a category silhouette
+        (
+            "<Thumb item={{ category: cur.cat, name: cur.name }} />",
+            "<Thumb item={{ ...cur, category: cur.cat }} />",
+        ),
+        # prefill brand/store from URL imports (photo path unaffected)
+        (
+            "list.map((d) => ({ ...d, cat: d.category, draft: { brand: '', size: '', store: '', note: '' }, showDetails: !!autoAddDetails }))",
+            "list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand }))",
+        ),
+        (
+            "q.map((d) => ({ ...d, cat: d.category, draft: { brand: '', size: '', store: '', note: '' }, showDetails: !!autoAddDetails }))",
+            "q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand }))",
+        ),
     ],
     "05-screens-cde.jsx": [
         # lookbook: no desktop title (sidebar already shows it); mobile title

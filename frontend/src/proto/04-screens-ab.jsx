@@ -292,7 +292,7 @@ function AddSheet({ ctx }) {
       setSel(list.map((d) => d.id));
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: '', size: '', store: '', note: '' }, showDetails: !!autoAddDetails })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand })));
           setStepIdx(0);
           return 'register';
         }
@@ -320,7 +320,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: '', size: '', store: '', note: '' }, showDetails: !!autoAddDetails })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand })));
     setStepIdx(0);
     setStage('register');
   };
@@ -519,7 +519,7 @@ function AddSheet({ ctx }) {
         {stage === 'register' && cur && (
           <div className="lb-anim-in" key={stepIdx}>
             <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', marginTop: 'var(--s5)' }}>
-              <div style={{ width: 72, flex: 'none' }}><Thumb item={{ category: cur.cat, name: cur.name }} /></div>
+              <div style={{ width: 72, flex: 'none' }}><Thumb item={{ ...cur, category: cur.cat }} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 6 }}>이름</div>
                 <input value={cur.name} onChange={(e) => patchStep({ name: e.target.value })} className="lb-input" style={{
