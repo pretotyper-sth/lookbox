@@ -1,0 +1,16 @@
+{
+  "name": "LOOKBOX",
+  "short_name": "LOOKBOX",
+  "description": "내 옷장 기반 AI 코디 추천",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EFEDE8",
+  "theme_color": "#EFEDE8",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
