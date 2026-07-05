@@ -23,7 +23,11 @@ async function ensureToken() {
   const { data } = await supabase.auth.getSession()
   let session = data.session
   if (!session) {
-    const { data: signed } = await supabase.auth.signInAnonymously()
+    const { data: signed, error } = await supabase.auth.signInAnonymously()
+    if (error) {
+      console.error('[LOOKBOX] Anonymous sign-in failed:', error.status, error.message, error)
+      return null
+    }
     session = signed.session
   }
   return session?.access_token || null
