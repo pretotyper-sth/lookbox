@@ -31,14 +31,14 @@ const styles = [
 ]
 
 const onboardingStyles = [
-  { id: 'minimal', name: '미니멀', en: 'MINIMAL', desc: '군더더기 없는 기본기', img: '/prototype-assets/style-minimal.png' },
-  { id: 'casual', name: '캐주얼', en: 'CASUAL', desc: '편안한 데일리 무드', img: '/prototype-assets/style-casual.png' },
-  { id: 'sporty', name: '스포티', en: 'SPORTY', desc: '활동적이고 가벼운', img: '/prototype-assets/style-sporty.png' },
-  { id: 'amekaji', name: '아메카지', en: 'AMEKAJI', desc: '빈티지 워크웨어', img: '/prototype-assets/style-amekaji.png' },
-  { id: 'dandy', name: '댄디', en: 'DANDY', desc: '단정한 클래식 신사', img: '/prototype-assets/style-dandy.png' },
-  { id: 'street', name: '스트릿', en: 'STREET', desc: '자유로운 시티 무드', img: '/prototype-assets/style-street.png' },
-  { id: 'chic', name: '시크', en: 'CHIC', desc: '모던하고 절제된', img: '/prototype-assets/style-chic.png' },
-  { id: 'classic', name: '클래식', en: 'CLASSIC', desc: '격식 있는 정통', img: '/prototype-assets/style-classic.png' },
+  { id: 'minimal', name: '미니멀', en: 'MINIMAL', desc: '군더더기 없는 기본기', img: '/prototype-assets/mood-minimal.png' },
+  { id: 'casual', name: '캐주얼', en: 'CASUAL', desc: '편안한 데일리 무드', img: '/prototype-assets/mood-casual.png' },
+  { id: 'sporty', name: '스포티', en: 'SPORTY', desc: '활동적이고 가벼운', img: '/prototype-assets/mood-sporty.png' },
+  { id: 'amekaji', name: '아메카지', en: 'AMEKAJI', desc: '빈티지 워크웨어', img: '/prototype-assets/mood-amekaji.png' },
+  { id: 'dandy', name: '댄디', en: 'DANDY', desc: '단정한 클래식 신사', img: '/prototype-assets/mood-dandy.png' },
+  { id: 'street', name: '스트릿', en: 'STREET', desc: '자유로운 시티 무드', img: '/prototype-assets/mood-street.png' },
+  { id: 'chic', name: '시크', en: 'CHIC', desc: '모던하고 절제된', img: '/prototype-assets/mood-chic.png' },
+  { id: 'classic', name: '클래식', en: 'CLASSIC', desc: '격식 있는 정통', img: '/prototype-assets/mood-classic.png' },
 ]
 
 const fits = ['슬림', '레귤러', '오버핏', '상관없음']
