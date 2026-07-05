@@ -8,11 +8,19 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
 
+const icons = {
+  plus: 'M12 5v14M5 12h14',
+  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.9 2.4L22 18l-2.1.6L19 21l-.9-2.4L16 18l2.1-.6z',
+  hanger: 'M12 4a2 2 0 0 0-1 3.7c.6.3 1 .9 1 1.6M3 18l9-6 9 6a1 1 0 0 1-.6 1.8H3.6A1 1 0 0 1 3 18z',
+  bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
+  user: 'M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+}
+
 const tabs = [
-  { id: 'wardrobe', label: '옷장' },
-  { id: 'daily', label: '오늘 코디' },
-  { id: 'lookbook', label: '룩북' },
-  { id: 'account', label: '마이' },
+  { id: 'wardrobe', label: '옷장', icon: 'hanger' },
+  { id: 'daily', label: '오늘 코디', icon: 'sparkle' },
+  { id: 'lookbook', label: '룩북', icon: 'bookmark' },
+  { id: 'account', label: '마이', icon: 'user' },
 ]
 
 const styles = [
@@ -282,7 +290,8 @@ function App() {
         <nav>
           {tabs.map((item) => (
             <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
-              {item.label}
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
@@ -362,6 +371,16 @@ function App() {
 
 function Logo() {
   return <div className="logo">LOOK<span>BOX</span></div>
+}
+
+function Icon({ name, size = 18 }) {
+  const d = icons[name]
+  if (!d) return null
+  return (
+    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {d.split('M').filter(Boolean).map((seg, index) => <path key={index} d={`M${seg}`} />)}
+    </svg>
+  )
 }
 
 function LandingAuth({
@@ -510,7 +529,7 @@ function LandingAuth({
           <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
           <p>사고 싶은 옷이 내 옷장과 어울리는지 먼저 확인하세요. 가진 옷으로 오늘 입을 코디도 추천받을 수 있어요.</p>
         </section>
-        <button className="primary start-button" onClick={startSignup} type="button">시작하기</button>
+        <button className="primary start-button" onClick={startSignup} type="button"><Icon name="sparkle" size={17} />시작하기</button>
         <button className="login-link" onClick={startLogin} type="button">이미 계정이 있으신가요? <span>로그인</span></button>
       </section>
     </main>
@@ -563,7 +582,7 @@ function HeroPreview() {
   return (
     <div className="hero-preview" aria-hidden="true">
       <div className="hero-preview-head">
-        <span>오늘의 추천 코디</span>
+        <span><Icon name="sparkle" size={15} />오늘의 추천 코디</span>
         <small>옷장 기반</small>
       </div>
       <div className="hero-preview-grid">

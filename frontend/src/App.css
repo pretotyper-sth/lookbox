@@ -33,12 +33,20 @@
 }
 
 .sidebar nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: transparent;
   color: var(--ink-2);
   text-align: left;
   padding: 12px 14px;
   border-radius: 14px;
   font-weight: 700;
+}
+
+.sidebar nav .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .sidebar nav button.active,
@@ -212,6 +220,12 @@ h1 {
   border: 1px solid var(--line);
   color: var(--ink);
   font-weight: 800;
+  gap: 8px;
+}
+
+.icon {
+  display: block;
+  flex: none;
 }
 
 .upload-button.dark,
@@ -309,6 +323,12 @@ h1 {
   margin-bottom: 12px;
 }
 
+.hero-preview-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .hero-preview-head small {
   color: var(--ink-3);
   font-weight: 700;
@@ -364,9 +384,9 @@ h1 {
 
 .start-button {
   width: 100%;
-  min-height: 78px;
+  min-height: 68px;
   margin-top: 70px;
-  font-size: 20px;
+  font-size: 18px;
   border-radius: 999px;
 }
 
@@ -720,9 +740,9 @@ h1 {
   }
 
   .start-button {
-    min-height: 64px;
+    min-height: 58px;
     margin-top: 52px;
-    font-size: 17px;
+    font-size: 16px;
   }
 
   .login-link {
@@ -757,10 +777,18 @@ h1 {
   }
 
   .sidebar nav button {
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
     text-align: center;
     border-radius: 0;
     padding: 14px 6px;
     font-size: 12px;
+  }
+
+  .sidebar nav .icon {
+    width: 17px;
+    height: 17px;
   }
 
   .content {
