@@ -74,12 +74,12 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, openAdd, wide, openItem, comboReady, comboGate } = ctx;
+  const { items, openAdd, wide, openItem, comboReady, comboGate, comboNeed } = ctx;
   const [cat, setCat] = useS('전체');
   const cats = LB_DATA.CATEGORIES;
   const filtered = cat === '전체' ? items : items.filter((i) => i.category === cat);
   const count = items.length;
-  const ready = count >= 3;
+  const ready = comboReady;
 
   /* ---- Empty state ---- */
   if (count === 0) {
@@ -98,7 +98,7 @@ function WardrobeScreen({ ctx }) {
             <Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>옷 추가</Btn>
           </div>
           <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5 }}>
-            <Icon name="lock" size={14} /> 3벌부터 조합 추천이 열려요
+            <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@ function WardrobeScreen({ ctx }) {
               <Icon name="lock" size={18} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{3 - count}벌 더 담으면 조합을 추천해드려요</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{comboNeed} 담으면 조합을 추천해드려요</div>
               <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
                 {[0, 1, 2].map((i) => (
                   <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i < count ? 'var(--accent)' : 'var(--line-2)' }} />

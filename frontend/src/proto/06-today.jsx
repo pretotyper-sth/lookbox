@@ -216,9 +216,9 @@ const calNavStyle = {
    TodayScreen — 오늘의 코디 (홈)
    ============================================================ */
 function TodayScreen({ ctx }) {
-  const { items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday, dailyCount, hasWardrobe, startComboOrWardrobe, dailyAllowed, dailyLoading, dailyStyle, requestDailyOutfits } = ctx;
+  const { items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday, dailyCount, hasWardrobe, startComboOrWardrobe, dailyAllowed, dailyLoading, dailyStyle, requestDailyOutfits, comboReady } = ctx;
   const pool = LB_DATA.DAILY;
-  const ready = items.length >= 3;
+  const ready = comboReady;
 
   const [offset, setOffset] = useTd(0);
   const [loading, setLoading] = useTd(false);
@@ -259,7 +259,7 @@ function TodayScreen({ ctx }) {
             <Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>
           </div>
           <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5 }}>
-            <Icon name="lock" size={14} /> 3벌부터 데일리 추천이 열려요
+            <Icon name="lock" size={14} /> 상의·하의를 담으면 추천이 열려요
           </div>
         </div>
       </div>

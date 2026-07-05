@@ -202,7 +202,10 @@ function App() {
   const openAdd = (mode) => setAddSheet({ open: true, mode });
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false }));
   const startCombo = () => openAdd('anchor');
-  const comboReady = items.length >= 3;
+  const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;
+  const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '원피스').length;
+  const comboReady = comboTops >= 1 && comboBottoms >= 1;
+  const comboNeed = (!comboTops && !comboBottoms) ? '상의와 하의를' : !comboTops ? '상의를' : '하의를';
   const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };
   const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
@@ -334,8 +337,8 @@ function App() {
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
-    hasWardrobe: items.length >= 3,
-    comboReady, comboGate,
+    hasWardrobe: comboReady,
+    comboReady, comboGate, comboNeed,
     autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 3),
@@ -344,7 +347,7 @@ function App() {
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
     openItem, openPrefs, openAccount, logout, prefs,
-    startComboOrWardrobe: () => items.length >= 3 ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
+    startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
   // ---- 온보딩 게이트: 가입 전이면 홈(랜딩) → 회원가입 단계 ----
@@ -425,7 +428,7 @@ function App() {
             </div>
             <div style={{ display: 'grid', gap: 8, marginTop: 20 }}>
               <Btn full size="lg" icon="plus" onClick={tutorialAddWardrobe}>옷 추가하기</Btn>
-              {items.length >= 3 && <Btn full variant="soft" icon="sparkle" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}
+              {comboReady && <Btn full variant="soft" icon="sparkle" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}
               <Btn full variant="ghost" onClick={finishTutorial}>나중에 할게요</Btn>
             </div>
           </div>
@@ -436,7 +439,7 @@ function App() {
       <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>상의·하의·신발 등 옷을 3벌만 모으면<br />어울리는 조합을 추천해드려요.</p>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed} 담으면 어울리는<br />조합을 추천해드려요.</p>
           <div style={{ marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
           </div>

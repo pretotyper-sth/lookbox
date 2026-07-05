@@ -16,6 +16,29 @@ EXTRACT = Path(__file__).resolve().parent / "extract_prototype.py"
 # file -> list of (old, new) exact replacements applied once each.
 TWEAKS = {
     "09-app.jsx": [
+        # combo readiness: a real outfit needs a top AND a bottom (a dress
+        # counts as both). comboNeed names what's still missing.
+        (
+            "  const comboReady = items.length >= 3;\n"
+            "  const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };\n",
+            "  const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;\n"
+            "  const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '원피스').length;\n"
+            "  const comboReady = comboTops >= 1 && comboBottoms >= 1;\n"
+            "  const comboNeed = (!comboTops && !comboBottoms) ? '상의와 하의를' : !comboTops ? '상의를' : '하의를';\n"
+            "  const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };\n",
+        ),
+        (
+            "    hasWardrobe: items.length >= 3,\n    comboReady, comboGate,\n",
+            "    hasWardrobe: comboReady,\n    comboReady, comboGate, comboNeed,\n",
+        ),
+        (
+            "startComboOrWardrobe: () => items.length >= 3 ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),",
+            "startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),",
+        ),
+        (
+            "{items.length >= 3 && <Btn full variant=\"soft\" icon=\"sparkle\" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}",
+            "{comboReady && <Btn full variant=\"soft\" icon=\"sparkle\" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}",
+        ),
         # combo-gate prompt: friendly explanation first, add button below
         (
             "        <div style={{ padding: '24px 24px 28px', textAlign: 'center' }}>\n"
@@ -24,7 +47,7 @@ TWEAKS = {
             "        </div>\n",
             "        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>\n"
             "          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>\n"
-            "          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>상의·하의·신발 등 옷을 3벌만 모으면<br />어울리는 조합을 추천해드려요.</p>\n"
+            "          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed} 담으면 어울리는<br />조합을 추천해드려요.</p>\n"
             "          <div style={{ marginTop: 20 }}>\n"
             "            <Btn full size=\"lg\" icon=\"plus\" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>\n"
             "          </div>\n"
@@ -51,6 +74,23 @@ TWEAKS = {
         (
             "            가진 옷을 모아두면, 사기 전에 어울리는 조합을 미리 확인할 수 있어요.",
             "            가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.",
+        ),
+        # category-aware combo readiness + copy
+        (
+            "  const { items, openAdd, wide, openItem, comboReady, comboGate } = ctx;",
+            "  const { items, openAdd, wide, openItem, comboReady, comboGate, comboNeed } = ctx;",
+        ),
+        (
+            "  const ready = count >= 3;",
+            "  const ready = comboReady;",
+        ),
+        (
+            "              <div style={{ fontSize: 14, fontWeight: 600 }}>{3 - count}벌 더 담으면 조합을 추천해드려요</div>",
+            "              <div style={{ fontSize: 14, fontWeight: 600 }}>{comboNeed} 담으면 조합을 추천해드려요</div>",
+        ),
+        (
+            "            <Icon name=\"lock\" size={14} /> 3벌부터 조합 추천이 열려요",
+            "            <Icon name=\"lock\" size={14} /> 상의·하의를 담으면 조합 추천이 열려요",
         ),
         # register step: keep the extracted image fixed (category chip only
         # changes the tag), instead of falling back to a category silhouette
@@ -88,8 +128,8 @@ TWEAKS = {
             "        )}\n",
             "",
         ),
-        # empty lookbook: add an invisible spacer matching the other empty
-        # screens' lock hint line so the icon/heading/button align vertically.
+        # empty lookbook: invisible spacer matching the other empty screens'
+        # hint line so the icon/heading/button align vertically.
         (
             "          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>\n"
             "            <Btn full size=\"lg\" icon=\"sparkle\" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>\n"
@@ -98,7 +138,7 @@ TWEAKS = {
             "            <Btn full size=\"lg\" icon=\"sparkle\" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>\n"
             "          </div>\n"
             "          <div aria-hidden=\"true\" style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5, visibility: 'hidden' }}>\n"
-            "            <Icon name=\"lock\" size={14} /> 3벌부터 데일리 추천이 열려요\n"
+            "            <Icon name=\"lock\" size={14} /> 상의·하의를 담으면 조합 추천이 열려요\n"
             "          </div>\n",
         ),
     ],
@@ -107,6 +147,19 @@ TWEAKS = {
         (
             "            옷장에 옷이 모이면, 매일 아침 가진 옷만으로 만든 코디를 추천해드려요.",
             "            옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.",
+        ),
+        # category-aware readiness for daily recommendations
+        (
+            "  const { items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday, dailyCount, hasWardrobe, startComboOrWardrobe, dailyAllowed, dailyLoading, dailyStyle, requestDailyOutfits } = ctx;",
+            "  const { items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday, dailyCount, hasWardrobe, startComboOrWardrobe, dailyAllowed, dailyLoading, dailyStyle, requestDailyOutfits, comboReady } = ctx;",
+        ),
+        (
+            "  const ready = items.length >= 3;",
+            "  const ready = comboReady;",
+        ),
+        (
+            "            <Icon name=\"lock\" size={14} /> 3벌부터 데일리 추천이 열려요",
+            "            <Icon name=\"lock\" size={14} /> 상의·하의를 담으면 추천이 열려요",
         ),
     ],
 }
