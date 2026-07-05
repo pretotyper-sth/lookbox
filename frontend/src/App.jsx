@@ -214,7 +214,7 @@ function App() {
           <section className="landing-copy">
             <span className="eyebrow">AI wardrobe</span>
             <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
-            <p>가진 옷으로 매일의 코디를 추천받고, 사고 싶은 옷과의 조합까지 미리 확인하세요.</p>
+            <p>사고 싶은 옷이 내 옷장과 어울리는지 먼저 확인하세요. 가진 옷으로 오늘 입을 코디도 추천받을 수 있어요.</p>
           </section>
           <form className="auth-form" onSubmit={submitAuth}>
             <label>이메일</label>

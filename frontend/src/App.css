@@ -333,8 +333,10 @@ h1 {
 
 .landing-copy p {
   color: var(--ink-2);
-  font-size: 14.5px;
-  line-height: 1.6;
+  max-width: 320px;
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: keep-all;
 }
 
 .auth-card {
