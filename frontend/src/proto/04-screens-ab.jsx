@@ -472,22 +472,28 @@ function AddSheet({ ctx }) {
         )}
 
         {/* ---------- ANALYZING ---------- */}
+        {/* skeleton mirrors the DetectRow result cards (same 54px thumb + 2 text
+            lines + check slot) so the loading state previews what's coming */}
         {stage === 'analyzing' && (
           <div style={{ marginTop: 'var(--s6)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className="lb-scan" style={{
-              width: '100%', maxWidth: 280, borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-              boxShadow: 'inset 0 0 0 1px var(--line)', padding: 14,
-              display: 'grid', gridTemplateColumns: detected.length > 1 ? '1fr 1fr' : '1fr', gap: 10,
-            }}>
-              {detected.map((d, i) => (
-                <div key={d.id} className="lb-detect-in" style={{ animationDelay: (i * 220) + 'ms' }}>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
-                    <Thumb item={d} radius="var(--r-sm)" />
+            <div className="lb-scan" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, borderRadius: 'var(--r-md)' }}>
+              {[0, 1].map((i) => (
+                <div key={i} className="lb-detect-in" style={{
+                  animationDelay: (i * 180) + 'ms',
+                  display: 'flex', alignItems: 'center', gap: 'var(--s3)',
+                  padding: 'var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                  boxShadow: 'inset 0 0 0 1px var(--line)',
+                }}>
+                  <div className="lb-skel" style={{ width: 54, height: 54, flex: 'none', borderRadius: 'var(--r-sm)' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="lb-skel" style={{ height: 13, borderRadius: 999, width: '62%' }} />
+                    <div className="lb-skel" style={{ height: 11, borderRadius: 999, width: '40%', marginTop: 8 }} />
                   </div>
+                  <div className="lb-skel" style={{ width: 24, height: 24, flex: 'none', borderRadius: '50%' }} />
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>{detected.length > 1 ? '옷을 하나씩 분리하고 있어요' : '옷을 인식하고 있어요'}</div>
+            <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
             <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)' }}>사진 속 의류를 찾는 중…</div>
           </div>
         )}
