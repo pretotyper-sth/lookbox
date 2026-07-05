@@ -2,6 +2,7 @@ import React from 'react'
 import * as ReactDOM from 'react-dom/client'
 import './proto/proto.css'
 import protoManifest from './proto/manifest.json'
+import { initLiveBridge } from './live-bridge.js'
 
 // The prototype modules were written for an in-browser Babel runtime that shared
 // one global scope. We expose React/ReactDOM/resources on window, then import the
@@ -11,6 +12,9 @@ window.React = React
 window.ReactDOM = ReactDOM
 // Exact resource id -> image path map, extracted from the given prototype HTML.
 window.__resources = protoManifest.resources
+
+// Route the prototype's /api/live/* calls to the backend with an anon session.
+await initLiveBridge()
 
 await import('./proto/01-tweaks.jsx')
 await import('./proto/02-shared.jsx')

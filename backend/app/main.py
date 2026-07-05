@@ -3,14 +3,18 @@ import hashlib
 import io
 import json
 import os
+import re
 import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import requests
+
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
@@ -52,6 +56,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    # The ported prototype reads error messages from `data.error`.
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
 
 CATEGORY_KO = {
     "top": "상의",
@@ -612,3 +622,210 @@ def save_outfit(outfit_id: str, body: OutfitAction, user: UserContext = Depends(
         return {"ok": True}
     supabase_admin.table("outfits").update(patch).eq("id", outfit_id).eq("user_id", user.id).execute()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# /api/live/* — compatibility layer for the ported prototype UI.
+# The prototype expects garment items shaped as { id, serverId, name,
+# category(KO), color, img } and outfits as { id, label, mood, itemIds, lookImg }.
+# Look images are composed client-side by <LookComposite>, so we skip paid image
+# generation here and return lookImg=null to keep the daily flow free.
+# ---------------------------------------------------------------------------
+
+LIVE_STATUS_MAP = {"owned": "owned", "considering": "considering", "delete": "deleted", "deleted": "deleted"}
+
+
+class LiveImportUrl(BaseModel):
+    url: str
+    status: str = "owned"
+
+
+class LiveCoordinate(BaseModel):
+    max_combos: int = 3
+    style: str = "dandy"
+    anchor_id: str | None = None
+
+
+class LiveStatus(BaseModel):
+    ids: list[str] = []
+    status: str = "owned"
+
+
+def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "serverId": row["id"],
+        "name": row.get("name") or "옷",
+        "category": CATEGORY_KO.get(row.get("category"), row.get("category") or "상의"),
+        "color": row.get("color") or "",
+        "img": row.get("image_url"),
+        "status": row.get("status"),
+    }
+
+
+def _store_uploaded_item(user_id: str, raw: bytes, suffix: str, content_type: str, status: str) -> dict[str, Any]:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(raw)
+        tmp_path = tmp.name
+    try:
+        meta = classify_item(tmp_path)
+        original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
+        original_url = upload_bytes(original_path, raw, content_type)
+        product_bytes = generate_product_image(user_id, tmp_path, meta)
+        image_path, image_url = original_path, original_url
+        if product_bytes:
+            image_path = f"{user_id}/items/{uuid.uuid4().hex}.png"
+            image_url = upload_bytes(image_path, product_bytes, "image/png")
+        row = (
+            supabase_admin.table("wardrobe_items")
+            .insert(
+                {
+                    "user_id": user_id,
+                    "name": meta.get("name") or "새 옷",
+                    "category": meta.get("category") or "top",
+                    "color": meta.get("color") or "neutral",
+                    "image_url": image_url,
+                    "storage_path": image_path,
+                    "source": "upload",
+                    "status": LIVE_STATUS_MAP.get(status, "owned"),
+                    "metadata": {"tags": meta.get("tags") or []},
+                }
+            )
+            .execute()
+            .data[0]
+        )
+        return row
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def _fetch_product_image(page_url: str) -> tuple[bytes, str]:
+    headers = {"User-Agent": "Mozilla/5.0 (LOOKBOX bot)"}
+    html = requests.get(page_url, headers=headers, timeout=15).text
+    match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+    if not match:
+        match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
+    if not match:
+        raise HTTPException(status_code=422, detail="상품 이미지를 찾지 못했어요")
+    img_url = match.group(1)
+    if img_url.startswith("//"):
+        img_url = "https:" + img_url
+    resp = requests.get(img_url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("content-type", "image/jpeg")
+
+
+@app.get("/api/live/wardrobe")
+def live_wardrobe(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .neq("status", "deleted")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return {"items": [live_item_payload(row) for row in rows]}
+
+
+@app.post("/api/live/import/photo")
+async def live_import_photo(
+    status: str = "owned",
+    image: UploadFile = File(...),
+    user: UserContext = Depends(current_user),
+) -> dict[str, Any]:
+    require_supabase()
+    suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
+    raw = await image.read()
+    row = _store_uploaded_item(user.id, raw, suffix, image.content_type or "image/jpeg", status)
+    return {"items": [live_item_payload(row)], "primary_idx": 0}
+
+
+@app.post("/api/live/import/url")
+def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    require_supabase()
+    if not body.url.strip():
+        raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
+    raw, content_type = _fetch_product_image(body.url.strip())
+    suffix = ".png" if "png" in content_type else ".jpg"
+    row = _store_uploaded_item(user.id, raw, suffix, content_type, body.status)
+    return {"items": [live_item_payload(row)], "primary_idx": 0}
+
+
+@app.post("/api/live/coordinate")
+def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    owned = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "owned")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    anchor = None
+    if body.anchor_id:
+        anchor_rows = (
+            supabase_admin.table("wardrobe_items")
+            .select("*")
+            .eq("id", body.anchor_id)
+            .eq("user_id", user.id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        anchor = anchor_rows[0] if anchor_rows else None
+    pool = [anchor, *owned] if anchor else owned[:]
+    pool = [row for row in pool if row]
+    if len(pool) < 2:
+        raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요")
+    combos = recommend_text(user.id, anchor, pool, body.style, min(max(body.max_combos, 1), 6))
+    by_id = {row["id"]: row for row in pool}
+    outfits, used = [], {}
+    for idx, combo in enumerate(combos):
+        ids = [item_id for item_id in combo["item_ids"] if item_id in by_id]
+        for item_id in ids:
+            used[item_id] = by_id[item_id]
+        outfits.append(
+            {
+                "id": f"live-{uuid.uuid4().hex[:8]}",
+                "label": combo.get("label") or f"추천 코디 {idx + 1}",
+                "mood": combo.get("mood") or "",
+                "itemIds": ids,
+                "lookImg": None,
+            }
+        )
+    return {"outfits": outfits, "items": [live_item_payload(row) for row in used.values()]}
+
+
+@app.post("/api/live/items/status")
+def live_items_status(body: LiveStatus, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    if not body.ids:
+        return {"items": []}
+    target = LIVE_STATUS_MAP.get(body.status, "owned")
+    (
+        supabase_admin.table("wardrobe_items")
+        .update({"status": target})
+        .in_("id", body.ids)
+        .eq("user_id", user.id)
+        .execute()
+    )
+    if target == "deleted":
+        return {"items": []}
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .in_("id", body.ids)
+        .eq("user_id", user.id)
+        .execute()
+        .data
+        or []
+    )
+    return {"items": [live_item_payload(row) for row in rows]}
