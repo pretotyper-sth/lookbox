@@ -150,6 +150,18 @@ def main():
         texts[out_name] = module_text(entry)
         registry |= registered_names(texts[out_name])
 
+    # This is a real service, not a demo: strip the prototype's sample user
+    # content (wardrobe/outfits/saved/detect) so a fresh account starts empty.
+    # Config-style data (categories, onboarding options, weather) is kept.
+    data_reset = (
+        "\n\n/* @prototype-ported: real-service start = empty user content */\n"
+        "Object.assign(window.LB_DATA, {\n"
+        "  WARDROBE: [], OUTFITS: [], DAILY: [], SAVED: [], DETECT: [],\n"
+        "  ALL: {}, OUTFIT_BY_ID: {},\n"
+        "});\n"
+        "Object.assign(window.LB_DATA.ANCHOR, { name: '', category: '', color: '', img: null });\n"
+    )
+
     # modules
     ported = []
     for _uuid, out_name in ORDER:
@@ -157,7 +169,10 @@ def main():
         if text is None:
             continue
         prelude = build_prelude(text, registry)
-        (PROTO / out_name).write_text(prelude + text)
+        body = prelude + text
+        if out_name == "03-data.jsx":
+            body += data_reset
+        (PROTO / out_name).write_text(body)
         ported.append(out_name)
 
     (PROTO / "manifest.json").write_text(

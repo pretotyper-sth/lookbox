@@ -123,3 +123,11 @@ const DEFAULT_PREFS = {
 };
 
 Object.assign(window, { LB_DATA: { CATEGORIES, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+
+
+/* @prototype-ported: real-service start = empty user content */
+Object.assign(window.LB_DATA, {
+  WARDROBE: [], OUTFITS: [], DAILY: [], SAVED: [], DETECT: [],
+  ALL: {}, OUTFIT_BY_ID: {},
+});
+Object.assign(window.LB_DATA.ANCHOR, { name: '', category: '', color: '', img: null });

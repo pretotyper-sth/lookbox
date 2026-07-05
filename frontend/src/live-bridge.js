@@ -46,7 +46,18 @@ function installFetchBridge() {
 // Bootstrap: install the bridge and pre-warm the anonymous session so the very
 // first wardrobe fetch already carries a token.
 export async function initLiveBridge() {
-  if (!configured) return
+  if (!configured) {
+    const missing = [
+      !API_BASE && 'VITE_API_BASE_URL',
+      !SUPABASE_URL && 'VITE_SUPABASE_URL',
+      !SUPABASE_ANON_KEY && 'VITE_SUPABASE_ANON_KEY',
+    ].filter(Boolean)
+    console.warn(
+      `[LOOKBOX] Backend not connected — missing build-time env: ${missing.join(', ')}. ` +
+        'Set these in Vercel and redeploy to enable the real service.',
+    )
+    return
+  }
   installFetchBridge()
   try {
     await ensureToken()
