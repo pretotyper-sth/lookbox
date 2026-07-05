@@ -207,16 +207,20 @@ function App() {
 
   if (!session) {
     return (
-      <main className="auth-page">
-        <section className="auth-card">
-          <Logo />
-          <h1>내 옷장으로 코디를 확인하세요.</h1>
-          <p>옷 사진을 추가하고, 사려는 옷이 내 옷장과 어울리는지 먼저 봅니다.</p>
-          <form onSubmit={submitAuth}>
+      <main className="landing-page">
+        <section className="landing-shell">
+          <div className="landing-brand"><Logo /></div>
+          <HeroPreview />
+          <section className="landing-copy">
+            <span className="eyebrow">AI wardrobe</span>
+            <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
+            <p>가진 옷으로 매일의 코디를 추천받고, 사고 싶은 옷과의 조합까지 미리 확인하세요.</p>
+          </section>
+          <form className="auth-form" onSubmit={submitAuth}>
             <label>이메일</label>
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
+            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
             <label>비밀번호</label>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} />
             {authError && <div className="error">{authError}</div>}
             <button type="submit">{authMode === 'signup' ? '가입하고 시작' : '로그인'}</button>
           </form>
@@ -315,6 +319,22 @@ function App() {
 
 function Logo() {
   return <div className="logo">LOOK<span>BOX</span></div>
+}
+
+function HeroPreview() {
+  return (
+    <div className="hero-preview" aria-hidden="true">
+      <div className="hero-preview-head">
+        <span>오늘의 추천 코디</span>
+        <small>옷장 기반</small>
+      </div>
+      <div className="hero-preview-grid">
+        <div className="mini-item shirt" />
+        <div className="mini-item skirt" />
+        <div className="mini-item sandal" />
+      </div>
+    </div>
+  )
 }
 
 function tabTitle(tab) {
