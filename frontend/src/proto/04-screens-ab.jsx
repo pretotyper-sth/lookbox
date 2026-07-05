@@ -74,7 +74,7 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, openAdd, startCombo, wide, openItem } = ctx;
+  const { items, openAdd, wide, openItem, comboReady, comboGate } = ctx;
   const [cat, setCat] = useS('전체');
   const cats = LB_DATA.CATEGORIES;
   const filtered = cat === '전체' ? items : items.filter((i) => i.category === cat);
@@ -116,7 +116,7 @@ function WardrobeScreen({ ctx }) {
       {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
       {!wide && chips}
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '0 18px', paddingBottom: (ready && !wide) ? 110 : undefined }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '0 18px', paddingBottom: !wide ? 110 : undefined }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -180,9 +180,9 @@ function WardrobeScreen({ ctx }) {
        </div>
       </div>
 
-      {ready && !wide && (
+      {!wide && (
         <div className="lb-cta-dock">
-          <Btn full size="lg" icon="sparkle" onClick={startCombo}>구매 전 조합 추천받기</Btn>
+          <Btn full size="lg" icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.6 }} onClick={comboGate}>구매 전 조합 추천받기</Btn>
         </div>
       )}
     </div>

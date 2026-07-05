@@ -162,6 +162,54 @@ def main():
         "Object.assign(window.LB_DATA.ANCHOR, { name: '', category: '', color: '', img: null });\n"
     )
 
+    # Post-extraction UX/text patches on top of the untouched prototype code.
+    patches = {
+        "09-app.jsx": [
+            # combo gate: reachable even with an empty wardrobe (shows a prompt)
+            (
+                "  const startCombo = () => openAdd('anchor');\n",
+                "  const startCombo = () => openAdd('anchor');\n"
+                "  const comboReady = items.length >= 3;\n"
+                "  const comboGate = () => {\n"
+                "    if (comboReady) return startCombo();\n"
+                "    showToast('옷을 3벌 이상 담으면 조합을 추천받을 수 있어요');\n"
+                "    openAdd('wardrobe');\n"
+                "  };\n",
+            ),
+            ("/> 오늘 코디", "/> 오늘의 추천 코디"),
+            (
+                "{items.length >= 3 && <Btn full icon=\"sparkle\" onClick={startCombo}>조합 추천받기</Btn>}",
+                "<Btn full icon=\"sparkle\" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.55 }} onClick={comboGate}>조합 추천받기</Btn>",
+            ),
+            (
+                "    hasWardrobe: items.length >= 3,\n",
+                "    hasWardrobe: items.length >= 3,\n    comboReady, comboGate,\n",
+            ),
+        ],
+        "04-screens-ab.jsx": [
+            (
+                "  const { items, openAdd, startCombo, wide, openItem } = ctx;",
+                "  const { items, openAdd, wide, openItem, comboReady, comboGate } = ctx;",
+            ),
+            (
+                "paddingBottom: (ready && !wide) ? 110 : undefined",
+                "paddingBottom: !wide ? 110 : undefined",
+            ),
+            (
+                "      {ready && !wide && (\n"
+                "        <div className=\"lb-cta-dock\">\n"
+                "          <Btn full size=\"lg\" icon=\"sparkle\" onClick={startCombo}>구매 전 조합 추천받기</Btn>\n"
+                "        </div>\n"
+                "      )}",
+                "      {!wide && (\n"
+                "        <div className=\"lb-cta-dock\">\n"
+                "          <Btn full size=\"lg\" icon=\"sparkle\" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.6 }} onClick={comboGate}>구매 전 조합 추천받기</Btn>\n"
+                "        </div>\n"
+                "      )}",
+            ),
+        ],
+    }
+
     # modules
     ported = []
     for _uuid, out_name in ORDER:
@@ -172,6 +220,10 @@ def main():
         body = prelude + text
         if out_name == "03-data.jsx":
             body += data_reset
+        for old, new in patches.get(out_name, []):
+            if old not in body:
+                raise SystemExit(f"patch anchor not found in {out_name}: {old[:60]!r}")
+            body = body.replace(old, new, 1)
         (PROTO / out_name).write_text(body)
         ported.append(out_name)
 

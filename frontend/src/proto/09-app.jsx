@@ -200,6 +200,12 @@ function App() {
   const openAdd = (mode) => setAddSheet({ open: true, mode });
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false }));
   const startCombo = () => openAdd('anchor');
+  const comboReady = items.length >= 3;
+  const comboGate = () => {
+    if (comboReady) return startCombo();
+    showToast('옷을 3벌 이상 담으면 조합을 추천받을 수 있어요');
+    openAdd('wardrobe');
+  };
   const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
   const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
@@ -331,6 +337,7 @@ function App() {
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
     hasWardrobe: items.length >= 3,
+    comboReady, comboGate,
     autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 3),
@@ -371,7 +378,7 @@ function App() {
               <Icon name="hanger" size={20} fill={tab === 'wardrobe' && !focused ? 'currentColor' : 'none'} stroke={tab === 'wardrobe' && !focused ? 0 : 1.7} /> 옷장
             </button>
             <button className={'lb-navitem' + (tab === 'today' && !focused ? ' on' : '')} onClick={() => go('today')}>
-              <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘 코디
+              <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘의 추천 코디
             </button>
             <button className={'lb-navitem' + (tab === 'lookbook' && !focused ? ' on' : '')} onClick={() => go('lookbook')}>
               <Icon name="bookmark" size={20} fill={tab === 'lookbook' && !focused ? 'currentColor' : 'none'} stroke={tab === 'lookbook' && !focused ? 0 : 1.7} /> 룩북
@@ -381,7 +388,7 @@ function App() {
             </button>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {items.length >= 3 && <Btn full icon="sparkle" onClick={startCombo}>조합 추천받기</Btn>}
+              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.55 }} onClick={comboGate}>조합 추천받기</Btn>
               <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>옷 추가</Btn>
             </div>
           </aside>
