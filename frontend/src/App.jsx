@@ -74,7 +74,7 @@ async function api(path, { token, method = 'GET', body, headers } = {}) {
 
 function App() {
   const [session, setSession] = useState(null)
-  const [authMode, setAuthMode] = useState('login')
+  const [authMode, setAuthMode] = useState('landing')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
@@ -477,25 +477,41 @@ function LandingAuth({
     )
   }
 
+  if (authMode === 'login') {
+    return (
+      <main className="landing-page">
+        <section className="landing-shell auth-shell">
+          <div className="landing-brand"><Logo /></div>
+          <section className="landing-copy compact">
+            <span className="eyebrow">로그인</span>
+            <h1>다시 내 옷장으로</h1>
+            <p>저장해둔 옷장과 코디 추천을 이어서 볼 수 있어요.</p>
+          </section>
+          <form className="auth-form" onSubmit={submitAuth}>
+            <label>이메일</label>
+            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
+            <label>비밀번호</label>
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
+            {authError && <div className="error">{authError}</div>}
+            <button type="submit">로그인</button>
+          </form>
+          <button className="link-button" onClick={startSignup}>처음이면 가입하기</button>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="landing-page">
       <section className="landing-shell">
         <div className="landing-brand"><Logo /></div>
         <HeroPreview />
         <section className="landing-copy">
-          <span className="eyebrow">AI wardrobe</span>
           <h1>내 옷장이 곧<br />나만의 스타일리스트</h1>
           <p>사고 싶은 옷이 내 옷장과 어울리는지 먼저 확인하세요. 가진 옷으로 오늘 입을 코디도 추천받을 수 있어요.</p>
         </section>
-        <form className="auth-form" onSubmit={submitAuth}>
-          <label>이메일</label>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
-          <label>비밀번호</label>
-          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
-          {authError && <div className="error">{authError}</div>}
-          <button type="submit">로그인</button>
-        </form>
-        <button className="link-button" onClick={startSignup}>처음이면 가입하기</button>
+        <button className="primary start-button" onClick={startSignup} type="button">시작하기</button>
+        <button className="login-link" onClick={startLogin} type="button">이미 계정이 있으신가요? <span>로그인</span></button>
       </section>
     </main>
   )
