@@ -74,15 +74,18 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, openAdd, wide, openItem, comboReady, comboGate, comboNeed } = ctx;
+  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed } = ctx;
   const [cat, setCat] = useS('전체');
   const cats = LB_DATA.CATEGORIES;
-  const filtered = cat === '전체' ? items : items.filter((i) => i.category === cat);
+  const viewingArchive = cat === '보관';
+  // 보관 탭을 보던 중 보관함이 비면 전체로 되돌린다
+  useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
+  const filtered = viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat));
   const count = items.length;
   const ready = comboReady;
 
-  /* ---- Empty state ---- */
-  if (count === 0) {
+  /* ---- Empty state (소유·보관 모두 없을 때만) ---- */
+  if (count === 0 && archived.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
@@ -109,6 +112,12 @@ function WardrobeScreen({ ctx }) {
   const chips = (
     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: wide ? '0 0 30px' : '2px 18px 14px' }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
+      {archived.length > 0 && (
+        <>
+          <span style={{ flex: 'none', width: 1, alignSelf: 'stretch', margin: '4px 2px', background: 'var(--line)' }} />
+          <Chip key="보관" active={viewingArchive} onClick={() => setCat('보관')}>보관 {archived.length}</Chip>
+        </>
+      )}
     </div>
   );
   return (
@@ -120,12 +129,12 @@ function WardrobeScreen({ ctx }) {
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
-            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>옷장</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{count}벌</span>
+            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>{viewingArchive ? '보관함' : '옷장'}</h1>
+            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}벌</span>
           </div>
         )}
         {wide && chips}
-        {!ready && (
+        {!viewingArchive && !ready && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none' }}>
               <Icon name="lock" size={18} />
@@ -141,7 +150,13 @@ function WardrobeScreen({ ctx }) {
           </div>
         )}
 
+        {viewingArchive && (
+          <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+            보관한 옷은 조합 추천에 쓰이지 않아요. 카드의 <b style={{ color: 'var(--ink-2)', fontWeight: 700 }}>×</b>를 눌러 다시 꺼내거나 삭제할 수 있어요.
+          </p>
+        )}
         <div className="lb-grid">
+          {!viewingArchive && (
           <button onClick={() => openAdd('wardrobe')} className="lb-addtile" style={{
             position: 'relative', display: 'block', width: '100%', textAlign: 'center',
             borderRadius: 'var(--r-md)', color: 'var(--ink-3)',
@@ -160,12 +175,13 @@ function WardrobeScreen({ ctx }) {
               <Icon name="plus" size={26} /><span style={{ fontSize: 12.5, fontWeight: 600 }}>옷 추가</span>
             </div>
           </button>
+          )}
           {filtered.map((it) => (
-            <div key={it.id} className="lb-anim-in">
+            <div key={it.id} className="lb-anim-in" style={{ position: 'relative' }}>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', position: 'relative' }}>
                 <Thumb item={it} />
                 {(it.brand || it.size || it.store || it.note) && (
-                  <span style={{ position: 'absolute', right: 8, top: 8, width: 22, height: 22, borderRadius: '50%', background: 'color-mix(in srgb, var(--ink) 80%, transparent)', color: '#fff', display: 'grid', placeItems: 'center', backdropFilter: 'blur(4px)' }}>
+                  <span style={{ position: 'absolute', left: 8, top: 8, width: 22, height: 22, borderRadius: '50%', background: 'color-mix(in srgb, var(--ink) 80%, transparent)', color: '#fff', display: 'grid', placeItems: 'center', backdropFilter: 'blur(4px)' }}>
                     <Icon name="check" size={13} stroke={2.6} />
                   </span>
                 )}
@@ -173,6 +189,18 @@ function WardrobeScreen({ ctx }) {
                   <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{it.brand ? it.brand + ' · ' : ''}{it.category} · {it.color}</div>
                 </div>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
+                aria-label={it.name + ' 삭제'}
+                className="lb-itemx"
+                style={{
+                  position: 'absolute', right: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
+                  display: 'grid', placeItems: 'center', color: 'var(--ink-2)',
+                  background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
+                  boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
+                }}>
+                <Icon name="x" size={13} stroke={2.4} />
               </button>
             </div>
           ))}

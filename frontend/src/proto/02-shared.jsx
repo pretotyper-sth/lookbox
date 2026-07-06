@@ -32,6 +32,7 @@ const ICONS = {
   pencil:   'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
   trash:    'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14',
   bell:     'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  archive:  'M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4',
   logout:   'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   help:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   shield:   'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
@@ -287,4 +288,39 @@ function ItemDetailSheet({ open, item, onClose, onSave }) {
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, LabeledField });
+/* ----------------------------------------------------------------
+   ItemRemoveSheet — 옷 카드 우상단 X → 보관 / 삭제 선택
+   보관: 옷장에서 숨김(archived) · 삭제: 완전 삭제(파괴적, 되돌릴 수 없음)
+---------------------------------------------------------------- */
+function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete }) {
+  const DANGER = '#B0573C';
+  if (!item) return null;
+  const isArchived = item.status === 'archived';
+  return (
+    <BottomSheet open={open} onClose={onClose}>
+      <div style={{ padding: '10px 24px 26px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+          <div style={{ width: 56, flex: 'none' }}><Thumb item={item} radius="var(--r-md)" /></div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{item.name}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{item.category} · {item.color}</div>
+          </div>
+        </div>
+        <p style={{ margin: '18px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+          {isArchived
+            ? <>옷장으로 꺼내면 다시 조합 추천에 사용돼요. 삭제하면 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>
+            : <>보관하면 옷장에서 숨겨져요. 삭제하면 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
+          {isArchived
+            ? <Btn full size="lg" variant="soft" icon="hanger" onClick={onRestore}>옷장으로 꺼내기</Btn>
+            : <Btn full size="lg" variant="soft" icon="archive" onClick={onArchive}>보관하기</Btn>}
+          <Btn full size="lg" icon="trash" onClick={onDelete} style={{ background: DANGER, color: '#fff' }}>삭제하기</Btn>
+          <Btn full variant="ghost" onClick={onClose}>취소</Btn>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+Object.assign(window, { Icon, Silhouette, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField });

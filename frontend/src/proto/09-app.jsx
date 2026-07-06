@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ItemDetailSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -105,6 +105,7 @@ function App() {
   );
   const [view, setView] = useState(pScreen === 'results' ? 'results' : pScreen === 'detail' ? 'detail' : null);
   const [items, setItems] = useState(() => seedItems(pWs || TWEAK_DEFAULTS.wardrobeState));
+  const [archived, setArchived] = useState([]);
   const [savedLooks, setSavedLooks] = useState(() => pSaved === 'empty' ? [] : LB_DATA.SAVED.slice());
   const [addSheet, setAddSheet] = useState({ open: pScreen === 'add' || !!pSheet, mode: pSheet || 'wardrobe' });
   const [loading, setLoading] = useState(pLoading);
@@ -191,6 +192,9 @@ function App() {
         setItems(liveItems);
       })
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'));
+    liveJSON('/api/live/wardrobe?status=archived')
+      .then((data) => { if (!dead) setArchived((data.items || []).map(liveRememberItem)); })
+      .catch(() => {});
     return () => { dead = true; };
   }, [isShowcase, putLiveItems, showToast]);
 
@@ -282,6 +286,41 @@ function App() {
   const openItem = (item) => setItemSheet({ open: true, item });
   const closeItem = () => setItemSheet((s) => ({ ...s, open: false }));
 
+  // 옷 카드 우상단 X → 보관(archived) / 삭제(delete), 보관 탭에서는 꺼내기(owned) / 삭제
+  const [removeSheet, setRemoveSheet] = useState({ open: false, item: null });
+  const requestRemove = (item) => setRemoveSheet({ open: true, item });
+  const closeRemove = () => setRemoveSheet((s) => ({ ...s, open: false }));
+  const setItemStatus = (id, status) => {
+    liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: [id], status }) }).catch(() => {});
+  };
+  const archiveItem = () => {
+    const t = removeSheet.item;
+    if (!t) return;
+    closeRemove();
+    setItems((arr) => arr.filter((it) => it.id !== t.id));
+    setArchived((arr) => [{ ...t, status: 'archived' }, ...arr.filter((it) => it.id !== t.id)]);
+    showToast('보관함으로 옮겼어요', 'archive');
+    setItemStatus(t.id, 'archived');
+  };
+  const restoreItem = () => {
+    const t = removeSheet.item;
+    if (!t) return;
+    closeRemove();
+    setArchived((arr) => arr.filter((it) => it.id !== t.id));
+    setItems((arr) => [{ ...t, status: 'owned' }, ...arr.filter((it) => it.id !== t.id)]);
+    showToast('옷장으로 꺼냈어요', 'check');
+    setItemStatus(t.id, 'owned');
+  };
+  const deleteItem = () => {
+    const t = removeSheet.item;
+    if (!t) return;
+    closeRemove();
+    setItems((arr) => arr.filter((it) => it.id !== t.id));
+    setArchived((arr) => arr.filter((it) => it.id !== t.id));
+    showToast('옷장에서 삭제했어요', 'check');
+    setItemStatus(t.id, 'delete');
+  };
+
   // 오늘의 코디 — '오늘 입기' 착장 기록 (룩북 저장과는 별개)
   const wearToday = (outfitId) => {
     setWornToday((arr) => {
@@ -292,6 +331,7 @@ function App() {
   };
   const saveItemDetails = (itemId, draft) => {
     setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...draft } : it));
+    setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...draft } : it));
     closeItem();
     showToast('상세 정보를 저장했어요', 'check');
   };
@@ -333,7 +373,7 @@ function App() {
   };
 
   const ctx = {
-    wide, items, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
+    wide, items, archived, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
@@ -346,7 +386,7 @@ function App() {
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
-    openItem, openPrefs, openAccount, logout, prefs,
+    openItem, requestRemove, openPrefs, openAccount, logout, prefs,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
@@ -446,6 +486,7 @@ function App() {
         </div>
       </BottomSheet>
       <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} />
+      <ItemRemoveSheet open={removeSheet.open} item={removeSheet.item} onClose={closeRemove} onArchive={archiveItem} onRestore={restoreItem} onDelete={deleteItem} />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
       {unsaveTarget && (
