@@ -634,7 +634,7 @@ def save_outfit(outfit_id: str, body: OutfitAction, user: UserContext = Depends(
 # generation here and return lookImg=null to keep the daily flow free.
 # ---------------------------------------------------------------------------
 
-LIVE_STATUS_MAP = {"owned": "owned", "considering": "considering", "delete": "deleted", "deleted": "deleted"}
+LIVE_STATUS_MAP = {"owned": "owned", "considering": "considering", "archived": "archived", "delete": "deleted", "deleted": "deleted"}
 
 
 class LiveImportUrl(BaseModel):
@@ -737,12 +737,13 @@ def _fetch_product_image(page_url: str) -> tuple[bytes, str, str]:
 
 
 @app.get("/api/live/wardrobe")
-def live_wardrobe(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+def live_wardrobe(status: str = "owned", user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    target = LIVE_STATUS_MAP.get(status, status)
     rows = (
         supabase_admin.table("wardrobe_items")
         .select("*")
         .eq("user_id", user.id)
-        .neq("status", "deleted")
+        .eq("status", target)
         .order("created_at", desc=True)
         .execute()
         .data
