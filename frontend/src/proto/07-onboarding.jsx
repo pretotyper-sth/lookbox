@@ -116,8 +116,6 @@ function StyleCard({ style, selected, onToggle }) {
         }}>
           <Icon name="check" size={14} stroke={2.8} />
         </span>
-        {/* EN 워터마크 라벨 */}
-        <span style={{ position: 'absolute', left: 11, bottom: 10, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--ink-3)' }}>{style.en}</span>
       </div>
       {/* 구분선 — 카드 전체 폭, 잘리지 않게 별도 블록으로 */}
       <div style={{ height: 1, background: selected ? 'var(--accent)' : 'var(--line-2)', transition: 'background var(--dur) var(--ease)' }} />
