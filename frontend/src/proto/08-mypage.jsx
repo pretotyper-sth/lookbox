@@ -204,7 +204,7 @@ function MyPageScreen({ ctx }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 24px',
+        padding: 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 24px',
       }}>
         {profile}
         {personal}

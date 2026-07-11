@@ -38,11 +38,11 @@ function TopBar({ left, title, right, sticky = true, border = true }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 'var(--s2)',
-      paddingTop: sticky ? 'calc(env(safe-area-inset-top, 0px) + 14px)' : 14,
+      paddingTop: sticky ? 'calc(env(safe-area-inset-top, 0px) + 18px)' : 16,
       paddingBottom: 14,
       paddingLeft: 18,
       paddingRight: 18,
-      minHeight: sticky ? 'calc(env(safe-area-inset-top, 0px) + 56px)' : 56,
+      minHeight: sticky ? 'calc(env(safe-area-inset-top, 0px) + 60px)' : 58,
       boxSizing: 'border-box',
       position: 'relative',
       flex: 'none',
@@ -166,7 +166,7 @@ function WardrobeScreen({ ctx }) {
       {!wide && (
         <div style={{
           flex: 'none',
-          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6px)',
           background: 'var(--ivory)',
           borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
         }}>

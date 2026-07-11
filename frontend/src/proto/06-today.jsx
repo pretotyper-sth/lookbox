@@ -317,7 +317,7 @@ function TodayScreen({ ctx }) {
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           textAlign: 'center',
-          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 40px 80px',
+          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 28px) 40px 80px',
         }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
@@ -343,7 +343,7 @@ function TodayScreen({ ctx }) {
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           textAlign: 'center',
-          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 40px 80px',
+          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 28px) 40px 80px',
         }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
@@ -451,7 +451,7 @@ function TodayScreen({ ctx }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
         flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 28px',
+        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 28px',
       }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
           {header}
