@@ -19,46 +19,81 @@ function MetaChips({ item }) {
 }
 
 /* ============================================================
-   LookComposite — 조합 전체를 '하나의 룩 이미지'처럼 한 배경 위에 겹쳍 배치.
-   outfit.lookImg 가 있으면 실제 합성 사진을 우선 사용(추후 교체 가능).
-   개별 구분은 아래 스와이프 스트립으로 제공.
+   LookComposite — 무신사 코디 플랫레이 느낌.
+   상의·하의를 중앙에 사람처럼 쌓고(허리에서 겹침), 신발·가방·액세서리는 오른쪽에.
    ============================================================ */
-const LOOK_SLOT = {
-  // 개별 의상을 키우고 상·하의를 살짝 겹쳐 실제 코디 실루엣처럼 보이게.
-  '아우터':   { cx: 48, cy: 38, w: 70, h: 68, z: 1, rot: -3 },
-  '상의':     { cx: 52, cy: 30, w: 54, h: 46, z: 3, rot: -2 },
-  '하의':     { cx: 48, cy: 66, w: 54, h: 56, z: 2, rot: 1 },
-  '원피스':   { cx: 50, cy: 50, w: 64, h: 76, z: 2, rot: -1 },
-  '신발':     { cx: 62, cy: 88, w: 38, h: 26, z: 4, rot: 4 },
-  '액세서리': { cx: 78, cy: 56, w: 28, h: 28, z: 5, rot: 0 },
+const LOOK_MAIN = {
+  '아우터':   { cx: 40, cy: 34, w: 78, h: 74, z: 1, rot: -3 },
+  '상의':     { cx: 40, cy: 26, w: 64, h: 54, z: 3, rot: -1 },
+  '하의':     { cx: 40, cy: 66, w: 62, h: 64, z: 2, rot: 1 },
+  '원피스':   { cx: 42, cy: 48, w: 70, h: 84, z: 2, rot: -1 },
+};
+const LOOK_SIDE = {
+  '신발':     { cx: 78, cy: 82, w: 40, h: 30, z: 4, rot: 8 },
+  '가방':     { cx: 80, cy: 48, w: 34, h: 40, z: 4, rot: 6 },
+  '액세서리': { cx: 80, cy: 20, w: 28, h: 28, z: 5, rot: 0 },
 };
 function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
     return (
-      <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      <div style={{ background: '#E9E8E4', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
         <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
   }
+  // 메인(몸통) / 사이드(포인트)로 나눠 배치 — 카탈로그 격자가 아니라 한 벌 코디처럼.
+  const mains = [];
+  const sides = [];
+  cleanItems.forEach((it) => {
+    if (LOOK_MAIN[it.category]) mains.push(it);
+    else if (LOOK_SIDE[it.category]) sides.push(it);
+    else mains.push(it);
+  });
+  // 상의·아우터가 하의보다 위에 오도록
+  const order = { '아우터': 0, '상의': 1, '원피스': 2, '하의': 3 };
+  mains.sort((a, b) => (order[a.category] ?? 9) - (order[b.category] ?? 9));
+
   const used = {};
+  const centerMain = sides.length === 0; // 상의·하의만이면 가운데 정렬
+  const place = (it, slotMap, sideIdx) => {
+    const base = slotMap[it.category] || LOOK_MAIN['상의'];
+    const n = used[it.category] || 0; used[it.category] = n + 1;
+    let cx = base.cx + n * 4;
+    let cy = base.cy + n * 3;
+    if (slotMap === LOOK_MAIN && centerMain) cx = 50;
+    // 사이드 아이템이 여러 개면 세로로 살짝 벌림
+    if (slotMap === LOOK_SIDE && sideIdx > 0) cy = Math.min(88, base.cy + sideIdx * 22);
+    return {
+      position: 'absolute', left: cx + '%', top: cy + '%', width: base.w + '%', height: base.h + '%',
+      transform: `translate(-50%,-50%) rotate(${base.rot}deg)`, zIndex: base.z + n,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+    };
+  };
+
   return (
-    <div style={{ position: 'relative', background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
-      {cleanItems.map((it) => {
-        const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
-        const n = used[it.category] || 0; used[it.category] = n + 1;
-        const cx = base.cx + n * 6, cy = base.cy + n * 4;
-        const frame = {
-          position: 'absolute', left: cx + '%', top: cy + '%', width: base.w + '%', height: base.h + '%',
-          transform: `translate(-50%,-50%) rotate(${base.rot}deg)`, zIndex: base.z,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-        };
+    <div style={{ position: 'relative', background: '#E9E8E4', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      {mains.map((it) => {
+        const frame = place(it, LOOK_MAIN, 0);
         return it.img
           ? (
             <div key={it.id} style={frame}>
               <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                filter: 'drop-shadow(0 10px 14px rgba(40,33,20,0.16))',
+                filter: 'drop-shadow(0 12px 18px rgba(40,33,20,0.18))',
+              }} />
+            </div>
+          )
+          : <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
+      })}
+      {sides.map((it, i) => {
+        const frame = place(it, LOOK_SIDE, i);
+        return it.img
+          ? (
+            <div key={it.id} style={frame}>
+              <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
+                width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+                filter: 'drop-shadow(0 8px 12px rgba(40,33,20,0.14))',
               }} />
             </div>
           )

@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb, TopBar, Wordmark } = window;
+const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb, TopBar, Wordmark } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, TopBar, Eyebrow, Wordmark, LookComposite */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, TopBar, Eyebrow, Wordmark, LookComposite, BottomSheet */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -266,6 +266,7 @@ function TodayScreen({ ctx }) {
   const SLOT = Math.max(1, parseInt(dailyCount, 10) || 4);
 
   const [loading, setLoading] = useTd(false);
+  const [needMoreOpen, setNeedMoreOpen] = useTd(false);
 
   // 날짜 선택 — 오늘이면 데일리 추천, 지난 날짜면 그날 추천 기록
   const today = React.useMemo(() => startOfDay(new Date()), []);
@@ -286,6 +287,11 @@ function TodayScreen({ ctx }) {
   const emptySlots = Math.max(0, SLOT - picks.length);
 
   const reshuffle = async () => {
+    // 이미 고유 조합이 슬롯을 못 채운 상태 → 더 추천할 수 없음
+    if (emptySlots > 0) {
+      setNeedMoreOpen(true);
+      return;
+    }
     setLoading(true);
     await requestDailyOutfits(preferredDailyStyle);
     setLoading(false);
@@ -379,6 +385,18 @@ function TodayScreen({ ctx }) {
           {list}
         </div>
       </div>
+      <BottomSheet open={needMoreOpen} onClose={() => setNeedMoreOpen(false)}>
+        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>더 추천할 코디가 없어요</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+            지금 옷장으로는 만들 수 있는 조합을<br />모두 보여드렸어요.<br />옷을 더 담으면 새로운 코디를 추천해드려요.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
+            <Btn full size="lg" icon="plus" onClick={() => { setNeedMoreOpen(false); openAdd ? openAdd('wardrobe') : startComboOrWardrobe(); }}>옷 추가</Btn>
+            <Btn full variant="ghost" onClick={() => setNeedMoreOpen(false)}>취소</Btn>
+          </div>
+        </div>
+      </BottomSheet>
     </div>
   );
 }
