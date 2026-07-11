@@ -201,7 +201,7 @@ function LookbookScreen({ ctx }) {
           </div>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>저장한 코디가 없어요</h1>
           <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 250 }}>
-            마음에 드는 조합을 저장하면 여기에 모여요. 구매가 아니라, 그냥 기록이에요.
+            마음에 든 코디를 모아두는 공간이에요. 구매와 상관없이, 편하게 저장해두세요.
           </p>
           <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
             <Btn full size="lg" icon="sparkle" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>
