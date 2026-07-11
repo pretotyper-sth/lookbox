@@ -29,8 +29,9 @@ function TopBar({ left, title, right }) {
       display: 'flex', alignItems: 'center', gap: 'var(--s2)',
       padding: '14px 18px 12px', minHeight: 56,
       position: 'sticky', top: 0, zIndex: 20,
-      background: 'color-mix(in srgb, var(--ivory) 86%, transparent)',
+      background: 'color-mix(in srgb, var(--ivory) 92%, transparent)',
       backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+      borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', minWidth: 44 }}>{left}</div>
       <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{title}</div>
@@ -80,24 +81,28 @@ function WardrobeScreen({ ctx }) {
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
   } = ctx;
   const [cat, setCat] = useS('전체');
-  const [sel, setSel] = useS([]); // desktop multi-select ids
+  const [sel, setSel] = useS([]); // multi-select ids
+  const [selectMode, setSelectMode] = useS(false); // mobile: explicit select mode (no hover)
   const [hoverId, setHoverId] = useS(null);
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const cats = LB_DATA.CATEGORIES;
   const viewingArchive = cat === '보관';
   // 보관 탭을 보던 중 보관함이 비면 전체로 되돌린다
   useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
-  useE(() => { setSel([]); setBulkDelAsk(false); }, [cat]);
+  useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat]);
   const filtered = viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat));
   const count = items.length;
   const ready = comboReady;
   const selCount = sel.length;
-  const selecting = wide && selCount > 0;
+  const selecting = selCount > 0;
+  const mobileSelect = !wide && selectMode;
+  const inSelectUx = wide ? selecting : (selectMode || selecting);
 
   const toggleSel = (id) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   const clearSel = () => { setSel([]); setBulkDelAsk(false); };
-  const runBulkArchive = () => { if (viewingArchive) bulkRestore(sel); else bulkArchive(sel); clearSel(); };
-  const runBulkDelete = () => { bulkDelete(sel); clearSel(); };
+  const exitSelectMode = () => { clearSel(); setSelectMode(false); };
+  const runBulkArchive = () => { if (viewingArchive) bulkRestore(sel); else bulkArchive(sel); exitSelectMode(); };
+  const runBulkDelete = () => { bulkDelete(sel); exitSelectMode(); };
 
   /* ---- Empty state (소유·보관 모두 없을 때만; 최초 로딩 중엔 스켈레톤 우선) ---- */
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
@@ -137,10 +142,35 @@ function WardrobeScreen({ ctx }) {
   );
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
-      {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
+      {!wide && (
+        <TopBar
+          left={<Wordmark />}
+          right={(
+            <>
+              {(count > 0 || archived.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                  style={{
+                    fontSize: 13, fontWeight: 700, padding: '6px 8px',
+                    color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
+                  }}
+                >
+                  {selectMode ? '완료' : '선택'}
+                </button>
+              )}
+              {!selectMode && <IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />}
+            </>
+          )}
+        />
+      )}
       {!wide && chips}
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '0 18px', paddingBottom: selecting ? 88 : (!wide ? 110 : undefined) }}>
+      <div style={{
+        flex: 1, overflowY: 'auto',
+        padding: wide ? '28px 0 36px' : '0 18px',
+        paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : undefined),
+      }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -171,8 +201,14 @@ function WardrobeScreen({ ctx }) {
           </p>
         )}
 
+        {mobileSelect && !selecting && (
+          <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+            옷을 눌러 여러 벌을 선택한 뒤 보관·삭제할 수 있어요.
+          </p>
+        )}
+
         <div className="lb-grid">
-          {!viewingArchive && (
+          {!viewingArchive && !mobileSelect && (
           <button onClick={() => openAdd('wardrobe')} className="lb-addtile" style={{
             position: 'relative', display: 'block', width: '100%', textAlign: 'center',
             borderRadius: 'var(--r-md)', color: 'var(--ink-3)',
@@ -201,7 +237,13 @@ function WardrobeScreen({ ctx }) {
           ))}
           {filtered.map((it) => {
             const on = sel.includes(it.id);
-            const showSel = wide && (on || selecting || hoverId === it.id);
+            const showSel = wide
+              ? (on || selecting || hoverId === it.id)
+              : (selectMode || on);
+            const onCardTap = () => {
+              if (!wide && (selectMode || selecting)) toggleSel(it.id);
+              else openItem(it);
+            };
             return (
             <div
               key={it.id}
@@ -211,13 +253,13 @@ function WardrobeScreen({ ctx }) {
               onMouseLeave={() => wide && setHoverId((h) => (h === it.id ? null : h))}
             >
               <div style={{ position: 'relative' }}>
-                <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
+                <button onClick={onCardTap} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
                   <Thumb item={it} />
                 </button>
-                {wide && (
+                {(wide || selectMode || on) && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleSel(it.id); }}
+                    onClick={(e) => { e.stopPropagation(); if (!wide && !selectMode) setSelectMode(true); toggleSel(it.id); }}
                     aria-label={on ? '선택 해제' : '선택'}
                     aria-pressed={on}
                     style={{
@@ -235,6 +277,7 @@ function WardrobeScreen({ ctx }) {
                     {on && <Icon name="check" size={10} stroke={2.6} />}
                   </button>
                 )}
+                {!inSelectUx && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
@@ -247,8 +290,9 @@ function WardrobeScreen({ ctx }) {
                 >
                   <Icon name="more" size={15} stroke={2.8} />
                 </button>
+                )}
               </div>
-              <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
+              <button onClick={onCardTap} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
                 <div style={{
                   fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
                   height: 'calc(1.3em * 2)', overflow: 'hidden',
@@ -267,12 +311,12 @@ function WardrobeScreen({ ctx }) {
        </div>
       </div>
 
-      {/* Desktop: 선택 시 하단 플로팅 메뉴 */}
+      {/* 선택 시 하단 플로팅 메뉴 */}
       {selecting && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 22, zIndex: 30,
+          position: 'absolute', left: 0, right: 0, bottom: wide ? 22 : 12, zIndex: 30,
           display: 'flex', justifyContent: 'center', pointerEvents: 'none',
-          padding: '0 24px',
+          padding: wide ? '0 24px' : '0 14px',
         }}>
           <div style={{
             pointerEvents: 'auto',
@@ -296,22 +340,20 @@ function WardrobeScreen({ ctx }) {
         </div>
       )}
 
-      {wide && (
-        <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
-          <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}벌을 삭제할까요?</h3>
-            <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-              완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b>
-            </p>
-            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-              <Btn variant="soft" onClick={() => setBulkDelAsk(false)} style={{ flex: 1 }}>취소</Btn>
-              <Btn icon="trash" onClick={runBulkDelete} style={{ flex: 1, background: '#B0573C', color: '#fff' }}>삭제</Btn>
-            </div>
+      <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
+        <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}벌을 삭제할까요?</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+            완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b>
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+            <Btn variant="soft" onClick={() => setBulkDelAsk(false)} style={{ flex: 1 }}>취소</Btn>
+            <Btn icon="trash" onClick={runBulkDelete} style={{ flex: 1, background: '#B0573C', color: '#fff' }}>삭제</Btn>
           </div>
-        </BottomSheet>
-      )}
+        </div>
+      </BottomSheet>
 
-      {!wide && (
+      {!wide && !selectMode && !selecting && (
         <div className="lb-cta-dock">
           <Btn full size="lg" icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.6 }} onClick={comboGate}>구매 전 조합 추천받기</Btn>
         </div>

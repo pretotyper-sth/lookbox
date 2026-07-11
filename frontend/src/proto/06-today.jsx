@@ -107,13 +107,13 @@ function EmptyTodaySlot({ onAdd }) {
       <div style={{
         flex: 1, minHeight: 0, aspectRatio: '4 / 5', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        textAlign: 'center', padding: '18px 14px', color: 'var(--ink-3)',
+        textAlign: 'center', padding: '14px 10px', color: 'var(--ink-3)',
       }}>
-        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', marginBottom: 12, color: 'var(--ink-2)' }}>
-          <Icon name="plus" size={22} />
+        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', marginBottom: 10, color: 'var(--ink-2)' }}>
+          <Icon name="plus" size={20} />
         </div>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-2)', lineHeight: 1.35 }}>더 다양한 코디를 보려면</div>
-        <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.45, color: 'var(--ink-3)' }}>옷장에 옷을 추가해 주세요</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', lineHeight: 1.35, wordBreak: 'keep-all' }}>더 많은 코디</div>
+        <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.4, color: 'var(--ink-3)', wordBreak: 'keep-all' }}>옷을 추가해 보세요</div>
       </div>
       <div style={{ marginTop: 'var(--s3)' }}>
         <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>옷 추가</Btn>
