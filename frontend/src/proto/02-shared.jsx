@@ -339,6 +339,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   useEffect(() => {
     if (open && item) {
       setDraft({
+        name: item.name || '',
         brand: item.brand || '',
         size: item.size || '',
         color: item.color || '',
@@ -354,7 +355,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
     <BottomSheet open={open} onClose={onClose}>
       <div style={{ padding: '10px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0, flex: 1 }}>
             <button
               type="button"
               onClick={() => canZoom && onViewImage(item)}
@@ -377,9 +378,22 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
                 </span>
               )}
             </button>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{item.name}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 6 }}>이름</div>
+              <input
+                className="lb-input"
+                value={draft.name || ''}
+                maxLength={48}
+                placeholder="예) 코튼 셔츠"
+                onChange={(e) => set('name')(e.target.value.slice(0, 48))}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: 'var(--r-md)',
+                  fontSize: 15, fontWeight: 700, lineHeight: 1.3,
+                  background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6 }}>
                 {item.category} · {draft.color || item.color || '색상 미정'}
               </div>
             </div>
@@ -403,7 +417,10 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Btn full size="lg" icon="check" onClick={() => onSave(item.id, draft)}>저장</Btn>
+          <Btn full size="lg" icon="check" onClick={() => onSave(item.id, {
+            ...draft,
+            name: (draft.name || '').trim() || item.name || '옷',
+          })}>저장</Btn>
         </div>
       </div>
     </BottomSheet>

@@ -578,6 +578,7 @@ function App() {
   };
   const saveItemDetails = async (itemId, draft) => {
     const patch = {
+      name: (draft.name || '').trim() || '옷',
       brand: draft.brand || '',
       size: draft.size || '',
       color: draft.color || '',
