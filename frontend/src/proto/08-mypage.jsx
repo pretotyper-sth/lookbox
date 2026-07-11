@@ -112,22 +112,26 @@ function MyPageScreen({ ctx }) {
   const profile = (
     <div style={{
       display: 'flex', alignItems: 'center', gap: wide ? 14 : 15,
-      padding: wide ? '16px 18px' : '4px 4px 22px',
+      padding: wide ? '14px 16px' : '4px 4px 22px',
       marginBottom: wide ? 14 : 0,
       background: wide ? 'var(--surface)' : 'transparent',
       borderRadius: wide ? 'var(--r-lg)' : 0,
     }}>
       <div style={{
-        width: wide ? 52 : 60, height: wide ? 52 : 60, borderRadius: '50%',
+        width: wide ? 44 : 60, height: wide ? 44 : 60, borderRadius: '50%',
         background: wide ? 'var(--ivory)' : 'var(--surface)',
         display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none',
         boxShadow: 'inset 0 0 0 1px var(--line)',
       }}>
-        <Icon name="user" size={wide ? 26 : 30} stroke={1.6} />
+        <Icon name="user" size={wide ? 22 : 30} stroke={1.6} />
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: wide ? 16 : 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
-        {wide && <div style={{ marginTop: 3, fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 500 }}>계정 · 취향 설정</div>}
+        {!wide && (
+          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
+        )}
+        {wide
+          ? <div style={{ fontSize: 13.5, color: 'var(--ink-2)', fontWeight: 600 }}>계정 · 취향 설정</div>
+          : null}
       </div>
     </div>
   );
@@ -181,19 +185,27 @@ function MyPageScreen({ ctx }) {
     </>
   );
 
-  /* PC: 계정/설정 페이지는 옷장처럼 풀와이드가 아니라 읽기 폭을 제한한 설정형 레이아웃 */
+  /* PC: 옷장과 같은 lb-wide-inner 타이틀 위치, 콘텐츠는 그 왼쪽 정렬로 읽기 폭만 제한 */
   if (wide) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '32px 0 48px' }}>
-          <div style={{ width: '100%', maxWidth: 680, margin: '0 auto', padding: '0 32px' }}>
-            <h1 style={{ margin: '0 0 18px', fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
-            {profile}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
-              {personal}
-              {styleSec}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 0 36px' }}>
+          <div className="lb-wide-inner">
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 22 }}>
+              <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
+              <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '46%' }}>
+                {prefs.email || '게스트'}
+              </span>
             </div>
-            {actions}
+
+            <div style={{ maxWidth: 760 }}>
+              {profile}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
+                {personal}
+                {styleSec}
+              </div>
+              {actions}
+            </div>
           </div>
         </div>
       </div>
