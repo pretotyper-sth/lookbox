@@ -36,6 +36,22 @@ function param(name) {
   try { return new URLSearchParams(location.search).get(name); } catch (e) { return null; }
 }
 
+const APP_TABS = ['wardrobe', 'lookbook', 'today', 'mypage'];
+function readTabFromUrl() {
+  const t = param('tab');
+  return APP_TABS.includes(t) ? t : null;
+}
+function persistTab(id) {
+  if (!APP_TABS.includes(id)) return;
+  try {
+    const u = new URL(location.href);
+    // showcase (?screen=)는 캔버스용 — tab 파라미터로 덮지 않음
+    if (u.searchParams.get('screen')) return;
+    u.searchParams.set('tab', id);
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+  } catch (e) { /* noop */ }
+}
+
 function seedItems(ws) {
   if (ws === 'empty') return [];
   if (ws === 'partial') return LB_DATA.WARDROBE.slice(0, 2);
@@ -115,7 +131,7 @@ function App() {
     : pScreen === 'mypage' ? 'mypage'
     : pScreen === 'today' ? 'today'
     : pScreen ? 'wardrobe'   // 그 외 쇼케이스(wardrobe/results/add)
-    : 'wardrobe'             // 일반 진입 → 옷장
+    : (readTabFromUrl() || 'wardrobe')  // 실서비스: URL ?tab= 유지
   );
   const [view, setView] = useState(pScreen === 'results' ? 'results' : pScreen === 'detail' ? 'detail' : null);
   const [items, setItems] = useState(() => {
@@ -230,7 +246,7 @@ function App() {
 
   // ---- actions ----
   const savedOutfitIds = savedLooks.map((l) => l.outfitId);
-  const go = (id) => { setView(null); setTab(id); };
+  const go = (id) => { setView(null); setTab(id); if (!isShowcase) persistTab(id); };
   const back = () => setView(null);
 
   const openAdd = (mode) => setAddSheet({ open: true, mode });
@@ -272,7 +288,7 @@ function App() {
   const confirmAdd = async (mode, details) => {
     closeAdd();
     if (mode === 'anchor') {
-      setTab('wardrobe'); setView('results'); setLoading(true);
+      setTab('wardrobe'); if (!isShowcase) persistTab('wardrobe'); setView('results'); setLoading(true);
       try {
         const imported = await liveImportSource({ ...(details || {}), status: 'considering' });
         const anchorItem = (imported.items || [])[imported.primary_idx || 0] || (imported.items || [])[0];
