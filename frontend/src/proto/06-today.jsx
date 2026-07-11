@@ -272,7 +272,7 @@ function TodayScreen({ ctx }) {
     dailyCount, startComboOrWardrobe, openAdd, go,
     dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
     dailyEnabled, setDailyEnabled,
-    preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
+    preferredDailyStyle, preferredStyleLabel,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
