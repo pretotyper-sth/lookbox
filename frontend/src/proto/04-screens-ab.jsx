@@ -320,7 +320,7 @@ function AddSheet({ ctx }) {
       setSel(list.map((d) => d.id));
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store || !!d.color })));
           setStepIdx(0);
           return 'register';
         }
@@ -348,7 +348,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store || !!d.color })));
     setStepIdx(0);
     setStage('register');
   };
@@ -592,6 +592,7 @@ function AddSheet({ ctx }) {
                       <div style={{ flex: 1 }}><LabeledField label="브랜드" value={cur.draft.brand} onChange={setStepDraft('brand')} placeholder="예) 코스" /></div>
                       <div style={{ flex: 1 }}><LabeledField label="사이즈" value={cur.draft.size} onChange={setStepDraft('size')} placeholder="예) M" /></div>
                     </div>
+                    <LabeledField label="컬러" value={cur.draft.color} onChange={setStepDraft('color')} placeholder="예) 블루" />
                     <LabeledField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사 · 오프라인" />
                     <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
                   </div>

@@ -694,6 +694,7 @@ def _store_uploaded_item(
     source_url: str | None = None,
     brand: str | None = None,
     store: str | None = None,
+    color_override: str | None = None,
 ) -> dict[str, Any]:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
@@ -722,7 +723,7 @@ def _store_uploaded_item(
                     "user_id": user_id,
                     "name": (name_override or "").strip() or meta.get("name") or "새 옷",
                     "category": meta.get("category") or "top",
-                    "color": meta.get("color") or "neutral",
+                    "color": (color_override or "").strip() or meta.get("color") or "neutral",
                     "image_url": image_url,
                     "storage_path": image_path,
                     "source": source,
@@ -795,6 +796,34 @@ def _meta_content(html: str, key: str, attr: str = "property") -> str:
 
 def _clean_brand(val: str) -> str:
     return (val or "").strip().strip("|·-–—").strip()[:40]
+
+
+# 상품명 끝의 '_블루' 같은 색상 꼬리표 판별용.
+COLOR_WORDS = (
+    "블랙", "화이트", "그레이", "그레이지", "차콜", "네이비", "블루", "스카이블루",
+    "라이트블루", "베이지", "브라운", "카멜", "카키", "올리브", "그린", "민트",
+    "아이보리", "크림", "오트밀", "레드", "와인", "버건디", "핑크", "코랄",
+    "오렌지", "옐로우", "머스타드", "퍼플", "라벤더", "연청", "중청", "진청",
+    "흑청", "데님", "인디고", "탄", "모카", "멜란지", "카멜색",
+    "black", "white", "gray", "grey", "charcoal", "navy", "blue", "beige",
+    "brown", "camel", "khaki", "olive", "green", "mint", "ivory", "cream",
+    "red", "wine", "burgundy", "pink", "coral", "orange", "yellow", "mustard",
+    "purple", "lavender", "denim", "indigo", "tan", "mocha",
+)
+
+
+def _split_color_from_title(title: str) -> tuple[str, str]:
+    """'원워시드 스트레이트 데님_블루' → ('원워시드 스트레이트 데님', '블루').
+
+    끝의 '_토큰'이 색상으로 보일 때만 분리. 아니면 제목을 그대로 둔다.
+    """
+    t = (title or "").strip()
+    if "_" in t:
+        head, _, tail = t.rpartition("_")
+        head, tail = head.strip(), tail.strip()
+        if head and tail and any(w in tail.lower() for w in COLOR_WORDS):
+            return head, tail
+    return t, ""
 
 
 def _brand_from_jsonld(html: str) -> str:
@@ -881,6 +910,7 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     if not title:
         tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
         title = tm.group(1).strip() if tm else ""
+    title, color = _split_color_from_title(title)
     match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
     if not match:
         match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
@@ -891,7 +921,7 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
         img_url = "https:" + img_url
     resp = requests.get(img_url, headers=headers, timeout=15)
     resp.raise_for_status()
-    meta = {"brand": brand, "store": store, "title": title[:120]}
+    meta = {"brand": brand, "store": store, "title": title[:120], "color": color}
     return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
 
 
@@ -981,6 +1011,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
         source_url=url,
         brand=meta.get("brand") or None,
         store=meta.get("store") or None,
+        color_override=meta.get("color") or None,
     )
     items = [live_item_payload(row)]
     _record_extraction_timing(user.id, "url", len(items), (time.perf_counter() - t0) * 1000)
