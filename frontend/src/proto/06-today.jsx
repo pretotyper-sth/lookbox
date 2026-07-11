@@ -370,55 +370,52 @@ function TodayScreen({ ctx }) {
       onSelect={(d) => setSelected(startOfDay(d))} />
   );
 
-  const headerAction = wide ? (
-    isToday ? (
-      <Btn variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>
-        {busy ? '추천 만드는 중...' : '다른 코디 추천받기'}
-      </Btn>
-    ) : (
-      <Btn variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
-    )
-  ) : null;
-
   const header = isToday ? (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Eyebrow>오늘의 추천 코디</Eyebrow>
-          <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-            옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
-            {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
-          </p>
-        </div>
-        {headerAction && <div style={{ flex: 'none', paddingTop: 2 }}>{headerAction}</div>}
-      </div>
+      <Eyebrow>오늘의 추천 코디</Eyebrow>
+      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
+        {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
+      </p>
       {ctxStrip}
     </div>
   ) : (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <Eyebrow>지난 추천 코디</Eyebrow>
-          <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-            <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>에 추천받았던 코디예요.
-          </p>
-        </div>
-        {headerAction && <div style={{ flex: 'none', paddingTop: 2 }}>{headerAction}</div>}
-      </div>
+      <Eyebrow>지난 추천 코디</Eyebrow>
+      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+        <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>에 추천받았던 코디예요.
+      </p>
       {ctxStrip}
     </div>
   );
 
   const shown = isToday ? picks : uniqueDailyOutfits(pastDay.picks).slice(0, SLOT);
   const empty = isToday ? emptySlots : Math.max(0, SLOT - shown.length);
+  const gridCols = wide
+    ? `repeat(${SLOT}, minmax(0, 1fr))`
+    : 'repeat(2, minmax(0,1fr))';
 
   const list = (
     <>
+      {wide && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: gridCols,
+          gap: 'var(--s4)',
+          marginBottom: 12,
+          alignItems: 'end',
+        }}>
+          {Array.from({ length: Math.max(0, SLOT - 1) }).map((_, i) => <div key={'sp' + i} />)}
+          <div>
+            {isToday
+              ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
+              : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
+          </div>
+        </div>
+      )}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: wide
-          ? 'repeat(auto-fill, minmax(220px, 1fr))'
-          : 'repeat(2, minmax(0,1fr))',
+        gridTemplateColumns: gridCols,
         gap: wide ? 'var(--s4)' : 'var(--s3)',
       }}>
         {busy
