@@ -129,8 +129,8 @@ function StyleCard({ style, selected, onToggle }) {
     <button onClick={onToggle} className="lb-stylecard" style={{
       display: 'block', width: '100%', textAlign: 'left', padding: 0,
       background: 'var(--surface-2)', borderRadius: 'var(--r-lg)', overflow: 'hidden',
-      boxShadow: selected ? 'inset 0 0 0 2px var(--accent)' : 'inset 0 0 0 1px var(--line)',
-      transition: 'box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease)',
+      boxShadow: 'inset 0 0 0 1px var(--line)',
+      transition: 'transform var(--dur) var(--ease)',
     }}>
       {/* 대표 이미지 자리 (4:5 — 풀룩 프레이밍은 유지하되 모바일 높이를 줄임) */}
       <div style={{
