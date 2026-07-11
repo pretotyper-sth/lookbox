@@ -8,6 +8,40 @@ const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLOR
 
 const { useState } = React;
 
+// ── 얼굴 감지 (퍼스널 컬러 진단 전 유효성) ──────────────────────────
+// MediaPipe FaceDetector를 지연 로드(진단 시점에만) → 초기 번들 영향 없음.
+// 얼굴이 없거나 불명확하면 진단을 막고 다시 올리도록 유도한다.
+let _faceDetectorPromise = null;
+function getFaceDetector() {
+  if (!_faceDetectorPromise) {
+    _faceDetectorPromise = (async () => {
+      const V = '0.10.35';
+      const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
+      const fileset = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}/wasm`);
+      return FaceDetector.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: 0.5,
+      });
+    })().catch((e) => { _faceDetectorPromise = null; throw e; });
+  }
+  return _faceDetectorPromise;
+}
+
+// dataURL 이미지에서 감지된 얼굴 수. 디코드/모델 로드 실패 시 -1(판정 불가 → 차단 안 함).
+async function countFacesInImage(dataURL) {
+  try {
+    const img = new Image();
+    img.src = dataURL;
+    await (img.decode ? img.decode() : new Promise((res, rej) => { img.onload = res; img.onerror = rej; }));
+    const detector = await getFaceDetector();
+    const result = detector.detect(img);
+    return (result && result.detections ? result.detections.length : 0);
+  } catch (e) {
+    return -1;
+  }
+}
+
 // 퍼스널 컬러별 진단 결과 상세 — 추천 컬러 팔레트 + 한 줄 설명 + 키워드.
 const PC_DETAIL = {
   spring: { tone: '봄 웜 · 라이트', desc: '맑고 화사한 따뜻한 색이 얼굴을 밝혀줘요.',
@@ -202,22 +236,34 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   const [pcPhase, setPcPhase] = useState('intro');   // intro → upload → analyzing
   const [pcPhoto, setPcPhoto] = useState(null);      // 업로드한 얼굴 사진 (dataURL)
   const [pcResult, setPcResult] = useState(null);    // 진단된 퍼스널 컴러 id
-  const openPc = () => { setPcPhoto(null); setPcResult(null); setPcPhase('intro'); setPcModal(true); };
+  const [pcError, setPcError] = useState('');        // 얼굴 미감지 등 안내
+  const openPc = () => { setPcPhoto(null); setPcResult(null); setPcError(''); setPcPhase('intro'); setPcModal(true); };
   const closePc = () => { if (pcPhase !== 'analyzing') setPcModal(false); };
   const onPickPhoto = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
+    setPcError('');
     const r = new FileReader();
     r.onload = () => setPcPhoto(r.result);
     r.readAsDataURL(f);
   };
-  const runDiagnosis = () => {
+  const runDiagnosis = async () => {
+    setPcError('');
     setPcPhase('analyzing');
-    setTimeout(() => {
-      const pick = LB_DATA.PERSONAL_COLORS[Math.floor(Math.random() * LB_DATA.PERSONAL_COLORS.length)].id;
-      setPcResult(pick);
-      setPcPhase('result');
-    }, 1800);
+    const started = Date.now();
+    const faces = await countFacesInImage(pcPhoto);
+    // 얼굴이 정확히 하나로 잘 잡힐 때만 진행. 0개면 얼굴 사진이 아니거나 불명확.
+    if (faces === 0) {
+      setPcError('얼굴을 인식하지 못했어요. 얼굴이 정면으로 잘 나온 사진으로 다시 올려주세요.');
+      setPcPhase('upload');
+      return;
+    }
+    // 분석 중 화면이 너무 빨리 지나가지 않도록 최소 시간 확보
+    const wait = Math.max(0, 1200 - (Date.now() - started));
+    if (wait) await new Promise((res) => setTimeout(res, wait));
+    const pick = LB_DATA.PERSONAL_COLORS[Math.floor(Math.random() * LB_DATA.PERSONAL_COLORS.length)].id;
+    setPcResult(pick);
+    setPcPhase('result');
   };
   // 진단 결과를 선호 정보에 반영
   const applyDiagnosis = () => {
@@ -394,6 +440,11 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
                 <p style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5, margin: '0 0 18px' }}>
                   자연광에서 정면으로 찍은 사진이 가장 정확해요.
                 </p>
+                {pcError && (
+                  <div style={{ padding: '11px 13px', margin: '0 0 18px', borderRadius: 'var(--r-md)', background: 'color-mix(in srgb, #B0573C 10%, transparent)', color: '#8F4531', fontSize: 12.5, fontWeight: 600, lineHeight: 1.5, textAlign: 'left' }}>
+                    {pcError}
+                  </div>
+                )}
                 <label style={{
                   display: 'block', position: 'relative', width: 168, height: 168, margin: '0 auto', borderRadius: '50%',
                   overflow: 'hidden', cursor: 'pointer', background: 'var(--ivory)',
