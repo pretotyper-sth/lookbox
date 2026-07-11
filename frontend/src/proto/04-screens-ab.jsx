@@ -149,7 +149,7 @@ function WardrobeScreen({ ctx }) {
   const chips = (
     <div style={{
       display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-      overscrollBehaviorX: 'contain',
+      overscrollBehaviorX: 'contain', minWidth: 0, width: '100%',
       padding: wide ? '0 0 30px' : '4px 18px 14px',
     }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
@@ -277,7 +277,7 @@ function WardrobeScreen({ ctx }) {
             return (
             <div
               key={it.id}
-              style={{ position: 'relative' }}
+              style={{ position: 'relative', minWidth: 0 }}
               onMouseEnter={() => wide && setHoverId(it.id)}
               onMouseLeave={() => wide && setHoverId((h) => (h === it.id ? null : h))}
             >
