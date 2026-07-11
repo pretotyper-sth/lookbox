@@ -21,6 +21,10 @@
     "styleCasual": "/prototype-assets/styleCasual.jpg",
     "styleMinimal": "/prototype-assets/styleMinimal.jpg",
     "styleSporty": "/prototype-assets/styleSporty.jpg",
-    "styleChic": "/prototype-assets/styleChic.jpg"
+    "styleChic": "/prototype-assets/styleChic.jpg",
+    "stylePreppy": "/prototype-assets/stylePreppy.jpg",
+    "styleGorpcore": "/prototype-assets/styleGorpcore.jpg",
+    "styleHiphop": "/prototype-assets/styleHiphop.jpg",
+    "styleY2k": "/prototype-assets/styleY2k.jpg"
   }
 }

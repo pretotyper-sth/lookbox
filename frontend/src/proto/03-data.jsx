@@ -88,15 +88,20 @@ const DETECT = [
 
 // 회원가입 — 선호 스타일. 대표 이미지는 빈칸(img:null)으로 두고 추후 교체.
 // img 에 경로를 넣으면 자동으로 placeholder 대신 사진이 표시됩니다.
+// 무드(선호 스타일) — 사람들이 많이 찾는 순으로 위에서부터 나열.
 const STYLES = [
-  { id: 'minimal', name: '미니멀',   en: 'MINIMAL',   desc: '군더더기 없는 기본기',   img: R('styleMinimal', 'app/img/style-minimal.png') },
-  { id: 'casual',  name: '캐주얼',   en: 'CASUAL',    desc: '편안한 데일리 무드',     img: R('styleCasual', 'app/img/style-casual.png') },
-  { id: 'sporty',  name: '스포티',   en: 'SPORTY',    desc: '활동적이고 가벼운',       img: R('styleSporty', 'app/img/style-sporty.png') },
-  { id: 'amekaji', name: '아메카지', en: 'AMEKAJI',   desc: '빈티지 워크웨어',         img: R('styleAmekaji', 'app/img/style-amekaji.png') },
-  { id: 'dandy',   name: '댄디',     en: 'DANDY',     desc: '단정한 클래식 신사',     img: R('styleDandy', 'app/img/style-dandy.png') },
-  { id: 'street',  name: '스트릿',   en: 'STREET',    desc: '자유로운 시티 무드',     img: R('styleStreet', 'app/img/style-street.png') },
-  { id: 'chic',    name: '시크',     en: 'CHIC',      desc: '모던하고 절제된',         img: R('styleChic', 'app/img/style-chic.png') },
-  { id: 'classic', name: '클래식',   en: 'CLASSIC',   desc: '격식 있는 정통',           img: R('styleClassic', 'app/img/style-classic.png') },
+  { id: 'casual',  name: '캐주얼',   en: 'CASUAL',    desc: '편안한 데일리 무드',       img: R('styleCasual', 'app/img/style-casual.png') },
+  { id: 'minimal', name: '미니멀',   en: 'MINIMAL',   desc: '군더더기 없는 기본기',     img: R('styleMinimal', 'app/img/style-minimal.png') },
+  { id: 'street',  name: '스트릿',   en: 'STREET',    desc: '자유로운 시티 무드',       img: R('styleStreet', 'app/img/style-street.png') },
+  { id: 'chic',    name: '시크',     en: 'CHIC',      desc: '모던하고 절제된',           img: R('styleChic', 'app/img/style-chic.png') },
+  { id: 'dandy',   name: '댄디',     en: 'DANDY',     desc: '단정한 클래식 신사',       img: R('styleDandy', 'app/img/style-dandy.png') },
+  { id: 'sporty',  name: '스포티',   en: 'SPORTY',    desc: '활동적이고 가벼운',         img: R('styleSporty', 'app/img/style-sporty.png') },
+  { id: 'classic', name: '클래식',   en: 'CLASSIC',   desc: '격식 있는 정통',             img: R('styleClassic', 'app/img/style-classic.png') },
+  { id: 'amekaji', name: '아메카지', en: 'AMEKAJI',   desc: '빈티지 워크웨어',           img: R('styleAmekaji', 'app/img/style-amekaji.png') },
+  { id: 'gorpcore', name: '고프코어', en: 'GORPCORE', desc: '기능적인 아웃도어 무드',   img: R('styleGorpcore', 'app/img/style-gorpcore.png') },
+  { id: 'hiphop',  name: '힙합',     en: 'HIPHOP',    desc: '자유분방한 힙합 무드',     img: R('styleHiphop', 'app/img/style-hiphop.png') },
+  { id: 'y2k',     name: 'Y2K',      en: 'Y2K',       desc: '과감한 2000년대 무드',     img: R('styleY2k', 'app/img/style-y2k.png') },
+  { id: 'preppy',  name: '프레피',   en: 'PREPPY',    desc: '단정한 캠퍼스 무드',       img: R('stylePreppy', 'app/img/style-preppy.png') },
 ];
 
 // 선호 핏 · 선호 컬러 (옷 추천에 사용)
