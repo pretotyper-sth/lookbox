@@ -125,6 +125,7 @@ const PERSONAL_COLORS = [
 
 const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
+  dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
 };
 
 Object.assign(window, { LB_DATA: { CATEGORIES, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });

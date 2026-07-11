@@ -257,8 +257,9 @@ const calNavStyle = {
 function TodayScreen({ ctx }) {
   const {
     items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday,
-    dailyCount, startComboOrWardrobe, openAdd,
+    dailyCount, startComboOrWardrobe, openAdd, go,
     dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
+    dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredDailyStyleName,
   } = ctx;
   const pool = LB_DATA.DAILY;
@@ -276,12 +277,12 @@ function TodayScreen({ ctx }) {
   const isToday = ymd(selected) === ymd(today);
   const pastDay = isToday ? null : buildDayFor(selected);
 
-  // 설정에서 고른 선호 무드로 자동 추천 — 별도 무드 선택 플로우 없음
+  // 설정에서 허용한 경우에만 자동 추천 (비용 효율)
   useTe(() => {
-    if (!ready || !isToday) return;
+    if (!dailyEnabled || !ready || !isToday) return;
     if (dailyAllowed || dailyLoading) return;
     requestDailyOutfits(preferredDailyStyle);
-  }, [ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
+  }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
   const picks = uniqueDailyOutfits(pool).slice(0, SLOT);
   const emptySlots = Math.max(0, SLOT - picks.length);
@@ -296,6 +297,32 @@ function TodayScreen({ ctx }) {
     await requestDailyOutfits(preferredDailyStyle);
     setLoading(false);
   };
+
+  /* ---- 설정에서 미허용 (디폴트 off) ---- */
+  if (!dailyEnabled) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {!wide && <TopBar left={<Wordmark />} />}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
+          <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
+            <Icon name="sparkle" size={38} stroke={1.4} />
+          </div>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>오늘의 추천 코디</h1>
+          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.55, maxWidth: 280 }}>
+            마이페이지에서 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>오늘의 추천 코디</b>를<br />
+            허용해야 매일 코디를 받을 수 있어요.
+          </p>
+          <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5, maxWidth: 280 }}>
+            AI 추천은 비용이 발생해 기본은 꺼져 있어요.
+          </p>
+          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Btn full size="lg" icon="sparkle" onClick={() => setDailyEnabled && setDailyEnabled(true)}>지금 허용하기</Btn>
+            <Btn full variant="soft" onClick={() => go ? go('mypage') : null}>마이페이지로 이동</Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /* ---- 잠금 상태 (상의·하의 미달) ---- */
   if (!ready) {

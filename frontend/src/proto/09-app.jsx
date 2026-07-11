@@ -292,8 +292,21 @@ function App() {
 
   const preferredDailyStyle = (prefs.styles && prefs.styles[0]) || 'dandy';
   const preferredDailyStyleName = ((LB_DATA.STYLES || []).find((s) => s.id === preferredDailyStyle) || {}).name || preferredDailyStyle;
+  const dailyEnabled = !!prefs.dailyEnabled;
+
+  const setDailyEnabled = (on) => {
+    const np = { ...prefs, dailyEnabled: !!on };
+    setPrefs(np);
+    persistPrefs(np);
+    if (!on) {
+      setDailyAllowed(false);
+      LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      showToast('오늘의 추천 코디를 껐어요');
+    }
+  };
 
   const requestDailyOutfits = async (style = preferredDailyStyle) => {
+    if (!prefs.dailyEnabled) return;
     setDailyStyle(style);
     setDailyAllowed(true);
     setDailyLoading(true);
@@ -524,11 +537,12 @@ function App() {
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
+    dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredDailyStyleName,
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
-    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, logout, prefs,
+    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, logout, prefs, go,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 

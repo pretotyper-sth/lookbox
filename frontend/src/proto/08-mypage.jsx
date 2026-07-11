@@ -78,10 +78,16 @@ function ActionRow({ icon, label, onClick, danger, last, right }) {
 /* ---- toggle switch ---- */
 function Switch({ on, onToggle }) {
   return (
-    <button onClick={onToggle} aria-label="알림 설정" style={{
-      width: 42, height: 25, borderRadius: 999, flex: 'none', position: 'relative',
-      background: on ? 'var(--accent)' : 'var(--line-2)', transition: 'background var(--dur) var(--ease)',
-    }}>
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      aria-pressed={!!on}
+      aria-label={on ? '끄기' : '켜기'}
+      style={{
+        width: 42, height: 25, borderRadius: 999, flex: 'none', position: 'relative',
+        background: on ? 'var(--accent)' : 'var(--line-2)', transition: 'background var(--dur) var(--ease)',
+      }}
+    >
       <span style={{ position: 'absolute', top: 3, left: on ? 20 : 3, width: 19, height: 19, borderRadius: '50%', background: '#fff', transition: 'left var(--dur) var(--ease)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
     </button>
   );
@@ -91,7 +97,7 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, logout } = ctx;
+  const { prefs, wide, openPrefs, openAccount, logout, dailyEnabled, setDailyEnabled } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
@@ -139,6 +145,11 @@ function MyPageScreen({ ctx }) {
 
       {/* 설정 / 계정 액션 */}
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
+        <ActionRow
+          icon="sparkle"
+          label="오늘의 추천 코디"
+          right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
+        />
         <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         <ActionRow icon="help" label="고객센터" onClick={() => {}} />
         <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
