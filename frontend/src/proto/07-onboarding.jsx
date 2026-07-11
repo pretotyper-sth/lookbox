@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, Thumb, WARDROBE, Wordmark } = window;
+const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, Thumb, useEscapeClose, WARDROBE, Wordmark } = window;
 
 /* global React, Btn, Chip, Icon, Wordmark, Eyebrow, LabeledField, Thumb, LB_DATA */
 // LOOKBOX — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
@@ -239,6 +239,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   const [pcError, setPcError] = useState('');        // 얼굴 미감지 등 안내
   const openPc = () => { setPcPhoto(null); setPcResult(null); setPcError(''); setPcPhase('intro'); setPcModal(true); };
   const closePc = () => { if (pcPhase !== 'analyzing') setPcModal(false); };
+  useEscapeClose(pcModal && pcPhase !== 'analyzing', closePc);
   const onPickPhoto = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;

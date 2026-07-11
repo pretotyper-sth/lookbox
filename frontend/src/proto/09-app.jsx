@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
 const ReactDOM = window.ReactDOM;
-const { BottomSheet } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { BottomSheet, useEscapeClose } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -28,8 +28,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 })();
 
 const TONES = {
-  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
-  paper: { '--ivory': '#F2F1EE', '--surface': '#FBFAF8', '--surface-2': '#FFFFFF', '--line': '#E7E5DF', '--line-2': '#DAD7CF', '--badge-bg': '#ECEAE3' },
+  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--thumb-bg': '#F3F3F1', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
+  paper: { '--ivory': '#F2F1EE', '--surface': '#FBFAF8', '--surface-2': '#FFFFFF', '--thumb-bg': '#F3F3F1', '--line': '#E7E5DF', '--line-2': '#DAD7CF', '--badge-bg': '#ECEAE3' },
 };
 
 function param(name) {
@@ -151,6 +151,7 @@ function App() {
   const [detailLook, setDetailLook] = useState(pSaved === 'empty' ? null : LB_DATA.SAVED[0]);
   const [addedItemIds, setAddedItemIds] = useState([]);
   const [itemSheet, setItemSheet] = useState({ open: false, item: null });
+  const [imageViewer, setImageViewer] = useState({ open: false, item: null });
   const [wornToday, setWornToday] = useState([]);   // 오늘 입은 데일리 코디 id들
   const [dailyAllowed, setDailyAllowed] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
@@ -238,6 +239,30 @@ function App() {
     return () => { dead = true; };
   }, [isShowcase, putLiveItems, showToast]);
 
+  // 기존 순백 배경 제품 컷 → 연한 그레이로 1회 정규화
+  useEffect(() => {
+    if (isShowcase) return;
+    const key = 'lb_bg_norm_v1';
+    try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
+    let dead = false;
+    liveJSON('/api/live/wardrobe/normalize-bg', { method: 'POST', body: '{}' })
+      .then((res) => {
+        if (dead) return;
+        try { localStorage.setItem(key, '1'); } catch (e) { /* noop */ }
+        if (!res || !res.updated) return;
+        return Promise.all([
+          liveJSON('/api/live/wardrobe'),
+          liveJSON('/api/live/wardrobe?status=archived'),
+        ]).then(([owned, arch]) => {
+          if (dead) return;
+          setItems((owned.items || []).map(liveRememberItem));
+          setArchived((arch.items || []).map(liveRememberItem));
+        });
+      })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [isShowcase]);
+
   // Persist the wardrobe locally so the next load paints instantly.
   useEffect(() => {
     if (isShowcase) return;
@@ -293,8 +318,11 @@ function App() {
     if (mode === 'anchor') {
       setTab('wardrobe'); if (!isShowcase) persistTab('wardrobe'); setView('results'); setLoading(true);
       try {
-        const imported = await liveImportSource({ ...(details || {}), status: 'considering' });
-        const anchorItem = (imported.items || [])[imported.primary_idx || 0] || (imported.items || [])[0];
+        let anchorItem = details?.anchorItem || null;
+        if (!anchorItem?.serverId) {
+          const imported = await liveImportSource({ ...(details || {}), status: 'considering' });
+          anchorItem = (imported.items || [])[imported.primary_idx || 0] || (imported.items || [])[0];
+        }
         if (!anchorItem) throw new Error('고민 중인 옷을 인식하지 못했어요');
         Object.assign(LB_DATA.ANCHOR, anchorItem, { inWardrobe: false, isAnchor: true });
         liveRememberItem(LB_DATA.ANCHOR);
@@ -338,13 +366,21 @@ function App() {
 
   const openItem = (item) => setItemSheet({ open: true, item });
   const closeItem = () => setItemSheet((s) => ({ ...s, open: false }));
+  const openImageViewer = (item) => { if (item && item.img) setImageViewer({ open: true, item }); };
+  const closeImageViewer = () => setImageViewer((s) => ({ ...s, open: false }));
+
+  useEscapeClose(!tutorialDone && onboarded, finishTutorial);
+  useEscapeClose(!!unsaveTarget, () => setUnsaveTarget(null));
+  useEscapeClose(editPrefs, () => setEditPrefs(false));
 
   // 옷 카드 우상단 X → 보관(archived) / 삭제(delete), 보관 탭에서는 꺼내기(owned) / 삭제
   const [removeSheet, setRemoveSheet] = useState({ open: false, item: null });
   const requestRemove = (item) => setRemoveSheet({ open: true, item });
   const closeRemove = () => setRemoveSheet((s) => ({ ...s, open: false }));
-  const setItemStatus = (id, status) => {
-    liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: [id], status }) }).catch(() => {});
+  const setItemStatus = (ids, status) => {
+    const list = Array.isArray(ids) ? ids : [ids];
+    if (!list.length) return;
+    liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: list, status }) }).catch(() => {});
   };
   const archiveItem = () => {
     const t = removeSheet.item;
@@ -373,6 +409,40 @@ function App() {
     showToast('옷장에서 삭제했어요', 'check');
     setItemStatus(t.id, 'delete');
   };
+  const bulkArchive = (ids) => {
+    const idSet = new Set(ids || []);
+    if (!idSet.size) return;
+    const moved = [];
+    setItems((arr) => {
+      const keep = [];
+      arr.forEach((it) => { if (idSet.has(it.id)) moved.push({ ...it, status: 'archived' }); else keep.push(it); });
+      return keep;
+    });
+    setArchived((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
+    showToast(idSet.size + '벌을 보관함으로 옮겼어요', 'archive');
+    setItemStatus([...idSet], 'archived');
+  };
+  const bulkRestore = (ids) => {
+    const idSet = new Set(ids || []);
+    if (!idSet.size) return;
+    const moved = [];
+    setArchived((arr) => {
+      const keep = [];
+      arr.forEach((it) => { if (idSet.has(it.id)) moved.push({ ...it, status: 'owned' }); else keep.push(it); });
+      return keep;
+    });
+    setItems((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
+    showToast(idSet.size + '벌을 옷장으로 꺼냈어요', 'check');
+    setItemStatus([...idSet], 'owned');
+  };
+  const bulkDelete = (ids) => {
+    const idSet = new Set(ids || []);
+    if (!idSet.size) return;
+    setItems((arr) => arr.filter((it) => !idSet.has(it.id)));
+    setArchived((arr) => arr.filter((it) => !idSet.has(it.id)));
+    showToast(idSet.size + '벌을 삭제했어요', 'check');
+    setItemStatus([...idSet], 'delete');
+  };
 
   // 오늘의 코디 — '오늘 입기' 착장 기록 (룩북 저장과는 별개)
   const wearToday = (outfitId) => {
@@ -382,11 +452,29 @@ function App() {
       return [outfitId, ...arr];
     });
   };
-  const saveItemDetails = (itemId, draft) => {
-    setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...draft } : it));
-    setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...draft } : it));
+  const saveItemDetails = async (itemId, draft) => {
+    const patch = {
+      brand: draft.brand || '',
+      size: draft.size || '',
+      color: draft.color || '',
+      store: draft.store || '',
+      note: draft.note || '',
+    };
+    setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
+    setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
     closeItem();
     showToast('상세 정보를 저장했어요', 'check');
+    try {
+      const res = await liveJSON('/api/live/items/' + itemId, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      if (res && res.item) {
+        liveRememberItem(res.item);
+        setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...res.item } : it));
+        setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...res.item } : it));
+      }
+    } catch (e) { /* optimistic local save kept */ }
   };
 
   const openDetail = (look) => { setDetailLook(look); setView('detail'); };
@@ -440,7 +528,7 @@ function App() {
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
-    openItem, requestRemove, openPrefs, openAccount, logout, prefs,
+    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, logout, prefs,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
@@ -540,7 +628,8 @@ function App() {
           </div>
         </div>
       </BottomSheet>
-      <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} />
+      <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} onViewImage={openImageViewer} />
+      <ImageViewer open={imageViewer.open} item={imageViewer.item} onClose={closeImageViewer} />
       <ItemRemoveSheet open={removeSheet.open} item={removeSheet.item} onClose={closeRemove} onArchive={archiveItem} onRestore={restoreItem} onDelete={deleteItem} />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 

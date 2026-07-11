@@ -7,6 +7,7 @@ import re
 import tempfile
 import time
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -238,12 +239,57 @@ def classify_item(path: str) -> dict[str, Any]:
         return fallback
 
 
+# 제품 컷 공통 배경 — 순백(#FFF) 대신 아주 연한 그레이 (밋밋함 완화, 옷 색은 유지)
+PRODUCT_BG_RGB = (243, 243, 241)  # #F3F3F1
+
+
+def apply_studio_backdrop(png_bytes: bytes) -> bytes:
+    """투명/순백 배경을 연한 그레이 스튜디오 배경으로 통일."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    w, h = img.size
+    bg = Image.new("RGBA", (w, h), (*PRODUCT_BG_RGB, 255))
+    alpha = img.getchannel("A")
+    amin, _amax = alpha.getextrema()
+    if amin < 250:
+        out = Image.alpha_composite(bg, img)
+    else:
+        # 불투명 순백 배경: 가장자리에서 이어진 밝은 픽셀만 교체 (옷 본색 보존)
+        px = img.load()
+        visited = [[False] * w for _ in range(h)]
+        q: deque[tuple[int, int]] = deque()
+
+        def is_bg(x: int, y: int) -> bool:
+            r, g, b, _a = px[x, y]
+            return r >= 248 and g >= 248 and b >= 248
+
+        seeds = [
+            (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+            (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
+        ]
+        for x, y in seeds:
+            if 0 <= x < w and 0 <= y < h and is_bg(x, y) and not visited[y][x]:
+                visited[y][x] = True
+                q.append((x, y))
+        while q:
+            x, y = q.popleft()
+            px[x, y] = (*PRODUCT_BG_RGB, 255)
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and is_bg(nx, ny):
+                    visited[ny][nx] = True
+                    q.append((nx, ny))
+        out = img
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-- 배경은 완전히 투명하게 (배경 완전 제거)
-- 사람, 마네킹, 그림자, 텍스트, 로고, 여분 소품 제거
+- 배경은 #F3F3F1 아주 연한 그레이 단색 (순백 #FFFFFF 금지, 투명 배경 금지)
+- 사람, 마네킹, 텍스트, 로고, 여분 소품 제거
+- 바닥에 아주 옅은 그림자만 허용
 - 아이템 전체가 잘리지 않게 중앙 배치
 - 원본 색상과 재질은 유지
 """
@@ -257,10 +303,10 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             prompt=prompt,
             size="1024x1536",
             quality=OPENAI_IMAGE_QUALITY,
-            background="transparent",
         )
         log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
-        return base64.b64decode(result.data[0].b64_json)
+        raw = base64.b64decode(result.data[0].b64_json)
+        return apply_studio_backdrop(raw)
     except Exception:
         return None
 
@@ -749,9 +795,20 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "img": row.get("image_url"),
         "status": row.get("status"),
         "brand": meta.get("brand") or "",
+        "size": meta.get("size") or "",
         "store": meta.get("store") or "",
+        "note": row.get("note") or meta.get("note") or "",
         "sourceUrl": meta.get("source_url") or "",
     }
+
+
+class LiveItemUpdate(BaseModel):
+    name: str | None = None
+    color: str | None = None
+    brand: str | None = None
+    size: str | None = None
+    store: str | None = None
+    note: str | None = None
 
 
 def _store_uploaded_item(
@@ -1045,6 +1102,92 @@ def live_wardrobe(status: str = "owned", user: UserContext = Depends(current_use
         or []
     )
     return {"items": [live_item_payload(row) for row in rows]}
+
+
+@app.patch("/api/live/items/{item_id}")
+def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="item_not_found")
+    row = rows[0]
+    meta = dict(row.get("metadata") or {})
+    patch: dict[str, Any] = {}
+    if body.name is not None:
+        patch["name"] = body.name
+    if body.color is not None:
+        patch["color"] = body.color
+    if body.note is not None:
+        patch["note"] = body.note
+    if body.brand is not None:
+        meta["brand"] = body.brand
+    if body.size is not None:
+        meta["size"] = body.size
+    if body.store is not None:
+        meta["store"] = body.store
+    if body.brand is not None or body.size is not None or body.store is not None:
+        patch["metadata"] = meta
+    if not patch:
+        return {"item": live_item_payload(row)}
+    updated = (
+        supabase_admin.table("wardrobe_items")
+        .update(patch)
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .execute()
+        .data
+        or []
+    )
+    return {"item": live_item_payload(updated[0] if updated else {**row, **patch})}
+
+
+@app.post("/api/live/wardrobe/normalize-bg")
+def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """기존 제품 컷 순백/투명 배경을 연한 그레이로 한 번 정규화."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .neq("status", "deleted")
+        .execute()
+        .data
+        or []
+    )
+    updated = 0
+    skipped = 0
+    for row in rows:
+        meta = dict(row.get("metadata") or {})
+        if meta.get("bg_norm") == "v1":
+            skipped += 1
+            continue
+        path = row.get("storage_path")
+        if not path:
+            skipped += 1
+            continue
+        try:
+            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
+            fixed = apply_studio_backdrop(raw)
+            # 새 경로로 업로드해 CDN 캐시 무효화
+            new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
+            image_url = upload_bytes(new_path, fixed, "image/png")
+            meta["bg_norm"] = "v1"
+            supabase_admin.table("wardrobe_items").update(
+                {"image_url": image_url, "storage_path": new_path, "metadata": meta}
+            ).eq("id", row["id"]).eq("user_id", user.id).execute()
+            updated += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"[normalize-bg] skip {row.get('id')}: {exc}", flush=True)
+            skipped += 1
+    return {"updated": updated, "skipped": skipped}
 
 
 @app.post("/api/live/import/photo")

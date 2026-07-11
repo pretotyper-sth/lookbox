@@ -7,6 +7,29 @@ const React = window.React;
 
 const { useState, useRef, useEffect } = React;
 
+/* Escape closes the topmost overlay only (stacked sheets/viewers). */
+const _escapeStack = [];
+function useEscapeClose(open, onClose) {
+  useEffect(() => {
+    if (!open || typeof onClose !== 'function') return undefined;
+    const entry = { onClose };
+    _escapeStack.push(entry);
+    const onKey = (e) => {
+      if (e.key !== 'Escape' && e.key !== 'Esc') return;
+      if (_escapeStack[_escapeStack.length - 1] !== entry) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      const i = _escapeStack.indexOf(entry);
+      if (i >= 0) _escapeStack.splice(i, 1);
+    };
+  }, [open, onClose]);
+}
+
 /* ----------------------------------------------------------------
    Icons — minimal 1.6px stroke set (Lucide-style), inline SVG.
 ---------------------------------------------------------------- */
@@ -36,6 +59,7 @@ const ICONS = {
   logout:   'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   help:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   shield:   'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  expand:   'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
 };
 
 function Icon({ name, size = 22, stroke = 1.7, fill = 'none', style }) {
@@ -77,13 +101,13 @@ function Silhouette({ category, scale = 1 }) {
 }
 
 /* ----------------------------------------------------------------
-   Thumb — square garment tile. Photo OR silhouette, both on ivory.
+   Thumb — square garment tile. Photo OR silhouette on soft gray plate.
 ---------------------------------------------------------------- */
 function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' }) {
   return (
     <div style={{
       position: 'relative', width: '100%', aspectRatio: ratio,
-      background: 'var(--surface-2)', borderRadius: radius, overflow: 'hidden',
+      background: 'var(--thumb-bg)', borderRadius: radius, overflow: 'hidden',
       boxShadow: 'inset 0 0 0 1px var(--line)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
@@ -91,6 +115,67 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
         ? <img src={item.img} alt={item.name || ''} loading="lazy" decoding="async"
                style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }} />
         : <Silhouette category={item ? item.category : '상의'} />}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------
+   ImageViewer — fullscreen garment preview (tap image to zoom)
+---------------------------------------------------------------- */
+function ImageViewer({ open, item, onClose }) {
+  useEscapeClose(open && !!(item && item.img), onClose);
+  if (!open || !item || !item.img) return null;
+  return (
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={(item.name || '옷') + ' 크게 보기'}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 100,
+        background: 'rgba(28, 26, 22, 0.88)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '24px 18px max(env(safe-area-inset-bottom), 24px)',
+        animation: 'lb-fade-in 180ms var(--ease)',
+      }}
+    >
+      <button
+        onClick={onClose}
+        aria-label="닫기"
+        className="lb-iconbtn"
+        style={{
+          position: 'absolute', top: 14, right: 14, width: 40, height: 40,
+          borderRadius: '50%', display: 'grid', placeItems: 'center',
+          color: '#fff', background: 'rgba(255,255,255,0.12)',
+        }}
+      >
+        <Icon name="x" size={22} />
+      </button>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 420, maxHeight: '78%',
+          background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
+          boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        <img
+          src={item.img}
+          alt={item.name || ''}
+          style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', padding: '6%' }}
+        />
+      </div>
+      {(item.name || item.category) && (
+        <div style={{ marginTop: 16, textAlign: 'center', color: 'rgba(255,255,255,0.88)', maxWidth: 360 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{item.name}</div>
+          <div style={{ fontSize: 12.5, marginTop: 4, opacity: 0.7 }}>
+            {[item.category, item.color].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -189,6 +274,7 @@ function BottomSheet({ open, onClose, children, maxW = 460 }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const [wide, setWide] = useState(typeof window !== 'undefined' && window.innerWidth >= 760);
+  useEscapeClose(open, onClose);
   useEffect(() => {
     const m = () => setWide(window.innerWidth >= 760);
     window.addEventListener('resize', m); return () => window.removeEventListener('resize', m);
@@ -247,20 +333,53 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
-function ItemDetailSheet({ open, item, onClose, onSave }) {
+function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const [draft, setDraft] = useState({});
-  useEffect(() => { if (open && item) setDraft({ brand: item.brand || '', size: item.size || '', store: item.store || '', note: item.note || '' }); }, [open, item && item.id]);
+  useEffect(() => {
+    if (open && item) {
+      setDraft({
+        brand: item.brand || '',
+        size: item.size || '',
+        color: item.color || '',
+        store: item.store || '',
+        note: item.note || '',
+      });
+    }
+  }, [open, item && item.id]);
   if (!item) return null;
   const set = (k) => (v) => setDraft((d) => ({ ...d, [k]: v }));
+  const canZoom = !!(item.img && onViewImage);
   return (
     <BottomSheet open={open} onClose={onClose}>
       <div style={{ padding: '10px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
-            <div style={{ width: 64, flex: 'none' }}><Thumb item={item} radius="var(--r-md)" /></div>
+            <button
+              type="button"
+              onClick={() => canZoom && onViewImage(item)}
+              aria-label={canZoom ? '이미지 크게 보기' : undefined}
+              disabled={!canZoom}
+              style={{
+                width: 72, flex: 'none', padding: 0, border: 'none', background: 'transparent',
+                cursor: canZoom ? 'zoom-in' : 'default', position: 'relative',
+              }}
+            >
+              <Thumb item={item} radius="var(--r-md)" />
+              {canZoom && (
+                <span style={{
+                  position: 'absolute', right: 4, bottom: 4, width: 22, height: 22, borderRadius: '50%',
+                  background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff',
+                  display: 'grid', placeItems: 'center',
+                }}>
+                  <Icon name="expand" size={11} stroke={2.4} />
+                </span>
+              )}
+            </button>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{item.name}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{item.category} · {item.color}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
+                {item.category} · {draft.color || item.color || '색상 미정'}
+              </div>
             </div>
           </div>
           <IconBtn name="x" label="닫기" onClick={onClose} style={{ marginRight: -8, flex: 'none' }} />
@@ -276,6 +395,7 @@ function ItemDetailSheet({ open, item, onClose, onSave }) {
             <div style={{ flex: 1 }}><LabeledField label="브랜드" value={draft.brand} onChange={set('brand')} placeholder="예) 코스" /></div>
             <div style={{ flex: 1 }}><LabeledField label="사이즈" value={draft.size} onChange={set('size')} placeholder="예) M" /></div>
           </div>
+          <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <LabeledField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사 · 오프라인" />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
         </div>
@@ -323,4 +443,4 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete }
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField });
+Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, useEscapeClose });

@@ -79,6 +79,7 @@ http://scripts.sil.org/OFL
 :root {
   /* ---- Color ---- */
   --ivory:      #EFEDE8;   /* page + every garment thumbnail bg → things float */
+  --thumb-bg:   #F3F3F1;   /* product cut plate — soft gray, not pure white */
   --surface:    #F7F5F0;   /* cards / sheets, a touch lighter than page */
   --surface-2:  #FBFAF7;
   --ink:        #1A1A1A;   /* primary text */
@@ -178,6 +179,7 @@ img { display: block; max-width: 100%; }
    environment freezes animations at 0%) ---- */
 .lb-anim-in { animation: lb-rise 420ms var(--ease) both; }
 @keyframes lb-rise { from { transform: translateY(10px); } to { transform: none; } }
+@keyframes lb-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .lb-anim-in { animation: none; } }
 
 /* ---- press / hover states ---- */

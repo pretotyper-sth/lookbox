@@ -74,15 +74,30 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading } = ctx;
+  const {
+    items, archived = [], openAdd, wide, openItem, openImageViewer, requestRemove,
+    bulkArchive, bulkRestore, bulkDelete,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
+  } = ctx;
   const [cat, setCat] = useS('전체');
+  const [sel, setSel] = useS([]); // desktop multi-select ids
+  const [hoverId, setHoverId] = useS(null);
+  const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const cats = LB_DATA.CATEGORIES;
   const viewingArchive = cat === '보관';
   // 보관 탭을 보던 중 보관함이 비면 전체로 되돌린다
   useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
+  useE(() => { setSel([]); setBulkDelAsk(false); }, [cat]);
   const filtered = viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat));
   const count = items.length;
   const ready = comboReady;
+  const selCount = sel.length;
+  const selecting = wide && selCount > 0;
+
+  const toggleSel = (id) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+  const clearSel = () => { setSel([]); setBulkDelAsk(false); };
+  const runBulkArchive = () => { if (viewingArchive) bulkRestore(sel); else bulkArchive(sel); clearSel(); };
+  const runBulkDelete = () => { bulkDelete(sel); clearSel(); };
 
   /* ---- Empty state (소유·보관 모두 없을 때만; 최초 로딩 중엔 스켈레톤 우선) ---- */
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
@@ -155,6 +170,24 @@ function WardrobeScreen({ ctx }) {
             보관한 옷은 조합 추천에 쓰이지 않아요. 카드의 <b style={{ color: 'var(--ink-2)', fontWeight: 700 }}>×</b>를 눌러 다시 꺼내거나 삭제할 수 있어요.
           </p>
         )}
+
+        {/* Desktop only: bulk actions when anything is selected */}
+        {selecting && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            padding: '10px 14px', marginBottom: 14, borderRadius: 'var(--r-md)',
+            background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)',
+          }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
+            <div style={{ flex: 1, minWidth: 8 }} />
+            <button onClick={clearSel} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '6px 4px' }}>선택 해제</button>
+            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}>
+              {viewingArchive ? '옷장으로' : '보관'}
+            </Btn>
+            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)} style={{ background: '#B0573C', color: '#fff' }}>삭제</Btn>
+          </div>
+        )}
+
         <div className="lb-grid">
           {!viewingArchive && (
           <button onClick={() => openAdd('wardrobe')} className="lb-addtile" style={{
@@ -183,37 +216,94 @@ function WardrobeScreen({ ctx }) {
               <div className="lb-skel" style={{ height: 10, marginTop: 6, borderRadius: 6, width: '55%' }} />
             </div>
           ))}
-          {filtered.map((it) => (
-            <div key={it.id} className="lb-anim-in" style={{ position: 'relative' }}>
-              <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', position: 'relative' }}>
-                <Thumb item={it} />
-                {(it.brand || it.size || it.store || it.note) && (
-                  <span style={{ position: 'absolute', left: 8, top: 8, width: 22, height: 22, borderRadius: '50%', background: 'color-mix(in srgb, var(--ink) 80%, transparent)', color: '#fff', display: 'grid', placeItems: 'center', backdropFilter: 'blur(4px)' }}>
-                    <Icon name="check" size={13} stroke={2.6} />
-                  </span>
+          {filtered.map((it) => {
+            const on = sel.includes(it.id);
+            const showSel = wide && (on || selecting || hoverId === it.id);
+            return (
+            <div
+              key={it.id}
+              className="lb-anim-in"
+              style={{ position: 'relative' }}
+              onMouseEnter={() => wide && setHoverId(it.id)}
+              onMouseLeave={() => wide && setHoverId((h) => (h === it.id ? null : h))}
+            >
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
+                  <Thumb item={it} />
+                </button>
+                {wide && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleSel(it.id); }}
+                    aria-label={on ? '선택 해제' : '선택'}
+                    aria-pressed={on}
+                    style={{
+                      position: 'absolute', left: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
+                      display: 'grid', placeItems: 'center', zIndex: 3,
+                      opacity: showSel ? 1 : 0,
+                      pointerEvents: showSel ? 'auto' : 'none',
+                      background: on ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 90%, transparent)',
+                      color: on ? 'var(--accent-ink)' : 'transparent',
+                      boxShadow: on ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
+                      backdropFilter: 'blur(6px)',
+                      transition: 'opacity var(--dur) var(--ease), background var(--dur) var(--ease)',
+                    }}
+                  >
+                    {on && <Icon name="check" size={13} stroke={2.6} />}
+                  </button>
                 )}
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{it.brand ? it.brand + ' · ' : ''}{it.category} · {it.color}</div>
-                </div>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
-                aria-label={it.name + ' 삭제'}
-                className="lb-itemx"
-                style={{
-                  position: 'absolute', right: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
-                  display: 'grid', placeItems: 'center', color: 'var(--ink-2)',
-                  background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
-                  boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
-                }}>
-                <Icon name="x" size={13} stroke={2.4} />
+                {it.img && openImageViewer && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openImageViewer(it); }}
+                    aria-label={it.name + ' 크게 보기'}
+                    style={{
+                      position: 'absolute', left: 6, bottom: 6, width: 26, height: 26, borderRadius: '50%',
+                      display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
+                      background: 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
+                      boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
+                    }}
+                  >
+                    <Icon name="expand" size={12} stroke={2.2} />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
+                  aria-label={it.name + ' 삭제'}
+                  className="lb-itemx"
+                  style={{
+                    position: 'absolute', right: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
+                    display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
+                    background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
+                    boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
+                  }}>
+                  <Icon name="x" size={13} stroke={2.4} />
+                </button>
+              </div>
+              <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{it.brand ? it.brand + ' · ' : ''}{it.category} · {it.color}</div>
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
        </div>
       </div>
+
+      {wide && (
+        <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
+          <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}벌을 삭제할까요?</h3>
+            <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b>
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+              <Btn variant="soft" onClick={() => setBulkDelAsk(false)} style={{ flex: 1 }}>취소</Btn>
+              <Btn icon="trash" onClick={runBulkDelete} style={{ flex: 1, background: '#B0573C', color: '#fff' }}>삭제</Btn>
+            </div>
+          </div>
+        </BottomSheet>
+      )}
 
       {!wide && (
         <div className="lb-cta-dock">
@@ -227,7 +317,7 @@ function WardrobeScreen({ ctx }) {
 /* ============================================================
    B · Add sheet — staged flow
    wardrobe:  input → analyzing → select → register (sequential)
-   anchor:    input only (single garment → combo recommend)
+   anchor:    input → analyzing → anchor-ready → combo recommend
    ============================================================ */
 
 /* progress dots for the sequential register stepper */
@@ -291,22 +381,17 @@ function AddSheet({ ctx }) {
   const [err, setErr] = useS('');
   const fileInput = useR(null);
 
-  // stage machine (wardrobe only goes past 'input')
-  const [stage, setStage] = useS('input'); // input | analyzing | select | register
+  // stage machine
+  const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready
   const [detected, setDetected] = useS([]);
   const [sel, setSel] = useS([]); // selected detected ids
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
   const [stepIdx, setStepIdx] = useS(0);
 
-  // anchor single-add draft
-  const [showDetails, setShowDetails] = useS(false);
-  const [draft, setDraft] = useS({ brand: '', size: '', store: '', note: '' });
-
   useE(() => {
     if (!addSheet.open) return;
     setTab('photo'); setPicked(false); setUrl(''); setLoaded(false); setFile(null); setBusy(false); setErr('');
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
-    setShowDetails(!!autoAddDetails); setDraft({ brand: '', size: '', store: '', note: '' });
   }, [addSheet.open, addSheet.mode]);
 
   // ---- detection: API "separates" one source image into N garments ----
@@ -318,13 +403,20 @@ function AddSheet({ ctx }) {
       const data = await liveImportSource({
         sourceType: source.sourceType || tab,
         file: source.file || file,
-        url,
-        status: 'pending',
+        url: source.url != null ? source.url : url,
+        status: anchor ? 'considering' : 'pending',
       });
       const list = (data.items || []).slice(0, detectCount).map((d, i) => ({ ...d, id: d.id || 'det' + i, cat: d.category, conf: d.conf || 0.95 }));
       if (!list.length) throw new Error('사진에서 옷을 찾지 못했어요');
       setDetected(list);
-      setSel(list.map((d) => d.id));
+      const primaryIdx = Math.min(data.primary_idx || 0, list.length - 1);
+      const primary = list[primaryIdx] || list[0];
+      setSel([primary.id]);
+      if (anchor) {
+        // 고민 중인 옷: 인식 결과 미리보기 → 조합 추천
+        setStage('anchor-ready');
+        return;
+      }
       setStage(() => {
         if (list.length === 1) {
           setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store || !!d.color })));
@@ -335,6 +427,8 @@ function AddSheet({ ctx }) {
       });
     } catch (e) {
       setErr(e.message || 'AI 분석에 실패했어요');
+      setLoaded(false);
+      setPicked(false);
       setStage('input');
     } finally {
       setBusy(false);
@@ -346,9 +440,15 @@ function AddSheet({ ctx }) {
     if (!f) return;
     setFile(f);
     setPicked(true);
-    if (!anchor) runDetect({ sourceType: 'photo', file: f });
+    runDetect({ sourceType: 'photo', file: f });
   };
-  const onLoadUrl = async () => { if (!url.trim()) return; setLoaded(true); if (!anchor) await runDetect({ sourceType: 'url' }); };
+  const onLoadUrl = async () => {
+    if (!url.trim()) return;
+    setLoaded(true);
+    await runDetect({ sourceType: 'url', url: url.trim() });
+  };
+
+  const anchorPrimary = detected.find((d) => sel.includes(d.id)) || detected[0] || null;
 
   // ---- select ----
   const toggle = (id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -380,19 +480,22 @@ function AddSheet({ ctx }) {
   const doneCount = steps.filter((s) => s.added).length;
 
   const goBack = () => {
-    if (stage === 'select') { setStage('input'); setPicked(false); setLoaded(false); }
-    else if (stage === 'register') { if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select'); }
+    if (stage === 'select' || stage === 'anchor-ready') {
+      setStage('input'); setPicked(false); setLoaded(false); setDetected([]); setSel([]);
+    } else if (stage === 'register') {
+      if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select');
+    }
   };
 
   // ---- header copy ----
   let header, sub;
   if (stage === 'select') { header = '담을 옷을 골라주세요'; sub = `사진에서 ${detected.length}벌을 찾았어요 · 고른 옷을 하나씩 담아요`; }
   else if (stage === 'register') { header = null; sub = null; }
+  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 옷 추가'; sub = '옷을 인식하고 있어요'; }
+  else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
   else { header = anchor ? '고민 중인 옷 추가' : '옷장에 옷 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 벌을 자동으로 분리해 드려요.'; }
 
-  const anchorReady = tab === 'photo' ? picked : loaded;
-  const setD = (k) => (v) => setDraft((d) => ({ ...d, [k]: v }));
-  const showBack = stage === 'select' || stage === 'register';
+  const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready';
 
   return (
     <BottomSheet open={addSheet.open} onClose={closeAdd}>
@@ -422,7 +525,7 @@ function AddSheet({ ctx }) {
           <IconBtn name="x" label="닫기" onClick={closeAdd} style={{ marginRight: -8, flex: 'none' }} />
         </div>
 
-        {/* ---------- INPUT (also anchor's whole flow) ---------- */}
+        {/* ---------- INPUT ---------- */}
         {stage === 'input' && (
           <>
             <div style={{ display: 'flex', gap: 4, background: 'var(--ivory)', borderRadius: 'var(--r-pill)', padding: 4, marginTop: 'var(--s5)' }}>
@@ -442,17 +545,7 @@ function AddSheet({ ctx }) {
 
             <div style={{ marginTop: 'var(--s5)' }}>
               {tab === 'photo' ? (
-                anchor && picked ? (
-                  <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s3)', background: 'var(--ivory)', borderRadius: 'var(--r-md)' }}>
-                    <div style={{ width: 76, flex: 'none' }}><Thumb item={{ category: '아우터' }} /></div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 600 }}>새 옷</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>사진 1장 · 분류 자동 인식</div>
-                    </div>
-                    <button onClick={() => setPicked(false)} style={{ color: 'var(--ink-3)', fontSize: 13, fontWeight: 600 }}>변경</button>
-                  </div>
-                ) : (
-                  <>
+                <>
                   <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
                   <button onClick={onPickPhoto} className="lb-drop" style={{
                     width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
@@ -463,27 +556,15 @@ function AddSheet({ ctx }) {
                     <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>탭하여 사진 선택 · 배경은 자동 정리</span>
                   </button>
-                  </>
-                )
+                </>
               ) : (
-                <div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input value={url} onChange={(e) => { setUrl(e.target.value); setLoaded(false); }}
-                      placeholder="상품 URL 붙여넣기" className="lb-input" style={{
-                        flex: 1, padding: '13px 16px', borderRadius: 'var(--r-pill)', fontSize: 14,
-                        background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none',
-                      }} />
-                    <Btn variant="soft" onClick={onLoadUrl} disabled={!url.trim() || busy}>{busy ? '분석 중' : '불러오기'}</Btn>
-                  </div>
-                  {anchor && loaded && (
-                    <div className="lb-anim-in" style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s3)', background: 'var(--ivory)', borderRadius: 'var(--r-md)', marginTop: 'var(--s3)' }}>
-                      <div style={{ width: 76, flex: 'none' }}><Thumb item={{ category: '아우터' }} /></div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.3 }}>불러온 상품</div>
-                        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{url}</div>
-                      </div>
-                    </div>
-                  )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={url} onChange={(e) => { setUrl(e.target.value); setLoaded(false); }}
+                    placeholder="상품 URL 붙여넣기" className="lb-input" style={{
+                      flex: 1, padding: '13px 16px', borderRadius: 'var(--r-pill)', fontSize: 14,
+                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none',
+                    }} />
+                  <Btn variant="soft" onClick={onLoadUrl} disabled={!url.trim() || busy}>{busy ? '분석 중' : '불러오기'}</Btn>
                 </div>
               )}
             </div>
@@ -496,12 +577,6 @@ function AddSheet({ ctx }) {
 
             {err && (
               <div style={{ marginTop: 'var(--s3)', color: '#B91C1C', fontSize: 13, fontWeight: 600 }}>{err}</div>
-            )}
-
-            {anchor && (
-              <div style={{ marginTop: 'var(--s7)' }}>
-                <Btn full size="lg" icon="sparkle" disabled={!anchorReady || busy} onClick={() => confirmAdd(mode, { sourceType: tab, file, url, ...draft })}>{busy ? '분석 중' : '조합 추천받기'}</Btn>
-              </div>
             )}
           </>
         )}
@@ -529,8 +604,34 @@ function AddSheet({ ctx }) {
               ))}
             </div>
             <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
-            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)' }}>사진 속 의류를 찾는 중…</div>
+            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)' }}>
+              {tab === 'url' ? '상품 이미지를 추출하는 중…' : '사진 속 의류를 찾는 중…'}
+            </div>
           </div>
+        )}
+
+        {/* ---------- ANCHOR READY (recognized preview) ---------- */}
+        {stage === 'anchor-ready' && anchorPrimary && (
+          <>
+            <div className="lb-anim-in" style={{
+              display: 'flex', gap: 'var(--s4)', alignItems: 'center',
+              padding: 'var(--s3)', background: 'var(--ivory)', borderRadius: 'var(--r-md)', marginTop: 'var(--s5)',
+            }}>
+              <div style={{ width: 76, flex: 'none' }}><Thumb item={anchorPrimary} radius="var(--r-sm)" /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.3 }}>{anchorPrimary.name || '불러온 상품'}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--ink-2)' }}>{anchorPrimary.category || anchorPrimary.cat}</span>
+                  {anchorPrimary.color ? ` · ${anchorPrimary.color}` : ''}
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 'var(--s7)' }}>
+              <Btn full size="lg" icon="sparkle" onClick={() => confirmAdd(mode, { anchorItem: anchorPrimary })}>
+                조합 추천받기
+              </Btn>
+            </div>
+          </>
         )}
 
         {/* ---------- SELECT ---------- */}
