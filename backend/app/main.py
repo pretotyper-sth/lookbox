@@ -741,7 +741,7 @@ def _store_uploaded_item(
             pass
 
 
-# 도메인 → 구매처(스토어) 이름. 순서대로 매칭.
+# 플랫폼 도메인 → 구매처명. 순서대로 매칭 (더 구체적인 것 먼저).
 STORE_DOMAINS = [
     ("musinsa.com", "무신사"),
     ("zigzag.kr", "지그재그"),
@@ -752,11 +752,18 @@ STORE_DOMAINS = [
     ("kream.co.kr", "KREAM"),
     ("brandi.co.kr", "브랜디"),
     ("ssg.com", "SSG닷컴"),
+    ("sivillage.com", "SI빌리지"),
+    ("thehyundai.com", "더현대닷컴"),
     ("lookpin.co.kr", "룩핀"),
     ("hiver.co.kr", "하이버"),
     ("oco.kr", "OCO"),
     ("4910.kr", "포켓"),
+    ("trenbe.com", "트렌비"),
+    ("balaan.co.kr", "발란"),
+    ("balaan.com", "발란"),
+    ("mustit.co.kr", "머스트잇"),
     ("smartstore.naver.com", "네이버 스마트스토어"),
+    ("brand.naver.com", "네이버 브랜드스토어"),
     ("shopping.naver.com", "네이버쇼핑"),
     ("coupang.com", "쿠팡"),
 ]
@@ -846,14 +853,21 @@ def _extract_brand(html: str, page_url: str) -> str:
     return ""
 
 
-def _detect_store(page_url: str, site_name: str = "") -> str:
-    """구매처: 알려진 스토어 도메인 → og:site_name(브랜드 자사몰) → 못 찾으면 URL 그대로."""
+def _detect_store(page_url: str, brand: str = "") -> str:
+    """구매처는 URL(도메인) 기준으로 판별.
+
+    1) 알려진 플랫폼 도메인 → 플랫폼명 (무신사·지그재그·에이블리 등)
+    2) 그 외(개별 브랜드몰) → '{브랜드} 공식 홈페이지'
+    3) 브랜드도 모르면 → URL 그대로 (클릭해서 직접 확인할 수 있게)
+
+    og:site_name은 사이트마다 제각각(상품명을 넣는 곳도 있음)이라 쓰지 않는다.
+    """
     host = _host_of(page_url)
     for dom, name in STORE_DOMAINS:
         if host == dom or host.endswith("." + dom):
             return name
-    if site_name and site_name.strip():
-        return site_name.strip()[:40]
+    if brand and brand.strip():
+        return f"{brand.strip()} 공식 홈페이지"
     return page_url
 
 
@@ -862,8 +876,7 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     headers = {"User-Agent": "Mozilla/5.0 (LOOKBOX bot)"}
     html = requests.get(page_url, headers=headers, timeout=15).text
     brand = _extract_brand(html, page_url)
-    site_name = _meta_content(html, "og:site_name")
-    store = _detect_store(page_url, site_name)
+    store = _detect_store(page_url, brand)
     title = _meta_content(html, "og:title") or _meta_content(html, "twitter:title", "name")
     if not title:
         tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
