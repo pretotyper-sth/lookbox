@@ -163,7 +163,7 @@ function ResultsScreen({ ctx }) {
         left={<IconBtn name="chevL" label="뒤로" onClick={back} style={{ marginLeft: -8 }} />}
         title="조합 추천"
       />
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '8px 0 36px' : '4px 18px 32px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '8px 0 36px' : '16px 18px 32px' }}>
         <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
           {/* anchor block */}
           <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', marginBottom: 'var(--s5)' }}>
@@ -248,7 +248,7 @@ function LookbookScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {!wide && <TopBar left={<NavTitle>룩북</NavTitle>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '4px 18px 28px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         <div className="lb-grid">
           {saved.map((lk) => <SavedCard key={lk.id} look={lk} onOpen={() => openDetail(lk)} />)}

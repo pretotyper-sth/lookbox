@@ -181,7 +181,7 @@ function MyPageScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <TopBar left={<NavTitle>마이페이지</NavTitle>} />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 18px 24px' }}>{body}</div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 24px' }}>{body}</div>
     </div>
   );
 }

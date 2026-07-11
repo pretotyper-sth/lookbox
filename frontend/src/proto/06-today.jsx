@@ -403,7 +403,7 @@ function TodayScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {!wide && <TopBar left={<Wordmark />} />}
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '4px 18px 28px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
         <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
           {header}
           {list}
