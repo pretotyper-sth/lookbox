@@ -56,8 +56,9 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
 /* ============================================================
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
-function TodayCard({ outfit, saved, onSave, worn, onWear }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel }) {
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
+  const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
@@ -77,7 +78,14 @@ function TodayCard({ outfit, saved, onSave, worn, onWear }) {
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>{outfit.mood} · {items.length}개</div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{outfit.note}</div>
+        {moodBasis ? (
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', marginTop: 5 }}>
+            {moodBasis} 무드 기준
+          </div>
+        ) : null}
+        {outfit.note ? (
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{outfit.note}</div>
+        ) : null}
       </div>
 
       {/* 오늘 입기 — 데일리 추천 고유 액션 */}
@@ -264,7 +272,7 @@ function TodayScreen({ ctx }) {
     dailyCount, startComboOrWardrobe, openAdd, go,
     dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
     dailyEnabled, setDailyEnabled,
-    preferredDailyStyle, preferredDailyStyleName,
+    preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -358,7 +366,7 @@ function TodayScreen({ ctx }) {
 
   const header = isToday ? (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <Eyebrow>오늘의 추천 코디 · {preferredDailyStyleName}</Eyebrow>
+      <Eyebrow>오늘의 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
         {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
@@ -387,6 +395,7 @@ function TodayScreen({ ctx }) {
             <>
               {shown.map((o, i) => (
                 <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
+                  styleLabel={preferredStyleLabel}
                   saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
                   worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)} />
               ))}
