@@ -125,6 +125,7 @@ const PERSONAL_COLORS = [
 
 const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
+  avatar: '', // 마이페이지 프로필 사진 (data URL)
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
 };
 

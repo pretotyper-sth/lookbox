@@ -63,6 +63,72 @@ function EditLink({ onClick }) {
   );
 }
 
+function readAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('사진을 읽지 못했어요'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('사진을 열지 못했어요'));
+      img.onload = () => {
+        const max = 512;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function ProfileAvatar({ src, size = 60, onChange }) {
+  const inputRef = React.useRef(null);
+  const onPick = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file || !onChange) return;
+    try {
+      const dataUrl = await readAvatarFile(file);
+      onChange(dataUrl);
+    } catch (err) {
+      /* noop — toast는 상위 setAvatar에서 */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => inputRef.current && inputRef.current.click()}
+      aria-label="프로필 사진 변경"
+      style={{
+        position: 'relative', width: size, height: size, borderRadius: '50%', flex: 'none',
+        padding: 0, overflow: 'hidden', cursor: 'pointer',
+        background: src ? 'transparent' : 'var(--ivory)', color: 'var(--ink-2)',
+        display: 'grid', placeItems: 'center',
+        boxShadow: 'inset 0 0 0 1px var(--line)',
+      }}
+    >
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} />
+      {src
+        ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <Icon name="user" size={Math.round(size * 0.47)} stroke={1.6} />}
+      <span style={{
+        position: 'absolute', right: 2, bottom: 2, width: Math.max(22, Math.round(size * 0.34)), height: Math.max(22, Math.round(size * 0.34)),
+        borderRadius: '50%', display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff',
+        boxShadow: '0 0 0 2px var(--surface)',
+      }}>
+        <Icon name="camera" size={Math.max(11, Math.round(size * 0.17))} stroke={2} />
+      </span>
+    </button>
+  );
+}
+
 /* ---- action row ---- */
 function ActionRow({ icon, label, onClick, danger, last, right }) {
   return (
@@ -100,7 +166,7 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, logout, dailyEnabled, setDailyEnabled } = ctx;
+  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
@@ -181,14 +247,7 @@ function MyPageScreen({ ctx }) {
               padding: '20px 22px', marginBottom: 16,
               background: 'var(--surface)', borderRadius: 'var(--r-lg)',
             }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: '50%', flex: 'none',
-                background: 'var(--ivory)', color: 'var(--ink-2)',
-                display: 'grid', placeItems: 'center',
-                boxShadow: 'inset 0 0 0 1px var(--line)',
-              }}>
-                <Icon name="user" size={30} stroke={1.6} />
-              </div>
+              <ProfileAvatar src={prefs.avatar} size={64} onChange={setAvatar} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {prefs.email || '게스트'}
@@ -196,9 +255,6 @@ function MyPageScreen({ ctx }) {
                 <div style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>
                   {metaBits.length ? metaBits.join(' · ') : '계정 정보를 완성해 주세요'}
                 </div>
-              </div>
-              <div style={{ flex: 'none' }}>
-                <Btn variant="soft" size="sm" icon="pencil" onClick={openAccount}>계정 수정</Btn>
               </div>
             </div>
 
@@ -227,13 +283,7 @@ function MyPageScreen({ ctx }) {
         padding: 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 24px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px 22px' }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: '50%', background: 'var(--surface)',
-            display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none',
-            boxShadow: 'inset 0 0 0 1px var(--line)',
-          }}>
-            <Icon name="user" size={30} stroke={1.6} />
-          </div>
+          <ProfileAvatar src={prefs.avatar} size={60} onChange={setAvatar} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
           </div>

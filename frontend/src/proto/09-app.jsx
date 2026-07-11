@@ -242,6 +242,12 @@ function App() {
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
+  const setAvatar = (dataUrl) => {
+    const np = { ...prefs, avatar: dataUrl || '' };
+    setPrefs(np);
+    persistPrefs(np);
+    showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');
+  };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => { try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ } setOnboarded(false); setPhase('landing'); setTab('wardrobe'); };
 
@@ -703,7 +709,7 @@ function App() {
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
-    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, logout, prefs, go,
+    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
