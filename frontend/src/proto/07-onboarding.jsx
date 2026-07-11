@@ -29,7 +29,13 @@ const PC_DETAIL = {
    Landing — 첫 진입(홈) 화면. '시작하기'를 누르면 회원가입 단계로 진입.
 ---------------------------------------------------------------- */
 function Landing({ onStart, onBypass }) {
-  const heroItems = LB_DATA.WARDROBE.filter((it) => it.img).slice(0, 3);
+  // 랜딩 히어로 미리보기 — 실서비스는 사용자 데이터(WARDROBE)를 비우므로
+  // 마케팅용 샘플 이미지는 비워지지 않는 IMG 리소스에서 직접 구성한다.
+  const heroItems = [
+    { id: 'hero-top', category: '상의', img: LB_DATA.IMG.topNavy },
+    { id: 'hero-bottom', category: '하의', img: LB_DATA.IMG.skirtWhite },
+    { id: 'hero-shoes', category: '신발', img: LB_DATA.IMG.sandalBlack },
+  ].filter((it) => it.img);
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
       <div style={{ width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, margin: '0 auto', padding: '0 26px' }}>
