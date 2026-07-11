@@ -238,7 +238,7 @@ function WardrobeScreen({ ctx }) {
                     aria-label={on ? '선택 해제' : '선택'}
                     aria-pressed={on}
                     style={{
-                      position: 'absolute', left: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
+                      position: 'absolute', left: 5, top: 5, width: 18, height: 18, borderRadius: '50%',
                       display: 'grid', placeItems: 'center', zIndex: 3,
                       opacity: showSel ? 1 : 0,
                       pointerEvents: showSel ? 'auto' : 'none',
@@ -249,7 +249,7 @@ function WardrobeScreen({ ctx }) {
                       transition: 'opacity var(--dur) var(--ease), background var(--dur) var(--ease)',
                     }}
                   >
-                    {on && <Icon name="check" size={13} stroke={2.6} />}
+                    {on && <Icon name="check" size={10} stroke={2.6} />}
                   </button>
                 )}
                 {it.img && openImageViewer && (
@@ -257,13 +257,13 @@ function WardrobeScreen({ ctx }) {
                     onClick={(e) => { e.stopPropagation(); openImageViewer(it); }}
                     aria-label={it.name + ' 크게 보기'}
                     style={{
-                      position: 'absolute', right: 36, top: 6, width: 24, height: 24, borderRadius: '50%',
+                      position: 'absolute', right: 28, top: 5, width: 18, height: 18, borderRadius: '50%',
                       display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
                       background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
                       boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
                     }}
                   >
-                    <Icon name="expand" size={12} stroke={2.2} />
+                    <Icon name="expand" size={9} stroke={2.2} />
                   </button>
                 )}
                 <button
@@ -271,12 +271,12 @@ function WardrobeScreen({ ctx }) {
                   aria-label={it.name + ' 삭제'}
                   className="lb-itemx"
                   style={{
-                    position: 'absolute', right: 6, top: 6, width: 24, height: 24, borderRadius: '50%',
+                    position: 'absolute', right: 5, top: 5, width: 18, height: 18, borderRadius: '50%',
                     display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
                     background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
                     boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
                   }}>
-                  <Icon name="x" size={13} stroke={2.4} />
+                  <Icon name="x" size={10} stroke={2.4} />
                 </button>
               </div>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>

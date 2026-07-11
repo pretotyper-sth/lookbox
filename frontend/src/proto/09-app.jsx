@@ -72,6 +72,30 @@ function writeWardrobeCache(owned, archived) {
   try { localStorage.setItem(WARDROBE_CACHE_KEY, JSON.stringify({ owned, archived })); } catch (e) { /* noop */ }
 }
 
+// 당일 추천 코디 캐시 — 새로고침해도 재생성하지 않음. force(다른 코디 추천)일 때만 갱신.
+const DAILY_CACHE_KEY = 'lb_daily_outfits_v1';
+function localYmd() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function readDailyCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DAILY_CACHE_KEY) || 'null');
+    if (!parsed || parsed.date !== localYmd() || !Array.isArray(parsed.outfits) || !parsed.outfits.length) return null;
+    return parsed;
+  } catch (e) { return null; }
+}
+function writeDailyCache({ style, outfits, items }) {
+  try {
+    localStorage.setItem(DAILY_CACHE_KEY, JSON.stringify({
+      date: localYmd(), style: style || '', outfits: outfits || [], items: items || [],
+    }));
+  } catch (e) { /* noop */ }
+}
+function clearDailyCache() {
+  try { localStorage.removeItem(DAILY_CACHE_KEY); } catch (e) { /* noop */ }
+}
+
 function liveRememberItem(item) {
   if (!item) return null;
   LB_DATA.ALL[item.id] = item;
@@ -301,12 +325,24 @@ function App() {
     if (!on) {
       setDailyAllowed(false);
       LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      clearDailyCache();
       showToast('오늘의 추천 코디를 껐어요');
     }
   };
 
-  const requestDailyOutfits = async (style = preferredDailyStyle) => {
+  const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
+    const force = !!(opts && opts.force);
     if (!prefs.dailyEnabled) return;
+    if (!force) {
+      const cached = readDailyCache();
+      if (cached) {
+        liveApplyPayload({ outfits: cached.outfits, items: cached.items }, 'daily');
+        setDailyStyle(cached.style || style);
+        setDailyAllowed(true);
+        setItems((arr) => arr.slice());
+        return;
+      }
+    }
     setDailyStyle(style);
     setDailyAllowed(true);
     setDailyLoading(true);
@@ -316,8 +352,9 @@ function App() {
         body: JSON.stringify({ max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 4), style }),
       });
       liveApplyPayload(payload, 'daily');
+      writeDailyCache({ style, outfits: payload.outfits || LB_DATA.DAILY.slice(), items: payload.items || [] });
       setItems((arr) => arr.slice());
-      showToast('오늘의 코디를 만들었어요', 'sparkle');
+      showToast(force ? '다른 코디로 바꿨어요' : '오늘의 코디를 만들었어요', 'sparkle');
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '오늘의 코디 추천에 실패했어요');

@@ -294,7 +294,7 @@ function TodayScreen({ ctx }) {
       return;
     }
     setLoading(true);
-    await requestDailyOutfits(preferredDailyStyle);
+    await requestDailyOutfits(preferredDailyStyle, { force: true });
     setLoading(false);
   };
 

@@ -23,13 +23,25 @@ function MetaChips({ item }) {
    개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
 const LOOK_SLOT = {
-  '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1, rot: 0 },
-  '상의':     { cx: 58, cy: 28, w: 43, h: 36, z: 3, rot: 0 },
-  '하의':     { cx: 40, cy: 61, w: 44, h: 47, z: 2, rot: 0 },
-  '원피스':   { cx: 48, cy: 53, w: 54, h: 64, z: 2, rot: 0 },
-  '신발':     { cx: 68, cy: 84, w: 33, h: 22, z: 4, rot: 0 },
-  '액세서리': { cx: 78, cy: 58, w: 24, h: 24, z: 5, rot: 0 },
+  '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1 },
+  '상의':     { cx: 50, cy: 28, w: 48, h: 40, z: 3 },
+  '하의':     { cx: 50, cy: 66, w: 48, h: 50, z: 2 },
+  '원피스':   { cx: 50, cy: 50, w: 56, h: 68, z: 2 },
+  '신발':     { cx: 72, cy: 84, w: 34, h: 24, z: 4 },
+  '가방':     { cx: 78, cy: 48, w: 28, h: 34, z: 4 },
+  '액세서리': { cx: 78, cy: 22, w: 24, h: 24, z: 5 },
 };
+const LOOK_SCALE = 1.25;
+
+function lookJitterRot(id) {
+  // 아이템별 고정 ±5° 지터 (리렌더해도 동일)
+  let h = 0;
+  const s = String(id || '');
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+  const r = (Math.abs(h) % 11) - 5; // -5..5
+  return r === 0 ? ((h & 1) ? 3 : -3) : r;
+}
+
 function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
@@ -40,15 +52,24 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
     );
   }
   const used = {};
+  const hasSide = cleanItems.some((it) => it.category === '신발' || it.category === '가방' || it.category === '액세서리');
   return (
     <div style={{ position: 'relative', background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
       {cleanItems.map((it) => {
         const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
         const n = used[it.category] || 0; used[it.category] = n + 1;
-        const cx = base.cx + n * 8, cy = base.cy + n * 5;
+        let cx = base.cx + n * 6;
+        const cy = base.cy + n * 4;
+        // 상의·하의만이면 가운데 정렬
+        if (!hasSide && (it.category === '상의' || it.category === '하의' || it.category === '아우터' || it.category === '원피스')) {
+          cx = 50 + n * 4;
+        }
+        const w = Math.min(92, base.w * LOOK_SCALE);
+        const h = Math.min(92, base.h * LOOK_SCALE);
+        const rot = lookJitterRot(it.id);
         const frame = {
-          position: 'absolute', left: cx + '%', top: cy + '%', width: base.w + '%', height: base.h + '%',
-          transform: `translate(-50%,-50%) rotate(${base.rot}deg)`, zIndex: base.z,
+          position: 'absolute', left: cx + '%', top: cy + '%', width: w + '%', height: h + '%',
+          transform: `translate(-50%,-50%) rotate(${rot}deg)`, zIndex: base.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
         return it.img
