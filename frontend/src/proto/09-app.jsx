@@ -529,7 +529,7 @@ function App() {
       <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면 어울리는<br />조합을 추천해드려요.</p>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면<br />어울리는 조합을 추천해드려요.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
             <Btn full variant="ghost" onClick={() => setComboPrompt(false)}>취소</Btn>
