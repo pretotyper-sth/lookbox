@@ -240,13 +240,12 @@ function WardrobeScreen({ ctx }) {
                   onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
                   aria-label={it.name + ' 더보기'}
                   style={{
-                    position: 'absolute', right: 5, top: 5, width: 22, height: 18, borderRadius: 9,
-                    display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
-                    background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
-                    boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
+                    position: 'absolute', right: 4, top: 4, width: 24, height: 20, borderRadius: 6,
+                    display: 'grid', placeItems: 'center', color: 'var(--ink)', zIndex: 2,
+                    background: 'transparent',
                   }}
                 >
-                  <Icon name="more" size={14} stroke={2.8} />
+                  <Icon name="more" size={15} stroke={2.8} />
                 </button>
               </div>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
