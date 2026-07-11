@@ -249,7 +249,7 @@ function WardrobeScreen({ ctx }) {
             <div aria-hidden="true" style={{ visibility: 'hidden' }}>
               <div style={{ aspectRatio: '1 / 1' }}></div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, height: 'calc(1.3em * 2)' }}>옷<br />옷</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, height: '1.3em' }}>옷</div>
                 <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.3 }}>옷</div>
               </div>
             </div>
@@ -324,9 +324,7 @@ function WardrobeScreen({ ctx }) {
               <button onClick={onCardTap} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
                 <div style={{
                   fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
-                  height: 'calc(1.3em * 2)', overflow: 'hidden',
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                  wordBreak: 'break-word', overflowWrap: 'anywhere',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>{it.name}</div>
                 <div style={{
                   fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.3,
