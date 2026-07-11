@@ -34,20 +34,25 @@ function NavTitle({ children }) {
   );
 }
 
-function TopBar({ left, title, right }) {
+function TopBar({ left, title, right, sticky = true, border = true }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 'var(--s2)',
-      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 14px)',
+      paddingTop: sticky ? 'calc(env(safe-area-inset-top, 0px) + 14px)' : 14,
       paddingBottom: 14,
       paddingLeft: 18,
       paddingRight: 18,
-      minHeight: 'calc(env(safe-area-inset-top, 0px) + 56px)',
+      minHeight: sticky ? 'calc(env(safe-area-inset-top, 0px) + 56px)' : 56,
       boxSizing: 'border-box',
-      position: 'sticky', top: 0, zIndex: 20,
-      background: 'color-mix(in srgb, var(--ivory) 92%, transparent)',
-      backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-      borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
+      position: sticky ? 'sticky' : 'relative',
+      top: sticky ? 0 : undefined,
+      zIndex: sticky ? 20 : undefined,
+      background: sticky
+        ? 'color-mix(in srgb, var(--ivory) 92%, transparent)'
+        : 'transparent',
+      backdropFilter: sticky ? 'blur(10px)' : undefined,
+      WebkitBackdropFilter: sticky ? 'blur(10px)' : undefined,
+      borderBottom: border ? '1px solid color-mix(in srgb, var(--line) 85%, transparent)' : 'none',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', minWidth: 44, minHeight: 32 }}>{left}</div>
       <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>{title}</div>
@@ -146,7 +151,7 @@ function WardrobeScreen({ ctx }) {
 
   /* ---- Partial / Full ---- */
   const chips = (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: wide ? '0 0 30px' : '2px 18px 14px' }}>
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: wide ? '0 0 30px' : '4px 18px 14px' }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
       {archived.length > 0 && (
         <>
@@ -159,28 +164,38 @@ function WardrobeScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       {!wide && (
-        <TopBar
-          left={<Wordmark />}
-          right={(
-            <>
-              {(count > 0 || archived.length > 0) && (
-                <button
-                  type="button"
-                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-                  style={{
-                    fontSize: 13, fontWeight: 700, padding: '6px 8px',
-                    color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
-                  }}
-                >
-                  {selectMode ? '완료' : '선택'}
-                </button>
-              )}
-              {!selectMode && <IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />}
-            </>
-          )}
-        />
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 20,
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          background: 'color-mix(in srgb, var(--ivory) 92%, transparent)',
+          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
+        }}>
+          <TopBar
+            sticky={false}
+            border={false}
+            left={<Wordmark />}
+            right={(
+              <>
+                {(count > 0 || archived.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                    style={{
+                      fontSize: 13, fontWeight: 700, padding: '6px 8px',
+                      color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
+                    }}
+                  >
+                    {selectMode ? '완료' : '선택'}
+                  </button>
+                )}
+                {!selectMode && <IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />}
+              </>
+            )}
+          />
+          {chips}
+        </div>
       )}
-      {!wide && chips}
 
       <div style={{
         flex: 1, overflowY: 'auto',
