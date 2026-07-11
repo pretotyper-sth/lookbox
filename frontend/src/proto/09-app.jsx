@@ -208,8 +208,12 @@ function App() {
   const startCombo = () => openAdd('anchor');
   const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;
   const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '원피스').length;
-  const comboReady = comboTops >= 1 && comboBottoms >= 1;
-  const comboNeed = (!comboTops && !comboBottoms) ? '상의와 하의를' : !comboTops ? '상의를' : '하의를';
+  // 조합 추천은 최소 상의 2벌 + 하의 2벌(총 4벌) 필요.
+  const comboTopsNeed = Math.max(0, 2 - comboTops);
+  const comboBottomsNeed = Math.max(0, 2 - comboBottoms);
+  const comboReady = comboTopsNeed === 0 && comboBottomsNeed === 0;
+  const comboProgress = Math.min(comboTops, 2) + Math.min(comboBottoms, 2);
+  const comboNeed = [comboTopsNeed ? `상의 ${comboTopsNeed}개` : '', comboBottomsNeed ? `하의 ${comboBottomsNeed}개` : ''].filter(Boolean).join(', ');
   const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };
   const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
@@ -378,7 +382,7 @@ function App() {
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
     hasWardrobe: comboReady,
-    comboReady, comboGate, comboNeed,
+    comboReady, comboGate, comboNeed, comboProgress,
     autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 3),
@@ -479,7 +483,7 @@ function App() {
       <BottomSheet open={comboPrompt} onClose={() => setComboPrompt(false)}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed} 담으면 어울리는<br />조합을 추천해드려요.</p>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면 어울리는<br />조합을 추천해드려요.</p>
           <div style={{ marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
           </div>
