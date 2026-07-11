@@ -74,7 +74,7 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed } = ctx;
+  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed, comboProgress } = ctx;
   const [cat, setCat] = useS('전체');
   const cats = LB_DATA.CATEGORIES;
   const viewingArchive = cat === '보관';
@@ -140,10 +140,10 @@ function WardrobeScreen({ ctx }) {
               <Icon name="lock" size={18} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{comboNeed} 담으면 조합을 추천해드려요</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{comboNeed}를 추가로 담으면 코디 조합을 추천받을 수 있어요</div>
               <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i < count ? 'var(--accent)' : 'var(--line-2)' }} />
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i < comboProgress ? 'var(--accent)' : 'var(--line-2)' }} />
                 ))}
               </div>
             </div>
@@ -601,7 +601,7 @@ function AddSheet({ ctx }) {
             </div>
 
             <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
-              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>건너뛰기</Btn>
+              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>{steps.length <= 1 ? '취소' : '건너뛰기'}</Btn>
               <Btn full icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
                 {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
               </Btn>
