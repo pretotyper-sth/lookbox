@@ -265,14 +265,17 @@ function App() {
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
   const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
 
-  const requestDailyOutfits = async (style = dailyStyle) => {
+  const preferredDailyStyle = (prefs.styles && prefs.styles[0]) || 'dandy';
+  const preferredDailyStyleName = ((LB_DATA.STYLES || []).find((s) => s.id === preferredDailyStyle) || {}).name || preferredDailyStyle;
+
+  const requestDailyOutfits = async (style = preferredDailyStyle) => {
     setDailyStyle(style);
     setDailyAllowed(true);
     setDailyLoading(true);
     try {
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
-        body: JSON.stringify({ max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 3), style }),
+        body: JSON.stringify({ max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 4), style }),
       });
       liveApplyPayload(payload, 'daily');
       setItems((arr) => arr.slice());
@@ -431,8 +434,9 @@ function App() {
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
     autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
-    dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 3),
+    dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
+    preferredDailyStyle, preferredDailyStyleName,
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,

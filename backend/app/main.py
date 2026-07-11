@@ -310,11 +310,21 @@ def recommend_text(
         "minimal": "절제된 미니멀 톤",
         "casual": "편한 데일리 캐주얼 톤",
         "office": "출근하기 좋은 오피스 톤",
+        "street": "자유로운 스트릿 톤",
+        "chic": "모던하고 시크한 톤",
+        "sporty": "활동적인 스포티 톤",
+        "classic": "격식 있는 클래식 톤",
+        "amekaji": "빈티지 아메카지 톤",
+        "gorpcore": "기능적인 아웃도어 톤",
+        "hiphop": "자유분방한 힙합 톤",
+        "y2k": "과감한 Y2K 톤",
+        "preppy": "단정한 프레피 톤",
     }
+    tone = style_map.get(style) or f"{style} 무드"
     if not openai_client:
-        return fallback_combos(items, anchor, max_combos)
+        return fallback_combos(items, anchor, max_combos, tone)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
-추천 톤: {style_map.get(style, style_map['dandy'])}
+추천 톤: {tone}
 {('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
 
 옷장:
@@ -324,6 +334,9 @@ def recommend_text(
 - item_ids에는 위 목록에 있는 id만 넣기
 - 한 코디에는 상의/하의/신발 중심으로 2~4개 구성
 - 기준 아이템이 있으면 반드시 포함
+- 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
+- 만들 수 있는 고유 조합이 max보다 적으면 적은 수만큼만 반환 (억지로 채우지 말 것)
+- mood에는 추천 톤을 반영한 짧은 한국어 문구
 - JSON만 응답
 
 형식:
@@ -339,28 +352,87 @@ def recommend_text(
         data = json.loads(response.choices[0].message.content or "{}")
         valid = {item["id"] for item in items}
         combos = []
-        for combo in (data.get("combos") or [])[:max_combos]:
+        seen: set[tuple[str, ...]] = set()
+        for combo in data.get("combos") or []:
             ids = [item_id for item_id in combo.get("item_ids", []) if item_id in valid]
             if anchor and anchor["id"] not in ids:
                 ids = [anchor["id"], *ids]
-            if len(ids) >= 2:
-                combos.append({"label": combo.get("label") or "추천 코디", "mood": combo.get("mood") or "", "item_ids": ids[:4]})
+            ids = ids[:4]
+            if len(ids) < 2:
+                continue
+            key = tuple(sorted(ids))
+            if key in seen:
+                continue
+            seen.add(key)
+            combos.append(
+                {
+                    "label": combo.get("label") or "추천 코디",
+                    "mood": combo.get("mood") or tone,
+                    "item_ids": ids,
+                }
+            )
+            if len(combos) >= max_combos:
+                break
         log_ai_usage(user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)})
-        return combos or fallback_combos(items, anchor, max_combos)
+        return combos or fallback_combos(items, anchor, max_combos, tone)
     except Exception:
-        return fallback_combos(items, anchor, max_combos)
+        return fallback_combos(items, anchor, max_combos, tone)
 
 
-def fallback_combos(items: list[dict[str, Any]], anchor: dict[str, Any] | None, max_combos: int) -> list[dict[str, Any]]:
-    ids = [item["id"] for item in items]
-    if anchor and anchor["id"] not in ids:
-        ids.insert(0, anchor["id"])
-    combos = []
-    for idx in range(min(max_combos, max(1, len(ids) - 1))):
-        pick = ids[idx : idx + 4]
-        if len(pick) < 2:
-            pick = ids[:2]
-        combos.append({"label": "데일리 조합", "mood": "내 옷장 기반 추천", "item_ids": pick})
+def _item_bucket(item: dict[str, Any]) -> str:
+    cat = (item.get("category") or "").lower()
+    if cat in ("top", "상의", "outer", "아우터"):
+        return "top"
+    if cat in ("bottom", "하의"):
+        return "bottom"
+    if cat in ("dress", "원피스"):
+        return "dress"
+    if cat in ("shoes", "신발"):
+        return "shoes"
+    return "other"
+
+
+def fallback_combos(
+    items: list[dict[str, Any]],
+    anchor: dict[str, Any] | None,
+    max_combos: int,
+    mood: str = "내 옷장 기반 추천",
+) -> list[dict[str, Any]]:
+    """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
+    tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
+    bottoms = [i for i in items if _item_bucket(i) in ("bottom", "dress")]
+    shoes = [i for i in items if _item_bucket(i) == "shoes"]
+    combos: list[dict[str, Any]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def _push(ids: list[str], label: str) -> None:
+        if len(ids) < 2:
+            return
+        if anchor and anchor["id"] not in ids:
+            ids = [anchor["id"], *[x for x in ids if x != anchor["id"]]]
+        key = tuple(sorted(ids[:4]))
+        if key in seen:
+            return
+        seen.add(key)
+        combos.append({"label": label, "mood": mood, "item_ids": ids[:4]})
+
+    n = 0
+    for t in tops:
+        for b in bottoms:
+            if t["id"] == b["id"]:
+                continue
+            ids = [t["id"], b["id"]]
+            if shoes:
+                ids.append(shoes[n % len(shoes)]["id"])
+                n += 1
+            _push(ids, f"추천 코디 {len(combos) + 1}")
+            if len(combos) >= max_combos:
+                return combos
+
+    # 페어가 거의 없으면 인접 아이템으로 최소 조합만
+    if not combos and len(items) >= 2:
+        ids = [items[0]["id"], items[1]["id"]]
+        _push(ids, "데일리 조합")
     return combos
 
 

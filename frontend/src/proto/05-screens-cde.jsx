@@ -24,12 +24,13 @@ function MetaChips({ item }) {
    개별 구분은 아래 스와이프 스트립으로 제공.
    ============================================================ */
 const LOOK_SLOT = {
-  '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1, rot: 0 },
-  '상의':     { cx: 58, cy: 28, w: 43, h: 36, z: 3, rot: 0 },
-  '하의':     { cx: 40, cy: 61, w: 44, h: 47, z: 2, rot: 0 },
-  '원피스':   { cx: 48, cy: 53, w: 54, h: 64, z: 2, rot: 0 },
-  '신발':     { cx: 68, cy: 84, w: 33, h: 22, z: 4, rot: 0 },
-  '액세서리': { cx: 78, cy: 58, w: 24, h: 24, z: 5, rot: 0 },
+  // 개별 의상을 키우고 상·하의를 살짝 겹쳐 실제 코디 실루엣처럼 보이게.
+  '아우터':   { cx: 48, cy: 38, w: 70, h: 68, z: 1, rot: -3 },
+  '상의':     { cx: 52, cy: 30, w: 54, h: 46, z: 3, rot: -2 },
+  '하의':     { cx: 48, cy: 66, w: 54, h: 56, z: 2, rot: 1 },
+  '원피스':   { cx: 50, cy: 50, w: 64, h: 76, z: 2, rot: -1 },
+  '신발':     { cx: 62, cy: 88, w: 38, h: 26, z: 4, rot: 4 },
+  '액세서리': { cx: 78, cy: 56, w: 28, h: 28, z: 5, rot: 0 },
 };
 function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const cleanItems = (items || []).filter(Boolean);
@@ -46,7 +47,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
       {cleanItems.map((it) => {
         const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
         const n = used[it.category] || 0; used[it.category] = n + 1;
-        const cx = base.cx + n * 8, cy = base.cy + n * 5;
+        const cx = base.cx + n * 6, cy = base.cy + n * 4;
         const frame = {
           position: 'absolute', left: cx + '%', top: cy + '%', width: base.w + '%', height: base.h + '%',
           transform: `translate(-50%,-50%) rotate(${base.rot}deg)`, zIndex: base.z,
@@ -55,9 +56,9 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
         return it.img
           ? (
             <div key={it.id} style={frame}>
-              <img src={it.img} alt={it.name} loading="lazy" style={{
+              <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                filter: 'drop-shadow(0 8px 10px rgba(40,33,20,0.10))',
+                filter: 'drop-shadow(0 10px 14px rgba(40,33,20,0.16))',
               }} />
             </div>
           )

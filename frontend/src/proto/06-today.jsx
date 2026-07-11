@@ -96,6 +96,45 @@ function TodayCardSkeleton() {
   );
 }
 
+/* 기본 4칸 중 고유 조합이 부족할 때 채우는 빈 슬롯 */
+function EmptyTodaySlot({ onAdd }) {
+  return (
+    <div style={{
+      background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)',
+      display: 'flex', flexDirection: 'column', minHeight: 0,
+      boxShadow: 'inset 0 0 0 1.5px dashed var(--line-2)',
+    }}>
+      <div style={{
+        flex: 1, minHeight: 0, aspectRatio: '4 / 5', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        textAlign: 'center', padding: '18px 14px', color: 'var(--ink-3)',
+      }}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', marginBottom: 12, color: 'var(--ink-2)' }}>
+          <Icon name="plus" size={22} />
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-2)', lineHeight: 1.35 }}>더 다양한 코디를 보려면</div>
+        <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.45, color: 'var(--ink-3)' }}>옷장에 옷을 추가해 주세요</div>
+      </div>
+      <div style={{ marginTop: 'var(--s3)' }}>
+        <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>옷 추가</Btn>
+      </div>
+    </div>
+  );
+}
+
+function uniqueDailyOutfits(list) {
+  const seen = {};
+  const out = [];
+  (list || []).forEach((o) => {
+    if (!o) return;
+    const key = (o.itemIds || []).slice().sort().join(',') || o.id;
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(o);
+  });
+  return out;
+}
+
 /* ============================================================
    지난 추천 히스토리 — 날짜별로 그날 추천되었던 코디를 되집어보기
    ============================================================ */
@@ -216,11 +255,16 @@ const calNavStyle = {
    TodayScreen — 오늘의 코디 (홈)
    ============================================================ */
 function TodayScreen({ ctx }) {
-  const { items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday, dailyCount, hasWardrobe, startComboOrWardrobe, dailyAllowed, dailyLoading, dailyStyle, requestDailyOutfits, comboReady } = ctx;
+  const {
+    items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday,
+    dailyCount, startComboOrWardrobe, openAdd,
+    dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
+    preferredDailyStyle, preferredDailyStyleName,
+  } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
+  const SLOT = Math.max(1, parseInt(dailyCount, 10) || 4);
 
-  const [offset, setOffset] = useTd(0);
   const [loading, setLoading] = useTd(false);
 
   // 날짜 선택 — 오늘이면 데일리 추천, 지난 날짜면 그날 추천 기록
@@ -231,18 +275,23 @@ function TodayScreen({ ctx }) {
   const isToday = ymd(selected) === ymd(today);
   const pastDay = isToday ? null : buildDayFor(selected);
 
-  // 풀에서 offset 기준 N개를 순환 선택
-  const picks = [];
-  for (let i = 0; i < Math.min(dailyCount, pool.length); i++) picks.push(pool[(offset + i) % pool.length]);
+  // 설정에서 고른 선호 무드로 자동 추천 — 별도 무드 선택 플로우 없음
+  useTe(() => {
+    if (!ready || !isToday) return;
+    if (dailyAllowed || dailyLoading) return;
+    requestDailyOutfits(preferredDailyStyle);
+  }, [ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
+
+  const picks = uniqueDailyOutfits(pool).slice(0, SLOT);
+  const emptySlots = Math.max(0, SLOT - picks.length);
 
   const reshuffle = async () => {
     setLoading(true);
-    await requestDailyOutfits(dailyStyle);
-    setOffset(0);
+    await requestDailyOutfits(preferredDailyStyle);
     setLoading(false);
   };
 
-  /* ---- 잠금 상태 (옷장 3벌 미만) ---- */
+  /* ---- 잠금 상태 (상의·하의 미달) ---- */
   if (!ready) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -266,54 +315,7 @@ function TodayScreen({ ctx }) {
     );
   }
 
-  if (!dailyAllowed) {
-    const styles = [
-      ['dandy', '댄디', '깔끔하고 단정한 출근/외출 톤'],
-      ['minimal', '미니멀', '컬러를 줄인 차분한 톤'],
-      ['casual', '캐주얼', '편한 데일리 톤'],
-      ['office', '오피스', '회의/출근에 안전한 톤'],
-    ];
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        {!wide && <TopBar left={<Wordmark />} />}
-        <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '4px 18px 28px' }}>
-          <div className={wide ? 'lb-wide-inner' : ''} style={{ maxWidth: 620, margin: wide ? '0 auto' : undefined }}>
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '28px 24px', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
-              <Eyebrow>오늘의 추천 코디</Eyebrow>
-              <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.25 }}>오늘 입을 무드를 골라주세요</h1>
-              <p style={{ margin: '12px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.65 }}>
-                원하는 분위기를 고르면, 내 옷장에 있는 옷만으로 오늘 입을 조합을 만들어드릴게요.
-              </p>
-              <div style={{ marginTop: 20, display: 'grid', gap: 10 }}>
-                {styles.map(([id, label, desc]) => (
-                  <button key={id} onClick={() => requestDailyOutfits(id)} disabled={dailyLoading} style={{
-                    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: '14px 15px', borderRadius: 'var(--r-md)',
-                    background: id === dailyStyle ? 'var(--ivory)' : 'var(--surface-2)', boxShadow: id === dailyStyle ? 'inset 0 0 0 1.5px var(--accent)' : 'inset 0 0 0 1px var(--line)',
-                    opacity: dailyLoading ? 0.58 : 1,
-                  }}>
-                    <span style={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: id === dailyStyle ? 'var(--accent)' : 'var(--ivory)', color: id === dailyStyle ? 'var(--accent-ink)' : 'var(--ink-2)' }}>
-                      <Icon name="sparkle" size={14} />
-                    </span>
-                    <span style={{ flex: 1 }}>
-                      <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800 }}>{label}</span>
-                      <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{desc}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div style={{ marginTop: 18 }}>
-                <Btn full size="lg" icon="sparkle" onClick={() => requestDailyOutfits(dailyStyle)} disabled={dailyLoading}>{dailyLoading ? '추천 만드는 중...' : '오늘의 코디 추천받기'}</Btn>
-              </div>
-              <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-                다른 분위기가 필요하면 언제든 다시 고를 수 있어요.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  const busy = dailyLoading || loading || (isToday && !dailyAllowed);
   const ctxStrip = (
     <ContextStrip selected={selected} today={today}
       calOpen={calOpen} setCalOpen={setCalOpen} view={view} setView={setView}
@@ -322,9 +324,10 @@ function TodayScreen({ ctx }) {
 
   const header = isToday ? (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <Eyebrow>오늘의 추천 코디</Eyebrow>
+      <Eyebrow>오늘의 추천 코디 · {preferredDailyStyleName}</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>로 만든 오늘의 추천 {picks.length}개예요.
+        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
+        {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
       </p>
       {ctxStrip}
     </div>
@@ -338,22 +341,30 @@ function TodayScreen({ ctx }) {
     </div>
   );
 
-  const shown = isToday ? picks : pastDay.picks;
+  const shown = isToday ? picks : uniqueDailyOutfits(pastDay.picks).slice(0, SLOT);
+  const empty = isToday ? emptySlots : Math.max(0, SLOT - shown.length);
 
   const list = (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: wide ? 'var(--s4)' : 'var(--s3)' }}>
-        {isToday && loading
-          ? Array.from({ length: picks.length }).map((_, i) => <TodayCardSkeleton key={i} />)
-          : shown.map((o, i) => (
-              <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
-                saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
-                worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)} />
-            ))}
+        {busy
+          ? Array.from({ length: SLOT }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
+          : (
+            <>
+              {shown.map((o, i) => (
+                <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
+                  saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
+                  worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)} />
+              ))}
+              {Array.from({ length: empty }).map((_, i) => (
+                <EmptyTodaySlot key={'empty' + i} onAdd={() => openAdd ? openAdd('wardrobe') : startComboOrWardrobe()} />
+              ))}
+            </>
+          )}
       </div>
       <div style={{ marginTop: 'var(--s5)' }}>
         {isToday
-          ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={loading || dailyLoading}>{(loading || dailyLoading) ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
+          ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
           : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
       </div>
     </>
