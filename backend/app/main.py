@@ -402,6 +402,7 @@ def recommend_text(
         uniq_styles.append(s)
     tones = [_style_tone(s) for s in uniq_styles]
     tone = " · ".join(tones)
+    style_id_note = ", ".join(uniq_styles)
     exclude_keys = {
         tuple(sorted(str(x) for x in ids if x))
         for ids in (exclude_item_ids or [])
@@ -412,10 +413,10 @@ def recommend_text(
         lines = [", ".join(k) for k in list(exclude_keys)[:20]]
         exclude_note = "\n이미 보여준 조합(제외):\n" + "\n".join(f"- {ln}" for ln in lines) + "\n"
     if not openai_client:
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
-사용자가 마이페이지에서 설정한 선호 무드: {tone}
-옷장이 충분하면 이 무드가 분명히 드러나는 조합을 우선하세요. 옷이 적으면 가능한 범위에서 가장 가까운 무드로.
+사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
+선호 무드 설명: {tone}
 {('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
 
 옷장:
@@ -428,11 +429,13 @@ def recommend_text(
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
 - 이미 보여준 조합은 절대 다시 쓰지 말 것
 - 만들 수 있는 고유 조합이 max보다 적으면 적은 수만큼만 반환 (억지로 채우지 말 것)
-- mood에는 선호 무드를 반영한 짧은 한국어 문구
+- 각 코디는 선호 무드 중 1~2개에만 맞춰 만들고, styles에 그 무드 id만 넣기 (전체 선호 무드를 한 코디에 몰아넣지 말 것)
+- 여러 코디가 있으면 선호 무드를 가능한 한 나눠 배정
+- mood에는 그 코디의 짧은 분위기 문구(한국어)
 - JSON만 응답
 
 형식:
-{{"combos":[{{"label":"", "mood":"", "item_ids":["..."]}}]}}
+{{"combos":[{{"label":"", "mood":"", "styles":["minimal"], "item_ids":["..."]}}]}}
 """
     try:
         response = openai_client.chat.completions.create(
@@ -443,6 +446,7 @@ def recommend_text(
         )
         data = json.loads(response.choices[0].message.content or "{}")
         valid = {item["id"] for item in items}
+        allowed_styles = set(uniq_styles)
         combos = []
         seen: set[tuple[str, ...]] = set(exclude_keys)
         for combo in data.get("combos") or []:
@@ -456,19 +460,23 @@ def recommend_text(
             if key in seen:
                 continue
             seen.add(key)
+            combo_styles = [s for s in (combo.get("styles") or []) if s in allowed_styles][:2]
+            if not combo_styles:
+                combo_styles = [uniq_styles[len(combos) % len(uniq_styles)]]
             combos.append(
                 {
                     "label": combo.get("label") or "추천 코디",
-                    "mood": combo.get("mood") or tone,
+                    "mood": combo.get("mood") or _style_tone(combo_styles[0]),
+                    "styles": combo_styles,
                     "item_ids": ids,
                 }
             )
             if len(combos) >= max_combos:
                 break
         log_ai_usage(user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)})
-        return combos or fallback_combos(items, anchor, max_combos, tone, exclude_keys)
+        return combos or fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
     except Exception:
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -490,6 +498,7 @@ def fallback_combos(
     max_combos: int,
     mood: str = "내 옷장 기반 추천",
     exclude_keys: set[tuple[str, ...]] | None = None,
+    styles: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
     tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
@@ -497,6 +506,7 @@ def fallback_combos(
     shoes = [i for i in items if _item_bucket(i) == "shoes"]
     combos: list[dict[str, Any]] = []
     seen: set[tuple[str, ...]] = set(exclude_keys or ())
+    style_cycle = [s for s in (styles or []) if s] or []
 
     def _push(ids: list[str], label: str) -> None:
         if len(ids) < 2:
@@ -507,7 +517,13 @@ def fallback_combos(
         if key in seen:
             return
         seen.add(key)
-        combos.append({"label": label, "mood": mood, "item_ids": ids[:4]})
+        assigned = [style_cycle[len(combos) % len(style_cycle)]] if style_cycle else []
+        combos.append({
+            "label": label,
+            "mood": (_style_tone(assigned[0]) if assigned else mood),
+            "styles": assigned,
+            "item_ids": ids[:4],
+        })
 
     n = 0
     for t in tops:
@@ -1410,6 +1426,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 "id": f"live-{uuid.uuid4().hex[:8]}",
                 "label": combo.get("label") or f"추천 코디 {idx + 1}",
                 "mood": combo.get("mood") or "",
+                "styles": combo.get("styles") or [],
                 "itemIds": ids,
                 "lookImg": None,
             }

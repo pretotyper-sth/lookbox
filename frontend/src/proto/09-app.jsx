@@ -73,7 +73,7 @@ function writeWardrobeCache(owned, archived) {
 }
 
 // 당일 추천 코디 캐시 — 새로고침해도 재생성하지 않음. force(다른 코디 추천)일 때만 갱신.
-const DAILY_CACHE_KEY = 'lb_daily_outfits_v1';
+const DAILY_CACHE_KEY = 'lb_daily_outfits_v2';
 function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -344,8 +344,15 @@ function App() {
     .join(' · ') || preferredDailyStyleName;
   const dailyEnabled = !!prefs.dailyEnabled;
 
-  const stampOutfitStyle = (list, label) => {
-    (list || []).forEach((o) => { o.styleLabel = label; });
+  const stampOutfitStyle = (list) => {
+    const nameOf = (id) => ((LB_DATA.STYLES || []).find((s) => s.id === id) || {}).name || id;
+    (list || []).forEach((o, i) => {
+      const ids = (o.styles && o.styles.length)
+        ? o.styles
+        : [preferredStyles[i % preferredStyles.length] || preferredDailyStyle];
+      o.styles = ids;
+      o.styleLabel = ids.map(nameOf).filter(Boolean).join(' · ');
+    });
     return list;
   };
 
@@ -367,6 +374,7 @@ function App() {
     if (!force) {
       const cached = readDailyCache();
       if (cached) {
+        stampOutfitStyle(cached.outfits);
         liveApplyPayload({ outfits: cached.outfits, items: cached.items }, 'daily');
         setDailyStyle(cached.style || style);
         setDailyAllowed(true);
@@ -386,7 +394,7 @@ function App() {
           styles: preferredStyles,
         }),
       });
-      stampOutfitStyle(payload.outfits, preferredStyleLabel);
+      stampOutfitStyle(payload.outfits);
       liveApplyPayload(payload, 'daily');
       writeDailyCache({ style, outfits: payload.outfits || LB_DATA.DAILY.slice(), items: payload.items || [] });
       setItems((arr) => arr.slice());
@@ -421,7 +429,7 @@ function App() {
             styles: preferredStyles,
           }),
         });
-        stampOutfitStyle(payload.outfits, preferredStyleLabel);
+        stampOutfitStyle(payload.outfits);
         liveApplyPayload({ ...payload, anchor: LB_DATA.ANCHOR }, 'outfits');
         setComboRev((n) => n + 1);
         showToast(`${preferredStyleLabel} 무드로 코디를 추천했어요`, 'sparkle');
@@ -458,7 +466,7 @@ function App() {
           exclude_item_ids: LB_DATA.OUTFITS.map((o) => o.itemIds || []),
         }),
       });
-      stampOutfitStyle(payload.outfits, preferredStyleLabel);
+      stampOutfitStyle(payload.outfits);
       const added = liveAppendOutfits(payload);
       setComboRev((n) => n + 1);
       if (!added.length) showToast('더 추천할 조합이 없어요');

@@ -80,7 +80,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel }) {
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>{outfit.mood} · {items.length}개</div>
         {moodBasis ? (
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', marginTop: 5 }}>
-            {moodBasis} 무드 기준
+            {moodBasis}
           </div>
         ) : null}
         {outfit.note ? (
