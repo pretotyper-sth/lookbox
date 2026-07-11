@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, STYLES, TopBar } = window;
+const { BottomSheet, Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, NavTitle, PALETTE, PERSONAL_COLORS, STYLES, TopBar } = window;
 
-/* global React, Btn, Icon, Chip, Eyebrow, TopBar, BottomSheet, LabeledField, LB_DATA */
+/* global React, Btn, Icon, Chip, Eyebrow, TopBar, NavTitle, BottomSheet, LabeledField, LB_DATA */
 // LOOKBOX — 마이페이지: 개인 정보(계정) + 내 스타일(취향) 허브. 실서비스 IA 기준.
 
 const { useState: useMp, useEffect: useMe } = React;
@@ -180,7 +180,7 @@ function MyPageScreen({ ctx }) {
   }
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <TopBar left={<div style={{ fontWeight: 800, fontSize: 19 }}>마이페이지</div>} />
+      <TopBar left={<NavTitle>마이페이지</NavTitle>} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 18px 24px' }}>{body}</div>
     </div>
   );

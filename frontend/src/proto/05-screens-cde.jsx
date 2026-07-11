@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { Badge, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, NavTitle, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, NavTitle, Eyebrow */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
 
 const { useState: useSc, useEffect: useEc } = React;
@@ -225,7 +225,7 @@ function LookbookScreen({ ctx }) {
   if (saved.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<div style={{ fontWeight: 800, fontSize: 19, marginTop: 4 }}>룩북</div>} />}
+        {!wide && <TopBar left={<NavTitle>룩북</NavTitle>} />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="bookmark" size={38} stroke={1.4} />
@@ -247,7 +247,7 @@ function LookbookScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {!wide && <TopBar left={<div style={{ fontWeight: 800, fontSize: 19, marginTop: 4 }}>룩북</div>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
+      {!wide && <TopBar left={<NavTitle>룩북</NavTitle>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
       <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '4px 18px 28px' }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         <div className="lb-grid">

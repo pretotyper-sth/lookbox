@@ -12,14 +12,25 @@ const { useState: useS, useEffect: useE, useRef: useR } = React;
    ============================================================ */
 function Wordmark({ size = 19 }) {
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, userSelect: 'none' }}>
-      <span style={{ fontWeight: 800, fontSize: size, letterSpacing: '-0.03em', color: 'var(--ink)' }}>LOOK</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, userSelect: 'none', height: 24 }}>
+      <span style={{ fontWeight: 800, fontSize: size, letterSpacing: '-0.03em', color: 'var(--ink)', lineHeight: 1 }}>LOOK</span>
       <span style={{
-        fontWeight: 800, fontSize: size - 2, letterSpacing: '-0.01em',
+        fontWeight: 800, fontSize: size - 2, letterSpacing: '-0.01em', lineHeight: 1,
         background: 'var(--accent)', color: 'var(--accent-ink)',
-        padding: '2px 7px 3px', borderRadius: 7, lineHeight: 1,
+        padding: '3px 7px', borderRadius: 7,
       }}>BOX</span>
     </div>
+  );
+}
+
+/** 탭 공통 좌측 타이틀 — Wordmark와 같은 시각 높이 */
+function NavTitle({ children }) {
+  return (
+    <div style={{
+      fontWeight: 800, fontSize: 19, letterSpacing: '-0.03em',
+      lineHeight: 1, color: 'var(--ink)', height: 24,
+      display: 'flex', alignItems: 'center',
+    }}>{children}</div>
   );
 }
 
@@ -27,15 +38,20 @@ function TopBar({ left, title, right }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 'var(--s2)',
-      padding: '14px 18px 12px', minHeight: 56,
+      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 14px)',
+      paddingBottom: 14,
+      paddingLeft: 18,
+      paddingRight: 18,
+      minHeight: 'calc(env(safe-area-inset-top, 0px) + 56px)',
+      boxSizing: 'border-box',
       position: 'sticky', top: 0, zIndex: 20,
       background: 'color-mix(in srgb, var(--ivory) 92%, transparent)',
       backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
       borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', minWidth: 44 }}>{left}</div>
-      <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{title}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 44, gap: 4 }}>{right}</div>
+      <div style={{ display: 'flex', alignItems: 'center', minWidth: 44, minHeight: 32 }}>{left}</div>
+      <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 44, minHeight: 32, gap: 4 }}>{right}</div>
     </div>
   );
 }
@@ -769,5 +785,5 @@ function AddSheet({ ctx }) {
   );
 }
 
-window.LB_SCREENS_AB = { Wordmark, TopBar, BottomNav, Eyebrow, WardrobeScreen, AddSheet };
-Object.assign(window, { Wordmark, TopBar, BottomNav, Eyebrow, WardrobeScreen, AddSheet });
+window.LB_SCREENS_AB = { Wordmark, NavTitle, TopBar, BottomNav, Eyebrow, WardrobeScreen, AddSheet };
+Object.assign(window, { Wordmark, NavTitle, TopBar, BottomNav, Eyebrow, WardrobeScreen, AddSheet });
