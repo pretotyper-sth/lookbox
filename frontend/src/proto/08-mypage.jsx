@@ -195,21 +195,19 @@ function MyPageScreen({ ctx }) {
                 </div>
                 <div style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>
                   {metaBits.length ? metaBits.join(' · ') : '계정 정보를 완성해 주세요'}
-                  {styleNames.length ? ` · ${styleNames.slice(0, 3).join(' · ')}` : ''}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+              <div style={{ flex: 'none' }}>
                 <Btn variant="soft" size="sm" icon="pencil" onClick={openAccount}>계정 수정</Btn>
-                <Btn variant="soft" size="sm" icon="sparkle" onClick={openPrefs}>취향 수정</Btn>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1.1fr)', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
               <Section title="개인 정보" action={<EditLink onClick={openAccount} />} fill>{personalBody}</Section>
               <Section title="내 스타일" action={<EditLink onClick={openPrefs} />} fill>{styleBody}</Section>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 0.8fr)', gap: 14, alignItems: 'stretch', marginBottom: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, alignItems: 'stretch', marginBottom: 18 }}>
               {settingsCard}
               {accountCard}
             </div>
