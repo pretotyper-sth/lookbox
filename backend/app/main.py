@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import html as html_lib
 import io
 import json
 import os
@@ -362,6 +363,7 @@ def recommend_text(
     items: list[dict[str, Any]],
     style: str,
     max_combos: int,
+    exclude_item_ids: list[list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     if not items:
         return []
@@ -385,20 +387,30 @@ def recommend_text(
         "preppy": "단정한 프레피 톤",
     }
     tone = style_map.get(style) or f"{style} 무드"
+    exclude_keys = {
+        tuple(sorted(str(x) for x in ids if x))
+        for ids in (exclude_item_ids or [])
+        if ids
+    }
+    exclude_note = ""
+    if exclude_keys:
+        lines = [", ".join(k) for k in list(exclude_keys)[:20]]
+        exclude_note = "\n이미 보여준 조합(제외):\n" + "\n".join(f"- {ln}" for ln in lines) + "\n"
     if not openai_client:
-        return fallback_combos(items, anchor, max_combos, tone)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
 추천 톤: {tone}
 {('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
 
 옷장:
 {catalog}
-
+{exclude_note}
 규칙:
 - item_ids에는 위 목록에 있는 id만 넣기
 - 한 코디에는 상의/하의/신발 중심으로 2~4개 구성
 - 기준 아이템이 있으면 반드시 포함
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
+- 이미 보여준 조합은 절대 다시 쓰지 말 것
 - 만들 수 있는 고유 조합이 max보다 적으면 적은 수만큼만 반환 (억지로 채우지 말 것)
 - mood에는 추천 톤을 반영한 짧은 한국어 문구
 - JSON만 응답
@@ -416,7 +428,7 @@ def recommend_text(
         data = json.loads(response.choices[0].message.content or "{}")
         valid = {item["id"] for item in items}
         combos = []
-        seen: set[tuple[str, ...]] = set()
+        seen: set[tuple[str, ...]] = set(exclude_keys)
         for combo in data.get("combos") or []:
             ids = [item_id for item_id in combo.get("item_ids", []) if item_id in valid]
             if anchor and anchor["id"] not in ids:
@@ -438,9 +450,9 @@ def recommend_text(
             if len(combos) >= max_combos:
                 break
         log_ai_usage(user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)})
-        return combos or fallback_combos(items, anchor, max_combos, tone)
+        return combos or fallback_combos(items, anchor, max_combos, tone, exclude_keys)
     except Exception:
-        return fallback_combos(items, anchor, max_combos, tone)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys)
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -461,13 +473,14 @@ def fallback_combos(
     anchor: dict[str, Any] | None,
     max_combos: int,
     mood: str = "내 옷장 기반 추천",
+    exclude_keys: set[tuple[str, ...]] | None = None,
 ) -> list[dict[str, Any]]:
     """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
     tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
     bottoms = [i for i in items if _item_bucket(i) in ("bottom", "dress")]
     shoes = [i for i in items if _item_bucket(i) == "shoes"]
     combos: list[dict[str, Any]] = []
-    seen: set[tuple[str, ...]] = set()
+    seen: set[tuple[str, ...]] = set(exclude_keys or ())
 
     def _push(ids: list[str], label: str) -> None:
         if len(ids) < 2:
@@ -497,6 +510,9 @@ def fallback_combos(
     if not combos and len(items) >= 2:
         ids = [items[0]["id"], items[1]["id"]]
         _push(ids, "데일리 조합")
+        if len(combos) >= max_combos:
+            return combos
+
     return combos
 
 
@@ -708,7 +724,7 @@ def create_recommendations(user: UserContext, anchor: dict[str, Any] | None, bod
         pool = [anchor, *pool]
     if len(pool) < 2:
         raise HTTPException(status_code=400, detail="not_enough_items")
-    combos = recommend_text(user.id, anchor, pool, body.style, min(max(body.max_combos, 1), 6))
+    combos = recommend_text(user.id, anchor, pool, body.style, min(max(body.max_combos, 1), 10))
     outfits = []
     by_id = {item["id"]: item for item in pool}
     for combo in combos:
@@ -792,9 +808,11 @@ class LiveImportUrl(BaseModel):
 
 
 class LiveCoordinate(BaseModel):
-    max_combos: int = 3
+    max_combos: int = 4
     style: str = "dandy"
     anchor_id: str | None = None
+    # 이미 보여준 조합(item id 목록) — 더 추천 시 중복 방지
+    exclude_item_ids: list[list[str]] = []
 
 
 class LiveStatus(BaseModel):
@@ -945,32 +963,93 @@ def _clean_brand(val: str) -> str:
     return (val or "").strip().strip("|·-–—").strip()[:40]
 
 
-# 상품명 끝의 '_블루' 같은 색상 꼬리표 판별용.
+# 상품명 끝의 '_블루' / '_삭스' 같은 색상 꼬리표 판별용.
 COLOR_WORDS = (
-    "블랙", "화이트", "그레이", "그레이지", "차콜", "네이비", "블루", "스카이블루",
-    "라이트블루", "베이지", "브라운", "카멜", "카키", "올리브", "그린", "민트",
-    "아이보리", "크림", "오트밀", "레드", "와인", "버건디", "핑크", "코랄",
-    "오렌지", "옐로우", "머스타드", "퍼플", "라벤더", "연청", "중청", "진청",
-    "흑청", "데님", "인디고", "탄", "모카", "멜란지", "카멜색",
-    "black", "white", "gray", "grey", "charcoal", "navy", "blue", "beige",
-    "brown", "camel", "khaki", "olive", "green", "mint", "ivory", "cream",
-    "red", "wine", "burgundy", "pink", "coral", "orange", "yellow", "mustard",
-    "purple", "lavender", "denim", "indigo", "tan", "mocha",
+    "블랙", "화이트", "오프화이트", "그레이", "라이트그레이", "다크그레이", "그레이지",
+    "차콜", "차콜그레이", "네이비", "다크네이비", "블루", "딥블루", "스카이블루",
+    "라이트블루", "소라", "삭스", "색스", "베이지", "샌드", "브라운", "카멜", "모카",
+    "탄", "카키", "올리브", "세이지", "세이지그린", "그린", "민트", "틸", "터콰이즈",
+    "아이보리", "크림", "에크루", "오트밀", "레드", "와인", "버건디", "마룬",
+    "핑크", "라이트핑크", "핫핑크", "더스티핑크", "로즈", "코랄", "오렌지",
+    "옐로우", "머스타드", "퍼플", "라벤더", "라일락", "코발트",
+    "연청", "중청", "진청", "흑청", "데님", "인디고", "멜란지", "카멜색",
+    "실버", "골드", "멀티",
+    "black", "white", "offwhite", "gray", "grey", "charcoal", "navy", "blue",
+    "saxe", "skyblue", "lightblue", "beige", "sand", "brown", "camel", "khaki",
+    "olive", "sage", "green", "mint", "teal", "ivory", "cream", "ecru", "oatmeal",
+    "red", "wine", "burgundy", "maroon", "pink", "rose", "coral", "orange",
+    "yellow", "mustard", "purple", "lavender", "lilac", "denim", "indigo",
+    "tan", "mocha", "silver", "gold",
 )
+
+# Cafe24 등에서 '_세트', '_남성'처럼 색상이 아닌 꼬리표.
+NON_COLOR_TAILS = frozenset({
+    "세트", "set", "남", "여", "남성", "여성", "남자", "여자",
+    "유니섹스", "unisex", "신상", "베스트", "best", "hot", "new", "sale",
+    "프리오더", "preorder", "한정", "시즌", "리오더", "재입고", "outlet",
+    "fw", "ss", "ss24", "ss25", "ss26", "fw24", "fw25", "fw26",
+})
+
+
+def _norm_color_token(s: str) -> str:
+    return re.sub(r"\s+", "", (s or "").strip().lower())
+
+
+_COLOR_NORM = {_norm_color_token(w) for w in COLOR_WORDS}
+
+
+def _is_color_tail(tail: str) -> bool:
+    """상품명 `_뒤` / 옵션 값이 색상(변형)명으로 보이는지."""
+    t = (tail or "").strip()
+    if not t or len(t) > 16:
+        return False
+    tn = _norm_color_token(t)
+    if not tn or tn in NON_COLOR_TAILS:
+        return False
+    if tn in _COLOR_NORM:
+        return True
+    # 사이즈·SKU 제외
+    if re.fullmatch(r"(?i)(xxs|xs|s|m|l|xl|xxl|2xl|3xl|4xl|[0-9]{1,2})$", t):
+        return False
+    if re.fullmatch(r"[A-Za-z]*\d{2,}[A-Za-z0-9]*", t):
+        return False
+    # 브랜드몰 관례: '_삭스', '_세이지'처럼 짧은 한글 토큰은 색상 변형명
+    if re.fullmatch(r"[가-힣]{1,10}", t):
+        return True
+    return False
 
 
 def _split_color_from_title(title: str) -> tuple[str, str]:
-    """'원워시드 스트레이트 데님_블루' → ('원워시드 스트레이트 데님', '블루').
-
-    끝의 '_토큰'이 색상으로 보일 때만 분리. 아니면 제목을 그대로 둔다.
-    """
-    t = (title or "").strip()
+    """'…셔츠_삭스' → ('…셔츠', '삭스'). 색상으로 보일 때만 분리."""
+    t = html_lib.unescape((title or "").strip())
+    t = t.replace("\\_", "_").replace("＿", "_")
     if "_" in t:
         head, _, tail = t.rpartition("_")
         head, tail = head.strip(), tail.strip()
-        if head and tail and any(w in tail.lower() for w in COLOR_WORDS):
+        if head and _is_color_tail(tail):
             return head, tail
+    m = re.search(r"^(.*?)[\s]*[\(\[]\s*([가-힣A-Za-z]{1,14})\s*[\)\]]\s*$", t)
+    if m and _is_color_tail(m.group(2)):
+        return m.group(1).strip(), m.group(2).strip()
     return t, ""
+
+
+def _extract_page_color(page_html: str) -> str:
+    """상세 HTML에서 색상/컬러 필드 추출 (Cafe24 등)."""
+    patterns = (
+        r"<th[^>]*>\s*(?:색상|컬러|Color)\s*</th>\s*<td[^>]*>\s*([^<]{1,20}?)\s*</td>",
+        r"id=[\"']product_color[\"'][^>]*>\s*([^<]{1,20})",
+        r"[\"'](?:product_)?color[\"']\s*:\s*[\"']([^\"']{1,20})[\"']",
+        r"option_name[\"']?\s*:\s*[\"'](?:색상|컬러|Color)[\"'][^}]{0,200}?option_value[\"']?\s*:\s*[\"']([^\"']{1,20})",
+    )
+    for pat in patterns:
+        m = re.search(pat, page_html, re.I | re.S)
+        if not m:
+            continue
+        c = re.sub(r"\s+", " ", html_lib.unescape(m.group(1))).strip()
+        if c and _is_color_tail(c):
+            return c
+    return ""
 
 
 def _brand_from_jsonld(html: str) -> str:
@@ -1054,10 +1133,24 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     brand = _extract_brand(html, page_url)
     store = _detect_store(page_url, brand)
     title = _meta_content(html, "og:title") or _meta_content(html, "twitter:title", "name")
+    tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
+    doc_title = tm.group(1).strip() if tm else ""
     if not title:
-        tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
-        title = tm.group(1).strip() if tm else ""
+        title = doc_title
+    # og:title에 색이 없고 <title>에 '_삭스'만 있는 경우도 흡수
     title, color = _split_color_from_title(title)
+    if not color and doc_title:
+        t2, c2 = _split_color_from_title(doc_title)
+        if c2:
+            color = c2
+            if title.endswith("_" + c2):
+                title = title[: -(len(c2) + 1)].strip()
+            elif title == doc_title:
+                title = t2
+    if not color:
+        color = _extract_page_color(html)
+        if color and title.endswith("_" + color):
+            title = title[: -(len(color) + 1)].strip()
     match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
     if not match:
         match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
@@ -1279,7 +1372,14 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     pool = [row for row in pool if row]
     if len(pool) < 2:
         raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요")
-    combos = recommend_text(user.id, anchor, pool, body.style, min(max(body.max_combos, 1), 6))
+    combos = recommend_text(
+        user.id,
+        anchor,
+        pool,
+        body.style,
+        min(max(body.max_combos, 1), 10),
+        body.exclude_item_ids or [],
+    )
     by_id = {row["id"]: row for row in pool}
     outfits, used = [], {}
     for idx, combo in enumerate(combos):

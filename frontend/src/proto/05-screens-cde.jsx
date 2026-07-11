@@ -89,48 +89,38 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
 
 
 /* ============================================================
-   Outfit card — 조합 룩 이미지를 히어로, 구성 아이템은 아래 스와이프.
+   Outfit card — 오늘의 추천과 같은 컴팩트 카드 (2열 그리드용)
    ============================================================ */
 function OutfitCard({ outfit, saved, onSave }) {
-  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
+  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{outfit.label}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginTop: 2 }}>{outfit.mood}</div>
-        </div>
-        <button onClick={onSave} className="lb-save" aria-label="이 코디 저장" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, flex: 'none',
-          padding: '8px 13px 8px 11px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 700,
+    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'relative' }}>
+        <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
+          position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
-          background: saved ? 'var(--accent)' : 'transparent',
-          boxShadow: saved ? 'none' : 'inset 0 0 0 1.4px var(--line-2)',
+          background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
+          boxShadow: saved ? 'none' : 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(4px)',
           transition: 'all var(--dur) var(--ease)',
         }}>
           <Icon name="heart" size={15} fill={saved ? 'currentColor' : 'none'} stroke={saved ? 0 : 2} />
-          {saved ? '저장됨' : '저장'}
         </button>
       </div>
 
-      {/* HERO — 조합 전체를 하나의 룩 이미지로 */}
-      <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
-
-      {/* 개별 아이템 — 옆으로 스와이프 */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: 'var(--s4) 0 8px' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700 }}>구성 아이템</span>
-        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>옆으로 넘겨보기</span>
+      <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>{outfit.mood} · {items.length}개</div>
       </div>
-      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 2, scrollSnapType: 'x proximity' }}>
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto', paddingBottom: 1 }}>
         {items.map((it) => (
-          <div key={it.id} style={{ width: 62, flex: 'none', scrollSnapAlign: 'start' }}>
-            <div style={{ padding: it.isAnchor ? 2.5 : 0, background: it.isAnchor ? 'var(--accent)' : 'transparent', borderRadius: it.isAnchor ? 11 : 'var(--r-sm)' }}>
-              <div style={{ borderRadius: it.isAnchor ? 8 : 'var(--r-sm)', overflow: 'hidden', boxShadow: it.isAnchor ? 'none' : 'inset 0 0 0 1px var(--line)' }}>
-                <Thumb item={it} radius={it.isAnchor ? '8px' : 'var(--r-sm)'} />
+          <div key={it.id} style={{ width: 40, flex: 'none' }}>
+            <div style={{ padding: it.isAnchor ? 1.5 : 0, background: it.isAnchor ? 'var(--accent)' : 'transparent', borderRadius: it.isAnchor ? 8 : 'var(--r-sm)' }}>
+              <div style={{ borderRadius: it.isAnchor ? 6 : 'var(--r-sm)', overflow: 'hidden', boxShadow: it.isAnchor ? 'none' : 'inset 0 0 0 1px var(--line)' }}>
+                <Thumb item={it} radius={it.isAnchor ? '6px' : 'var(--r-sm)'} />
               </div>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 600, marginTop: 5, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</div>
-            <div style={{ fontSize: 10, fontWeight: 700, marginTop: 1, color: it.isAnchor ? 'var(--accent)' : 'var(--ink-3)' }}>{it.isAnchor ? '고민 중' : '내 옷장'}</div>
           </div>
         ))}
       </div>
@@ -140,13 +130,10 @@ function OutfitCard({ outfit, saved, onSave }) {
 
 function OutfitSkeleton() {
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-        <div><Skeleton w={120} h={16} /><Skeleton w={84} h={11} style={{ marginTop: 8 }} /></div>
-        <Skeleton w={62} h={32} radius="var(--r-pill)" />
-      </div>
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)' }}>
       <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 'var(--s4)' }}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} w={62} h={78} radius="var(--r-sm)" />)}</div>
+      <div style={{ padding: '11px 3px 0' }}><Skeleton w="70%" h={15} /><Skeleton w="50%" h={11} style={{ marginTop: 8 }} /></div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>{[0, 1].map((i) => <Skeleton key={i} w={40} h={40} radius="var(--r-sm)" />)}</div>
     </div>
   );
 }
@@ -155,36 +142,54 @@ function OutfitSkeleton() {
    C · Combo results (AI)
    ============================================================ */
 function ResultsScreen({ ctx }) {
-  const { back, anchor, loading, savedOutfitIds, saveOutfit } = ctx;
+  const {
+    back, anchor, loading, savedOutfitIds, saveOutfit, wide,
+    loadMoreCombos, moreLoading, comboRev,
+  } = ctx;
+  const outfits = LB_DATA.OUTFITS;
+  void comboRev;
+  const busy = !!loading;
+  const moreBusy = !!moreLoading;
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <TopBar
         left={<IconBtn name="chevL" label="뒤로" onClick={back} style={{ marginLeft: -8 }} />}
         title="조합 추천"
       />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 18px 32px' }}>
-        {/* anchor block */}
-        <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', marginBottom: 'var(--s5)' }}>
-          <div style={{ width: 92, flex: 'none' }}><Thumb item={anchor} /></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Eyebrow>고민 중인 옷</Eyebrow>
-            <div style={{ fontSize: 17, fontWeight: 700, margin: '6px 0 8px', textWrap: 'pretty' }}>{anchor.name}</div>
-            <MetaChips item={anchor} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '8px 0 36px' : '4px 18px 32px' }}>
+        <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
+          {/* anchor block */}
+          <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', marginBottom: 'var(--s5)' }}>
+            <div style={{ width: wide ? 80 : 92, flex: 'none' }}><Thumb item={anchor} /></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Eyebrow>고민 중인 옷</Eyebrow>
+              <div style={{ fontSize: wide ? 16 : 17, fontWeight: 700, margin: '6px 0 8px', textWrap: 'pretty' }}>{anchor.name}</div>
+              <MetaChips item={anchor} />
+            </div>
           </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{loading ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}</div>
-          {!loading && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{LB_DATA.OUTFITS.length}벌</div>}
-        </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{busy ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}</div>
+            {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{outfits.length}벌</div>}
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s4)' }}>
-          {loading
-            ? [0, 1, 2].map((i) => <OutfitSkeleton key={i} />)
-            : LB_DATA.OUTFITS.map((o) => (
-                <OutfitCard key={o.id} outfit={o}
-                  saved={savedOutfitIds.includes(o.id)} onSave={() => saveOutfit(o.id)} />
-              ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: wide ? 'var(--s4)' : 'var(--s3)' }}>
+            {busy
+              ? [0, 1, 2, 3].map((i) => <OutfitSkeleton key={i} />)
+              : outfits.map((o) => (
+                  <OutfitCard key={o.id} outfit={o}
+                    saved={savedOutfitIds.includes(o.id)} onSave={() => saveOutfit(o.id)} />
+                ))}
+          </div>
+
+          {!busy && (
+            <div style={{ marginTop: 'var(--s5)' }}>
+              <Btn full variant="soft" icon="sparkle" onClick={loadMoreCombos} disabled={moreBusy}>
+                {moreBusy ? '추천 만드는 중...' : '2개 더 추천받기'}
+              </Btn>
+            </div>
+          )}
         </div>
       </div>
     </div>

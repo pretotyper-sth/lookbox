@@ -115,6 +115,23 @@ function liveApplyPayload(payload, target = 'outfits') {
   return list;
 }
 
+function liveAppendOutfits(payload) {
+  (payload.items || []).forEach(liveRememberItem);
+  const seen = new Set(
+    LB_DATA.OUTFITS.map((o) => [...(o.itemIds || [])].map(String).sort().join('|'))
+  );
+  const added = [];
+  for (const o of payload.outfits || []) {
+    const k = [...(o.itemIds || [])].map(String).sort().join('|');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    LB_DATA.OUTFITS.push(o);
+    LB_DATA.OUTFIT_BY_ID[o.id] = o;
+    added.push(o);
+  }
+  return added;
+}
+
 async function liveJSON(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -172,6 +189,8 @@ function App() {
   const [savedLooks, setSavedLooks] = useState(() => pSaved === 'empty' ? [] : LB_DATA.SAVED.slice());
   const [addSheet, setAddSheet] = useState({ open: pScreen === 'add' || !!pSheet, mode: pSheet || 'wardrobe' });
   const [loading, setLoading] = useState(pLoading);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [comboRev, setComboRev] = useState(0);
   const [detailLook, setDetailLook] = useState(pSaved === 'empty' ? null : LB_DATA.SAVED[0]);
   const [addedItemIds, setAddedItemIds] = useState([]);
   const [itemSheet, setItemSheet] = useState({ open: false, item: null });
@@ -381,6 +400,7 @@ function App() {
           body: JSON.stringify({ anchor_id: anchorItem.serverId, max_combos: 4 }),
         });
         liveApplyPayload({ ...payload, anchor: LB_DATA.ANCHOR }, 'outfits');
+        setComboRev((n) => n + 1);
         showToast('GPT가 내 옷장 기준으로 코디를 추천했어요', 'sparkle');
       } catch (e) {
         showToast(e.message || '코디 추천에 실패했어요');
@@ -393,6 +413,34 @@ function App() {
       const it = { id: 'n' + (_newId++), name: clean.brand ? clean.brand + ' 아이템' : '새로 담은 옷', category: cats[items.length % cats.length], color: '뉴트럴', img: null, ...clean };
       putLiveItems([it], true);
       showToast('옷장에 담았어요', 'check');
+    }
+  };
+
+  const loadMoreCombos = async () => {
+    if (moreLoading || loading) return;
+    const anchorId = LB_DATA.ANCHOR?.serverId;
+    if (!anchorId) {
+      showToast('고민 중인 옷을 다시 불러와 주세요');
+      return;
+    }
+    setMoreLoading(true);
+    try {
+      const payload = await liveJSON('/api/live/coordinate', {
+        method: 'POST',
+        body: JSON.stringify({
+          anchor_id: anchorId,
+          max_combos: 2,
+          exclude_item_ids: LB_DATA.OUTFITS.map((o) => o.itemIds || []),
+        }),
+      });
+      const added = liveAppendOutfits(payload);
+      setComboRev((n) => n + 1);
+      if (!added.length) showToast('더 추천할 조합이 없어요');
+      else showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
+    } catch (e) {
+      showToast(e.message || '추가 추천에 실패했어요');
+    } finally {
+      setMoreLoading(false);
     }
   };
 
@@ -565,6 +613,7 @@ function App() {
 
   const ctx = {
     wide, items, archived, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
+    moreLoading, loadMoreCombos, comboRev,
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
@@ -628,7 +677,14 @@ function App() {
           </aside>
           <main className="lb-wide-main">
             {focused
-              ? <div style={{ width: '100%', maxWidth: 460, margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>{screen}</div>
+              ? (
+                <div style={{
+                  width: '100%',
+                  maxWidth: view === 'results' ? 820 : 460,
+                  margin: '0 auto',
+                  flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
+                }}>{screen}</div>
+              )
               : screen}
           </main>
         </>
