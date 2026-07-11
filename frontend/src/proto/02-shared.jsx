@@ -88,7 +88,7 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {item && item.img
-        ? <img src={item.img} alt={item.name || ''} loading="lazy"
+        ? <img src={item.img} alt={item.name || ''} loading="lazy" decoding="async"
                style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }} />
         : <Silhouette category={item ? item.category : '상의'} />}
     </div>
@@ -309,7 +309,7 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete }
         <p style={{ margin: '18px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
           {isArchived
             ? <>옷장으로 꺼내면 다시 조합 추천에 사용돼요. 삭제하면 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>
-            : <>보관하면 옷장에서 숨겨져요. 삭제하면 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>}
+            : <>보관 시 옷장에서 숨겨지고, 삭제 시 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
           {isArchived

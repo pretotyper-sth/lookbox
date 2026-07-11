@@ -74,7 +74,7 @@ function Eyebrow({ children }) {
    A · Wardrobe (home)
    ============================================================ */
 function WardrobeScreen({ ctx }) {
-  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed, comboProgress } = ctx;
+  const { items, archived = [], openAdd, wide, openItem, requestRemove, comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading } = ctx;
   const [cat, setCat] = useS('전체');
   const cats = LB_DATA.CATEGORIES;
   const viewingArchive = cat === '보관';
@@ -84,8 +84,8 @@ function WardrobeScreen({ ctx }) {
   const count = items.length;
   const ready = comboReady;
 
-  /* ---- Empty state (소유·보관 모두 없을 때만) ---- */
-  if (count === 0 && archived.length === 0) {
+  /* ---- Empty state (소유·보관 모두 없을 때만; 최초 로딩 중엔 스켈레톤 우선) ---- */
+  if (count === 0 && archived.length === 0 && !wardrobeLoading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
@@ -134,7 +134,7 @@ function WardrobeScreen({ ctx }) {
           </div>
         )}
         {wide && chips}
-        {!viewingArchive && !ready && (
+        {!viewingArchive && !ready && !wardrobeLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none' }}>
               <Icon name="lock" size={18} />
@@ -176,6 +176,13 @@ function WardrobeScreen({ ctx }) {
             </div>
           </button>
           )}
+          {wardrobeLoading && !viewingArchive && filtered.length === 0 && [0, 1, 2].map((i) => (
+            <div key={'sk' + i} aria-hidden="true">
+              <div className="lb-skel" style={{ aspectRatio: '1 / 1', borderRadius: 'var(--r-md)' }} />
+              <div className="lb-skel" style={{ height: 12, marginTop: 8, borderRadius: 6, width: '80%' }} />
+              <div className="lb-skel" style={{ height: 10, marginTop: 6, borderRadius: 6, width: '55%' }} />
+            </div>
+          ))}
           {filtered.map((it) => (
             <div key={it.id} className="lb-anim-in" style={{ position: 'relative' }}>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', position: 'relative' }}>

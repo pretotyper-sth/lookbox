@@ -14,7 +14,9 @@ window.ReactDOM = ReactDOM
 window.__resources = protoManifest.resources
 
 // Route the prototype's /api/live/* calls to the backend with an anon session.
-await initLiveBridge()
+// Non-blocking: installs the fetch bridge synchronously and warms the session in
+// the background so we don't delay first paint on a network round trip.
+initLiveBridge()
 
 await import('./proto/01-tweaks.jsx')
 await import('./proto/02-shared.jsx')

@@ -18,19 +18,47 @@ if (configured) {
   })
 }
 
+// De-dupe concurrent token fetches (background warm-up + first request) so we
+// don't kick off two anonymous sign-ins. Reset after settle so later calls can
+// still pick up a refreshed session token.
+let tokenInFlight = null
 async function ensureToken() {
   if (!supabase) return null
-  const { data } = await supabase.auth.getSession()
-  let session = data.session
-  if (!session) {
-    const { data: signed, error } = await supabase.auth.signInAnonymously()
-    if (error) {
-      console.error('[LOOKBOX] Anonymous sign-in failed:', error.status, error.message, error)
-      return null
+  if (tokenInFlight) return tokenInFlight
+  tokenInFlight = (async () => {
+    const { data } = await supabase.auth.getSession()
+    let session = data.session
+    if (!session) {
+      const { data: signed, error } = await supabase.auth.signInAnonymously()
+      if (error) {
+        console.error('[LOOKBOX] Anonymous sign-in failed:', error.status, error.message, error)
+        return null
+      }
+      session = signed.session
     }
-    session = signed.session
+    return session?.access_token || null
+  })()
+  try {
+    return await tokenInFlight
+  } finally {
+    tokenInFlight = null
   }
-  return session?.access_token || null
+}
+
+// Warm up TCP/TLS to the API and Supabase origins early so the first request is
+// faster (DNS/handshake already done).
+function addPreconnect(url) {
+  if (!url || typeof document === 'undefined') return
+  try {
+    const { origin } = new URL(url)
+    const link = document.createElement('link')
+    link.rel = 'preconnect'
+    link.href = origin
+    link.crossOrigin = 'anonymous'
+    document.head.appendChild(link)
+  } catch {
+    /* ignore malformed URL */
+  }
 }
 
 function installFetchBridge() {
@@ -47,9 +75,10 @@ function installFetchBridge() {
   }
 }
 
-// Bootstrap: install the bridge and pre-warm the anonymous session so the very
-// first wardrobe fetch already carries a token.
-export async function initLiveBridge() {
+// Bootstrap: install the bridge synchronously and warm the anonymous session in
+// the BACKGROUND. We intentionally do NOT block first paint on the auth network
+// round trip — the fetch bridge awaits the (already in-flight) token per request.
+export function initLiveBridge() {
   if (!configured) {
     const missing = [
       !API_BASE && 'VITE_API_BASE_URL',
@@ -63,9 +92,10 @@ export async function initLiveBridge() {
     return
   }
   installFetchBridge()
-  try {
-    await ensureToken()
-  } catch {
+  addPreconnect(API_BASE)
+  addPreconnect(SUPABASE_URL)
+  // fire-and-forget: don't await, so module import + render start immediately
+  ensureToken().catch(() => {
     /* offline / not configured — prototype falls back to sample data */
-  }
+  })
 }

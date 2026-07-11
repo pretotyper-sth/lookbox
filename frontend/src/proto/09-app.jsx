@@ -42,6 +42,20 @@ function seedItems(ws) {
   return LB_DATA.WARDROBE.slice();
 }
 
+// Cache the last-known wardrobe locally so a refresh paints the real list
+// instantly (no empty-state flash) while the network fetch reconciles.
+const WARDROBE_CACHE_KEY = 'lb_wardrobe_cache_v1';
+function readWardrobeCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(WARDROBE_CACHE_KEY) || 'null');
+    if (!parsed || !Array.isArray(parsed.owned)) return null;
+    return { owned: parsed.owned, archived: Array.isArray(parsed.archived) ? parsed.archived : [] };
+  } catch (e) { return null; }
+}
+function writeWardrobeCache(owned, archived) {
+  try { localStorage.setItem(WARDROBE_CACHE_KEY, JSON.stringify({ owned, archived })); } catch (e) { /* noop */ }
+}
+
 function liveRememberItem(item) {
   if (!item) return null;
   LB_DATA.ALL[item.id] = item;
@@ -104,8 +118,17 @@ function App() {
     : 'wardrobe'             // 일반 진입 → 옷장
   );
   const [view, setView] = useState(pScreen === 'results' ? 'results' : pScreen === 'detail' ? 'detail' : null);
-  const [items, setItems] = useState(() => seedItems(pWs || TWEAK_DEFAULTS.wardrobeState));
-  const [archived, setArchived] = useState([]);
+  const [items, setItems] = useState(() => {
+    if (!isShowcase) { const c = readWardrobeCache(); if (c) return c.owned.map(liveRememberItem); }
+    return seedItems(pWs || TWEAK_DEFAULTS.wardrobeState);
+  });
+  const [archived, setArchived] = useState(() => {
+    if (!isShowcase) { const c = readWardrobeCache(); if (c) return c.archived.map(liveRememberItem); }
+    return [];
+  });
+  // true only until the first live wardrobe fetch settles AND there was no cache
+  // to paint — lets us show a skeleton instead of flashing the empty state.
+  const [wardrobeLoading, setWardrobeLoading] = useState(() => !isShowcase && !readWardrobeCache());
   const [savedLooks, setSavedLooks] = useState(() => pSaved === 'empty' ? [] : LB_DATA.SAVED.slice());
   const [addSheet, setAddSheet] = useState({ open: pScreen === 'add' || !!pSheet, mode: pSheet || 'wardrobe' });
   const [loading, setLoading] = useState(pLoading);
@@ -191,12 +214,19 @@ function App() {
         const liveItems = (data.items || []).map(liveRememberItem);
         setItems(liveItems);
       })
-      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'));
+      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
+      .finally(() => { if (!dead) setWardrobeLoading(false); });
     liveJSON('/api/live/wardrobe?status=archived')
       .then((data) => { if (!dead) setArchived((data.items || []).map(liveRememberItem)); })
       .catch(() => {});
     return () => { dead = true; };
   }, [isShowcase, putLiveItems, showToast]);
+
+  // Persist the wardrobe locally so the next load paints instantly.
+  useEffect(() => {
+    if (isShowcase) return;
+    writeWardrobeCache(items, archived);
+  }, [items, archived, isShowcase]);
 
   // ---- actions ----
   const savedOutfitIds = savedLooks.map((l) => l.outfitId);
@@ -382,7 +412,7 @@ function App() {
     detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: savedLooks.length, gotoLook,
     hasWardrobe: comboReady,
-    comboReady, comboGate, comboNeed, comboProgress,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
     autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 3),
@@ -484,8 +514,9 @@ function App() {
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면 어울리는<br />조합을 추천해드려요.</p>
-          <div style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
+            <Btn full variant="ghost" onClick={() => setComboPrompt(false)}>취소</Btn>
           </div>
         </div>
       </BottomSheet>
