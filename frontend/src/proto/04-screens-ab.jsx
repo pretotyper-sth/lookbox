@@ -276,20 +276,22 @@ function WardrobeScreen({ ctx }) {
         }}>
           <div style={{
             pointerEvents: 'auto',
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
             maxWidth: '100%',
-            padding: '10px 14px 10px 16px',
+            padding: '10px 22px',
             borderRadius: 'var(--r-pill)',
             background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
             boxShadow: '0 10px 32px -10px color-mix(in srgb, var(--ink) 28%, transparent), inset 0 0 0 1px var(--line)',
             backdropFilter: 'blur(10px)',
           }}>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
-            <button onClick={clearSel} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '6px 4px' }}>선택 해제</button>
-            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
+            <button onClick={clearSel} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px' }}>선택 해제</button>
+            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}
+              style={{ fontSize: 12, padding: '7px 12px' }}>
               {viewingArchive ? '옷장으로' : '보관'}
             </Btn>
-            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)} style={{ background: '#B0573C', color: '#fff' }}>삭제</Btn>
+            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)}
+              style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: '7px 12px' }}>삭제</Btn>
           </div>
         </div>
       )}
