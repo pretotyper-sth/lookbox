@@ -40,9 +40,12 @@ function PrefBlock({ label, children, last }) {
 }
 
 /* ---- section card ---- */
-function Section({ title, action, children }) {
+function Section({ title, action, children, fill }) {
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '16px 20px 10px', marginBottom: 14 }}>
+    <div style={{
+      background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '16px 20px 10px',
+      marginBottom: fill ? 0 : 14, height: fill ? '100%' : undefined, boxSizing: 'border-box',
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 24, marginBottom: 8 }}>
         <div style={{ fontSize: 14.5, fontWeight: 800 }}>{title}</div>
         {action}
@@ -107,18 +110,30 @@ function MyPageScreen({ ctx }) {
   const paletteNames = (prefs.palettes || []).map((id) => (LB_DATA.PALETTE.find((p) => p.id === id) || {}).name).filter(Boolean);
 
   const profile = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px 22px' }}>
-      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
-        <Icon name="user" size={30} stroke={1.6} />
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: wide ? 14 : 15,
+      padding: wide ? '16px 18px' : '4px 4px 22px',
+      marginBottom: wide ? 14 : 0,
+      background: wide ? 'var(--surface)' : 'transparent',
+      borderRadius: wide ? 'var(--r-lg)' : 0,
+    }}>
+      <div style={{
+        width: wide ? 52 : 60, height: wide ? 52 : 60, borderRadius: '50%',
+        background: wide ? 'var(--ivory)' : 'var(--surface)',
+        display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none',
+        boxShadow: 'inset 0 0 0 1px var(--line)',
+      }}>
+        <Icon name="user" size={wide ? 26 : 30} stroke={1.6} />
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
+        <div style={{ fontSize: wide ? 16 : 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
+        {wide && <div style={{ marginTop: 3, fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 500 }}>계정 · 취향 설정</div>}
       </div>
     </div>
   );
 
   const personal = (
-    <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>
+    <Section title="개인 정보" action={<EditLink onClick={openAccount} />} fill={wide}>
       <InfoRow label="이메일" value={prefs.email} />
       <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
       <InfoRow label="성별" value={prefs.gender} />
@@ -127,7 +142,7 @@ function MyPageScreen({ ctx }) {
   );
 
   const styleSec = (
-    <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>
+    <Section title="내 스타일" action={<EditLink onClick={openPrefs} />} fill={wide}>
       <PrefBlock label="선호 스타일"><SummaryChips items={styleNames} empty="미설정" /></PrefBlock>
       <PrefBlock label="선호 핏"><SummaryChips items={prefs.fit ? [prefs.fit] : []} empty="미설정" /></PrefBlock>
       <PrefBlock label="퍼스널 컬러">
@@ -166,30 +181,35 @@ function MyPageScreen({ ctx }) {
     </>
   );
 
+  /* PC: 계정/설정 페이지는 옷장처럼 풀와이드가 아니라 읽기 폭을 제한한 설정형 레이아웃 */
+  if (wide) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '32px 0 48px' }}>
+          <div style={{ width: '100%', maxWidth: 680, margin: '0 auto', padding: '0 32px' }}>
+            <h1 style={{ margin: '0 0 18px', fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
+            {profile}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
+              {personal}
+              {styleSec}
+            </div>
+            {actions}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 24px',
+        padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 24px',
       }}>
-        <div className={wide ? 'lb-wide-inner' : undefined}>
-          {wide && <h1 style={{ margin: '0 0 20px', fontSize: 25, fontWeight: 800 }}>마이페이지</h1>}
-          {profile}
-          {wide ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start', marginBottom: 4 }}>
-              {personal}
-              {styleSec}
-            </div>
-          ) : (
-            <>
-              {personal}
-              {styleSec}
-            </>
-          )}
-          {wide ? (
-            <div style={{ maxWidth: 520 }}>{actions}</div>
-          ) : actions}
-        </div>
+        {profile}
+        {personal}
+        {styleSec}
+        {actions}
       </div>
     </div>
   );
