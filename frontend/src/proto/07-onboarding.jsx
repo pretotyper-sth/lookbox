@@ -254,7 +254,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
     const faces = await countFacesInImage(pcPhoto);
     // 얼굴이 정확히 하나로 잘 잡힐 때만 진행. 0개면 얼굴 사진이 아니거나 불명확.
     if (faces === 0) {
-      setPcError('얼굴을 인식하지 못했어요. 얼굴이 정면으로 잘 나온 사진으로 다시 올려주세요.');
+      setPcError('얼굴이 잘 보이는 정면 사진으로 다시 올려주세요.');
       setPcPhase('upload');
       return;
     }
