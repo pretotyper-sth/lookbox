@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, NavTitle, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { Badge, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, NavTitle, Eyebrow */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
 
 const { useState: useSc, useEffect: useEc } = React;
@@ -164,7 +164,7 @@ function ResultsScreen({ ctx }) {
         title="조합 추천"
       />
       <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '8px 0 36px' : '16px 18px 32px' }}>
-        <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
+        <div className={wide ? 'lb-wide-inner' : undefined}>
           {/* anchor block */}
           <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', marginBottom: 'var(--s5)' }}>
             <div style={{ width: wide ? 80 : 92, flex: 'none' }}><Thumb item={anchor} /></div>
@@ -180,7 +180,13 @@ function ResultsScreen({ ctx }) {
             {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{outfits.length}벌</div>}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: wide ? 'var(--s4)' : 'var(--s3)' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: wide
+              ? 'repeat(auto-fill, minmax(220px, 1fr))'
+              : 'repeat(2, minmax(0,1fr))',
+            gap: wide ? 'var(--s4)' : 'var(--s3)',
+          }}>
             {busy
               ? [0, 1, 2, 3].map((i) => <OutfitSkeleton key={i} />)
               : outfits.map((o) => (
@@ -225,8 +231,11 @@ function LookbookScreen({ ctx }) {
   if (saved.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<NavTitle>룩북</NavTitle>} />}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          textAlign: 'center',
+          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 40px 80px',
+        }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="bookmark" size={38} stroke={1.4} />
           </div>
@@ -247,13 +256,21 @@ function LookbookScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {!wide && <TopBar left={<NavTitle>룩북</NavTitle>} right={<span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>} />}
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
-       <div className={wide ? 'lb-wide-inner' : ''}>
-        <div className="lb-grid">
-          {saved.map((lk) => <SavedCard key={lk.id} look={lk} onOpen={() => openDetail(lk)} />)}
+      <div style={{
+        flex: 1, overflowY: 'auto',
+        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 28px',
+      }}>
+        <div className={wide ? 'lb-wide-inner' : undefined}>
+          {wide && (
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
+              <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>룩북</h1>
+              <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{saved.length}개</span>
+            </div>
+          )}
+          <div className="lb-grid">
+            {saved.map((lk) => <SavedCard key={lk.id} look={lk} onOpen={() => openDetail(lk)} />)}
+          </div>
         </div>
-       </div>
       </div>
     </div>
   );

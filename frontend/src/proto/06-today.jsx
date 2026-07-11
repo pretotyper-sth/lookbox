@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, NavTitle, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, TopBar, NavTitle, Eyebrow, LookComposite, BottomSheet */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, BottomSheet */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -314,8 +314,11 @@ function TodayScreen({ ctx }) {
   if (!dailyEnabled) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          textAlign: 'center',
+          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 40px 80px',
+        }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
           </div>
@@ -337,8 +340,11 @@ function TodayScreen({ ctx }) {
   if (!ready) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          textAlign: 'center',
+          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 40px 80px',
+        }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
           </div>
@@ -366,8 +372,8 @@ function TodayScreen({ ctx }) {
 
   const header = isToday ? (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      {wide && <Eyebrow>오늘의 추천 코디</Eyebrow>}
-      <p style={{ margin: wide ? '10px 0 0' : 0, fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+      <Eyebrow>오늘의 추천 코디</Eyebrow>
+      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
         {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
       </p>
@@ -375,8 +381,8 @@ function TodayScreen({ ctx }) {
     </div>
   ) : (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      {wide && <Eyebrow>지난 추천 코디</Eyebrow>}
-      <p style={{ margin: wide ? '10px 0 0' : 0, fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+      <Eyebrow>지난 추천 코디</Eyebrow>
+      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>에 추천받았던 코디예요.
       </p>
       {ctxStrip}
@@ -388,7 +394,13 @@ function TodayScreen({ ctx }) {
 
   const list = (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: wide ? 'var(--s4)' : 'var(--s3)' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: wide
+          ? 'repeat(auto-fill, minmax(220px, 1fr))'
+          : 'repeat(2, minmax(0,1fr))',
+        gap: wide ? 'var(--s4)' : 'var(--s3)',
+      }}>
         {busy
           ? Array.from({ length: SLOT }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
           : (
@@ -405,7 +417,7 @@ function TodayScreen({ ctx }) {
             </>
           )}
       </div>
-      <div style={{ marginTop: 'var(--s5)' }}>
+      <div style={{ marginTop: 'var(--s5)', maxWidth: wide ? 360 : undefined }}>
         {isToday
           ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
           : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
@@ -415,9 +427,11 @@ function TodayScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
-        <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
+      <div style={{
+        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 28px',
+      }}>
+        <div className={wide ? 'lb-wide-inner' : undefined}>
           {header}
           {list}
         </div>

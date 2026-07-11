@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, NavTitle, PALETTE, PERSONAL_COLORS, STYLES, TopBar } = window;
+const { BottomSheet, Btn, Chip, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, STYLES } = window;
 
-/* global React, Btn, Icon, Chip, Eyebrow, TopBar, NavTitle, BottomSheet, LabeledField, LB_DATA */
+/* global React, Btn, Icon, Chip, BottomSheet, LabeledField, LB_DATA */
 // LOOKBOX — 마이페이지: 개인 정보(계정) + 내 스타일(취향) 허브. 실서비스 IA 기준.
 
 const { useState: useMp, useEffect: useMe } = React;
@@ -106,44 +106,46 @@ function MyPageScreen({ ctx }) {
   const pc = LB_DATA.PERSONAL_COLORS.find((p) => p.id === prefs.personalColor);
   const paletteNames = (prefs.palettes || []).map((id) => (LB_DATA.PALETTE.find((p) => p.id === id) || {}).name).filter(Boolean);
 
-  const body = (
-    <>
-      {/* 프로필 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px 22px' }}>
-        <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
-          <Icon name="user" size={30} stroke={1.6} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
-        </div>
+  const profile = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px 22px' }}>
+      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
+        <Icon name="user" size={30} stroke={1.6} />
       </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
+      </div>
+    </div>
+  );
 
-      {/* 개인 정보 */}
-      <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>
-        <InfoRow label="이메일" value={prefs.email} />
-        <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
-        <InfoRow label="성별" value={prefs.gender} />
-        <InfoRow label="연령대" value={prefs.age} last />
-      </Section>
+  const personal = (
+    <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>
+      <InfoRow label="이메일" value={prefs.email} />
+      <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
+      <InfoRow label="성별" value={prefs.gender} />
+      <InfoRow label="연령대" value={prefs.age} last />
+    </Section>
+  );
 
-      {/* 내 스타일 */}
-      <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>
-        <PrefBlock label="선호 스타일"><SummaryChips items={styleNames} empty="미설정" /></PrefBlock>
-        <PrefBlock label="선호 핏"><SummaryChips items={prefs.fit ? [prefs.fit] : []} empty="미설정" /></PrefBlock>
-        <PrefBlock label="퍼스널 컬러">
-          {pc ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ display: 'flex', width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flex: 'none', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)' }}>
-                {pc.swatch.map((c, i) => <span key={i} style={{ flex: 1, background: c }} />)}
-              </span>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{pc.name}</span>
-            </div>
-          ) : <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>미설정</span>}
-        </PrefBlock>
-        <PrefBlock label="선호 컬러 팔레트" last><SummaryChips items={paletteNames} empty="미설정" /></PrefBlock>
-      </Section>
+  const styleSec = (
+    <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>
+      <PrefBlock label="선호 스타일"><SummaryChips items={styleNames} empty="미설정" /></PrefBlock>
+      <PrefBlock label="선호 핏"><SummaryChips items={prefs.fit ? [prefs.fit] : []} empty="미설정" /></PrefBlock>
+      <PrefBlock label="퍼스널 컬러">
+        {pc ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <span style={{ display: 'flex', width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flex: 'none', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)' }}>
+              {pc.swatch.map((c, i) => <span key={i} style={{ flex: 1, background: c }} />)}
+            </span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{pc.name}</span>
+          </div>
+        ) : <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>미설정</span>}
+      </PrefBlock>
+      <PrefBlock label="선호 컬러 팔레트" last><SummaryChips items={paletteNames} empty="미설정" /></PrefBlock>
+    </Section>
+  );
 
-      {/* 설정 / 계정 액션 */}
+  const actions = (
+    <>
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
         <ActionRow
           icon="sparkle"
@@ -158,30 +160,37 @@ function MyPageScreen({ ctx }) {
         <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
         <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
       </div>
-
       <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
-
       <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
     </>
   );
 
-  if (wide) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 0 36px' }}>
-          <div className="lb-wide-inner" style={{ maxWidth: 600 }}>
-            <h1 style={{ margin: '0 0 20px', fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
-            {body}
-          </div>
-        </div>
-      </div>
-    );
-  }
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <TopBar left={<NavTitle>마이페이지</NavTitle>} />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 24px' }}>{body}</div>
+      <div style={{
+        flex: 1, overflowY: 'auto',
+        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 16px) 18px 24px',
+      }}>
+        <div className={wide ? 'lb-wide-inner' : undefined}>
+          {wide && <h1 style={{ margin: '0 0 20px', fontSize: 25, fontWeight: 800 }}>마이페이지</h1>}
+          {profile}
+          {wide ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start', marginBottom: 4 }}>
+              {personal}
+              {styleSec}
+            </div>
+          ) : (
+            <>
+              {personal}
+              {styleSec}
+            </>
+          )}
+          {wide ? (
+            <div style={{ maxWidth: 520 }}>{actions}</div>
+          ) : actions}
+        </div>
+      </div>
     </div>
   );
 }
