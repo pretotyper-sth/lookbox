@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb, TopBar, Wordmark } = window;
+const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, NavTitle, Silhouette, Skeleton, Thumb, TopBar } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, TopBar, Eyebrow, Wordmark, LookComposite, BottomSheet */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, TopBar, NavTitle, Eyebrow, LookComposite, BottomSheet */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -314,7 +314,7 @@ function TodayScreen({ ctx }) {
   if (!dailyEnabled) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<Wordmark />} />}
+        {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
@@ -337,7 +337,7 @@ function TodayScreen({ ctx }) {
   if (!ready) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<Wordmark />} />}
+        {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="sparkle" size={38} stroke={1.4} />
@@ -366,8 +366,8 @@ function TodayScreen({ ctx }) {
 
   const header = isToday ? (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <Eyebrow>오늘의 추천 코디</Eyebrow>
-      <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+      {wide && <Eyebrow>오늘의 추천 코디</Eyebrow>}
+      <p style={{ margin: wide ? '10px 0 0' : 0, fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
         {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
       </p>
@@ -375,8 +375,8 @@ function TodayScreen({ ctx }) {
     </div>
   ) : (
     <div style={{ marginBottom: 'var(--s5)' }}>
-      <Eyebrow>지난 추천 코디</Eyebrow>
-      <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
+      {wide && <Eyebrow>지난 추천 코디</Eyebrow>}
+      <p style={{ margin: wide ? '10px 0 0' : 0, fontSize: 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>에 추천받았던 코디예요.
       </p>
       {ctxStrip}
@@ -415,8 +415,8 @@ function TodayScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {!wide && <TopBar left={<Wordmark />} />}
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
+      {!wide && <TopBar left={<NavTitle>오늘의 추천 코디</NavTitle>} />}
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: wide ? '28px 0 36px' : '18px 18px 28px' }}>
         <div className={wide ? 'lb-wide-inner' : ''} style={wide ? { maxWidth: 760 } : undefined}>
           {header}
           {list}

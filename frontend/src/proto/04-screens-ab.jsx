@@ -44,14 +44,10 @@ function TopBar({ left, title, right, sticky = true, border = true }) {
       paddingRight: 18,
       minHeight: sticky ? 'calc(env(safe-area-inset-top, 0px) + 56px)' : 56,
       boxSizing: 'border-box',
-      position: sticky ? 'sticky' : 'relative',
-      top: sticky ? 0 : undefined,
-      zIndex: sticky ? 20 : undefined,
-      background: sticky
-        ? 'color-mix(in srgb, var(--ivory) 92%, transparent)'
-        : 'transparent',
-      backdropFilter: sticky ? 'blur(10px)' : undefined,
-      WebkitBackdropFilter: sticky ? 'blur(10px)' : undefined,
+      position: 'relative',
+      flex: 'none',
+      zIndex: 20,
+      background: 'var(--ivory)',
       borderBottom: border ? '1px solid color-mix(in srgb, var(--line) 85%, transparent)' : 'none',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', minWidth: 44, minHeight: 32 }}>{left}</div>
@@ -151,7 +147,11 @@ function WardrobeScreen({ ctx }) {
 
   /* ---- Partial / Full ---- */
   const chips = (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: wide ? '0 0 30px' : '4px 18px 14px' }}>
+    <div style={{
+      display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      overscrollBehaviorX: 'contain',
+      padding: wide ? '0 0 30px' : '4px 18px 14px',
+    }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
       {archived.length > 0 && (
         <>
@@ -165,10 +165,9 @@ function WardrobeScreen({ ctx }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       {!wide && (
         <div style={{
-          position: 'sticky', top: 0, zIndex: 20,
+          flex: 'none',
           paddingTop: 'env(safe-area-inset-top, 0px)',
-          background: 'color-mix(in srgb, var(--ivory) 92%, transparent)',
-          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          background: 'var(--ivory)',
           borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
         }}>
           <TopBar
@@ -198,7 +197,7 @@ function WardrobeScreen({ ctx }) {
       )}
 
       <div style={{
-        flex: 1, overflowY: 'auto',
+        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         padding: wide ? '28px 0 36px' : '16px 18px',
         paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : undefined),
       }}>
@@ -278,7 +277,6 @@ function WardrobeScreen({ ctx }) {
             return (
             <div
               key={it.id}
-              className="lb-anim-in"
               style={{ position: 'relative' }}
               onMouseEnter={() => wide && setHoverId(it.id)}
               onMouseLeave={() => wide && setHoverId((h) => (h === it.id ? null : h))}
