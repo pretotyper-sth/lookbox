@@ -108,45 +108,19 @@ function MyPageScreen({ ctx }) {
   const styleNames = (prefs.styles || []).map((id) => (LB_DATA.STYLES.find((s) => s.id === id) || {}).name).filter(Boolean);
   const pc = LB_DATA.PERSONAL_COLORS.find((p) => p.id === prefs.personalColor);
   const paletteNames = (prefs.palettes || []).map((id) => (LB_DATA.PALETTE.find((p) => p.id === id) || {}).name).filter(Boolean);
+  const metaBits = [prefs.gender, prefs.age].filter(Boolean);
 
-  const profile = (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: wide ? 14 : 15,
-      padding: wide ? '14px 16px' : '4px 4px 22px',
-      marginBottom: wide ? 14 : 0,
-      background: wide ? 'var(--surface)' : 'transparent',
-      borderRadius: wide ? 'var(--r-lg)' : 0,
-    }}>
-      <div style={{
-        width: wide ? 44 : 60, height: wide ? 44 : 60, borderRadius: '50%',
-        background: wide ? 'var(--ivory)' : 'var(--surface)',
-        display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none',
-        boxShadow: 'inset 0 0 0 1px var(--line)',
-      }}>
-        <Icon name="user" size={wide ? 22 : 30} stroke={1.6} />
-      </div>
-      <div style={{ minWidth: 0 }}>
-        {!wide && (
-          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
-        )}
-        {wide
-          ? <div style={{ fontSize: 13.5, color: 'var(--ink-2)', fontWeight: 600 }}>계정 · 취향 설정</div>
-          : null}
-      </div>
-    </div>
-  );
-
-  const personal = (
-    <Section title="개인 정보" action={<EditLink onClick={openAccount} />} fill={wide}>
+  const personalBody = (
+    <>
       <InfoRow label="이메일" value={prefs.email} />
       <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
       <InfoRow label="성별" value={prefs.gender} />
       <InfoRow label="연령대" value={prefs.age} last />
-    </Section>
+    </>
   );
 
-  const styleSec = (
-    <Section title="내 스타일" action={<EditLink onClick={openPrefs} />} fill={wide}>
+  const styleBody = (
+    <>
       <PrefBlock label="선호 스타일"><SummaryChips items={styleNames} empty="미설정" /></PrefBlock>
       <PrefBlock label="선호 핏"><SummaryChips items={prefs.fit ? [prefs.fit] : []} empty="미설정" /></PrefBlock>
       <PrefBlock label="퍼스널 컬러">
@@ -160,32 +134,39 @@ function MyPageScreen({ ctx }) {
         ) : <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>미설정</span>}
       </PrefBlock>
       <PrefBlock label="선호 컬러 팔레트" last><SummaryChips items={paletteNames} empty="미설정" /></PrefBlock>
-    </Section>
-  );
-
-  const actions = (
-    <>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
-        <ActionRow
-          icon="sparkle"
-          label="오늘의 추천 코디"
-          right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
-        />
-        <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
-        <ActionRow icon="help" label="고객센터" onClick={() => {}} />
-        <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
-      </div>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
-        <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
-        <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
-      </div>
-      <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
-      <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
-      <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
     </>
   );
 
-  /* PC: 옷장과 같은 lb-wide-inner 타이틀 위치, 콘텐츠는 그 왼쪽 정렬로 읽기 폭만 제한 */
+  const settingsCard = (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
+      <ActionRow
+        icon="sparkle"
+        label="오늘의 추천 코디"
+        right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
+      />
+      <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
+      <ActionRow icon="help" label="고객센터" onClick={() => {}} />
+      <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
+    </div>
+  );
+
+  const accountCard = (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>계정</div>
+      <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
+      <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
+    </div>
+  );
+
+  const sheets = (
+    <>
+      <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
+      <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
+    </>
+  );
+
+  /* PC: 옷장과 같은 타이틀 프레임 + 풀폭 대시보드 */
   if (wide) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -193,19 +174,48 @@ function MyPageScreen({ ctx }) {
           <div className="lb-wide-inner">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 22 }}>
               <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
-              <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '46%' }}>
-                {prefs.email || '게스트'}
-              </span>
             </div>
 
-            <div style={{ maxWidth: 760 }}>
-              {profile}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'stretch', marginBottom: 14 }}>
-                {personal}
-                {styleSec}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 18,
+              padding: '20px 22px', marginBottom: 16,
+              background: 'var(--surface)', borderRadius: 'var(--r-lg)',
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%', flex: 'none',
+                background: 'var(--ivory)', color: 'var(--ink-2)',
+                display: 'grid', placeItems: 'center',
+                boxShadow: 'inset 0 0 0 1px var(--line)',
+              }}>
+                <Icon name="user" size={30} stroke={1.6} />
               </div>
-              {actions}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {prefs.email || '게스트'}
+                </div>
+                <div style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>
+                  {metaBits.length ? metaBits.join(' · ') : '계정 정보를 완성해 주세요'}
+                  {styleNames.length ? ` · ${styleNames.slice(0, 3).join(' · ')}` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                <Btn variant="soft" size="sm" icon="pencil" onClick={openAccount}>계정 수정</Btn>
+                <Btn variant="soft" size="sm" icon="sparkle" onClick={openPrefs}>취향 수정</Btn>
+              </div>
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.9fr) minmax(0, 1.1fr)', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
+              <Section title="개인 정보" action={<EditLink onClick={openAccount} />} fill>{personalBody}</Section>
+              <Section title="내 스타일" action={<EditLink onClick={openPrefs} />} fill>{styleBody}</Section>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 0.8fr)', gap: 14, alignItems: 'stretch', marginBottom: 18 }}>
+              {settingsCard}
+              {accountCard}
+            </div>
+
+            <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
+            {sheets}
           </div>
         </div>
       </div>
@@ -218,10 +228,36 @@ function MyPageScreen({ ctx }) {
         flex: 1, overflowY: 'auto',
         padding: 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 24px',
       }}>
-        {profile}
-        {personal}
-        {styleSec}
-        {actions}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px 22px' }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%', background: 'var(--surface)',
+            display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none',
+            boxShadow: 'inset 0 0 0 1px var(--line)',
+          }}>
+            <Icon name="user" size={30} stroke={1.6} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
+          </div>
+        </div>
+        <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>{personalBody}</Section>
+        <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>{styleBody}</Section>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
+          <ActionRow
+            icon="sparkle"
+            label="오늘의 추천 코디"
+            right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
+          />
+          <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
+          <ActionRow icon="help" label="고객센터" onClick={() => {}} />
+          <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
+        </div>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
+          <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
+          <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
+        </div>
+        {sheets}
+        <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
       </div>
     </div>
   );
