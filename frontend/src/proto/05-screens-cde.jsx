@@ -111,12 +111,9 @@ function OutfitCard({ outfit, saved, onSave, styleLabel }) {
 
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
-        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>{outfit.mood} · {items.length}개</div>
-        {moodBasis ? (
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', marginTop: 5 }}>
-            {moodBasis}
-          </div>
-        ) : null}
+        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
+          {moodBasis ? `${moodBasis} · ` : ''}{items.length}개 조합
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto', paddingBottom: 1 }}>
