@@ -239,10 +239,10 @@ function App() {
     return () => { dead = true; };
   }, [isShowcase, putLiveItems, showToast]);
 
-  // 기존 순백 배경 제품 컷 → 연한 그레이로 1회 정규화
+  // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
     if (isShowcase) return;
-    const key = 'lb_bg_norm_v1';
+    const key = 'lb_bg_norm_cutout_v2';
     try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
     let dead = false;
     liveJSON('/api/live/wardrobe/normalize-bg', { method: 'POST', body: '{}' })

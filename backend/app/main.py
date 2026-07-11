@@ -239,47 +239,49 @@ def classify_item(path: str) -> dict[str, Any]:
         return fallback
 
 
-# 제품 컷 공통 배경 — 순백(#FFF) 대신 아주 연한 그레이 (밋밋함 완화, 옷 색은 유지)
-PRODUCT_BG_RGB = (243, 243, 241)  # #F3F3F1
+# 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
+_STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
 
 
-def apply_studio_backdrop(png_bytes: bytes) -> bytes:
-    """투명/순백 배경을 연한 그레이 스튜디오 배경으로 통일."""
+def make_transparent_cutout(png_bytes: bytes) -> bytes:
+    """가장자리에서 이어진 순백·연회색 배경을 투명으로 바꿔 옷만 남김."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     w, h = img.size
-    bg = Image.new("RGBA", (w, h), (*PRODUCT_BG_RGB, 255))
-    alpha = img.getchannel("A")
-    amin, _amax = alpha.getextrema()
-    if amin < 250:
-        out = Image.alpha_composite(bg, img)
-    else:
-        # 불투명 순백 배경: 가장자리에서 이어진 밝은 픽셀만 교체 (옷 본색 보존)
-        px = img.load()
-        visited = [[False] * w for _ in range(h)]
-        q: deque[tuple[int, int]] = deque()
+    px = img.load()
+    visited = [[False] * w for _ in range(h)]
+    q: deque[tuple[int, int]] = deque()
 
-        def is_bg(x: int, y: int) -> bool:
-            r, g, b, _a = px[x, y]
-            return r >= 248 and g >= 248 and b >= 248
+    def is_plate(x: int, y: int) -> bool:
+        r, g, b, a = px[x, y]
+        if a < 12:
+            return True
+        # 순백에 가깝거나, 예전 스튜디오 그레이에 가까우면 배경으로 취급
+        if r >= 248 and g >= 248 and b >= 248:
+            return True
+        return (
+            abs(r - _STUDIO_BG[0]) <= 10
+            and abs(g - _STUDIO_BG[1]) <= 10
+            and abs(b - _STUDIO_BG[2]) <= 10
+        )
 
-        seeds = [
-            (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
-            (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
-        ]
-        for x, y in seeds:
-            if 0 <= x < w and 0 <= y < h and is_bg(x, y) and not visited[y][x]:
-                visited[y][x] = True
-                q.append((x, y))
-        while q:
-            x, y = q.popleft()
-            px[x, y] = (*PRODUCT_BG_RGB, 255)
-            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-                if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and is_bg(nx, ny):
-                    visited[ny][nx] = True
-                    q.append((nx, ny))
-        out = img
+    seeds = [
+        (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+        (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
+    ]
+    for x, y in seeds:
+        if 0 <= x < w and 0 <= y < h and is_plate(x, y) and not visited[y][x]:
+            visited[y][x] = True
+            q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        r, g, b, _a = px[x, y]
+        px[x, y] = (r, g, b, 0)
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and is_plate(nx, ny):
+                visited[ny][nx] = True
+                q.append((nx, ny))
     buf = io.BytesIO()
-    out.save(buf, format="PNG")
+    img.save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -287,9 +289,8 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-- 배경은 #F3F3F1 아주 연한 그레이 단색 (순백 #FFFFFF 금지, 투명 배경 금지)
-- 사람, 마네킹, 텍스트, 로고, 여분 소품 제거
-- 바닥에 아주 옅은 그림자만 허용
+- 배경은 완전히 투명하게 (배경 완전 제거)
+- 사람, 마네킹, 그림자, 텍스트, 로고, 여분 소품 제거
 - 아이템 전체가 잘리지 않게 중앙 배치
 - 원본 색상과 재질은 유지
 """
@@ -303,12 +304,29 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             prompt=prompt,
             size="1024x1536",
             quality=OPENAI_IMAGE_QUALITY,
+            background="transparent",
         )
         log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
         raw = base64.b64decode(result.data[0].b64_json)
-        return apply_studio_backdrop(raw)
+        return make_transparent_cutout(raw)
     except Exception:
-        return None
+        try:
+            # background=transparent 미지원 모델 폴백
+            img_bytes = read_image_as_png_bytes(path)
+            buf = io.BytesIO(img_bytes)
+            buf.name = "source.png"
+            result = openai_client.images.edit(
+                model=OPENAI_IMAGE_MODEL,
+                image=buf,
+                prompt=prompt,
+                size="1024x1536",
+                quality=OPENAI_IMAGE_QUALITY,
+            )
+            log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
+            raw = base64.b64decode(result.data[0].b64_json)
+            return make_transparent_cutout(raw)
+        except Exception:
+            return None
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -1151,7 +1169,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
 
 @app.post("/api/live/wardrobe/normalize-bg")
 def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, Any]:
-    """기존 제품 컷 순백/투명 배경을 연한 그레이로 한 번 정규화."""
+    """기존 제품 컷의 흰/연회색 판을 투명 컷아웃으로 정규화."""
     require_supabase()
     rows = (
         supabase_admin.table("wardrobe_items")
@@ -1166,7 +1184,7 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
     skipped = 0
     for row in rows:
         meta = dict(row.get("metadata") or {})
-        if meta.get("bg_norm") == "v1":
+        if meta.get("bg_norm") == "cutout_v2":
             skipped += 1
             continue
         path = row.get("storage_path")
@@ -1175,11 +1193,10 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             continue
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
-            fixed = apply_studio_backdrop(raw)
-            # 새 경로로 업로드해 CDN 캐시 무효화
+            fixed = make_transparent_cutout(raw)
             new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(new_path, fixed, "image/png")
-            meta["bg_norm"] = "v1"
+            meta["bg_norm"] = "cutout_v2"
             supabase_admin.table("wardrobe_items").update(
                 {"image_url": image_url, "storage_path": new_path, "metadata": meta}
             ).eq("id", row["id"]).eq("user_id", user.id).execute()

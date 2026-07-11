@@ -19,113 +19,48 @@ function MetaChips({ item }) {
 }
 
 /* ============================================================
-   LookComposite — 무신사식 플랫레이 코디.
-   - 공통 thumb-bg 위에 상의→하의 실루엣으로 배치 (코디처럼 보이게)
-   - 제품 컷의 흰/연회색 판은 mix-blend로 배경에 녹여 사각형 컷오프 제거
-   - 신발·가방은 옆에 포인트로
+   LookComposite — 조합 전체를 한 배경 위에 옷(컷아웃)만 배치.
+   개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
-function buildFlatlaySlots(items) {
-  const rest = items.slice();
-  const take = (cat) => {
-    const i = rest.findIndex((it) => it.category === cat);
-    if (i < 0) return null;
-    return rest.splice(i, 1)[0];
-  };
-  const dress = take('원피스');
-  const outer = take('아우터');
-  const top = take('상의');
-  const bottom = take('하의');
-  const shoes = take('신발');
-  const bag = take('가방') || take('액세서리');
-  const extras = rest;
-
-  const slots = [];
-  const push = (it, frame) => { if (it) slots.push({ it, frame }); };
-
-  if (dress) {
-    push(dress, { cx: 48, cy: 48, w: 66, h: 80, z: 2, rot: -1 });
-  } else if (outer && top && bottom) {
-    push(outer,  { cx: 50, cy: 24, w: 70, h: 42, z: 1, rot: -2 });
-    push(top,    { cx: 50, cy: 38, w: 50, h: 34, z: 3, rot: -1 });
-    push(bottom, { cx: 50, cy: 74, w: 56, h: 46, z: 2, rot: 1 });
-  } else if (outer && bottom && !top) {
-    push(outer,  { cx: 50, cy: 26, w: 68, h: 46, z: 2, rot: -2 });
-    push(bottom, { cx: 50, cy: 74, w: 56, h: 46, z: 1, rot: 1 });
-  } else if (top && bottom) {
-    // 상의·하의 몸통 축 — 크게, 허리는 맞닿을 정도로만 (옷끼리 거의 안 겹침)
-    push(top,    { cx: 50, cy: 26, w: 66, h: 44, z: 2, rot: -1.5 });
-    push(bottom, { cx: 50, cy: 74, w: 60, h: 48, z: 1, rot: 1 });
-  } else if (top || outer) {
-    push(top || outer, { cx: 50, cy: 44, w: 72, h: 64, z: 2, rot: -1 });
-  } else if (bottom) {
-    push(bottom, { cx: 50, cy: 50, w: 64, h: 66, z: 1, rot: 0 });
-  }
-
-  // 포인트 아이템 — 오른쪽 여백
-  if (shoes) push(shoes, { cx: 78, cy: 84, w: 34, h: 26, z: 4, rot: 6 });
-  if (bag) {
-    const isAcc = bag.category === '액세서리';
-    push(bag, isAcc
-      ? { cx: 80, cy: 20, w: 26, h: 26, z: 4, rot: 0 }
-      : { cx: 80, cy: 48, w: 30, h: 36, z: 4, rot: 5 });
-  }
-  extras.forEach((it, i) => {
-    push(it, { cx: 82, cy: 28 + i * 18, w: 24, h: 24, z: 5, rot: 0 });
-  });
-
-  // 슬롯이 비면(카테고리 없음) 중앙 그리드 폴백
-  if (!slots.length) {
-    items.forEach((it, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      push(it, { cx: 30 + col * 40, cy: 32 + row * 36, w: 42, h: 40, z: 1, rot: 0 });
-    });
-  }
-  return slots;
-}
-
+const LOOK_SLOT = {
+  '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1, rot: 0 },
+  '상의':     { cx: 58, cy: 28, w: 43, h: 36, z: 3, rot: 0 },
+  '하의':     { cx: 40, cy: 61, w: 44, h: 47, z: 2, rot: 0 },
+  '원피스':   { cx: 48, cy: 53, w: 54, h: 64, z: 2, rot: 0 },
+  '신발':     { cx: 68, cy: 84, w: 33, h: 22, z: 4, rot: 0 },
+  '액세서리': { cx: 78, cy: 58, w: 24, h: 24, z: 5, rot: 0 },
+};
 function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
     return (
-      <div style={{ background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
         <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
   }
-  const slots = buildFlatlaySlots(cleanItems);
+  const used = {};
   return (
-    <div style={{
-      position: 'relative', background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)',
-      overflow: 'hidden', aspectRatio: ratio, isolation: 'isolate',
-    }}>
-      {slots.map(({ it, frame }) => {
-        const box = {
-          position: 'absolute',
-          left: frame.cx + '%', top: frame.cy + '%',
-          width: frame.w + '%', height: frame.h + '%',
-          transform: `translate(-50%, -50%) rotate(${frame.rot}deg)`,
-          zIndex: frame.z,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none',
-          // 흰/연회색 제품 배경 → 공통 판에 흡수. 옷 본색만 남김.
-          mixBlendMode: it.img ? 'multiply' : 'normal',
+    <div style={{ position: 'relative', background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      {cleanItems.map((it) => {
+        const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
+        const n = used[it.category] || 0; used[it.category] = n + 1;
+        const cx = base.cx + n * 8, cy = base.cy + n * 5;
+        const frame = {
+          position: 'absolute', left: cx + '%', top: cy + '%', width: base.w + '%', height: base.h + '%',
+          transform: `translate(-50%,-50%) rotate(${base.rot}deg)`, zIndex: base.z,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
-        return it.img ? (
-          <div key={it.id} style={box}>
-            <img
-              src={it.img}
-              alt={it.name}
-              loading="lazy"
-              decoding="async"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-            />
-          </div>
-        ) : (
-          <div key={it.id} style={{ ...box, color: 'var(--ink-3)' }}>
-            <Silhouette category={it.category} />
-          </div>
-        );
+        return it.img
+          ? (
+            <div key={it.id} style={frame}>
+              <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
+                width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+                filter: 'drop-shadow(0 8px 10px rgba(40,33,20,0.10))',
+              }} />
+            </div>
+          )
+          : <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
       })}
     </div>
   );

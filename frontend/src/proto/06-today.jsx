@@ -312,9 +312,6 @@ function TodayScreen({ ctx }) {
             마이페이지에서 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>오늘의 추천 코디</b>를<br />
             허용해야 매일 코디를 받을 수 있어요.
           </p>
-          <p style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5, maxWidth: 280 }}>
-            AI 추천은 비용이 발생해 기본은 꺼져 있어요.
-          </p>
           <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Btn full size="lg" icon="sparkle" onClick={() => setDailyEnabled && setDailyEnabled(true)}>지금 허용하기</Btn>
             <Btn full variant="soft" onClick={() => go ? go('mypage') : null}>마이페이지로 이동</Btn>

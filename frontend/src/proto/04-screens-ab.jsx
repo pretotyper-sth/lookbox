@@ -200,8 +200,8 @@ function WardrobeScreen({ ctx }) {
             <div aria-hidden="true" style={{ visibility: 'hidden' }}>
               <div style={{ aspectRatio: '1 / 1' }}></div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3 }}>옷</div>
-                <div style={{ fontSize: 11, marginTop: 2 }}>옷</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, height: 'calc(1.3em * 2)' }}>옷<br />옷</div>
+                <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.3 }}>옷</div>
               </div>
             </div>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -257,9 +257,9 @@ function WardrobeScreen({ ctx }) {
                     onClick={(e) => { e.stopPropagation(); openImageViewer(it); }}
                     aria-label={it.name + ' 크게 보기'}
                     style={{
-                      position: 'absolute', left: 6, bottom: 6, width: 26, height: 26, borderRadius: '50%',
+                      position: 'absolute', right: 36, top: 6, width: 24, height: 24, borderRadius: '50%',
                       display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
-                      background: 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
+                      background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
                       boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
                     }}
                   >
@@ -280,8 +280,16 @@ function WardrobeScreen({ ctx }) {
                 </button>
               </div>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{it.brand ? it.brand + ' · ' : ''}{it.category} · {it.color}</div>
+                <div style={{
+                  fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
+                  height: 'calc(1.3em * 2)', overflow: 'hidden',
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  wordBreak: 'break-word', overflowWrap: 'anywhere',
+                }}>{it.name}</div>
+                <div style={{
+                  fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.3,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{[it.brand, it.category, it.color].filter(Boolean).join(' · ')}</div>
               </button>
             </div>
             );
@@ -664,7 +672,7 @@ function AddSheet({ ctx }) {
               <div style={{ width: 72, flex: 'none' }}><Thumb item={{ ...cur, category: cur.cat }} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 6 }}>이름</div>
-                <input value={cur.name} onChange={(e) => patchStep({ name: e.target.value })} className="lb-input" style={{
+                <input value={cur.name} onChange={(e) => patchStep({ name: e.target.value.slice(0, 48) })} maxLength={48} className="lb-input" placeholder="예) 코튼 셔츠" style={{
                   width: '100%', padding: '10px 12px', borderRadius: 'var(--r-md)', fontSize: 14.5, fontWeight: 600,
                   background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
                 }} />

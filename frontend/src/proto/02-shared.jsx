@@ -362,6 +362,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
               style={{
                 width: 72, flex: 'none', padding: 0, border: 'none', background: 'transparent',
                 cursor: canZoom ? 'zoom-in' : 'default', position: 'relative',
+                outline: 'none', boxShadow: 'none', WebkitTapHighlightColor: 'transparent',
               }}
             >
               <Thumb item={item} radius="var(--r-md)" />

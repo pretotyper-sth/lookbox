@@ -134,7 +134,9 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; padding: 0; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
+button:focus,
+button:focus-visible { outline: none; }
 input  { font-family: inherit; }
 img { display: block; max-width: 100%; }
 
