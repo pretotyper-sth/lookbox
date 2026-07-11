@@ -279,7 +279,7 @@ function TodayScreen({ ctx }) {
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
-  const SLOT = Math.max(1, parseInt(dailyCount, 10) || 4);
+  const COLS = Math.max(1, parseInt(dailyCount, 10) || 4);
 
   const [loading, setLoading] = useTd(false);
   const [needMoreOpen, setNeedMoreOpen] = useTd(false);
@@ -299,12 +299,12 @@ function TodayScreen({ ctx }) {
     requestDailyOutfits(preferredDailyStyle);
   }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
-  const picks = uniqueDailyOutfits(pool).slice(0, SLOT);
-  const emptySlots = Math.max(0, SLOT - picks.length);
+  const picks = uniqueDailyOutfits(pool);
+  // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 추가 2개부터는 왼쪽부터 이어서 채움
+  const emptySlots = picks.length < COLS ? COLS - picks.length : 0;
 
   const reshuffle = async () => {
-    // 이미 고유 조합이 슬롯을 못 채운 상태 → 더 추천할 수 없음
-    if (emptySlots > 0) {
+    if (picks.length < COLS) {
       setNeedMoreOpen(true);
       return;
     }
@@ -402,10 +402,10 @@ function TodayScreen({ ctx }) {
     </div>
   );
 
-  const shown = isToday ? picks : uniqueDailyOutfits(pastDay.picks).slice(0, SLOT);
-  const empty = isToday ? emptySlots : Math.max(0, SLOT - shown.length);
+  const shown = isToday ? picks : uniqueDailyOutfits(pastDay.picks).slice(0, COLS);
+  const empty = isToday ? emptySlots : Math.max(0, COLS - shown.length);
   const gridCols = wide
-    ? `repeat(${SLOT}, minmax(0, 1fr))`
+    ? `repeat(${COLS}, minmax(0, 1fr))`
     : 'repeat(2, minmax(0,1fr))';
 
   const list = (
@@ -416,7 +416,7 @@ function TodayScreen({ ctx }) {
         gap: wide ? 'var(--s4)' : 'var(--s3)',
       }}>
         {busy
-          ? Array.from({ length: SLOT }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
+          ? Array.from({ length: COLS }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
           : (
             <>
               {shown.map((o, i) => (

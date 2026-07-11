@@ -132,6 +132,23 @@ function liveAppendOutfits(payload) {
   return added;
 }
 
+function liveAppendDaily(payload) {
+  (payload.items || []).forEach(liveRememberItem);
+  const seen = new Set(
+    LB_DATA.DAILY.map((o) => [...(o.itemIds || [])].map(String).sort().join('|'))
+  );
+  const added = [];
+  for (const o of payload.outfits || []) {
+    const k = [...(o.itemIds || [])].map(String).sort().join('|');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    LB_DATA.DAILY.push(o);
+    LB_DATA.OUTFIT_BY_ID[o.id] = o;
+    added.push(o);
+  }
+  return added;
+}
+
 async function liveJSON(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -386,10 +403,33 @@ function App() {
     setDailyAllowed(true);
     setDailyLoading(true);
     try {
+      const baseCount = Math.max(1, parseInt(t.dailyCount, 10) || 4);
+      if (force && LB_DATA.DAILY.length > 0) {
+        const payload = await liveJSON('/api/live/coordinate', {
+          method: 'POST',
+          body: JSON.stringify({
+            max_combos: 2,
+            style,
+            styles: preferredStyles,
+            exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+          }),
+        });
+        stampOutfitStyle(payload.outfits);
+        const added = liveAppendDaily(payload);
+        const prev = readDailyCache();
+        const byId = {};
+        (prev && prev.items ? prev.items : []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
+        (payload.items || []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
+        writeDailyCache({ style, outfits: LB_DATA.DAILY.slice(), items: Object.values(byId) });
+        setItems((arr) => arr.slice());
+        if (!added.length) showToast('더 추천할 조합이 없어요');
+        else showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
+        return;
+      }
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
         body: JSON.stringify({
-          max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 4),
+          max_combos: baseCount,
           style,
           styles: preferredStyles,
         }),
@@ -398,7 +438,7 @@ function App() {
       liveApplyPayload(payload, 'daily');
       writeDailyCache({ style, outfits: payload.outfits || LB_DATA.DAILY.slice(), items: payload.items || [] });
       setItems((arr) => arr.slice());
-      showToast(force ? '다른 코디로 바꿨어요' : '오늘의 코디를 만들었어요', 'sparkle');
+      showToast('오늘의 코디를 만들었어요', 'sparkle');
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '오늘의 코디 추천에 실패했어요');
