@@ -335,7 +335,19 @@ function App() {
 
   const preferredDailyStyle = (prefs.styles && prefs.styles[0]) || 'dandy';
   const preferredDailyStyleName = ((LB_DATA.STYLES || []).find((s) => s.id === preferredDailyStyle) || {}).name || preferredDailyStyle;
+  const preferredStyles = (prefs.styles && prefs.styles.length)
+    ? prefs.styles.slice()
+    : [preferredDailyStyle];
+  const preferredStyleLabel = preferredStyles
+    .map((id) => ((LB_DATA.STYLES || []).find((s) => s.id === id) || {}).name || id)
+    .filter(Boolean)
+    .join(' · ') || preferredDailyStyleName;
   const dailyEnabled = !!prefs.dailyEnabled;
+
+  const stampOutfitStyle = (list, label) => {
+    (list || []).forEach((o) => { o.styleLabel = label; });
+    return list;
+  };
 
   const setDailyEnabled = (on) => {
     const np = { ...prefs, dailyEnabled: !!on };
@@ -368,8 +380,13 @@ function App() {
     try {
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
-        body: JSON.stringify({ max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 4), style }),
+        body: JSON.stringify({
+          max_combos: Math.max(1, parseInt(t.dailyCount, 10) || 4),
+          style,
+          styles: preferredStyles,
+        }),
       });
+      stampOutfitStyle(payload.outfits, preferredStyleLabel);
       liveApplyPayload(payload, 'daily');
       writeDailyCache({ style, outfits: payload.outfits || LB_DATA.DAILY.slice(), items: payload.items || [] });
       setItems((arr) => arr.slice());
@@ -397,11 +414,17 @@ function App() {
         liveRememberItem(LB_DATA.ANCHOR);
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
-          body: JSON.stringify({ anchor_id: anchorItem.serverId, max_combos: 4 }),
+          body: JSON.stringify({
+            anchor_id: anchorItem.serverId,
+            max_combos: 4,
+            style: preferredDailyStyle,
+            styles: preferredStyles,
+          }),
         });
+        stampOutfitStyle(payload.outfits, preferredStyleLabel);
         liveApplyPayload({ ...payload, anchor: LB_DATA.ANCHOR }, 'outfits');
         setComboRev((n) => n + 1);
-        showToast('GPT가 내 옷장 기준으로 코디를 추천했어요', 'sparkle');
+        showToast(`${preferredStyleLabel} 무드로 코디를 추천했어요`, 'sparkle');
       } catch (e) {
         showToast(e.message || '코디 추천에 실패했어요');
       } finally {
@@ -430,9 +453,12 @@ function App() {
         body: JSON.stringify({
           anchor_id: anchorId,
           max_combos: 2,
+          style: preferredDailyStyle,
+          styles: preferredStyles,
           exclude_item_ids: LB_DATA.OUTFITS.map((o) => o.itemIds || []),
         }),
       });
+      stampOutfitStyle(payload.outfits, preferredStyleLabel);
       const added = liveAppendOutfits(payload);
       setComboRev((n) => n + 1);
       if (!added.length) showToast('더 추천할 조합이 없어요');
@@ -624,7 +650,7 @@ function App() {
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
-    preferredDailyStyle, preferredDailyStyleName,
+    preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,

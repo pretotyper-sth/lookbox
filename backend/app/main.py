@@ -357,20 +357,7 @@ def outfit_payload(row: dict[str, Any], items: list[dict[str, Any]]) -> dict[str
     }
 
 
-def recommend_text(
-    user_id: str,
-    anchor: dict[str, Any] | None,
-    items: list[dict[str, Any]],
-    style: str,
-    max_combos: int,
-    exclude_item_ids: list[list[str]] | None = None,
-) -> list[dict[str, Any]]:
-    if not items:
-        return []
-    catalog = "\n".join(
-        f"id={item['id']} | {item.get('category')} | {item.get('color')} | {item.get('name')}"
-        for item in items
-    )
+def _style_tone(style: str) -> str:
     style_map = {
         "dandy": "댄디하고 깔끔한 톤",
         "minimal": "절제된 미니멀 톤",
@@ -386,7 +373,35 @@ def recommend_text(
         "y2k": "과감한 Y2K 톤",
         "preppy": "단정한 프레피 톤",
     }
-    tone = style_map.get(style) or f"{style} 무드"
+    return style_map.get(style) or f"{style} 무드"
+
+
+def recommend_text(
+    user_id: str,
+    anchor: dict[str, Any] | None,
+    items: list[dict[str, Any]],
+    style: str,
+    max_combos: int,
+    exclude_item_ids: list[list[str]] | None = None,
+    styles: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not items:
+        return []
+    catalog = "\n".join(
+        f"id={item['id']} | {item.get('category')} | {item.get('color')} | {item.get('name')}"
+        for item in items
+    )
+    style_ids = [s for s in (styles or []) if s] or ([style] if style else ["dandy"])
+    # 순서 유지하며 중복 제거
+    seen_s: set[str] = set()
+    uniq_styles: list[str] = []
+    for s in style_ids:
+        if s in seen_s:
+            continue
+        seen_s.add(s)
+        uniq_styles.append(s)
+    tones = [_style_tone(s) for s in uniq_styles]
+    tone = " · ".join(tones)
     exclude_keys = {
         tuple(sorted(str(x) for x in ids if x))
         for ids in (exclude_item_ids or [])
@@ -399,7 +414,8 @@ def recommend_text(
     if not openai_client:
         return fallback_combos(items, anchor, max_combos, tone, exclude_keys)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
-추천 톤: {tone}
+사용자가 마이페이지에서 설정한 선호 무드: {tone}
+옷장이 충분하면 이 무드가 분명히 드러나는 조합을 우선하세요. 옷이 적으면 가능한 범위에서 가장 가까운 무드로.
 {('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
 
 옷장:
@@ -412,7 +428,7 @@ def recommend_text(
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
 - 이미 보여준 조합은 절대 다시 쓰지 말 것
 - 만들 수 있는 고유 조합이 max보다 적으면 적은 수만큼만 반환 (억지로 채우지 말 것)
-- mood에는 추천 톤을 반영한 짧은 한국어 문구
+- mood에는 선호 무드를 반영한 짧은 한국어 문구
 - JSON만 응답
 
 형식:
@@ -810,6 +826,8 @@ class LiveImportUrl(BaseModel):
 class LiveCoordinate(BaseModel):
     max_combos: int = 4
     style: str = "dandy"
+    # 마이페이지 선호 무드(복수 가능). 있으면 style보다 우선해 톤에 반영
+    styles: list[str] = []
     anchor_id: str | None = None
     # 이미 보여준 조합(item id 목록) — 더 추천 시 중복 방지
     exclude_item_ids: list[list[str]] = []
@@ -1379,6 +1397,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         body.style,
         min(max(body.max_combos, 1), 10),
         body.exclude_item_ids or [],
+        body.styles or None,
     )
     by_id = {row["id"]: row for row in pool}
     outfits, used = [], {}

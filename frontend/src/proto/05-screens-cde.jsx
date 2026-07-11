@@ -91,8 +91,9 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
 /* ============================================================
    Outfit card — 오늘의 추천과 같은 컴팩트 카드 (2열 그리드용)
    ============================================================ */
-function OutfitCard({ outfit, saved, onSave }) {
+function OutfitCard({ outfit, saved, onSave, styleLabel }) {
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
+  const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
@@ -111,6 +112,11 @@ function OutfitCard({ outfit, saved, onSave }) {
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>{outfit.mood} · {items.length}개</div>
+        {moodBasis ? (
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', marginTop: 5 }}>
+            {moodBasis} 무드 기준
+          </div>
+        ) : null}
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginTop: 10, overflowX: 'auto', paddingBottom: 1 }}>
@@ -144,7 +150,7 @@ function OutfitSkeleton() {
 function ResultsScreen({ ctx }) {
   const {
     back, anchor, loading, savedOutfitIds, saveOutfit, wide,
-    loadMoreCombos, moreLoading, comboRev,
+    loadMoreCombos, moreLoading, comboRev, preferredStyleLabel,
   } = ctx;
   const outfits = LB_DATA.OUTFITS;
   void comboRev;
@@ -178,7 +184,7 @@ function ResultsScreen({ ctx }) {
             {busy
               ? [0, 1, 2, 3].map((i) => <OutfitSkeleton key={i} />)
               : outfits.map((o) => (
-                  <OutfitCard key={o.id} outfit={o}
+                  <OutfitCard key={o.id} outfit={o} styleLabel={preferredStyleLabel}
                     saved={savedOutfitIds.includes(o.id)} onSave={() => saveOutfit(o.id)} />
                 ))}
           </div>
