@@ -60,6 +60,7 @@ const ICONS = {
   help:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   shield:   'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
   expand:   'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
+  more:     'M5 12h.01M12 12h.01M19 12h.01',
 };
 
 function Icon({ name, size = 22, stroke = 1.7, fill = 'none', style }) {
@@ -410,10 +411,9 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
 }
 
 /* ----------------------------------------------------------------
-   ItemRemoveSheet — 옷 카드 우상단 X → 보관 / 삭제 선택
-   보관: 옷장에서 숨김(archived) · 삭제: 완전 삭제(파괴적, 되돌릴 수 없음)
+   ItemRemoveSheet — 카드 ··· 더보기 → 확대 / 보관 / 삭제
 ---------------------------------------------------------------- */
-function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete }) {
+function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, onExpand }) {
   const DANGER = '#B0573C';
   if (!item) return null;
   const isArchived = item.status === 'archived';
@@ -427,12 +427,10 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete }
             <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{item.category} · {item.color}</div>
           </div>
         </div>
-        <p style={{ margin: '18px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-          {isArchived
-            ? <>옷장으로 꺼내면 다시 조합 추천에 사용돼요. 삭제하면 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>
-            : <>보관 시 옷장에서 숨겨지고, 삭제 시 완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>}
-        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
+          {item.img && onExpand && (
+            <Btn full size="lg" variant="soft" icon="expand" onClick={onExpand}>이미지 크게 보기</Btn>
+          )}
           {isArchived
             ? <Btn full size="lg" variant="soft" icon="hanger" onClick={onRestore}>옷장으로 꺼내기</Btn>
             : <Btn full size="lg" variant="soft" icon="archive" onClick={onArchive}>보관하기</Btn>}

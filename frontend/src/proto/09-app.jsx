@@ -737,7 +737,19 @@ function App() {
       </BottomSheet>
       <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} onViewImage={openImageViewer} />
       <ImageViewer open={imageViewer.open} item={imageViewer.item} onClose={closeImageViewer} />
-      <ItemRemoveSheet open={removeSheet.open} item={removeSheet.item} onClose={closeRemove} onArchive={archiveItem} onRestore={restoreItem} onDelete={deleteItem} />
+      <ItemRemoveSheet
+        open={removeSheet.open}
+        item={removeSheet.item}
+        onClose={closeRemove}
+        onArchive={archiveItem}
+        onRestore={restoreItem}
+        onDelete={deleteItem}
+        onExpand={() => {
+          const t = removeSheet.item;
+          closeRemove();
+          if (t && t.img) openImageViewer(t);
+        }}
+      />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
       {unsaveTarget && (

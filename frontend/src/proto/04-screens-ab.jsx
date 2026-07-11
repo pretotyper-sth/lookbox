@@ -75,7 +75,7 @@ function Eyebrow({ children }) {
    ============================================================ */
 function WardrobeScreen({ ctx }) {
   const {
-    items, archived = [], openAdd, wide, openItem, openImageViewer, requestRemove,
+    items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
   } = ctx;
@@ -136,11 +136,11 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
       {!wide && chips}
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '0 18px', paddingBottom: !wide ? 110 : undefined }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? '28px 0 36px' : '0 18px', paddingBottom: selecting ? 88 : (!wide ? 110 : undefined) }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -167,25 +167,8 @@ function WardrobeScreen({ ctx }) {
 
         {viewingArchive && (
           <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-            보관한 옷은 조합 추천에 쓰이지 않아요. 카드의 <b style={{ color: 'var(--ink-2)', fontWeight: 700 }}>×</b>를 눌러 다시 꺼내거나 삭제할 수 있어요.
+            보관한 옷은 조합 추천에 쓰이지 않아요. 카드의 <b style={{ color: 'var(--ink-2)', fontWeight: 700 }}>···</b>에서 다시 꺼내거나 삭제할 수 있어요.
           </p>
-        )}
-
-        {/* Desktop only: bulk actions when anything is selected */}
-        {selecting && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            padding: '10px 14px', marginBottom: 14, borderRadius: 'var(--r-md)',
-            background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)',
-          }}>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
-            <div style={{ flex: 1, minWidth: 8 }} />
-            <button onClick={clearSel} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '6px 4px' }}>선택 해제</button>
-            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}>
-              {viewingArchive ? '옷장으로' : '보관'}
-            </Btn>
-            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)} style={{ background: '#B0573C', color: '#fff' }}>삭제</Btn>
-          </div>
         )}
 
         <div className="lb-grid">
@@ -252,31 +235,18 @@ function WardrobeScreen({ ctx }) {
                     {on && <Icon name="check" size={10} stroke={2.6} />}
                   </button>
                 )}
-                {it.img && openImageViewer && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openImageViewer(it); }}
-                    aria-label={it.name + ' 크게 보기'}
-                    style={{
-                      position: 'absolute', right: 28, top: 5, width: 18, height: 18, borderRadius: '50%',
-                      display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
-                      background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
-                      boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
-                    }}
-                  >
-                    <Icon name="expand" size={9} stroke={2.2} />
-                  </button>
-                )}
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); requestRemove(it); }}
-                  aria-label={it.name + ' 삭제'}
-                  className="lb-itemx"
+                  aria-label={it.name + ' 더보기'}
                   style={{
-                    position: 'absolute', right: 5, top: 5, width: 18, height: 18, borderRadius: '50%',
+                    position: 'absolute', right: 5, top: 5, width: 22, height: 18, borderRadius: 9,
                     display: 'grid', placeItems: 'center', color: 'var(--ink-2)', zIndex: 2,
                     background: 'color-mix(in srgb, var(--surface-2) 82%, transparent)',
                     boxShadow: 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(6px)',
-                  }}>
-                  <Icon name="x" size={10} stroke={2.4} />
+                  }}
+                >
+                  <Icon name="more" size={14} stroke={2.8} />
                 </button>
               </div>
               <button onClick={() => openItem(it)} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
@@ -297,6 +267,33 @@ function WardrobeScreen({ ctx }) {
         </div>
        </div>
       </div>
+
+      {/* Desktop: 선택 시 하단 플로팅 메뉴 */}
+      {selecting && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 22, zIndex: 30,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+          padding: '0 24px',
+        }}>
+          <div style={{
+            pointerEvents: 'auto',
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            maxWidth: '100%',
+            padding: '10px 14px 10px 16px',
+            borderRadius: 'var(--r-pill)',
+            background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
+            boxShadow: '0 10px 32px -10px color-mix(in srgb, var(--ink) 28%, transparent), inset 0 0 0 1px var(--line)',
+            backdropFilter: 'blur(10px)',
+          }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
+            <button onClick={clearSel} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '6px 4px' }}>선택 해제</button>
+            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}>
+              {viewingArchive ? '옷장으로' : '보관'}
+            </Btn>
+            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)} style={{ background: '#B0573C', color: '#fff' }}>삭제</Btn>
+          </div>
+        </div>
+      )}
 
       {wide && (
         <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
