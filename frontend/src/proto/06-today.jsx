@@ -15,40 +15,46 @@ function todayLabel() {
 }
 
 /* 날씨 · 날짜 메타 라인 — 날짜는 눌러서 지난 추천을 되짚어보는 진입점 */
-function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect }) {
+function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect, action }) {
   const w = LB_DATA.WEATHER;
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)' };
   const isToday = ymd(selected) === ymd(today);
   const dlabel = `${selected.getMonth() + 1}월 ${selected.getDate()}일 (${WD[selected.getDay()]})`;
   return (
     <div style={{
-      display: 'flex', flexWrap: 'nowrap', gap: 8, marginTop: 'var(--s4)',
-      overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-      marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
+      display: 'flex', alignItems: 'center', gap: 10, marginTop: 'var(--s4)',
+      minWidth: 0,
     }}>
-      <div style={{ position: 'relative', flex: 'none' }}>
-        <button onClick={() => setCalOpen((o) => !o)} aria-label="날짜 선택"
-          style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none', whiteSpace: 'nowrap' }}>
-          {isToday ? `오늘 · ${dlabel}` : dlabel}
-          <Icon name="chevD" size={13} stroke={2} style={{ transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur) var(--ease)' }} />
-        </button>
-        {calOpen && (
-          <>
-            <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, width: 300, maxWidth: '86vw', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: '0 12px 36px -8px color-mix(in srgb, var(--ink) 26%, transparent), 0 0 0 1px var(--line)' }}>
-              <HistoryCalendar today={today} selected={selected}
-                onSelect={(d) => { onSelect(d); setCalOpen(false); }}
-                view={view} onPrevMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
-                onNextMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() + 1, 1))} />
-            </div>
-          </>
-        )}
+      <div style={{
+        display: 'flex', flexWrap: 'nowrap', gap: 8, flex: 1, minWidth: 0,
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        marginLeft: -2, paddingLeft: 2, paddingRight: 2,
+      }}>
+        <div style={{ position: 'relative', flex: 'none' }}>
+          <button onClick={() => setCalOpen((o) => !o)} aria-label="날짜 선택"
+            style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none', whiteSpace: 'nowrap' }}>
+            {isToday ? `오늘 · ${dlabel}` : dlabel}
+            <Icon name="chevD" size={13} stroke={2} style={{ transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur) var(--ease)' }} />
+          </button>
+          {calOpen && (
+            <>
+              <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, width: 300, maxWidth: '86vw', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: '0 12px 36px -8px color-mix(in srgb, var(--ink) 26%, transparent), 0 0 0 1px var(--line)' }}>
+                <HistoryCalendar today={today} selected={selected}
+                  onSelect={(d) => { onSelect(d); setCalOpen(false); }}
+                  view={view} onPrevMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
+                  onNextMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() + 1, 1))} />
+              </div>
+            </>
+          )}
+        </div>
+        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
+          {w.city} {w.temp}° {w.cond}
+        </span>
+        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
       </div>
-      <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
-        {w.city} {w.temp}° {w.cond}
-      </span>
-      <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
+      {action ? <div style={{ flex: 'none' }}>{action}</div> : null}
     </div>
   );
 }
@@ -364,10 +370,20 @@ function TodayScreen({ ctx }) {
   }
 
   const busy = dailyLoading || loading || (isToday && !dailyAllowed);
+  const stripAction = wide ? (
+    isToday ? (
+      <Btn size="sm" variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>
+        {busy ? '추천 만드는 중...' : '다른 코디 추천받기'}
+      </Btn>
+    ) : (
+      <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
+    )
+  ) : null;
   const ctxStrip = (
     <ContextStrip selected={selected} today={today}
       calOpen={calOpen} setCalOpen={setCalOpen} view={view} setView={setView}
-      onSelect={(d) => setSelected(startOfDay(d))} />
+      onSelect={(d) => setSelected(startOfDay(d))}
+      action={stripAction} />
   );
 
   const header = isToday ? (
@@ -397,22 +413,6 @@ function TodayScreen({ ctx }) {
 
   const list = (
     <>
-      {wide && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: gridCols,
-          gap: 'var(--s4)',
-          marginBottom: 12,
-          alignItems: 'end',
-        }}>
-          {Array.from({ length: Math.max(0, SLOT - 1) }).map((_, i) => <div key={'sp' + i} />)}
-          <div>
-            {isToday
-              ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
-              : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
-          </div>
-        </div>
-      )}
       <div style={{
         display: 'grid',
         gridTemplateColumns: gridCols,
