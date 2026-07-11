@@ -71,6 +71,15 @@ create table if not exists public.credit_ledger (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.extraction_timings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  source text not null,
+  item_count int not null default 0,
+  duration_ms int not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_wardrobe_items_user_status on public.wardrobe_items(user_id, status);
 create index if not exists idx_outfits_user_created on public.outfits(user_id, created_at desc);
 create index if not exists idx_generated_images_user_cache on public.generated_images(user_id, cache_key);
@@ -82,6 +91,8 @@ alter table public.outfits enable row level security;
 alter table public.generated_images enable row level security;
 alter table public.ai_usage_logs enable row level security;
 alter table public.credit_ledger enable row level security;
+-- extraction_timings: 백엔드(service role)만 기록/집계. anon 접근은 RLS로 차단(정책 없음).
+alter table public.extraction_timings enable row level security;
 
 drop policy if exists "profiles own rows" on public.profiles;
 create policy "profiles own rows" on public.profiles

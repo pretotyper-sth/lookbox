@@ -5,6 +5,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -182,6 +183,18 @@ def log_ai_usage(user_id: str, feature: str, model: str, metadata: dict[str, Any
     supabase_admin.table("ai_usage_logs").insert(
         {"user_id": user_id, "feature": feature, "model": model, "metadata": metadata}
     ).execute()
+
+
+def _record_extraction_timing(user_id: str | None, source: str, item_count: int, duration_ms: float) -> None:
+    """추출(사진·URL) 소요시간 기록 — 개수별 평균 산출용. 실패해도 요청은 계속."""
+    ms = int(duration_ms)
+    try:
+        supabase_admin.table("extraction_timings").insert(
+            {"user_id": user_id, "source": source, "item_count": int(item_count), "duration_ms": ms}
+        ).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[timing] record failed: {exc}", flush=True)
+    print(f"[timing] source={source} items={item_count} duration_ms={ms} ({ms / 1000:.1f}s)", flush=True)
 
 
 def classify_item(path: str) -> dict[str, Any]:
@@ -654,6 +667,7 @@ class LiveStatus(BaseModel):
 
 
 def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
+    meta = row.get("metadata") or {}
     return {
         "id": row["id"],
         "serverId": row["id"],
@@ -662,10 +676,25 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "color": row.get("color") or "",
         "img": row.get("image_url"),
         "status": row.get("status"),
+        "brand": meta.get("brand") or "",
+        "store": meta.get("store") or "",
+        "sourceUrl": meta.get("source_url") or "",
     }
 
 
-def _store_uploaded_item(user_id: str, raw: bytes, suffix: str, content_type: str, status: str) -> dict[str, Any]:
+def _store_uploaded_item(
+    user_id: str,
+    raw: bytes,
+    suffix: str,
+    content_type: str,
+    status: str,
+    *,
+    source: str = "upload",
+    name_override: str | None = None,
+    source_url: str | None = None,
+    brand: str | None = None,
+    store: str | None = None,
+) -> dict[str, Any]:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
@@ -678,19 +707,27 @@ def _store_uploaded_item(user_id: str, raw: bytes, suffix: str, content_type: st
         if product_bytes:
             image_path = f"{user_id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(image_path, product_bytes, "image/png")
+        # brand/store/source_url은 스키마 변경 없이 metadata(jsonb)에 저장.
+        item_metadata: dict[str, Any] = {"tags": meta.get("tags") or []}
+        if (brand or "").strip():
+            item_metadata["brand"] = brand.strip()
+        if (store or "").strip():
+            item_metadata["store"] = store.strip()
+        if (source_url or "").strip():
+            item_metadata["source_url"] = source_url.strip()
         row = (
             supabase_admin.table("wardrobe_items")
             .insert(
                 {
                     "user_id": user_id,
-                    "name": meta.get("name") or "새 옷",
+                    "name": (name_override or "").strip() or meta.get("name") or "새 옷",
                     "category": meta.get("category") or "top",
                     "color": meta.get("color") or "neutral",
                     "image_url": image_url,
                     "storage_path": image_path,
-                    "source": "upload",
+                    "source": source,
                     "status": LIVE_STATUS_MAP.get(status, "owned"),
-                    "metadata": {"tags": meta.get("tags") or []},
+                    "metadata": item_metadata,
                 }
             )
             .execute()
@@ -704,25 +741,133 @@ def _store_uploaded_item(user_id: str, raw: bytes, suffix: str, content_type: st
             pass
 
 
+# 도메인 → 구매처(스토어) 이름. 순서대로 매칭.
+STORE_DOMAINS = [
+    ("musinsa.com", "무신사"),
+    ("zigzag.kr", "지그재그"),
+    ("29cm.co.kr", "29CM"),
+    ("a-bly.com", "에이블리"),
+    ("ably.co.kr", "에이블리"),
+    ("wconcept.co.kr", "W컨셉"),
+    ("kream.co.kr", "KREAM"),
+    ("brandi.co.kr", "브랜디"),
+    ("ssg.com", "SSG닷컴"),
+    ("lookpin.co.kr", "룩핀"),
+    ("hiver.co.kr", "하이버"),
+    ("oco.kr", "OCO"),
+    ("4910.kr", "포켓"),
+    ("smartstore.naver.com", "네이버 스마트스토어"),
+    ("shopping.naver.com", "네이버쇼핑"),
+    ("coupang.com", "쿠팡"),
+]
+
+
+def _host_of(page_url: str) -> str:
+    host = (urlparse(page_url).hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host.startswith("m."):
+        host = host[2:]
+    return host
+
+
+def _meta_content(html: str, key: str, attr: str = "property") -> str:
+    m = re.search(
+        rf'<meta[^>]+{attr}=["\']{re.escape(key)}["\'][^>]+content=["\']([^"\']+)["\']',
+        html,
+        re.I,
+    )
+    if not m:
+        m = re.search(
+            rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+{attr}=["\']{re.escape(key)}["\']',
+            html,
+            re.I,
+        )
+    return m.group(1).strip() if m and m.group(1).strip() else ""
+
+
+def _clean_brand(val: str) -> str:
+    return (val or "").strip().strip("|·-–—").strip()[:40]
+
+
+def _brand_from_jsonld(html: str) -> str:
+    for block in re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.I | re.S,
+    ):
+        raw = block.strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            m = re.search(r'"brand"\s*:\s*\{[^{}]*?"name"\s*:\s*"([^"]+)"', raw)
+            if m:
+                return _clean_brand(m.group(1))
+            m = re.search(r'"brand"\s*:\s*"([^"]+)"', raw)
+            if m:
+                return _clean_brand(m.group(1))
+            continue
+        stack = [data]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, list):
+                stack.extend(node)
+            elif isinstance(node, dict):
+                if "@graph" in node:
+                    stack.extend(node["@graph"] if isinstance(node["@graph"], list) else [node["@graph"]])
+                b = node.get("brand")
+                if isinstance(b, dict) and b.get("name"):
+                    return _clean_brand(str(b["name"]))
+                if isinstance(b, str) and b.strip():
+                    return _clean_brand(b)
+    return ""
+
+
 def _extract_brand(html: str, page_url: str) -> str:
-    patterns = [
-        r'property=["\']product:brand["\'][^>]+content=["\']([^"\']+)["\']',
-        r'property=["\']og:brand["\'][^>]+content=["\']([^"\']+)["\']',
-        r'property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)["\']',
-        r'name=["\']author["\'][^>]+content=["\']([^"\']+)["\']',
-    ]
-    for pat in patterns:
-        m = re.search(pat, html, re.I)
+    """옷 브랜드 추출: JSON-LD brand → meta 태그 → 도메인별 휴리스틱."""
+    brand = _brand_from_jsonld(html)
+    if brand:
+        return brand
+    for key, attr in (
+        ("product:brand", "property"),
+        ("og:brand", "property"),
+        ("brand", "name"),
+        ("brand", "itemprop"),
+    ):
+        val = _meta_content(html, key, attr)
+        if val:
+            return _clean_brand(val)
+    if "musinsa" in _host_of(page_url):
+        m = re.search(r'<a[^>]+href=["\'][^"\']*/brand[^"\']*["\'][^>]*>([^<]+)</a>', html, re.I)
         if m and m.group(1).strip():
-            return m.group(1).strip()
-    host = re.sub(r"^www\.", "", urlparse(page_url).netloc)
-    return host.split(".")[0].upper() if host else ""
+            return _clean_brand(m.group(1))
+    return ""
 
 
-def _fetch_product_image(page_url: str) -> tuple[bytes, str, str]:
+def _detect_store(page_url: str, site_name: str = "") -> str:
+    """구매처: 알려진 스토어 도메인 → og:site_name(브랜드 자사몰) → 못 찾으면 URL 그대로."""
+    host = _host_of(page_url)
+    for dom, name in STORE_DOMAINS:
+        if host == dom or host.endswith("." + dom):
+            return name
+    if site_name and site_name.strip():
+        return site_name.strip()[:40]
+    return page_url
+
+
+def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
+    """상품 이미지 바이트 + (brand, store, title) 컨텍스트."""
     headers = {"User-Agent": "Mozilla/5.0 (LOOKBOX bot)"}
     html = requests.get(page_url, headers=headers, timeout=15).text
     brand = _extract_brand(html, page_url)
+    site_name = _meta_content(html, "og:site_name")
+    store = _detect_store(page_url, site_name)
+    title = _meta_content(html, "og:title") or _meta_content(html, "twitter:title", "name")
+    if not title:
+        tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
+        title = tm.group(1).strip() if tm else ""
     match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
     if not match:
         match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
@@ -733,7 +878,42 @@ def _fetch_product_image(page_url: str) -> tuple[bytes, str, str]:
         img_url = "https:" + img_url
     resp = requests.get(img_url, headers=headers, timeout=15)
     resp.raise_for_status()
-    return resp.content, resp.headers.get("content-type", "image/jpeg"), brand
+    meta = {"brand": brand, "store": store, "title": title[:120]}
+    return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
+
+
+@app.get("/api/live/extraction-stats")
+def live_extraction_stats() -> dict[str, Any]:
+    """추출 소요시간 평균 (소스·개수별). 나중에 FE 대기 안내에 사용."""
+    rows = (
+        supabase_admin.table("extraction_timings")
+        .select("source,item_count,duration_ms")
+        .limit(10000)
+        .execute()
+        .data
+        or []
+    )
+    by_count: dict[tuple[str, int], list[int]] = {}
+    by_source: dict[str, list[int]] = {}
+    for r in rows:
+        src = r.get("source") or "unknown"
+        cnt = int(r.get("item_count") or 0)
+        ms = int(r.get("duration_ms") or 0)
+        by_count.setdefault((src, cnt), []).append(ms)
+        by_source.setdefault(src, []).append(ms)
+
+    def _avg(v: list[int]) -> float:
+        return round(sum(v) / len(v), 1) if v else 0.0
+
+    return {
+        "by_count": [
+            {"source": s, "item_count": c, "n": len(v), "avg_ms": _avg(v)}
+            for (s, c), v in sorted(by_count.items())
+        ],
+        "by_source": [
+            {"source": s, "n": len(v), "avg_ms": _avg(v)} for s, v in sorted(by_source.items())
+        ],
+    }
 
 
 @app.get("/api/live/wardrobe")
@@ -759,10 +939,13 @@ async def live_import_photo(
     user: UserContext = Depends(current_user),
 ) -> dict[str, Any]:
     require_supabase()
+    t0 = time.perf_counter()
     suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
     raw = await image.read()
     row = _store_uploaded_item(user.id, raw, suffix, image.content_type or "image/jpeg", status)
-    return {"items": [live_item_payload(row)], "primary_idx": 0}
+    items = [live_item_payload(row)]
+    _record_extraction_timing(user.id, "photo", len(items), (time.perf_counter() - t0) * 1000)
+    return {"items": items, "primary_idx": 0}
 
 
 @app.post("/api/live/import/url")
@@ -770,14 +953,25 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     require_supabase()
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
-    raw, content_type, brand = _fetch_product_image(body.url.strip())
+    url = body.url.strip()
+    t0 = time.perf_counter()
+    raw, content_type, meta = _fetch_product_meta(url)
     suffix = ".png" if "png" in content_type else ".jpg"
-    row = _store_uploaded_item(user.id, raw, suffix, content_type, body.status)
-    item = live_item_payload(row)
-    if brand:
-        item["brand"] = brand
-        item["store"] = brand
-    return {"items": [item], "primary_idx": 0}
+    row = _store_uploaded_item(
+        user.id,
+        raw,
+        suffix,
+        content_type,
+        body.status,
+        source="url",
+        name_override=meta.get("title") or None,
+        source_url=url,
+        brand=meta.get("brand") or None,
+        store=meta.get("store") or None,
+    )
+    items = [live_item_payload(row)]
+    _record_extraction_timing(user.id, "url", len(items), (time.perf_counter() - t0) * 1000)
+    return {"items": items, "primary_idx": 0}
 
 
 @app.post("/api/live/coordinate")

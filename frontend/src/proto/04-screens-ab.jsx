@@ -320,7 +320,7 @@ function AddSheet({ ctx }) {
       setSel(list.map((d) => d.id));
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store })));
           setStepIdx(0);
           return 'register';
         }
@@ -348,7 +348,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store })));
     setStepIdx(0);
     setStage('register');
   };
