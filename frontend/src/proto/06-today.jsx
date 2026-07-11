@@ -21,10 +21,14 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
   const isToday = ymd(selected) === ymd(today);
   const dlabel = `${selected.getMonth() + 1}월 ${selected.getDate()}일 (${WD[selected.getDay()]})`;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 'var(--s4)' }}>
-      <div style={{ position: 'relative' }}>
+    <div style={{
+      display: 'flex', flexWrap: 'nowrap', gap: 8, marginTop: 'var(--s4)',
+      overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
+    }}>
+      <div style={{ position: 'relative', flex: 'none' }}>
         <button onClick={() => setCalOpen((o) => !o)} aria-label="날짜 선택"
-          style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none' }}>
+          style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none', whiteSpace: 'nowrap' }}>
           {isToday ? `오늘 · ${dlabel}` : dlabel}
           <Icon name="chevD" size={13} stroke={2} style={{ transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur) var(--ease)' }} />
         </button>
@@ -40,11 +44,11 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
           </>
         )}
       </div>
-      <span style={pill}>
+      <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
         {w.city} {w.temp}° {w.cond}
       </span>
-      <span style={pill}>최고 {w.hi}° · 최저 {w.lo}°</span>
+      <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
     </div>
   );
 }
