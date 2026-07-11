@@ -123,8 +123,8 @@ function StyleCard({ style, selected, onToggle }) {
           <Icon name="check" size={14} stroke={2.8} />
         </span>
       </div>
-      {/* 구분선 — 카드 전체 폭, 잘리지 않게 별도 블록으로 */}
-      <div style={{ height: 1, background: selected ? 'var(--accent)' : 'var(--line-2)', transition: 'background var(--dur) var(--ease)' }} />
+      {/* 구분선 — 카드 전체 폭, 잘리지 않게 별도 블록으로. 선택 표시는 체크/테두리로 충분해 항상 중립색 유지 */}
+      <div style={{ height: 1, background: 'var(--line-2)' }} />
       <div style={{ padding: '10px 13px 12px', background: 'var(--surface-2)' }}>
         <div style={{ fontSize: 14.5, fontWeight: 700 }}>{style.name}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2 }}>{style.desc}</div>
