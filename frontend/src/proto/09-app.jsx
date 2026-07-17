@@ -164,18 +164,53 @@ function dailyCacheItemsFromOwned(ownedItems, outfits) {
 }
 /** LB_DATA.DAILY + 로컬 캐시를 현재 owned 옷장에 맞게 정리. 제거된 코디 수를 반환. */
 function pruneDailyAgainstOwned(ownedItems) {
+  const cached = readDailyCache();
+  // 메모리가 비어 있어도 당일 캐시가 있으면 먼저 복원. (비어 있다고 캐시를 지우면 탭 재진입마다 재추천됨)
+  if (!LB_DATA.DAILY.length && cached && cached.outfits && cached.outfits.length) {
+    const hydrated = filterDailyOutfitsByOwned(cached.outfits, ownedItems);
+    if (hydrated.length) {
+      liveApplyPayload({
+        outfits: hydrated,
+        items: dailyCacheItemsFromOwned(ownedItems, hydrated),
+      }, 'daily');
+      if (hydrated.length !== cached.outfits.length) {
+        writeDailyCache({
+          style: cached.style || '',
+          outfits: hydrated,
+          items: dailyCacheItemsFromOwned(ownedItems, hydrated),
+          wardrobeSig: cached.wardrobeSig,
+          wardrobeCount: cached.wardrobeCount,
+        });
+      }
+    } else {
+      clearDailyCache();
+      return 0;
+    }
+  }
   const before = LB_DATA.DAILY.length;
   const kept = filterDailyOutfitsByOwned(LB_DATA.DAILY, ownedItems);
   const removed = before - kept.length;
   if (removed) LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...kept);
-  const cached = readDailyCache();
   if (!kept.length) {
-    if (cached || before) clearDailyCache();
+    // 실제로 무효화된 코디가 있을 때만 캐시 삭제 (메모리만 비어 있던 경우는 위에서 처리)
+    if (before > 0) clearDailyCache();
     return removed;
   }
-  if (removed || !cached) {
+  const latestCache = readDailyCache();
+  if (removed) {
+    // 옷 삭제로 코디가 줄었을 때만 캐시 갱신. wardrobeSig는 유지해 '옷장 증가' CTA가 살아있게.
     writeDailyCache({
-      style: (cached && cached.style) || '',
+      style: (latestCache && latestCache.style) || '',
+      outfits: kept,
+      items: dailyCacheItemsFromOwned(ownedItems, kept),
+      wardrobeSig: (latestCache && latestCache.wardrobeSig) || wardrobeSigOf(ownedItems),
+      wardrobeCount: latestCache && latestCache.wardrobeCount != null
+        ? latestCache.wardrobeCount
+        : (ownedItems || []).length,
+    });
+  } else if (!latestCache) {
+    writeDailyCache({
+      style: '',
       outfits: kept,
       items: dailyCacheItemsFromOwned(ownedItems, kept),
       wardrobeSig: wardrobeSigOf(ownedItems),
@@ -431,7 +466,8 @@ function App() {
         setArchived(archItems);
         syncAllFromWardrobe(liveItems, archItems);
         const removed = pruneDailyAgainstOwned(liveItems);
-        if (removed && !LB_DATA.DAILY.length) setDailyAllowed(false);
+        if (LB_DATA.DAILY.length) setDailyAllowed(true);
+        else if (removed) setDailyAllowed(false);
         bumpDaily();
       })
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
@@ -535,10 +571,18 @@ function App() {
     const quiet = !!(opts && opts.quiet);
     if (!prefs.dailyEnabled) return { added: 0, wardrobeGrew: false };
     // 캐시/메모리에 남은 삭제·보관 아이템 코디를 먼저 걷어낸다.
-    pruneDailyAgainstOwned(items);
     syncAllFromWardrobe(items, archived);
+    pruneDailyAgainstOwned(items);
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     if (!force) {
+      // 오늘 이미 추천한 이력이 있으면 API 없이 기존 코디만 보여준다.
+      if (LB_DATA.DAILY.length > 0) {
+        const cached = readDailyCache();
+        setDailyStyle((cached && cached.style) || style);
+        setDailyAllowed(true);
+        bumpDaily();
+        return { added: 0, wardrobeGrew, fromCache: true };
+      }
       const cached = readDailyCache();
       if (cached) {
         const outfits = filterDailyOutfitsByOwned(cached.outfits, items);
@@ -548,12 +592,13 @@ function App() {
             outfits,
             items: dailyCacheItemsFromOwned(items, outfits),
           }, 'daily');
+          // wardrobeSig는 추천 시점 값을 유지 → 옷 추가 후 CTA만 뜨고 자동 재추천 안 함
           writeDailyCache({
             style: cached.style || style,
             outfits,
             items: dailyCacheItemsFromOwned(items, outfits),
-            wardrobeSig: wardrobeSigOf(items),
-            wardrobeCount: items.length,
+            wardrobeSig: cached.wardrobeSig,
+            wardrobeCount: cached.wardrobeCount != null ? cached.wardrobeCount : items.length,
           });
           setDailyStyle(cached.style || style);
           setDailyAllowed(true);
@@ -596,6 +641,11 @@ function App() {
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 추천할 조합이 없어요');
         return { added: added.length, wardrobeGrew };
+      }
+      // force여도 당일 이력이 있으면 전체 리셋 대신 추가만 (위에서 처리). 여기 도달 = 오늘 첫 추천.
+      if (!force && LB_DATA.DAILY.length > 0) {
+        setDailyAllowed(true);
+        return { added: 0, wardrobeGrew, fromCache: true };
       }
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
@@ -773,9 +823,8 @@ function App() {
   const syncDailyAfterWardrobeChange = (nextOwned, nextArchived) => {
     syncAllFromWardrobe(nextOwned, nextArchived != null ? nextArchived : archived);
     const removed = pruneDailyAgainstOwned(nextOwned);
-    if (removed > 0 && !LB_DATA.DAILY.length && prefs.dailyEnabled) {
-      setDailyAllowed(false);
-    }
+    if (LB_DATA.DAILY.length) setDailyAllowed(true);
+    else if (removed > 0 && prefs.dailyEnabled) setDailyAllowed(false);
     bumpDaily();
   };
   const archiveItem = () => {
