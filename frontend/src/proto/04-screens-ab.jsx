@@ -451,7 +451,7 @@ function urlImportBlockedHint(raw) {
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
-    autoAddDetails, detectCount, liveReplaceItemImage, applyReextractItem,
+    autoAddDetails, detectCount, liveReplaceItemImage, applyReextractItem, showToast,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -574,6 +574,9 @@ function AddSheet({ ctx }) {
         return;
       }
       if (!list.length) throw new Error('사진에서 옷을 찾지 못했어요');
+      // AI 추출이 지연/실패해 임시 이미지로 저장된 경우 안내
+      const warn = (data.items || []).map((d) => d && d.extractWarning).find(Boolean);
+      if (warn && typeof showToast === 'function') showToast(warn + ' 이미지 변경으로 다시 시도할 수 있어요.');
       setDetected(list);
       const primaryIdx = Math.min(data.primary_idx || 0, list.length - 1);
       const primary = list[primaryIdx] || list[0];

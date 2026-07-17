@@ -289,10 +289,25 @@ function liveAppendDaily(payload, ownedItems) {
 }
 
 async function liveJSON(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: options.body instanceof FormData ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  });
+  // 안전망 타임아웃: 서버가 오래 걸려도 무한 대기하지 않고 명확한 메시지로 실패
+  const timeoutMs = options.timeoutMs || 150000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(url, {
+      ...options,
+      signal: ctrl.signal,
+      headers: options.body instanceof FormData ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    if (e && e.name === 'AbortError') {
+      throw new Error('시간이 너무 오래 걸려 중단했어요. 잠시 후 다시 시도해 주세요.');
+    }
+    throw new Error('네트워크 연결이 불안정해요. 잠시 후 다시 시도해 주세요.');
+  }
+  clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || '요청에 실패했어요');
   return data;
@@ -1066,7 +1081,7 @@ function App() {
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday,
-    addItemsBatch, discardLiveItems, liveImportSource,
+    addItemsBatch, discardLiveItems, liveImportSource, showToast,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
     liveReplaceItemImage, applyReextractItem,

@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI
 from PIL import Image
 from pydantic import BaseModel
 from supabase import Client, create_client
@@ -54,10 +54,11 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-# 타임아웃을 명시해 이미지 생성이 지연돼도 연결을 오래 붙잡지 않게 한다.
-# (무한 대기 시 Render/브라우저가 먼저 끊어 'Failed to fetch'가 발생)
+# 타임아웃 명시 + 재시도 0 → 지연돼도 연결을 오래 붙잡지 않고 빠르게 실패.
+# (재시도가 시간을 배로 늘려 3분+ 걸리던 문제 방지)
+OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "80"))
 openai_client = (
-    OpenAI(api_key=OPENAI_API_KEY, timeout=90.0, max_retries=1)
+    OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_IMAGE_TIMEOUT, max_retries=0)
     if OPENAI_API_KEY
     else None
 )
@@ -556,41 +557,60 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         attempts.append((model, False))
 
     seen: set[tuple[str, bool]] = set()
-    last_err = ""
+    deadline = time.monotonic() + OPENAI_IMAGE_TIMEOUT + 5
     for use_model, transparent in attempts:
         key = (use_model, transparent)
         if key in seen:
             continue
         seen.add(key)
+        if time.monotonic() >= deadline:
+            meta["_extract_fail"] = "timeout"
+            print("[extract] deadline reached — stop", flush=True)
+            break
         try:
             raw = _edit(use_model, transparent=transparent)
             print(f"[extract] ok model={use_model} transparent={transparent}", flush=True)
             meta["_extract_mode"] = "ai"
             return finalize_cutout(raw)
+        except (APITimeoutError, APIConnectionError) as exc:
+            # 타임아웃/연결 지연이면 재시도해도 또 오래 걸리므로 즉시 중단
+            meta["_extract_fail"] = "timeout"
+            print(f"[extract] timeout/conn model={use_model}: {exc}", flush=True)
+            break
         except Exception as exc:  # noqa: BLE001
-            last_err = str(exc)
+            meta["_extract_fail"] = "api_error"
             print(f"[extract] edit failed model={use_model} transparent={transparent}: {exc}", flush=True)
-    meta["_extract_fail"] = last_err or "edit_failed"
+    meta["_extract_fail"] = meta.get("_extract_fail") or "edit_failed"
     return None
 
 
+_EXTRACT_FAIL_MSG = {
+    "timeout": "AI 이미지 생성이 지연돼 중단했어요(제한 시간 초과). 잠시 후 다시 시도해 주세요.",
+    "api_error": "AI 이미지 생성 중 오류가 났어요. 잠시 후 다시 시도해 주세요.",
+    "no_openai": "이미지 생성 기능이 비활성화돼 있어요.",
+    "edit_failed": "이미지를 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
+}
+
+
 def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
-    """AI 추출. 힌트가 있으면 로컬 배경제거 폴백으로 가짜 성공을 만들지 않음."""
+    """AI 추출. 실패/타임아웃이면 구체적 사유로 안내. 힌트 없으면 로컬 폴백으로 저장은 유지."""
     hint = str(meta.get("extract_hint") or "").strip()
     product = generate_product_image(user_id, path, meta)
     if product:
         return product
+    fail = meta.get("_extract_fail") or "edit_failed"
+    msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
+    # 힌트 추출은 로컬 배경제거로 대체하면 의도와 달라지므로 명확히 실패 처리
     if hint:
-        fail = meta.get("_extract_fail") or "edit_failed"
         print(f"[extract] hint extract failed ({fail}) — no local fallback", flush=True)
-        raise HTTPException(
-            status_code=502,
-            detail="요청한 아이템을 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
-        )
+        raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
+    # 힌트 없는 일반 추출: 항목은 로컬 컷아웃으로 저장(유실 방지)하되 경고를 남겨 '이미지 변경'으로 재시도 안내
     local = local_product_cutout(path)
     if local:
         meta["_extract_mode"] = "local"
-    return local
+        meta["_extract_warning"] = msg
+        return local
+    raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -1179,6 +1199,7 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "store": meta.get("store") or "",
         "note": row.get("note") or meta.get("note") or "",
         "sourceUrl": meta.get("source_url") or "",
+        "extractWarning": meta.get("extract_warning") or "",
     }
 
 
@@ -1238,6 +1259,8 @@ def _store_uploaded_item(
             item_metadata["bg_norm"] = _BG_NORM_VERSION
             if meta.get("_extract_mode"):
                 item_metadata["extract_mode"] = meta["_extract_mode"]
+            if meta.get("_extract_warning"):
+                item_metadata["extract_warning"] = meta["_extract_warning"]
         if hint:
             item_metadata["extract_hint"] = hint[:200]
         if (brand or "").strip():
