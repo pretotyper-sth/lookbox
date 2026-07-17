@@ -728,7 +728,7 @@ function AddSheet({ ctx }) {
   else if (stage === 'register') { header = null; sub = null; }
   else if (stage === 'analyzing') {
     header = reextract ? '이미지만 변경' : (anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가');
-    sub = reextract ? '제품 컷을 만들고 있어요' : '아이템을 인식하고 있어요';
+    sub = null; // 본문 로딩 카피로만 안내 (헤더 중복 방지)
   }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
   else if (reextract) {
@@ -762,7 +762,9 @@ function AddSheet({ ctx }) {
             ) : (
               <div>
                 <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{header}</h2>
-                <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>{sub}</p>
+                {sub ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>{sub}</p>
+                ) : null}
               </div>
             )}
           </div>
@@ -933,7 +935,7 @@ function AddSheet({ ctx }) {
                 <div className="lb-skel" style={{ width: 24, height: 24, flex: 'none', borderRadius: '50%' }} />
               </div>
             </div>
-            <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
+            <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>아이템을 인식하고 있어요</div>
             <div style={{
               marginTop: 6, fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
               textAlign: 'center', letterSpacing: '-0.01em',
