@@ -445,6 +445,7 @@ function AddSheet({ ctx }) {
   const mode = addSheet.mode; // 'wardrobe' | 'anchor'
   const anchor = mode === 'anchor';
   const CATS = LB_DATA.CATEGORIES.filter((c) => c !== '전체');
+  const isTouch = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
 
   // input
   const [tab, setTab] = useS('photo');
@@ -522,6 +523,36 @@ function AddSheet({ ctx }) {
     setLoaded(true);
     await runDetect({ sourceType: 'url', url: url.trim() });
   };
+
+  // ---- clipboard paste (PC: Ctrl/⌘+V, 모바일: 꾹 눌러 붙여넣기) ----
+  // runDetect가 매 렌더 새로 만들어지므로 최신 참조를 ref로 유지한다.
+  const runDetectRef = useR(runDetect);
+  runDetectRef.current = runDetect;
+  const handlePasteImage = (e) => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it && it.kind === 'file' && it.type && it.type.indexOf('image') === 0) {
+        const f = it.getAsFile();
+        if (f) {
+          e.preventDefault();
+          setTab('photo');
+          setFile(f);
+          setPicked(true);
+          runDetectRef.current({ sourceType: 'photo', file: f });
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  // 시트가 열려 input 단계일 때만 문서 전역 붙여넣기를 가로챈다.
+  useE(() => {
+    if (!addSheet.open || stage !== 'input') return undefined;
+    const onDocPaste = (e) => { handlePasteImage(e); };
+    document.addEventListener('paste', onDocPaste);
+    return () => document.removeEventListener('paste', onDocPaste);
+  }, [addSheet.open, stage]);
 
   const anchorPrimary = detected.find((d) => sel.includes(d.id)) || detected[0] || null;
 
@@ -622,15 +653,32 @@ function AddSheet({ ctx }) {
               {tab === 'photo' ? (
                 <>
                   <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
-                  <button onClick={onPickPhoto} className="lb-drop" style={{
-                    width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-                    border: '1.5px dashed var(--line-2)', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 10, color: 'var(--ink-2)',
-                  }}>
-                    <Icon name="camera" size={30} stroke={1.5} />
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
-                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>탭하여 사진 선택 · 배경은 자동 정리</span>
-                  </button>
+                  {/* contentEditable: 모바일에서 꾹 누르면 '붙여넣기' 메뉴가 뜨고, 붙여넣은
+                      이미지는 onPaste로 잡는다. 탭하면 파일 선택. inputMode=none으로 키보드 억제. */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    contentEditable
+                    suppressContentEditableWarning
+                    inputMode="none"
+                    onClick={onPickPhoto}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPickPhoto(); } }}
+                    onInput={(e) => { e.currentTarget.textContent = ''; }}
+                    onCut={(e) => e.preventDefault()}
+                    className="lb-drop" style={{
+                      width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                      border: '1.5px dashed var(--line-2)', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', gap: 10, color: 'var(--ink-2)', cursor: 'pointer',
+                      caretColor: 'transparent', outline: 'none',
+                    }}>
+                    <div contentEditable={false} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+                      <Icon name="camera" size={30} stroke={1.5} />
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
+                      <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                        {isTouch ? '탭하여 선택 · 꾹 눌러 붙여넣기' : '탭하여 선택 · Ctrl/⌘+V로 붙여넣기'}
+                      </span>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <div style={{ display: 'flex', gap: 8 }}>
