@@ -1007,7 +1007,14 @@ def save_outfit(outfit_id: str, body: OutfitAction, user: UserContext = Depends(
 # generation here and return lookImg=null to keep the daily flow free.
 # ---------------------------------------------------------------------------
 
-LIVE_STATUS_MAP = {"owned": "owned", "considering": "considering", "archived": "archived", "delete": "deleted", "deleted": "deleted"}
+LIVE_STATUS_MAP = {
+    "owned": "owned",
+    "considering": "considering",
+    "pending": "pending",
+    "archived": "archived",
+    "delete": "deleted",
+    "deleted": "deleted",
+}
 
 
 class LiveImportUrl(BaseModel):
@@ -1889,8 +1896,8 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
 
 @app.post("/api/live/import/photo")
 async def live_import_photo(
-    status: str = "owned",
     image: UploadFile = File(...),
+    status: str = Form("owned"),
     user: UserContext = Depends(current_user),
 ) -> dict[str, Any]:
     require_supabase()

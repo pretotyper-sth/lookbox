@@ -904,10 +904,19 @@ function App() {
   };
 
   // Commit a batch of garments separated from one photo/URL (sequential add flow).
+  const discardLiveItems = (ids) => {
+    const clean = [...new Set((ids || []).map(String).filter(Boolean))];
+    if (!clean.length) return;
+    liveJSON('/api/live/items/status', {
+      method: 'POST',
+      body: JSON.stringify({ ids: clean, status: 'delete' }),
+    }).catch(() => {});
+  };
+
   const addItemsBatch = async (list, skippedIds = []) => {
     closeAdd();
     if (skippedIds && skippedIds.length) {
-      liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: skippedIds, status: 'delete' }) }).catch(() => {});
+      discardLiveItems(skippedIds);
     }
     if (!list || !list.length) return;
     // 1) pending → owned
@@ -961,7 +970,7 @@ function App() {
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday,
-    addItemsBatch, liveImportSource,
+    addItemsBatch, discardLiveItems, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
     liveReplaceItemImage, applyReextractItem,

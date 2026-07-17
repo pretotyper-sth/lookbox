@@ -450,7 +450,7 @@ function urlImportBlockedHint(raw) {
 
 function AddSheet({ ctx }) {
   const {
-    addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource,
+    addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     autoAddDetails, detectCount, liveReplaceItemImage, applyReextractItem,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -477,14 +477,48 @@ function AddSheet({ ctx }) {
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
   const [stepIdx, setStepIdx] = useS(0);
 
-  useE(() => {
-    if (!addSheet.open) return;
+  // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
+  const cancelledRef = useR(false);
+  const draftIdsRef = useR([]);
+  const detectedRef = useR([]);
+  const stepsRef = useR([]);
+  detectedRef.current = detected;
+  stepsRef.current = steps;
+
+  const resetLocalDraft = () => {
     setTab('photo'); setPicked(false); setUrl(''); setLoaded(false); setFile(null); setBusy(false); setErr('');
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
+    draftIdsRef.current = [];
+  };
+
+  const discardDraftIds = (ids) => {
+    const clean = [...new Set((ids || []).map(String).filter(Boolean))];
+    if (!clean.length || typeof discardLiveItems !== 'function') return;
+    discardLiveItems(clean);
+  };
+
+  const requestClose = () => {
+    cancelledRef.current = true;
+    const ids = [
+      ...draftIdsRef.current,
+      ...detectedRef.current.map((d) => d && d.id),
+      ...stepsRef.current.map((s) => s && s.id),
+    ];
+    discardDraftIds(ids);
+    resetLocalDraft();
+    closeAdd();
+  };
+
+  useE(() => {
+    if (!addSheet.open) return;
+    cancelledRef.current = false;
+    resetLocalDraft();
   }, [addSheet.open, addSheet.mode, addSheet.replaceItem && addSheet.replaceItem.id]);
 
   // ---- detection: API "separates" one source image into N garments ----
   const runDetect = async (source = {}) => {
+    cancelledRef.current = false;
+    draftIdsRef.current = [];
     setErr('');
     setBusy(true);
     setStage('analyzing');
@@ -498,6 +532,7 @@ function AddSheet({ ctx }) {
           file: source.file || file,
           url: source.url != null ? source.url : url,
         });
+        if (cancelledRef.current) return;
         if (!next) throw new Error('이미지를 바꾸지 못했어요');
         applyReextractItem(next);
         closeAdd();
@@ -510,6 +545,13 @@ function AddSheet({ ctx }) {
         status: anchor ? 'considering' : 'pending',
       });
       const list = (data.items || []).slice(0, detectCount).map((d, i) => ({ ...d, id: d.id || 'det' + i, cat: d.category, conf: d.conf || 0.95 }));
+      const ids = list.map((d) => d.id).filter(Boolean);
+      draftIdsRef.current = ids;
+      if (cancelledRef.current) {
+        discardDraftIds(ids);
+        draftIdsRef.current = [];
+        return;
+      }
       if (!list.length) throw new Error('사진에서 옷을 찾지 못했어요');
       setDetected(list);
       const primaryIdx = Math.min(data.primary_idx || 0, list.length - 1);
@@ -529,12 +571,13 @@ function AddSheet({ ctx }) {
         return 'select';
       });
     } catch (e) {
+      if (cancelledRef.current) return;
       setErr(e.message || 'AI 분석에 실패했어요');
       setLoaded(false);
       setPicked(false);
       setStage('input');
     } finally {
-      setBusy(false);
+      if (!cancelledRef.current) setBusy(false);
     }
   };
   const onPickPhoto = () => { if (fileInput.current) fileInput.current.click(); };
@@ -629,6 +672,7 @@ function AddSheet({ ctx }) {
     if (stepIdx >= steps.length - 1) {
       const kept = updated.filter((s) => s.added).map(toItem);
       const skipped = detected.filter((d) => !updated.some((s) => s.id === d.id && s.added)).map((d) => d.id);
+      draftIdsRef.current = [];
       addItemsBatch(kept, skipped);
     } else setStepIdx(stepIdx + 1);
   };
@@ -636,6 +680,8 @@ function AddSheet({ ctx }) {
 
   const goBack = () => {
     if (stage === 'select' || stage === 'anchor-ready') {
+      discardDraftIds(detected.map((d) => d && d.id));
+      draftIdsRef.current = [];
       setStage('input'); setPicked(false); setLoaded(false); setDetected([]); setSel([]);
     } else if (stage === 'register') {
       if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select');
@@ -662,7 +708,7 @@ function AddSheet({ ctx }) {
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready';
 
   return (
-    <BottomSheet open={addSheet.open} onClose={closeAdd}>
+    <BottomSheet open={addSheet.open} onClose={requestClose}>
       <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -686,7 +732,7 @@ function AddSheet({ ctx }) {
               </div>
             )}
           </div>
-          <IconBtn name="x" label="닫기" onClick={closeAdd} style={{ marginRight: -8, flex: 'none' }} />
+          <IconBtn name="x" label="닫기" onClick={requestClose} style={{ marginRight: -8, flex: 'none' }} />
         </div>
 
         {/* ---------- INPUT ---------- */}
