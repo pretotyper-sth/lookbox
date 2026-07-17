@@ -179,11 +179,12 @@ def credit_balance(user_id: str) -> int:
 
 
 def charge_credit(user_id: str, reason: str, metadata: dict[str, Any] | None = None) -> bool:
-    if credit_balance(user_id) <= 0:
-        return False
-    supabase_admin.table("credit_ledger").insert(
-        {"user_id": user_id, "delta": -1, "reason": reason, "metadata": metadata or {}}
-    ).execute()
+    # BM/유료화 전까지 크레딧 제한·차감 비활성. 나중에 다시 켤 때 아래 블록 복구.
+    # if credit_balance(user_id) <= 0:
+    #     return False
+    # supabase_admin.table("credit_ledger").insert(
+    #     {"user_id": user_id, "delta": -1, "reason": reason, "metadata": metadata or {}}
+    # ).execute()
     return True
 
 
