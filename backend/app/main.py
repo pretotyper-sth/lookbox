@@ -430,8 +430,14 @@ def local_product_cutout(path: str) -> bytes | None:
 
 
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
-    """ChatGPT images.edit와 같은 단순 경로: 이미지 + 프롬프트 1회(실패 시 폴백만)."""
-    if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
+    """이미지 + 프롬프트로 images.edit. 힌트면 사용자 문장 우선(ChatGPT와 동일)."""
+    if not openai_client:
+        print("[extract] openai client missing", flush=True)
+        meta["_extract_fail"] = "no_openai"
+        return None
+    if not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
+        print(f"[extract] no credits user={user_id}", flush=True)
+        meta["_extract_fail"] = "no_credits"
         return None
     if "has_text_logo" not in meta:
         meta.update(detect_garment_text(path))
@@ -442,20 +448,17 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             meta["logo_text"] = ""
     has_text = bool(meta.get("has_text_logo"))
     logo_text = str(meta.get("logo_text") or "").strip()
-    model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
-    quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
+    model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
+    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else OPENAI_IMAGE_QUALITY
 
-    # 힌트 있으면 사용자 문장을 맨 앞(ChatGPT와 동일). 없으면 기존 서비스 톤 추출.
     if hint:
+        # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
         prompt = f"""{hint}
 
-위 요청을 최우선으로 따르세요. 요청한 것만 쇼핑몰 상품 컷처럼 뽑아 주세요.
-- 요청한 아이템만 남기고 사람·팔·몸통·얼굴·다른 옷은 제거
-- 깔끔한 흰 스튜디오 배경, 아이템 중앙 배치, 전체가 잘리지 않게
-- 원본의 색·실루엣·재질·주름·광택 유지 (새로 창작하지 말 것)
-- 아이템 위 로고·글자는 철자·간격 그대로
+쇼핑몰 상품 컷처럼 요청한 아이템만 흰 배경에 단독으로 뽑아줘. 사람·팔·다른 옷은 넣지 마.
+원본 색·형태·재질은 그대로 유지해.
 """
     else:
         prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
@@ -469,6 +472,11 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
         if logo_text:
             prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
+
+    print(
+        f"[extract] start hint={bool(hint)!r} hint_text={hint[:60]!r} model={model} quality={quality}",
+        flush=True,
+    )
 
     def _edit(use_model: str, *, transparent: bool) -> bytes:
         img_bytes = read_image_as_png_bytes(path)
@@ -498,11 +506,10 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         )
         return base64.b64decode(result.data[0].b64_json)
 
-    # 힌트: ChatGPT처럼 opaque 상품 컷 우선. 무힌트: 기존처럼 transparent 우선.
     attempts: list[tuple[str, bool]] = []
     if hint:
         attempts.append((model, False))
-        if "image-2" not in model:
+        if "image-2" not in (model or ""):
             attempts.append((model, True))
         if model != OPENAI_IMAGE_MODEL:
             attempts.append((OPENAI_IMAGE_MODEL, False))
@@ -513,6 +520,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             attempts.append((OPENAI_IMAGE_MODEL, True))
 
     seen: set[tuple[str, bool]] = set()
+    last_err = ""
     for use_model, transparent in attempts:
         key = (use_model, transparent)
         if key in seen:
@@ -520,18 +528,35 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         seen.add(key)
         try:
             raw = _edit(use_model, transparent=transparent)
+            print(f"[extract] ok model={use_model} transparent={transparent}", flush=True)
+            meta["_extract_mode"] = "ai"
             return finalize_cutout(raw)
         except Exception as exc:  # noqa: BLE001
+            last_err = str(exc)
             print(f"[extract] edit failed model={use_model} transparent={transparent}: {exc}", flush=True)
+    meta["_extract_fail"] = last_err or "edit_failed"
     return None
 
 
 def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
-    """AI 추출을 시도하고, 실패해도 로컬 컷아웃으로 카드 톤을 통일."""
+    """AI 추출. 힌트가 있으면 로컬 배경제거 폴백으로 가짜 성공을 만들지 않음."""
+    hint = str(meta.get("extract_hint") or "").strip()
     product = generate_product_image(user_id, path, meta)
     if product:
         return product
-    return local_product_cutout(path)
+    if hint:
+        fail = meta.get("_extract_fail") or "edit_failed"
+        print(f"[extract] hint extract failed ({fail}) — no local fallback", flush=True)
+        if fail == "no_credits":
+            raise HTTPException(status_code=402, detail="이미지 생성 크레딧이 부족해요")
+        raise HTTPException(
+            status_code=502,
+            detail="요청한 아이템을 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
+        )
+    local = local_product_cutout(path)
+    if local:
+        meta["_extract_mode"] = "local"
+    return local
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -1174,6 +1199,10 @@ def _store_uploaded_item(
         }
         if product_bytes:
             item_metadata["bg_norm"] = _BG_NORM_VERSION
+            if meta.get("_extract_mode"):
+                item_metadata["extract_mode"] = meta["_extract_mode"]
+        if hint:
+            item_metadata["extract_hint"] = hint[:200]
         if (brand or "").strip():
             item_metadata["brand"] = brand.strip()
         if (store or "").strip():
