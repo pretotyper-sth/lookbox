@@ -312,40 +312,54 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v3"
+_BG_NORM_VERSION = "cutout_v4"
 
 
-def make_transparent_cutout(png_bytes: bytes) -> bytes:
-    """가장자리에서 이어진 순백·연회색 스튜디오 배경을 투명으로 바꿔 옷만 남김."""
+def make_transparent_cutout(png_bytes: bytes, *, aggressive: bool = False) -> bytes:
+    """가장자리에서 이어진 순백·연회색 스튜디오 배경을 투명으로 바꿔 옷만 남김.
+
+    gpt-image-2 등이 불투명 흰 판을 남기는 경우가 있어, aggressive=True면 임계를 더 낮춤.
+    """
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     w, h = img.size
+    if w < 2 or h < 2:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
     px = img.load()
     visited = [[False] * w for _ in range(h)]
     q: deque[tuple[int, int]] = deque()
+    white_floor = 235 if aggressive else 242
+    gray_floor = 200 if aggressive else 218
+    chroma_max = 18 if aggressive else 14
 
     def is_plate(x: int, y: int) -> bool:
         r, g, b, a = px[x, y]
-        if a < 12:
+        if a < 18:
             return True
-        # 순백
-        if r >= 248 and g >= 248 and b >= 248:
+        # 순백·거의 흰색 (image-2 불투명 흰 판)
+        if r >= white_floor and g >= white_floor and b >= white_floor:
             return True
-        # 밝고 채도 낮은 스튜디오 그레이/아이보리 판 (가장자리 flood-fill만 적용)
+        # 밝고 채도 낮은 스튜디오 그레이/아이보리 판
         mx, mn = max(r, g, b), min(r, g, b)
-        if mn >= 218 and (mx - mn) <= 14:
+        if mn >= gray_floor and (mx - mn) <= chroma_max:
             return True
-        if mn >= 232 and (mx - mn) <= 22:
+        if mn >= 228 and (mx - mn) <= 24:
             return True
         return (
-            abs(r - _STUDIO_BG[0]) <= 14
-            and abs(g - _STUDIO_BG[1]) <= 14
-            and abs(b - _STUDIO_BG[2]) <= 14
+            abs(r - _STUDIO_BG[0]) <= 16
+            and abs(g - _STUDIO_BG[1]) <= 16
+            and abs(b - _STUDIO_BG[2]) <= 16
         )
 
-    seeds = [
-        (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
-        (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
-    ]
+    # 테두리 전체를 시드로 — 모서리만이면 얇은 테두리에 막힐 수 있음
+    seeds: list[tuple[int, int]] = []
+    for x in range(0, w, max(1, w // 64)):
+        seeds.append((x, 0))
+        seeds.append((x, h - 1))
+    for y in range(0, h, max(1, h // 64)):
+        seeds.append((0, y))
+        seeds.append((w - 1, y))
     for x, y in seeds:
         if 0 <= x < w and 0 <= y < h and is_plate(x, y) and not visited[y][x]:
             visited[y][x] = True
@@ -363,10 +377,47 @@ def make_transparent_cutout(png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _edge_plate_ratio(png_bytes: bytes) -> float:
+    """가장자리 픽셀 중 불투명 흰/회색 판 비율. 컷아웃 실패 감지용."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    w, h = img.size
+    px = img.load()
+    samples: list[tuple[int, int]] = []
+    step = max(1, min(w, h) // 40)
+    for x in range(0, w, step):
+        samples.append((x, 0))
+        samples.append((x, h - 1))
+    for y in range(0, h, step):
+        samples.append((0, y))
+        samples.append((w - 1, y))
+    if not samples:
+        return 0.0
+    hits = 0
+    for x, y in samples:
+        r, g, b, a = px[x, y]
+        if a < 18:
+            continue
+        if r >= 235 and g >= 235 and b >= 235:
+            hits += 1
+            continue
+        mx, mn = max(r, g, b), min(r, g, b)
+        if mn >= 200 and (mx - mn) <= 18:
+            hits += 1
+    return hits / len(samples)
+
+
+def finalize_cutout(png_bytes: bytes) -> bytes:
+    """1차 컷아웃 후 가장자리에 흰 판이 남으면 더 강하게 한 번 더."""
+    out = make_transparent_cutout(png_bytes, aggressive=False)
+    if _edge_plate_ratio(out) >= 0.12:
+        out = make_transparent_cutout(out, aggressive=True)
+    return out
+
+
 def local_product_cutout(path: str) -> bytes | None:
     """AI 추출 실패 시에도 원본 스튜디오 배경을 걷어 카드 톤을 맞춤."""
     try:
-        return make_transparent_cutout(read_image_as_png_bytes(path))
+        return finalize_cutout(read_image_as_png_bytes(path))
     except Exception:
         return None
 
@@ -388,7 +439,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-- 배경은 완전히 투명하게 (배경 완전 제거). 원본이 이미 스튜디오 제품컷이어도 회색·흰색·아이보리 배경 판을 절대 남기지 말 것
+- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
 - 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
@@ -399,6 +450,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         prompt += f'\n- USER FOCUS (highest priority): "{hint}". Extract ONLY that item. Ignore other garments, the person, and unrelated objects.'
     if has_text:
         prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
+        prompt += "\n- Still output a transparent background — logo preservation must not keep a white/gray studio plate."
         if logo_text:
             prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
     try:
@@ -420,7 +472,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             {"quality": quality, "has_text_logo": has_text, "logo_text": logo_text[:40]},
         )
         raw = base64.b64decode(result.data[0].b64_json)
-        return make_transparent_cutout(raw)
+        return finalize_cutout(raw)
     except Exception:
         try:
             # background=transparent 미지원 모델 폴백
@@ -441,7 +493,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
                 {"quality": quality, "has_text_logo": has_text, "fallback": True},
             )
             raw = base64.b64decode(result.data[0].b64_json)
-            return make_transparent_cutout(raw)
+            return finalize_cutout(raw)
         except Exception:
             # 텍스트용 상위 모델 실패 시 기본 모델로 한 번 더
             if model != OPENAI_IMAGE_MODEL:
@@ -464,7 +516,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
                         {"quality": quality, "has_text_logo": has_text, "fallback_model": True},
                     )
                     raw = base64.b64decode(result.data[0].b64_json)
-                    return make_transparent_cutout(raw)
+                    return finalize_cutout(raw)
                 except Exception:
                     return None
             return None
@@ -1892,7 +1944,7 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             continue
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
-            fixed = make_transparent_cutout(raw)
+            fixed = finalize_cutout(raw)
             new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(new_path, fixed, "image/png")
             meta["bg_norm"] = _BG_NORM_VERSION
