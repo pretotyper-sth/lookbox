@@ -227,8 +227,10 @@ def classify_item(path: str) -> dict[str, Any]:
   "logo_text": ""
 }
 규칙:
-- has_text_logo: 옷 원단에 인쇄·자수·패치된 글자/브랜드 로고가 보이면 true. 가격표·워터마크·화면 UI 텍스트는 false.
-- logo_text: 읽을 수 있는 글자를 원문 철자 그대로 (예: "IAB STUDIO"). 없으면 "".
+- color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
+- has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
+  false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
+- logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 """
     try:
         response = openai_client.chat.completions.create(
@@ -248,11 +250,23 @@ def classify_item(path: str) -> dict[str, Any]:
         data = json.loads(response.choices[0].message.content or "{}")
         if data.get("category") not in CATEGORY_KO:
             data["category"] = fallback["category"]
-        data["has_text_logo"] = bool(data.get("has_text_logo"))
         data["logo_text"] = str(data.get("logo_text") or "").strip()[:80]
+        data["has_text_logo"] = _significant_garment_logo(
+            bool(data.get("has_text_logo")), data["logo_text"]
+        )
+        if not data["has_text_logo"]:
+            data["logo_text"] = ""
         return {**fallback, **data}
     except Exception:
         return fallback
+
+
+def _significant_garment_logo(has_text_logo: bool, logo_text: str) -> bool:
+    """gpt-image-2가 필요한 실질 텍스트 로고만 통과. 애매·미세 텍스트는 제외."""
+    if not has_text_logo:
+        return False
+    chars = re.sub(r"[^A-Za-z0-9가-힣]", "", logo_text or "")
+    return len(chars) >= 3
 
 
 def detect_garment_text(path: str) -> dict[str, Any]:
@@ -260,10 +274,12 @@ def detect_garment_text(path: str) -> dict[str, Any]:
     empty = {"has_text_logo": False, "logo_text": ""}
     if not openai_client:
         return empty
-    prompt = """이 이미지의 주요 옷 원단에 인쇄·자수·패치된 글자나 브랜드 로고가 있는지 보세요.
-가격표·워터마크·화면 UI는 무시하세요. JSON만 응답:
+    prompt = """이 이미지의 주요 옷에 '읽을 수 있는 브랜드명·슬로건'이 크게 인쇄/자수되어 있는지 보세요.
+true 조건: 가슴·등·소매 등 눈에 띄는 글자 3자 이상 (예: IAB STUDIO, NIKE).
+false 조건: 작은 이니셜, 케어라벨, 사이즈택, 글자 없는 마크, 가격표/워터마크/UI, 애매함.
+JSON만 응답:
 {"has_text_logo": false, "logo_text": ""}
-logo_text는 읽을 수 있으면 원문 철자 그대로, 없으면 "".
+logo_text는 true일 때만 원문 철자, 아니면 "".
 """
     try:
         response = openai_client.chat.completions.create(
@@ -281,9 +297,11 @@ logo_text는 읽을 수 있으면 원문 철자 그대로, 없으면 "".
             temperature=0,
         )
         data = json.loads(response.choices[0].message.content or "{}")
+        logo_text = str(data.get("logo_text") or "").strip()[:80]
+        has_logo = _significant_garment_logo(bool(data.get("has_text_logo")), logo_text)
         return {
-            "has_text_logo": bool(data.get("has_text_logo")),
-            "logo_text": str(data.get("logo_text") or "").strip()[:80],
+            "has_text_logo": has_logo,
+            "logo_text": logo_text if has_logo else "",
         }
     except Exception:
         return empty
@@ -341,6 +359,12 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     # 분류 단계에서 이미 넣었으면 재사용, 재추출/이미지만 변경 등은 여기서 감지
     if "has_text_logo" not in meta:
         meta.update(detect_garment_text(path))
+    else:
+        # 저장된 플래그도 동일 게이트로 한 번 더 거름
+        logo_text = str(meta.get("logo_text") or "").strip()
+        meta["has_text_logo"] = _significant_garment_logo(bool(meta.get("has_text_logo")), logo_text)
+        if not meta["has_text_logo"]:
+            meta["logo_text"] = ""
     has_text = bool(meta.get("has_text_logo"))
     logo_text = str(meta.get("logo_text") or "").strip()
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
@@ -426,12 +450,13 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
+    raw_color = (row.get("color") or "").strip()
     return {
         "id": row["id"],
         "name": row.get("name") or "옷",
         "category": CATEGORY_KO.get(row.get("category"), row.get("category") or "상의"),
         "categoryKey": row.get("category"),
-        "color": row.get("color") or "neutral",
+        "color": _canonicalize_color(raw_color) if raw_color else "뉴트럴",
         "imageUrl": row.get("image_url"),
         "status": row.get("status"),
         "note": row.get("note") or "",
@@ -980,12 +1005,13 @@ class LiveStatus(BaseModel):
 
 def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
     meta = row.get("metadata") or {}
+    raw_color = (row.get("color") or "").strip()
     return {
         "id": row["id"],
         "serverId": row["id"],
         "name": row.get("name") or "옷",
         "category": CATEGORY_KO.get(row.get("category"), row.get("category") or "상의"),
-        "color": row.get("color") or "",
+        "color": _canonicalize_color(raw_color) if raw_color else "",
         "img": row.get("image_url"),
         "status": row.get("status"),
         "brand": meta.get("brand") or "",
@@ -1174,6 +1200,64 @@ def _norm_color_token(s: str) -> str:
     return re.sub(r"\s+", "", (s or "").strip().lower())
 
 
+# 일상어·영어 → 패션 음차 표기 (블랙/그레이/화이트…)
+_COLOR_CANONICAL_RAW: dict[str, str] = {
+    "검정": "블랙", "검은색": "블랙", "검정색": "블랙", "흑색": "블랙", "black": "블랙",
+    "흰색": "화이트", "하얀색": "화이트", "하양": "화이트", "백색": "화이트", "white": "화이트",
+    "회색": "그레이", "쥐색": "그레이", "gray": "그레이", "grey": "그레이",
+    "연회색": "라이트그레이", "진회색": "다크그레이", "lightgray": "라이트그레이",
+    "lightgrey": "라이트그레이", "darkgray": "다크그레이", "darkgrey": "다크그레이",
+    "남색": "네이비", "곤색": "네이비", "navy": "네이비", "navyblue": "네이비",
+    "갈색": "브라운", "brown": "브라운",
+    "빨강": "레드", "빨간색": "레드", "적색": "레드", "red": "레드",
+    "파랑": "블루", "파란색": "블루", "청색": "블루", "blue": "블루",
+    "하늘색": "스카이블루", "skyblue": "스카이블루", "lightblue": "라이트블루",
+    "초록": "그린", "초록색": "그린", "녹색": "그린", "green": "그린",
+    "노랑": "옐로우", "노란색": "옐로우", "황색": "옐로우", "yellow": "옐로우",
+    "보라": "퍼플", "보라색": "퍼플", "purple": "퍼플",
+    "분홍": "핑크", "분홍색": "핑크", "pink": "핑크",
+    "주황": "오렌지", "주황색": "오렌지", "orange": "오렌지",
+    "베이지색": "베이지", "beige": "베이지",
+    "카키색": "카키", "khaki": "카키",
+    "아이보리색": "아이보리", "ivory": "아이보리",
+    "크림색": "크림", "cream": "크림",
+    "카멜색": "카멜", "camel": "카멜",
+    "차콜색": "차콜", "charcoal": "차콜",
+    "와인색": "와인", "버건디색": "버건디",
+    "멜란지그레이": "멜란지", "melangegray": "멜란지", "melangegrey": "멜란지",
+    "neutral": "뉴트럴", "unknown": "뉴트럴", "없음": "뉴트럴", "none": "뉴트럴",
+}
+_COLOR_CANONICAL = {_norm_color_token(k): v for k, v in _COLOR_CANONICAL_RAW.items()}
+
+
+def _canonicalize_color(color: str) -> str:
+    """검정→블랙, gray→그레이 등 패션 음차로 통일."""
+    c = (color or "").strip()
+    if not c:
+        return "뉴트럴"
+    key = _norm_color_token(c)
+    if key in _COLOR_CANONICAL:
+        return _COLOR_CANONICAL[key]
+    # 이미 음차 목록에 있으면 그대로(공백만 정리)
+    for w in COLOR_WORDS:
+        if _norm_color_token(w) == key and not re.fullmatch(r"[a-z]+", key):
+            return w
+    # 영어 단일어가 COLOR_WORDS에만 있으면 한글 음차로
+    en_map = {
+        "offwhite": "오프화이트", "charcoal": "차콜", "beige": "베이지", "sand": "샌드",
+        "camel": "카멜", "khaki": "카키", "olive": "올리브", "sage": "세이지",
+        "mint": "민트", "teal": "틸", "ivory": "아이보리", "cream": "크림",
+        "ecru": "에크루", "oatmeal": "오트밀", "wine": "와인", "burgundy": "버건디",
+        "maroon": "마룬", "rose": "로즈", "coral": "코랄", "mustard": "머스타드",
+        "lavender": "라벤더", "lilac": "라일락", "denim": "데님", "indigo": "인디고",
+        "tan": "탄", "mocha": "모카", "silver": "실버", "gold": "골드",
+        "saxe": "삭스", "skyblue": "스카이블루", "lightblue": "라이트블루",
+    }
+    if key in en_map:
+        return en_map[key]
+    return c
+
+
 _COLOR_NORM = {_norm_color_token(w) for w in COLOR_WORDS}
 _COLOR_MOD_NORM = {_norm_color_token(w) for w in COLOR_MODIFIERS}
 _COLOR_NORM_BY_LEN = sorted(_COLOR_NORM, key=len, reverse=True)
@@ -1237,8 +1321,7 @@ def _normalize_item_name_color(name: str, color: str) -> tuple[str, str]:
             # 이름에 있던 꼬리표가 더 구체적이면(블루 스트라이프) 그걸 색으로
             if len(split_c) >= len(c):
                 c = split_c
-    if not c:
-        c = "neutral"
+    c = _canonicalize_color(c)
     return n, c
 
 
@@ -1256,7 +1339,7 @@ def _extract_page_color(page_html: str) -> str:
             continue
         c = re.sub(r"\s+", " ", html_lib.unescape(m.group(1))).strip()
         if c and _is_color_tail(c):
-            return c
+            return _canonicalize_color(c)
     return ""
 
 
@@ -1539,7 +1622,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
     if body.name is not None:
         patch["name"] = body.name
     if body.color is not None:
-        patch["color"] = body.color
+        patch["color"] = _canonicalize_color(body.color)
     if body.note is not None:
         patch["note"] = body.note
     if body.category is not None:
