@@ -718,7 +718,7 @@ function App() {
     if (phase === 'onboarding') {
       return <Onboarding mode="signup" onDone={completeOnboarding} onCancel={() => setPhase('landing')} />;
     }
-    return <Landing onStart={() => setPhase('onboarding')} onBypass={() => completeOnboarding(LB_DATA.DEFAULT_PREFS)} />;
+    return <Landing onStart={() => setPhase('onboarding')} />;
   }
 
   // ---- which screen ----

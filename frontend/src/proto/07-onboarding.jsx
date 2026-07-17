@@ -62,13 +62,13 @@ const PC_DETAIL = {
 /* ----------------------------------------------------------------
    Landing — 첫 진입(홈) 화면. '시작하기'를 누르면 회원가입 단계로 진입.
 ---------------------------------------------------------------- */
-function Landing({ onStart, onBypass }) {
+function Landing({ onStart }) {
   // 랜딩 히어로 미리보기 — 실서비스는 사용자 데이터(WARDROBE)를 비우므로
   // 마케팅용 샘플 이미지는 비워지지 않는 IMG 리소스에서 직접 구성한다.
-  const heroItems = [
-    { id: 'hero-top', category: '상의', img: LB_DATA.IMG.topNavy },
-    { id: 'hero-bottom', category: '하의', img: LB_DATA.IMG.skirtWhite },
-    { id: 'hero-shoes', category: '신발', img: LB_DATA.IMG.sandalBlack },
+  const anchorItem = { id: 'hero-anchor', category: '상의', img: LB_DATA.IMG.topNavy };
+  const wardrobeItems = [
+    { id: 'hero-w1', category: '하의', img: LB_DATA.IMG.skirtWhite },
+    { id: 'hero-w2', category: '신발', img: LB_DATA.IMG.sandalBlack },
   ].filter((it) => it.img);
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
@@ -77,22 +77,54 @@ function Landing({ onStart, onBypass }) {
 
         {/* 본문 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0, paddingBottom: 8 }}>
-          {/* 코디 미리보기 (제품 느낌) */}
+          {/* 구매 전 조합 미리보기 — 사고 싶은 옷 + 내 옷장 → 여러 코디 */}
           <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', boxShadow: 'inset 0 0 0 1px var(--line)', padding: 16, marginBottom: 30 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, color: 'var(--ink-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, color: 'var(--ink-2)' }}>
               <Icon name="sparkle" size={15} stroke={2} />
-              <span style={{ fontSize: 12, fontWeight: 700 }}>오늘의 추천 코디</span>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>구매 전 조합 추천</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              {heroItems.map((it) => <Thumb key={it.id} item={it} radius="var(--r-md)" />)}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* 사고 싶은 옷 (앵커) */}
+              <div style={{ width: 92, flex: 'none' }}>
+                <div style={{ position: 'relative', borderRadius: 'var(--r-md)', boxShadow: '0 0 0 2px var(--accent)' }}>
+                  <Thumb item={anchorItem} radius="var(--r-md)" />
+                  <span style={{
+                    position: 'absolute', left: 6, top: 6, fontSize: 10, fontWeight: 700,
+                    color: 'var(--accent-ink)', background: 'var(--accent)',
+                    padding: '3px 7px', borderRadius: 'var(--r-pill)',
+                  }}>사고 싶은 옷</span>
+                </div>
+              </div>
+
+              <Icon name="plus" size={16} stroke={2.4} style={{ color: 'var(--ink-3)', flex: 'none' }} />
+
+              {/* 내 옷장 */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 6 }}>내 옷장</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {wardrobeItems.map((it) => <Thumb key={it.id} item={it} radius="var(--r-sm)" />)}
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              marginTop: 14, padding: '9px 0', borderRadius: 'var(--r-pill)',
+              background: 'var(--ivory)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 700,
+            }}>
+              <Icon name="check" size={14} stroke={2.4} style={{ color: 'var(--accent-ink, var(--ink))' }} />
+              어울리는 코디 3개 완성
             </div>
           </div>
 
           <h1 style={{ margin: '0 0 14px', fontSize: 30, fontWeight: 800, lineHeight: 1.18, letterSpacing: '-0.02em', textWrap: 'balance' }}>
-            내 옷장이 곧<br />나만의 스타일리스트
+            이 옷, 내 옷장이랑<br />어울릴까?
           </h1>
           <p style={{ margin: 0, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.55, textWrap: 'pretty' }}>
-            가진 옷으로 매일의 코디를 추천받고,<br />사고 싶은 옷과의 조합까지 미리 확인하세요.
+            사고 싶은 옷을 올리면, 내 옷장 옷들과<br />
+            어울리는 코디를 미리 만들어드려요.<br />
+            매일의 데일리 추천은 덤이에요.
           </p>
         </div>
 
@@ -105,15 +137,6 @@ function Landing({ onStart, onBypass }) {
           }}>
             이미 계정이 있으신가요? <span style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: 3 }}>로그인</span>
           </button>
-          {onBypass && (
-            <button onClick={onBypass} className="lb-btn" style={{
-              width: '100%', marginTop: 6, background: 'transparent', color: 'var(--ink-3)',
-              fontSize: 12, fontWeight: 600, padding: '8px', gap: 6,
-              border: '1px dashed var(--line-2)', borderRadius: 'var(--r-pill)',
-            }}>
-              <Icon name="sparkle" size={13} /> 개발용 · 로그인 없이 바로 둘러보기
-            </button>
-          )}
         </div>
       </div>
     </div>
