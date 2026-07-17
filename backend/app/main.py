@@ -36,6 +36,8 @@ OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
 OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION_MODEL
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
+# 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 고품질 (비용↑, 글자 보존↑)
+OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
     origin.strip()
@@ -208,6 +210,8 @@ def classify_item(path: str) -> dict[str, Any]:
         "category": "top",
         "color": "neutral",
         "tags": [],
+        "has_text_logo": False,
+        "logo_text": "",
     }
     if not openai_client:
         return fallback
@@ -217,8 +221,13 @@ def classify_item(path: str) -> dict[str, Any]:
   "name": "한국어 이름",
   "category": "top|bottom|outer|dress|shoes|bag|accessory",
   "color": "대표 색상",
-  "tags": ["키워드"]
+  "tags": ["키워드"],
+  "has_text_logo": false,
+  "logo_text": ""
 }
+규칙:
+- has_text_logo: 옷 원단에 인쇄·자수·패치된 글자/브랜드 로고가 보이면 true. 가격표·워터마크·화면 UI 텍스트는 false.
+- logo_text: 읽을 수 있는 글자를 원문 철자 그대로 (예: "IAB STUDIO"). 없으면 "".
 """
     try:
         response = openai_client.chat.completions.create(
@@ -238,9 +247,45 @@ def classify_item(path: str) -> dict[str, Any]:
         data = json.loads(response.choices[0].message.content or "{}")
         if data.get("category") not in CATEGORY_KO:
             data["category"] = fallback["category"]
+        data["has_text_logo"] = bool(data.get("has_text_logo"))
+        data["logo_text"] = str(data.get("logo_text") or "").strip()[:80]
         return {**fallback, **data}
     except Exception:
         return fallback
+
+
+def detect_garment_text(path: str) -> dict[str, Any]:
+    """옷 표면 인쇄/자수 텍스트·로고만 감지 (분류 메타에 없을 때 재추출·교체용)."""
+    empty = {"has_text_logo": False, "logo_text": ""}
+    if not openai_client:
+        return empty
+    prompt = """이 이미지의 주요 옷 원단에 인쇄·자수·패치된 글자나 브랜드 로고가 있는지 보세요.
+가격표·워터마크·화면 UI는 무시하세요. JSON만 응답:
+{"has_text_logo": false, "logo_text": ""}
+logo_text는 읽을 수 있으면 원문 철자 그대로, 없으면 "".
+"""
+    try:
+        response = openai_client.chat.completions.create(
+            model=OPENAI_CLASSIFY_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_to_data_url(path)}},
+                    ],
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        data = json.loads(response.choices[0].message.content or "{}")
+        return {
+            "has_text_logo": bool(data.get("has_text_logo")),
+            "logo_text": str(data.get("logo_text") or "").strip()[:80],
+        }
+    except Exception:
+        return empty
 
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
@@ -292,6 +337,12 @@ def make_transparent_cutout(png_bytes: bytes) -> bytes:
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
+    # 분류 단계에서 이미 넣었으면 재사용, 재추출/이미지만 변경 등은 여기서 감지
+    if "has_text_logo" not in meta:
+        meta.update(detect_garment_text(path))
+    has_text = bool(meta.get("has_text_logo"))
+    logo_text = str(meta.get("logo_text") or "").strip()
+    quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
 - 배경은 완전히 투명하게 (배경 완전 제거)
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
@@ -299,6 +350,10 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
 - 아이템 전체가 잘리지 않게 중앙 배치
 - 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
+    if has_text:
+        prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
+        if logo_text:
+            prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
     try:
         img_bytes = read_image_as_png_bytes(path)
         buf = io.BytesIO(img_bytes)
@@ -308,10 +363,15 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             image=buf,
             prompt=prompt,
             size="1024x1536",
-            quality=OPENAI_IMAGE_QUALITY,
+            quality=quality,
             background="transparent",
         )
-        log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
+        log_ai_usage(
+            user_id,
+            "product_image",
+            OPENAI_IMAGE_MODEL,
+            {"quality": quality, "has_text_logo": has_text, "logo_text": logo_text[:40]},
+        )
         raw = base64.b64decode(result.data[0].b64_json)
         return make_transparent_cutout(raw)
     except Exception:
@@ -325,9 +385,14 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
                 image=buf,
                 prompt=prompt,
                 size="1024x1536",
-                quality=OPENAI_IMAGE_QUALITY,
+                quality=quality,
             )
-            log_ai_usage(user_id, "product_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
+            log_ai_usage(
+                user_id,
+                "product_image",
+                OPENAI_IMAGE_MODEL,
+                {"quality": quality, "has_text_logo": has_text, "fallback": True},
+            )
             raw = base64.b64decode(result.data[0].b64_json)
             return make_transparent_cutout(raw)
         except Exception:
@@ -709,7 +774,11 @@ async def upload_item(
                     "storage_path": image_path,
                     "source": "upload",
                     "status": status if status in {"owned", "considering"} else "owned",
-                    "metadata": {"tags": meta.get("tags") or []},
+                    "metadata": {
+                        "tags": meta.get("tags") or [],
+                        "has_text_logo": bool(meta.get("has_text_logo")),
+                        "logo_text": str(meta.get("logo_text") or "").strip()[:80],
+                    },
                 }
             )
             .execute()
@@ -949,6 +1018,8 @@ def _store_uploaded_item(
             "tags": meta.get("tags") or [],
             "original_path": original_path,
             "original_url": original_url,
+            "has_text_logo": bool(meta.get("has_text_logo")),
+            "logo_text": str(meta.get("logo_text") or "").strip()[:80],
         }
         if (brand or "").strip():
             item_metadata["brand"] = brand.strip()
@@ -1511,12 +1582,19 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
             "color": row.get("color") or "",
             "tags": meta.get("tags") or [],
         }
+        # 예전 아이템은 메타에 없을 수 있음 → generate 안에서 감지
+        if "has_text_logo" in meta:
+            gen_meta["has_text_logo"] = bool(meta.get("has_text_logo"))
+            gen_meta["logo_text"] = str(meta.get("logo_text") or "").strip()[:80]
         product_bytes = generate_product_image(user.id, tmp_path, gen_meta)
         if not product_bytes:
             raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
         new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
         image_url = upload_bytes(new_path, product_bytes, "image/png")
         meta["bg_norm"] = "cutout_v2"
+        if "has_text_logo" in gen_meta:
+            meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
+            meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
         if not meta.get("original_path"):
             meta["original_path"] = source_path
         updated = (
@@ -1590,6 +1668,7 @@ async def live_replace_image(
     try:
         original_path = f"{user.id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
+        # 새 이미지 기준이므로 로고 여부를 다시 감지 (generate 안에서 처리)
         gen_meta = {
             "name": row.get("name") or "옷",
             "category": row.get("category") or "top",
@@ -1602,6 +1681,9 @@ async def live_replace_image(
             image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(image_path, product_bytes, "image/png")
             meta["bg_norm"] = "cutout_v2"
+        if "has_text_logo" in gen_meta:
+            meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
+            meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
         meta["original_path"] = original_path
         meta["original_url"] = original_url
         updated = (
