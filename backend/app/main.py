@@ -54,7 +54,13 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# 타임아웃을 명시해 이미지 생성이 지연돼도 연결을 오래 붙잡지 않게 한다.
+# (무한 대기 시 Render/브라우저가 먼저 끊어 'Failed to fetch'가 발생)
+openai_client = (
+    OpenAI(api_key=OPENAI_API_KEY, timeout=90.0, max_retries=1)
+    if OPENAI_API_KEY
+    else None
+)
 
 app = FastAPI(title="LOOKBOX API")
 app.add_middleware(
@@ -528,18 +534,15 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         )
         return base64.b64decode(result.data[0].b64_json)
 
+    # 한 요청이 오래 걸리지 않도록 시도는 최대 2회로 제한.
     attempts: list[tuple[str, bool]] = []
     if hint:
         attempts.append((model, False))
-        if "image-2" not in (model or ""):
-            attempts.append((model, True))
         if model != OPENAI_IMAGE_MODEL:
             attempts.append((OPENAI_IMAGE_MODEL, False))
     else:
         attempts.append((model, True))
         attempts.append((model, False))
-        if model != OPENAI_IMAGE_MODEL:
-            attempts.append((OPENAI_IMAGE_MODEL, True))
 
     seen: set[tuple[str, bool]] = set()
     last_err = ""
