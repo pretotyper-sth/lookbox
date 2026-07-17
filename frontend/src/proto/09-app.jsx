@@ -263,15 +263,20 @@ async function liveJSON(url, options = {}) {
   return data;
 }
 
-async function liveImportSource({ sourceType, file, url, status }) {
+async function liveImportSource({ sourceType, file, url, status, extractHint }) {
+  const hint = (extractHint || '').trim();
   if (sourceType === 'url') {
     if (!url || !url.trim()) throw new Error('상품 URL을 입력해주세요');
-    return liveJSON('/api/live/import/url', { method: 'POST', body: JSON.stringify({ url, status }) });
+    return liveJSON('/api/live/import/url', {
+      method: 'POST',
+      body: JSON.stringify({ url, status, extract_hint: hint }),
+    });
   }
   if (!file) throw new Error('사진 파일을 선택해주세요');
   const fd = new FormData();
   fd.append('image', file);
   fd.append('status', status || 'owned');
+  if (hint) fd.append('extract_hint', hint);
   return liveJSON('/api/live/import/photo', { method: 'POST', body: fd });
 }
 
@@ -740,10 +745,12 @@ function App() {
       : s));
     showToast('이미지를 바꿨어요', 'sparkle');
   };
-  const liveReplaceItemImage = async ({ itemId, sourceType, file, url }) => {
+  const liveReplaceItemImage = async ({ itemId, sourceType, file, url, extractHint }) => {
     const fd = new FormData();
     if (sourceType === 'url') fd.append('url', url);
     else fd.append('image', file);
+    const hint = (extractHint || '').trim();
+    if (hint) fd.append('extract_hint', hint);
     const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image`, {
       method: 'POST',
       body: fd,

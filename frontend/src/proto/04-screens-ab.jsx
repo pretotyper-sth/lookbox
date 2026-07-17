@@ -464,11 +464,28 @@ function AddSheet({ ctx }) {
   const [tab, setTab] = useS('photo');
   const [picked, setPicked] = useS(false);
   const [url, setUrl] = useS('');
-  const [loaded, setLoaded] = useS(false);
   const [file, setFile] = useS(null);
+  const [previewUrl, setPreviewUrl] = useS('');
+  const [hint, setHint] = useS('');
+  const [showHint, setShowHint] = useS(false);
   const [busy, setBusy] = useS(false);
   const [err, setErr] = useS('');
   const fileInput = useR(null);
+  const previewUrlRef = useR('');
+
+  const setPreviewFromFile = (f) => {
+    if (previewUrlRef.current) {
+      try { URL.revokeObjectURL(previewUrlRef.current); } catch (e) { /* ignore */ }
+      previewUrlRef.current = '';
+    }
+    if (!f) {
+      setPreviewUrl('');
+      return;
+    }
+    const next = URL.createObjectURL(f);
+    previewUrlRef.current = next;
+    setPreviewUrl(next);
+  };
 
   // stage machine
   const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready
@@ -486,7 +503,9 @@ function AddSheet({ ctx }) {
   stepsRef.current = steps;
 
   const resetLocalDraft = () => {
-    setTab('photo'); setPicked(false); setUrl(''); setLoaded(false); setFile(null); setBusy(false); setErr('');
+    setPreviewFromFile(null);
+    setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
+    setBusy(false); setErr('');
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
     draftIdsRef.current = [];
   };
@@ -531,6 +550,7 @@ function AddSheet({ ctx }) {
           sourceType: source.sourceType || tab,
           file: source.file || file,
           url: source.url != null ? source.url : url,
+          extractHint: source.extractHint != null ? source.extractHint : hint,
         });
         if (cancelledRef.current) return;
         if (!next) throw new Error('이미지를 바꾸지 못했어요');
@@ -543,6 +563,7 @@ function AddSheet({ ctx }) {
         file: source.file || file,
         url: source.url != null ? source.url : url,
         status: anchor ? 'considering' : 'pending',
+        extractHint: source.extractHint != null ? source.extractHint : hint,
       });
       const list = (data.items || []).slice(0, detectCount).map((d, i) => ({ ...d, id: d.id || 'det' + i, cat: d.category, conf: d.conf || 0.95 }));
       const ids = list.map((d) => d.id).filter(Boolean);
@@ -573,7 +594,6 @@ function AddSheet({ ctx }) {
     } catch (e) {
       if (cancelledRef.current) return;
       setErr(e.message || 'AI 분석에 실패했어요');
-      setLoaded(false);
       setPicked(false);
       setStage('input');
     } finally {
@@ -586,22 +606,35 @@ function AddSheet({ ctx }) {
     if (!f) return;
     setFile(f);
     setPicked(true);
-    runDetect({ sourceType: 'photo', file: f });
+    setPreviewFromFile(f);
+    setErr('');
+    // 같은 파일을 다시 고를 수 있게 초기화
+    e.target.value = '';
   };
-  const onLoadUrl = async () => {
+  const clearPhoto = () => {
+    setFile(null);
+    setPicked(false);
+    setPreviewFromFile(null);
+    setErr('');
+  };
+  const canSubmit = tab === 'photo' ? !!file : !!url.trim();
+  const onSubmitAdd = async () => {
+    setErr('');
+    if (tab === 'photo') {
+      if (!file) { setErr('사진을 먼저 넣어 주세요'); return; }
+      await runDetect({ sourceType: 'photo', file, extractHint: hint });
+      return;
+    }
     const raw = url.trim();
-    if (!raw) return;
-    // 대표 마켓은 분석 대기 없이 바로 안내 (서버도 동일 문구로 응답)
+    if (!raw) { setErr('상품 URL을 입력해 주세요'); return; }
     const blocked = urlImportBlockedHint(raw);
     if (blocked) {
       setErr(blocked);
-      setLoaded(false);
       return;
     }
-    setLoaded(true);
     const normalized = /^https?:\/\//i.test(raw) ? raw : ('https://' + raw.replace(/^\/+/, ''));
     if (normalized !== raw) setUrl(normalized);
-    await runDetect({ sourceType: 'url', url: normalized });
+    await runDetect({ sourceType: 'url', url: normalized, extractHint: hint });
   };
 
   // ---- clipboard paste (PC: Ctrl/⌘+V, 모바일: 꾹 눌러 붙여넣기) ----
@@ -619,7 +652,8 @@ function AddSheet({ ctx }) {
           setTab('photo');
           setFile(f);
           setPicked(true);
-          runDetectRef.current({ sourceType: 'photo', file: f });
+          setPreviewFromFile(f);
+          setErr('');
           return true;
         }
       }
@@ -682,7 +716,7 @@ function AddSheet({ ctx }) {
     if (stage === 'select' || stage === 'anchor-ready') {
       discardDraftIds(detected.map((d) => d && d.id));
       draftIdsRef.current = [];
-      setStage('input'); setPicked(false); setLoaded(false); setDetected([]); setSel([]);
+      setStage('input'); setDetected([]); setSel([]);
     } else if (stage === 'register') {
       if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select');
     }
@@ -757,43 +791,107 @@ function AddSheet({ ctx }) {
               {tab === 'photo' ? (
                 <>
                   <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
-                  {/* contentEditable: 모바일에서 꾹 누르면 '붙여넣기' 메뉴가 뜨고, 붙여넣은
-                      이미지는 onPaste로 잡는다. 탭하면 파일 선택. inputMode=none으로 키보드 억제. */}
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    contentEditable
-                    suppressContentEditableWarning
-                    inputMode="none"
-                    onClick={onPickPhoto}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPickPhoto(); } }}
-                    onInput={(e) => { e.currentTarget.textContent = ''; }}
-                    onCut={(e) => e.preventDefault()}
-                    className="lb-drop" style={{
-                      width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-                      border: '1.5px dashed var(--line-2)', display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', gap: 10, color: 'var(--ink-2)', cursor: 'pointer',
-                      caretColor: 'transparent', outline: 'none',
+                  {picked && previewUrl ? (
+                    <div style={{
+                      position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
+                      background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                      aspectRatio: '1 / 1', display: 'grid', placeItems: 'center',
                     }}>
-                    <div contentEditable={false} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
-                      <Icon name="camera" size={30} stroke={1.5} />
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
-                      <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                        {isTouch ? '탭하여 선택 · 꾹 눌러 붙여넣기' : '탭하여 선택 · Ctrl/⌘+V로 붙여넣기'}
-                      </span>
+                      <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '6%' }} />
+                      <button
+                        type="button"
+                        onClick={clearPhoto}
+                        aria-label="사진 지우기"
+                        className="lb-iconbtn"
+                        style={{
+                          position: 'absolute', top: 10, right: 10, width: 34, height: 34, borderRadius: '50%',
+                          background: 'color-mix(in srgb, var(--surface) 88%, transparent)', color: 'var(--ink-2)',
+                          display: 'grid', placeItems: 'center', boxShadow: 'inset 0 0 0 1px var(--line)',
+                        }}
+                      >
+                        <Icon name="x" size={18} />
+                      </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      contentEditable
+                      suppressContentEditableWarning
+                      inputMode="none"
+                      onClick={onPickPhoto}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPickPhoto(); } }}
+                      onInput={(e) => { e.currentTarget.textContent = ''; }}
+                      onCut={(e) => e.preventDefault()}
+                      className="lb-drop" style={{
+                        width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                        border: '1.5px dashed var(--line-2)', display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', gap: 10, color: 'var(--ink-2)', cursor: 'pointer',
+                        caretColor: 'transparent', outline: 'none',
+                      }}>
+                      <div contentEditable={false} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
+                        <Icon name="camera" size={30} stroke={1.5} />
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
+                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                          {isTouch ? '탭하여 선택 · 꾹 눌러 붙여넣기' : '탭하여 선택 · Ctrl/⌘+V로 붙여넣기'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input value={url} onChange={(e) => { setUrl(e.target.value); setLoaded(false); }}
-                    placeholder="상품 URL 붙여넣기" className="lb-input" style={{
-                      flex: 1, padding: '13px 16px', borderRadius: 'var(--r-pill)', fontSize: 14,
-                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none',
-                    }} />
-                  <Btn variant="soft" onClick={onLoadUrl} disabled={!url.trim() || busy}>{busy ? '분석 중' : '불러오기'}</Btn>
+                <input
+                  value={url}
+                  onChange={(e) => { setUrl(e.target.value); setErr(''); }}
+                  placeholder="상품 URL 붙여넣기"
+                  className="lb-input"
+                  style={{
+                    width: '100%', padding: '13px 16px', borderRadius: 'var(--r-md)', fontSize: 14,
+                    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowHint((v) => !v)}
+                style={{
+                  marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
+                }}
+              >
+                <Icon name="plus" size={15} /> 추출 힌트 추가
+                <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
+                <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+                  <Icon name="chevL" size={14} />
+                </span>
+              </button>
+              {showHint && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    className="lb-input"
+                    rows={2}
+                    value={hint}
+                    onChange={(e) => setHint(e.target.value)}
+                    placeholder={'예) 이 이미지에서 가방만 추출해줘'}
+                    style={{
+                      width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                      outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
+                    여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.
+                  </div>
                 </div>
               )}
+
+              <div style={{ marginTop: 'var(--s5)' }}>
+                <Btn full size="lg" icon="sparkle" onClick={onSubmitAdd} disabled={!canSubmit || busy}>
+                  {busy ? '인식 중…' : (reextract ? '이미지 변경' : '추가하기')}
+                </Btn>
+              </div>
             </div>
 
             {!anchor && !reextract && (

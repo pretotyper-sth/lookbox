@@ -205,7 +205,7 @@ def _record_extraction_timing(user_id: str | None, source: str, item_count: int,
     print(f"[timing] source={source} items={item_count} duration_ms={ms} ({ms / 1000:.1f}s)", flush=True)
 
 
-def classify_item(path: str) -> dict[str, Any]:
+def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
     fallback = {
         "name": "새로 추가한 옷",
         "category": "top",
@@ -216,6 +216,7 @@ def classify_item(path: str) -> dict[str, Any]:
     }
     if not openai_client:
         return fallback
+    hint = (extract_hint or "").strip()[:240]
     prompt = """이미지의 주요 패션 아이템 1개를 분석하세요. JSON만 응답하세요.
 형식:
 {
@@ -232,6 +233,8 @@ def classify_item(path: str) -> dict[str, Any]:
   false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 """
+    if hint:
+        prompt += f'\n사용자 지시(최우선): "{hint}" — 이 지시에 맞는 아이템 1개만 분석하세요. 다른 옷/사람은 무시.'
     try:
         response = openai_client.chat.completions.create(
             model=OPENAI_CLASSIFY_MODEL,
@@ -391,6 +394,9 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
 - 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
 - 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
+    hint = str(meta.get("extract_hint") or "").strip()[:240]
+    if hint:
+        prompt += f'\n- USER FOCUS (highest priority): "{hint}". Extract ONLY that item. Ignore other garments, the person, and unrelated objects.'
     if has_text:
         prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
         if logo_text:
@@ -1020,6 +1026,7 @@ LIVE_STATUS_MAP = {
 class LiveImportUrl(BaseModel):
     url: str
     status: str = "owned"
+    extract_hint: str = ""
 
 
 class LiveCoordinate(BaseModel):
@@ -1079,18 +1086,20 @@ def _store_uploaded_item(
     brand: str | None = None,
     store: str | None = None,
     color_override: str | None = None,
+    extract_hint: str | None = None,
 ) -> dict[str, Any]:
+    hint = (extract_hint or "").strip()[:240]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
     try:
-        meta = classify_item(tmp_path)
+        meta = classify_item(tmp_path, extract_hint=hint)
         # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
         item_name, item_color = _normalize_item_name_color(
             (name_override or "").strip() or meta.get("name") or "새 옷",
             (color_override or "").strip() or meta.get("color") or "neutral",
         )
-        meta = {**meta, "name": item_name, "color": item_color}
+        meta = {**meta, "name": item_name, "color": item_color, "extract_hint": hint}
         original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
         product_bytes = resolve_product_image(user_id, tmp_path, meta)
@@ -1764,6 +1773,7 @@ async def live_replace_image(
     item_id: str,
     image: UploadFile | None = File(None),
     url: str | None = Form(None),
+    extract_hint: str = Form(""),
     user: UserContext = Depends(current_user),
 ) -> dict[str, Any]:
     """새 사진/URL로 제품 컷만 교체. 이름·색상·브랜드 등 메타는 유지."""
@@ -1807,6 +1817,7 @@ async def live_replace_image(
         raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요")
 
     meta = dict(row.get("metadata") or {})
+    hint = (extract_hint or "").strip()[:240]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
@@ -1819,6 +1830,7 @@ async def live_replace_image(
             "category": row.get("category") or "top",
             "color": row.get("color") or "",
             "tags": meta.get("tags") or [],
+            "extract_hint": hint,
         }
         product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         image_path, image_url = original_path, original_url
@@ -1898,13 +1910,21 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
 async def live_import_photo(
     image: UploadFile = File(...),
     status: str = Form("owned"),
+    extract_hint: str = Form(""),
     user: UserContext = Depends(current_user),
 ) -> dict[str, Any]:
     require_supabase()
     t0 = time.perf_counter()
     suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
     raw = await image.read()
-    row = _store_uploaded_item(user.id, raw, suffix, image.content_type or "image/jpeg", status)
+    row = _store_uploaded_item(
+        user.id,
+        raw,
+        suffix,
+        image.content_type or "image/jpeg",
+        status,
+        extract_hint=extract_hint,
+    )
     items = [live_item_payload(row)]
     _record_extraction_timing(user.id, "photo", len(items), (time.perf_counter() - t0) * 1000)
     return {"items": items, "primary_idx": 0}
@@ -1931,6 +1951,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
         brand=meta.get("brand") or None,
         store=meta.get("store") or None,
         color_override=meta.get("color") or None,
+        extract_hint=body.extract_hint,
     )
     items = [live_item_payload(row)]
     _record_extraction_timing(user.id, "url", len(items), (time.perf_counter() - t0) * 1000)
