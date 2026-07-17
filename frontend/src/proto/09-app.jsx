@@ -597,7 +597,7 @@ function App() {
       return keep;
     });
     setArchived((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
-    showToast(idSet.size + '벌을 보관함으로 옮겼어요', 'archive');
+    showToast(idSet.size + '개를 보관함으로 옮겼어요', 'archive');
     setItemStatus([...idSet], 'archived');
   };
   const bulkRestore = (ids) => {
@@ -610,7 +610,7 @@ function App() {
       return keep;
     });
     setItems((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
-    showToast(idSet.size + '벌을 옷장으로 꺼냈어요', 'check');
+    showToast(idSet.size + '개를 옷장으로 꺼냈어요', 'check');
     setItemStatus([...idSet], 'owned');
   };
   const bulkDelete = (ids) => {
@@ -618,7 +618,7 @@ function App() {
     if (!idSet.size) return;
     setItems((arr) => arr.filter((it) => !idSet.has(it.id)));
     setArchived((arr) => arr.filter((it) => !idSet.has(it.id)));
-    showToast(idSet.size + '벌을 삭제했어요', 'check');
+    showToast(idSet.size + '개를 삭제했어요', 'check');
     setItemStatus([...idSet], 'delete');
   };
 
@@ -689,7 +689,7 @@ function App() {
       showToast(e.message || '저장은 됐지만 서버 반영 확인에 실패했어요');
     }
     putLiveItems(finalList, true);
-    showToast(finalList.length + '벌을 옷장에 담았어요', 'check');
+    showToast(finalList.length + '개 담았어요', 'check');
   };
 
   const ctx = {
@@ -753,7 +753,7 @@ function App() {
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.55 }} onClick={comboGate}>조합 추천받기</Btn>
-              <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>옷 추가</Btn>
+              <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
             </div>
           </aside>
           <main className="lb-wide-main">
@@ -782,11 +782,11 @@ function App() {
             <Eyebrow>처음 시작하기</Eyebrow>
             <h2 style={{ margin: '9px 0 0', fontSize: 22, lineHeight: 1.25, fontWeight: 800, letterSpacing: '-0.04em' }}>옷을 먼저 추가해 주세요</h2>
             <p style={{ margin: '9px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)' }}>
-              LOOKBOX는 내 옷장에 있는 옷을 기준으로 조합을 보여줘요. 옷이 몇 벌 들어가야 추천이 정확해집니다.
+              LOOKBOX는 내 옷장에 있는 아이템을 기준으로 조합을 보여줘요. 아이템이 몇 개 모여야 추천이 정확해집니다.
             </p>
             <div style={{ display: 'grid', gap: 0, marginTop: 18 }}>
               {[
-                ['1', '사진으로 옷 추가', '옷 사진을 올리면 상의·하의·신발을 자동으로 나눠 담아요.'],
+                ['1', '사진으로 아이템 추가', '사진을 올리면 상의·하의·신발을 자동으로 나눠 담아요.'],
                 ['2', '옷장 확인', '분류와 색상이 맞는지 보고 필요한 정보만 간단히 고쳐요.'],
                 ['3', '추천 사용', '옷이 모이면 구매 전 조합과 오늘 코디를 볼 수 있어요.'],
               ].map(([n, title, desc]) => (
@@ -797,7 +797,7 @@ function App() {
               ))}
             </div>
             <div style={{ display: 'grid', gap: 8, marginTop: 20 }}>
-              <Btn full size="lg" icon="plus" onClick={tutorialAddWardrobe}>옷 추가하기</Btn>
+              <Btn full size="lg" icon="plus" onClick={tutorialAddWardrobe}>아이템 추가하기</Btn>
               {comboReady && <Btn full variant="soft" icon="sparkle" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}
               <Btn full variant="ghost" onClick={finishTutorial}>나중에 할게요</Btn>
             </div>
@@ -811,7 +811,7 @@ function App() {
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>조합 추천을 받으려면 옷이 필요해요</h3>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면<br />어울리는 조합을 추천해드려요.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
-            <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>옷 추가</Btn>
+            <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>아이템 추가</Btn>
             <Btn full variant="ghost" onClick={() => setComboPrompt(false)}>취소</Btn>
           </div>
         </div>

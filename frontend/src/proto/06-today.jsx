@@ -131,7 +131,7 @@ function EmptyTodaySlot({ onAdd }) {
         <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.4, color: 'var(--ink-3)', wordBreak: 'keep-all' }}>옷을 추가해 보세요</div>
       </div>
       <div style={{ marginTop: 'var(--s3)' }}>
-        <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>옷 추가</Btn>
+        <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>아이템 추가</Btn>
       </div>
     </div>
   );
@@ -387,7 +387,7 @@ function TodayScreen({ ctx }) {
     <div style={{ marginBottom: 'var(--s5)' }}>
       <Eyebrow>오늘의 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}벌</b>
+        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
         {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
       </p>
       {ctxStrip}
@@ -459,7 +459,7 @@ function TodayScreen({ ctx }) {
             지금 옷장으로는 만들 수 있는 조합을<br />모두 보여드렸어요.<br />옷을 더 담으면 새로운 코디를 추천해드려요.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
-            <Btn full size="lg" icon="plus" onClick={() => { setNeedMoreOpen(false); openAdd ? openAdd('wardrobe') : startComboOrWardrobe(); }}>옷 추가</Btn>
+            <Btn full size="lg" icon="plus" onClick={() => { setNeedMoreOpen(false); openAdd ? openAdd('wardrobe') : startComboOrWardrobe(); }}>아이템 추가</Btn>
             <Btn full variant="ghost" onClick={() => setNeedMoreOpen(false)}>취소</Btn>
           </div>
         </div>

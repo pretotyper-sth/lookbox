@@ -174,7 +174,7 @@ function ResultsScreen({ ctx }) {
 
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{busy ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}</div>
-            {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{outfits.length}벌</div>}
+            {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{outfits.length}개</div>}
           </div>
 
           <div style={{

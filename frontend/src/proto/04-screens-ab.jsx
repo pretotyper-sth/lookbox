@@ -125,7 +125,7 @@ function WardrobeScreen({ ctx }) {
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />} />}
+        {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
             <Icon name="hanger" size={40} stroke={1.4} />
@@ -135,7 +135,7 @@ function WardrobeScreen({ ctx }) {
             가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
           </p>
           <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
-            <Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>옷 추가</Btn>
+            <Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
           </div>
           <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5 }}>
             <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
@@ -188,7 +188,7 @@ function WardrobeScreen({ ctx }) {
                     {selectMode ? '완료' : '선택'}
                   </button>
                 )}
-                {!selectMode && <IconBtn name="plus" label="옷 추가" onClick={() => openAdd('wardrobe')} />}
+                {!selectMode && <IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />}
               </>
             )}
           />
@@ -205,7 +205,7 @@ function WardrobeScreen({ ctx }) {
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
             <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>{viewingArchive ? '보관함' : '옷장'}</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}벌</span>
+            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}개</span>
           </div>
         )}
         {wide && chips}
@@ -233,7 +233,7 @@ function WardrobeScreen({ ctx }) {
 
         {mobileSelect && !selecting && (
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-            옷을 눌러 여러 벌을 선택한 뒤 보관·삭제할 수 있어요.
+            옷을 눌러 여러 개를 선택한 뒤 보관·삭제할 수 있어요.
           </p>
         )}
 
@@ -254,7 +254,7 @@ function WardrobeScreen({ ctx }) {
               </div>
             </div>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Icon name="plus" size={26} /><span style={{ fontSize: 12.5, fontWeight: 600 }}>옷 추가</span>
+              <Icon name="plus" size={26} /><span style={{ fontSize: 12.5, fontWeight: 600 }}>아이템 추가</span>
             </div>
           </button>
           )}
@@ -355,7 +355,7 @@ function WardrobeScreen({ ctx }) {
             boxShadow: '0 10px 32px -10px color-mix(in srgb, var(--ink) 28%, transparent), inset 0 0 0 1px var(--line)',
             backdropFilter: 'blur(10px)',
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}벌 선택됨</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}개 선택됨</span>
             <button onClick={clearSel} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px' }}>선택 해제</button>
             <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}
               style={{ fontSize: 12, padding: '7px 12px' }}>
@@ -369,7 +369,7 @@ function WardrobeScreen({ ctx }) {
 
       <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
         <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}벌을 삭제할까요?</h3>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}개를 삭제할까요?</h3>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
             완전히 지워지고 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b>
           </p>
@@ -595,11 +595,11 @@ function AddSheet({ ctx }) {
 
   // ---- header copy ----
   let header, sub;
-  if (stage === 'select') { header = '담을 옷을 골라주세요'; sub = `사진에서 ${detected.length}벌을 찾았어요 · 고른 옷을 하나씩 담아요`; }
+  if (stage === 'select') { header = '담을 아이템을 골라주세요'; sub = `사진에서 ${detected.length}개를 찾았어요 · 고른 아이템을 하나씩 담아요`; }
   else if (stage === 'register') { header = null; sub = null; }
-  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 옷 추가'; sub = '옷을 인식하고 있어요'; }
+  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = '아이템을 인식하고 있어요'; }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
-  else { header = anchor ? '고민 중인 옷 추가' : '옷장에 옷 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 벌을 자동으로 분리해 드려요.'; }
+  else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
 
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready';
 
@@ -618,7 +618,7 @@ function AddSheet({ ctx }) {
                 </div>
                 <h2 style={{ margin: '12px 0 0', fontSize: 19, fontWeight: 700 }}>옷장에 담기</h2>
                 <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-                  {doneCount > 0 ? `지금까지 ${doneCount}벌 담음 · ` : ''}내용을 확인하고 하나씩 담아요.
+                  {doneCount > 0 ? `지금까지 ${doneCount}개 담음 · ` : ''}내용을 확인하고 하나씩 담아요.
                 </p>
               </div>
             ) : (
@@ -761,7 +761,7 @@ function AddSheet({ ctx }) {
         {stage === 'select' && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'var(--s5)', marginBottom: 'var(--s3)' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }} className="tnum">{sel.length}벌 선택됨</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }} className="tnum">{sel.length}개 선택됨</span>
               <button onClick={() => setSel(allOn ? [] : detected.map((d) => d.id))} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>
                 {allOn ? '전체 해제' : '전체 선택'}
               </button>
@@ -773,7 +773,7 @@ function AddSheet({ ctx }) {
             </div>
             <div style={{ marginTop: 'var(--s6)', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Btn full size="lg" icon="check" disabled={sel.length === 0} onClick={startRegister}>
-                {sel.length > 0 ? `선택한 ${sel.length}벌 담기` : '담을 옷을 선택하세요'}
+                {sel.length > 0 ? `선택한 ${sel.length}개 담기` : '담을 아이템을 선택하세요'}
               </Btn>
               <Btn full variant="ghost" onClick={goBack}>다른 사진 올리기</Btn>
             </div>
