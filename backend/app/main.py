@@ -923,7 +923,12 @@ def _store_uploaded_item(
             image_path = f"{user_id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(image_path, product_bytes, "image/png")
         # brand/store/source_url은 스키마 변경 없이 metadata(jsonb)에 저장.
-        item_metadata: dict[str, Any] = {"tags": meta.get("tags") or []}
+        # original_* 는 이미지 재추출 시 원본 소스로 사용.
+        item_metadata: dict[str, Any] = {
+            "tags": meta.get("tags") or [],
+            "original_path": original_path,
+            "original_url": original_url,
+        }
         if (brand or "").strip():
             item_metadata["brand"] = brand.strip()
         if (store or "").strip():
@@ -1445,6 +1450,69 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         or []
     )
     return {"item": live_item_payload(updated[0] if updated else {**row, **patch})}
+
+
+@app.post("/api/live/items/{item_id}/reextract")
+def live_reextract_item(item_id: str, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """이름·메타는 유지하고 제품 컷(이미지 추출)만 다시 생성."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="item_not_found")
+    row = rows[0]
+    if row.get("status") == "deleted":
+        raise HTTPException(status_code=404, detail="item_not_found")
+    meta = dict(row.get("metadata") or {})
+    source_path = (meta.get("original_path") or "").strip() or (row.get("storage_path") or "").strip()
+    if not source_path:
+        raise HTTPException(status_code=400, detail="원본 이미지가 없어 다시 추출할 수 없어요")
+    try:
+        raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(source_path)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="원본 이미지를 불러오지 못했어요") from exc
+    suffix = os.path.splitext(source_path)[1] or ".png"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(raw)
+        tmp_path = tmp.name
+    try:
+        gen_meta = {
+            "name": row.get("name") or "옷",
+            "category": row.get("category") or "top",
+            "color": row.get("color") or "",
+            "tags": meta.get("tags") or [],
+        }
+        product_bytes = generate_product_image(user.id, tmp_path, gen_meta)
+        if not product_bytes:
+            raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
+        new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
+        image_url = upload_bytes(new_path, product_bytes, "image/png")
+        meta["bg_norm"] = "cutout_v2"
+        if not meta.get("original_path"):
+            meta["original_path"] = source_path
+        updated = (
+            supabase_admin.table("wardrobe_items")
+            .update({"image_url": image_url, "storage_path": new_path, "metadata": meta})
+            .eq("id", item_id)
+            .eq("user_id", user.id)
+            .execute()
+            .data
+            or []
+        )
+        return {"item": live_item_payload(updated[0] if updated else {**row, "image_url": image_url, "storage_path": new_path, "metadata": meta})}
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/live/wardrobe/normalize-bg")

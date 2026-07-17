@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, Thumb, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -72,8 +72,9 @@ function writeWardrobeCache(owned, archived) {
   try { localStorage.setItem(WARDROBE_CACHE_KEY, JSON.stringify({ owned, archived })); } catch (e) { /* noop */ }
 }
 
-// 당일 추천 코디 캐시 — 새로고침해도 재생성하지 않음. force(다른 코디 추천)일 때만 갱신.
-const DAILY_CACHE_KEY = 'lb_daily_outfits_v2';
+// 당일 추천 코디 캐시 — v3: owned-only 스냅샷(삭제·보관 아이템 재유입 방지)
+const DAILY_CACHE_KEY = 'lb_daily_outfits_v3';
+const DAILY_CACHE_LEGACY_KEYS = ['lb_daily_outfits_v2'];
 function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -102,7 +103,10 @@ function writeDailyCache({ style, outfits, items, wardrobeSig, wardrobeCount }) 
   } catch (e) { /* noop */ }
 }
 function clearDailyCache() {
-  try { localStorage.removeItem(DAILY_CACHE_KEY); } catch (e) { /* noop */ }
+  try {
+    localStorage.removeItem(DAILY_CACHE_KEY);
+    DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* noop */ }
 }
 function dailyWardrobeGrewSinceCache(ownedItems) {
   const cached = readDailyCache();
@@ -110,12 +114,69 @@ function dailyWardrobeGrewSinceCache(ownedItems) {
   const nowSig = wardrobeSigOf(ownedItems);
   if (cached.wardrobeSig) return cached.wardrobeSig !== nowSig;
   if (typeof cached.wardrobeCount === 'number') return (ownedItems || []).length > cached.wardrobeCount;
-  // 레거시 캐시(시그니처 없음): 추천에 쓰인 아이템보다 옷장이 넓으면 늘었을 가능성으로 본다
   const used = new Set();
   (cached.outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
   const owned = ownedItems || [];
   if (owned.some((it) => it && it.id && !used.has(String(it.id)))) return true;
   return owned.length > used.size;
+}
+const DAILY_APPEND_BATCH = 2;
+function ownedIdSet(ownedItems) {
+  return new Set((ownedItems || []).map((it) => it && (it.id || it.serverId)).filter(Boolean).map(String));
+}
+/** owned에 있는 id만 남긴 코디. 2개 미만이면 버린다. */
+function sanitizeDailyOutfit(outfit, owned) {
+  if (!outfit) return null;
+  const ids = (outfit.itemIds || []).map(String).filter((id) => owned.has(id));
+  if (ids.length < 2) return null;
+  if (ids.length === (outfit.itemIds || []).length) return outfit;
+  return { ...outfit, itemIds: ids };
+}
+function filterDailyOutfitsByOwned(outfits, ownedItems) {
+  const owned = ownedIdSet(ownedItems);
+  const out = [];
+  (outfits || []).forEach((o) => {
+    const next = sanitizeDailyOutfit(o, owned);
+    if (next) out.push(next);
+  });
+  return out;
+}
+function dailyCacheItemsFromOwned(ownedItems, outfits) {
+  const used = new Set();
+  (outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
+  return (ownedItems || []).filter((it) => it && used.has(String(it.id || it.serverId)));
+}
+/** LB_DATA.DAILY + 로컬 캐시를 현재 owned 옷장에 맞게 정리. 제거된 코디 수를 반환. */
+function pruneDailyAgainstOwned(ownedItems) {
+  const before = LB_DATA.DAILY.length;
+  const kept = filterDailyOutfitsByOwned(LB_DATA.DAILY, ownedItems);
+  const removed = before - kept.length;
+  if (removed) LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...kept);
+  const cached = readDailyCache();
+  if (!kept.length) {
+    if (cached || before) clearDailyCache();
+    return removed;
+  }
+  if (removed || !cached) {
+    writeDailyCache({
+      style: (cached && cached.style) || '',
+      outfits: kept,
+      items: dailyCacheItemsFromOwned(ownedItems, kept),
+      wardrobeSig: wardrobeSigOf(ownedItems),
+      wardrobeCount: (ownedItems || []).length,
+    });
+  }
+  return removed;
+}
+/** owned + archived만 LB_DATA.ALL에 남기고 데일리 잔상 아이템 제거 */
+function syncAllFromWardrobe(ownedItems, archivedItems) {
+  const keep = ownedIdSet([...(ownedItems || []), ...(archivedItems || [])]);
+  if (LB_DATA.ANCHOR && LB_DATA.ANCHOR.id) keep.add(String(LB_DATA.ANCHOR.id));
+  Object.keys(LB_DATA.ALL || {}).forEach((id) => {
+    if (!keep.has(String(id))) delete LB_DATA.ALL[id];
+  });
+  (ownedItems || []).forEach(liveRememberItem);
+  (archivedItems || []).forEach(liveRememberItem);
 }
 
 function liveRememberItem(item) {
@@ -154,13 +215,18 @@ function liveAppendOutfits(payload) {
   return added;
 }
 
-function liveAppendDaily(payload) {
-  (payload.items || []).forEach(liveRememberItem);
+function liveAppendDaily(payload, ownedItems) {
+  const owned = ownedIdSet(ownedItems);
+  (payload.items || []).forEach((it) => {
+    if (it && owned.has(String(it.id || it.serverId))) liveRememberItem(it);
+  });
   const seen = new Set(
     LB_DATA.DAILY.map((o) => [...(o.itemIds || [])].map(String).sort().join('|'))
   );
   const added = [];
-  for (const o of payload.outfits || []) {
+  for (const raw of payload.outfits || []) {
+    const o = sanitizeDailyOutfit(raw, owned);
+    if (!o) continue;
     const k = [...(o.itemIds || [])].map(String).sort().join('|');
     if (seen.has(k)) continue;
     seen.add(k);
@@ -249,7 +315,15 @@ function App() {
   const [dailyAllowed, setDailyAllowed] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyStyle, setDailyStyle] = useState('dandy');
+  const [dailyTick, setDailyTick] = useState(0);
+  const bumpDaily = useCallback(() => setDailyTick((n) => n + 1), []);
   const [comboPrompt, setComboPrompt] = useState(false);
+  // 구버전 데일리 캐시(삭제 아이템 잔상) 1회 제거
+  useEffect(() => {
+    try {
+      DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* noop */ }
+  }, []);
   const [tutorialDone, setTutorialDone] = useState(() => {
     if (isShowcase) return true;
     try { return localStorage.getItem('lb_tutorial_done') === '1'; } catch (e) { return false; }
@@ -324,19 +398,25 @@ function App() {
   useEffect(() => {
     if (isShowcase) return;
     let dead = false;
-    liveJSON('/api/live/wardrobe')
-      .then((data) => {
+    Promise.all([
+      liveJSON('/api/live/wardrobe'),
+      liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
+    ])
+      .then(([ownedData, archData]) => {
         if (dead) return;
-        const liveItems = (data.items || []).map(liveRememberItem);
+        const liveItems = (ownedData.items || []).map(liveRememberItem);
+        const archItems = (archData.items || []).map(liveRememberItem);
         setItems(liveItems);
+        setArchived(archItems);
+        syncAllFromWardrobe(liveItems, archItems);
+        const removed = pruneDailyAgainstOwned(liveItems);
+        if (removed && !LB_DATA.DAILY.length) setDailyAllowed(false);
+        bumpDaily();
       })
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
       .finally(() => { if (!dead) setWardrobeLoading(false); });
-    liveJSON('/api/live/wardrobe?status=archived')
-      .then((data) => { if (!dead) setArchived((data.items || []).map(liveRememberItem)); })
-      .catch(() => {});
     return () => { dead = true; };
-  }, [isShowcase, putLiveItems, showToast]);
+  }, [isShowcase, putLiveItems, showToast, bumpDaily]);
 
   // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
@@ -354,13 +434,18 @@ function App() {
           liveJSON('/api/live/wardrobe?status=archived'),
         ]).then(([owned, arch]) => {
           if (dead) return;
-          setItems((owned.items || []).map(liveRememberItem));
-          setArchived((arch.items || []).map(liveRememberItem));
+          const liveItems = (owned.items || []).map(liveRememberItem);
+          const archItems = (arch.items || []).map(liveRememberItem);
+          setItems(liveItems);
+          setArchived(archItems);
+          syncAllFromWardrobe(liveItems, archItems);
+          pruneDailyAgainstOwned(liveItems);
+          bumpDaily();
         });
       })
       .catch(() => {});
     return () => { dead = true; };
-  }, [isShowcase]);
+  }, [isShowcase, bumpDaily]);
 
   // Persist the wardrobe locally so the next load paints instantly.
   useEffect(() => {
@@ -428,16 +513,33 @@ function App() {
     const force = !!(opts && opts.force);
     const quiet = !!(opts && opts.quiet);
     if (!prefs.dailyEnabled) return { added: 0, wardrobeGrew: false };
+    // 캐시/메모리에 남은 삭제·보관 아이템 코디를 먼저 걷어낸다.
+    pruneDailyAgainstOwned(items);
+    syncAllFromWardrobe(items, archived);
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     if (!force) {
       const cached = readDailyCache();
       if (cached) {
-        stampOutfitStyle(cached.outfits);
-        liveApplyPayload({ outfits: cached.outfits, items: cached.items }, 'daily');
-        setDailyStyle(cached.style || style);
-        setDailyAllowed(true);
-        setItems((arr) => arr.slice());
-        return { added: 0, wardrobeGrew, fromCache: true };
+        const outfits = filterDailyOutfitsByOwned(cached.outfits, items);
+        if (outfits.length) {
+          stampOutfitStyle(outfits);
+          liveApplyPayload({
+            outfits,
+            items: dailyCacheItemsFromOwned(items, outfits),
+          }, 'daily');
+          writeDailyCache({
+            style: cached.style || style,
+            outfits,
+            items: dailyCacheItemsFromOwned(items, outfits),
+            wardrobeSig: wardrobeSigOf(items),
+            wardrobeCount: items.length,
+          });
+          setDailyStyle(cached.style || style);
+          setDailyAllowed(true);
+          bumpDaily();
+          return { added: 0, wardrobeGrew, fromCache: true };
+        }
+        clearDailyCache();
       }
     }
     setDailyStyle(style);
@@ -447,9 +549,9 @@ function App() {
       const baseCount = Math.max(1, parseInt(t.dailyCount, 10) || 4);
       const ownedSig = wardrobeSigOf(items);
       if (force && LB_DATA.DAILY.length > 0) {
-        // 칸이 비어 있으면 그만큼, 아니면 2개씩 추가. 옷장이 늘었으면 새 조합을 우선 시도.
+        // 첫 줄(4) 미달이면 나머지만, 찼으면 2개씩 추가(리셋 아님).
         const need = Math.max(0, baseCount - LB_DATA.DAILY.length);
-        const maxCombos = Math.max(need > 0 ? need : 2, 2);
+        const maxCombos = need > 0 ? need : DAILY_APPEND_BATCH;
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
           body: JSON.stringify({
@@ -460,21 +562,16 @@ function App() {
           }),
         });
         stampOutfitStyle(payload.outfits);
-        const added = liveAppendDaily(payload);
-        const prev = readDailyCache();
-        const byId = {};
-        (prev && prev.items ? prev.items : []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
-        (payload.items || []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
-        // 옷장 시그니처는 현재 owned 기준 (캐시 items가 일부만일 수 있음)
+        const added = liveAppendDaily(payload, items);
+        pruneDailyAgainstOwned(items);
         writeDailyCache({
           style,
           outfits: LB_DATA.DAILY.slice(),
-          items: Object.values(byId),
+          items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
           wardrobeSig: ownedSig,
           wardrobeCount: items.length,
         });
-        setItems((arr) => arr.slice());
-        // quiet: 0건일 때 Today 시트가 안내하므로 토스트 생략. 성공은 항상 토스트.
+        bumpDaily();
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 추천할 조합이 없어요');
         return { added: added.length, wardrobeGrew };
@@ -488,17 +585,19 @@ function App() {
         }),
       });
       stampOutfitStyle(payload.outfits);
-      liveApplyPayload(payload, 'daily');
+      // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가)
+      const outfits = filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount);
+      liveApplyPayload({ outfits, items: dailyCacheItemsFromOwned(items, outfits) }, 'daily');
       writeDailyCache({
         style,
-        outfits: payload.outfits || LB_DATA.DAILY.slice(),
-        items: payload.items || [],
+        outfits: LB_DATA.DAILY.slice(),
+        items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
         wardrobeSig: ownedSig,
         wardrobeCount: items.length,
       });
-      setItems((arr) => arr.slice());
+      bumpDaily();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
-      return { added: (payload.outfits || []).length, wardrobeGrew: false };
+      return { added: outfits.length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '오늘의 코디 추천에 실패했어요');
@@ -602,6 +701,44 @@ function App() {
   const openImageViewer = (item) => { if (item && item.img) setImageViewer({ open: true, item }); };
   const closeImageViewer = () => setImageViewer((s) => ({ ...s, open: false }));
 
+  const [reextractSheet, setReextractSheet] = useState({ open: false, item: null, busy: false });
+  const requestReextract = (item) => {
+    if (!item) return;
+    closeRemove();
+    closeItem();
+    setReextractSheet({ open: true, item, busy: false });
+  };
+  const closeReextract = () => {
+    if (reextractSheet.busy) return;
+    setReextractSheet({ open: false, item: null, busy: false });
+  };
+  const runReextract = async () => {
+    const target = reextractSheet.item;
+    if (!target) return;
+    const id = target.serverId || target.id;
+    if (!id) return;
+    setReextractSheet((s) => ({ ...s, busy: true }));
+    try {
+      const data = await liveJSON(`/api/live/items/${encodeURIComponent(id)}/reextract`, {
+        method: 'POST',
+        body: '{}',
+      });
+      const next = data && data.item ? liveRememberItem(data.item) : null;
+      if (next) {
+        setItems((arr) => arr.map((it) => (it.id === next.id || it.serverId === next.id ? { ...it, ...next } : it)));
+        setArchived((arr) => arr.map((it) => (it.id === next.id || it.serverId === next.id ? { ...it, ...next } : it)));
+        setItemSheet((s) => (s.item && (s.item.id === next.id || s.item.serverId === next.id)
+          ? { ...s, item: { ...s.item, ...next } }
+          : s));
+      }
+      setReextractSheet({ open: false, item: null, busy: false });
+      showToast('이미지를 다시 추출했어요', 'sparkle');
+    } catch (e) {
+      setReextractSheet((s) => ({ ...s, busy: false }));
+      showToast(e.message || '이미지 추출에 실패했어요');
+    }
+  };
+
   useEscapeClose(!tutorialDone && onboarded, finishTutorial);
   useEscapeClose(!!unsaveTarget, () => setUnsaveTarget(null));
   useEscapeClose(editPrefs, () => setEditPrefs(false));
@@ -615,12 +752,23 @@ function App() {
     if (!list.length) return;
     liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: list, status }) }).catch(() => {});
   };
+  const syncDailyAfterWardrobeChange = (nextOwned, nextArchived) => {
+    syncAllFromWardrobe(nextOwned, nextArchived != null ? nextArchived : archived);
+    const removed = pruneDailyAgainstOwned(nextOwned);
+    if (removed > 0 && !LB_DATA.DAILY.length && prefs.dailyEnabled) {
+      setDailyAllowed(false);
+    }
+    bumpDaily();
+  };
   const archiveItem = () => {
     const t = removeSheet.item;
     if (!t) return;
     closeRemove();
-    setItems((arr) => arr.filter((it) => it.id !== t.id));
-    setArchived((arr) => [{ ...t, status: 'archived' }, ...arr.filter((it) => it.id !== t.id)]);
+    const nextOwned = items.filter((it) => it.id !== t.id);
+    const nextArchived = [{ ...t, status: 'archived' }, ...archived.filter((it) => it.id !== t.id)];
+    setItems(nextOwned);
+    setArchived(nextArchived);
+    syncDailyAfterWardrobeChange(nextOwned, nextArchived);
     showToast('보관함으로 옮겼어요', 'archive');
     setItemStatus(t.id, 'archived');
   };
@@ -628,8 +776,12 @@ function App() {
     const t = removeSheet.item;
     if (!t) return;
     closeRemove();
-    setArchived((arr) => arr.filter((it) => it.id !== t.id));
-    setItems((arr) => [{ ...t, status: 'owned' }, ...arr.filter((it) => it.id !== t.id)]);
+    const nextArchived = archived.filter((it) => it.id !== t.id);
+    const nextOwned = [{ ...t, status: 'owned' }, ...items.filter((it) => it.id !== t.id)];
+    setArchived(nextArchived);
+    setItems(nextOwned);
+    syncAllFromWardrobe(nextOwned, nextArchived);
+    bumpDaily();
     showToast('옷장으로 꺼냈어요', 'check');
     setItemStatus(t.id, 'owned');
   };
@@ -637,8 +789,11 @@ function App() {
     const t = removeSheet.item;
     if (!t) return;
     closeRemove();
-    setItems((arr) => arr.filter((it) => it.id !== t.id));
-    setArchived((arr) => arr.filter((it) => it.id !== t.id));
+    const nextOwned = items.filter((it) => it.id !== t.id);
+    const nextArchived = archived.filter((it) => it.id !== t.id);
+    setItems(nextOwned);
+    setArchived(nextArchived);
+    syncDailyAfterWardrobeChange(nextOwned, nextArchived);
     showToast('옷장에서 삭제했어요', 'check');
     setItemStatus(t.id, 'delete');
   };
@@ -646,12 +801,15 @@ function App() {
     const idSet = new Set(ids || []);
     if (!idSet.size) return;
     const moved = [];
-    setItems((arr) => {
-      const keep = [];
-      arr.forEach((it) => { if (idSet.has(it.id)) moved.push({ ...it, status: 'archived' }); else keep.push(it); });
-      return keep;
+    const nextOwned = [];
+    items.forEach((it) => {
+      if (idSet.has(it.id)) moved.push({ ...it, status: 'archived' });
+      else nextOwned.push(it);
     });
-    setArchived((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
+    const nextArchived = [...moved, ...archived.filter((it) => !idSet.has(it.id))];
+    setItems(nextOwned);
+    setArchived(nextArchived);
+    syncDailyAfterWardrobeChange(nextOwned, nextArchived);
     showToast(idSet.size + '개를 보관함으로 옮겼어요', 'archive');
     setItemStatus([...idSet], 'archived');
   };
@@ -659,20 +817,27 @@ function App() {
     const idSet = new Set(ids || []);
     if (!idSet.size) return;
     const moved = [];
-    setArchived((arr) => {
-      const keep = [];
-      arr.forEach((it) => { if (idSet.has(it.id)) moved.push({ ...it, status: 'owned' }); else keep.push(it); });
-      return keep;
+    const nextArchived = [];
+    archived.forEach((it) => {
+      if (idSet.has(it.id)) moved.push({ ...it, status: 'owned' });
+      else nextArchived.push(it);
     });
-    setItems((arr) => [...moved, ...arr.filter((it) => !idSet.has(it.id))]);
+    const nextOwned = [...moved, ...items.filter((it) => !idSet.has(it.id))];
+    setArchived(nextArchived);
+    setItems(nextOwned);
+    syncAllFromWardrobe(nextOwned, nextArchived);
+    bumpDaily();
     showToast(idSet.size + '개를 옷장으로 꺼냈어요', 'check');
     setItemStatus([...idSet], 'owned');
   };
   const bulkDelete = (ids) => {
     const idSet = new Set(ids || []);
     if (!idSet.size) return;
-    setItems((arr) => arr.filter((it) => !idSet.has(it.id)));
-    setArchived((arr) => arr.filter((it) => !idSet.has(it.id)));
+    const nextOwned = items.filter((it) => !idSet.has(it.id));
+    const nextArchived = archived.filter((it) => !idSet.has(it.id));
+    setItems(nextOwned);
+    setArchived(nextArchived);
+    syncDailyAfterWardrobeChange(nextOwned, nextArchived);
     showToast(idSet.size + '개를 삭제했어요', 'check');
     setItemStatus([...idSet], 'delete');
   };
@@ -781,6 +946,7 @@ function App() {
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
     dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),
+    dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
@@ -917,7 +1083,14 @@ function App() {
           </div>
         </div>
       </BottomSheet>
-      <ItemDetailSheet open={itemSheet.open} item={itemSheet.item} onClose={closeItem} onSave={saveItemDetails} onViewImage={openImageViewer} />
+      <ItemDetailSheet
+        open={itemSheet.open}
+        item={itemSheet.item}
+        onClose={closeItem}
+        onSave={saveItemDetails}
+        onViewImage={openImageViewer}
+        onReextract={requestReextract}
+      />
       <ImageViewer open={imageViewer.open} item={imageViewer.item} onClose={closeImageViewer} />
       <ItemRemoveSheet
         open={removeSheet.open}
@@ -926,12 +1099,33 @@ function App() {
         onArchive={archiveItem}
         onRestore={restoreItem}
         onDelete={deleteItem}
+        onReextract={requestReextract}
         onExpand={() => {
           const t = removeSheet.item;
           closeRemove();
           if (t && t.img) openImageViewer(t);
         }}
       />
+      <BottomSheet open={reextractSheet.open} onClose={closeReextract}>
+        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>이미지를 다시 추출할까요?</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+            이름·색상 등 정보는 그대로 두고<br />제품 컷만 다시 만들어요.<br />
+            <span style={{ color: 'var(--ink-3)' }}>최대 2분 걸릴 수 있어요.</span>
+          </p>
+          {reextractSheet.item && (
+            <div style={{ width: 88, margin: '18px auto 0' }}>
+              <Thumb item={reextractSheet.item} radius="var(--r-md)" />
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
+            <Btn full size="lg" icon="sparkle" disabled={reextractSheet.busy} onClick={runReextract}>
+              {reextractSheet.busy ? '추출 중… 최대 2분' : '다시 추출하기'}
+            </Btn>
+            <Btn full variant="ghost" disabled={reextractSheet.busy} onClick={closeReextract}>취소</Btn>
+          </div>
+        </div>
+      </BottomSheet>
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
       {unsaveTarget && (

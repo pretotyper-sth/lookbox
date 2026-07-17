@@ -63,7 +63,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel }) {
-  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
+  const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -131,13 +131,14 @@ function EmptyTodaySlot({ wardrobeGrew, onRecommend, onAdd }) {
           {wardrobeGrew ? '옷장이 늘었어요' : '더 많은 코디'}
         </div>
         <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.4, color: 'var(--ink-3)', wordBreak: 'keep-all' }}>
-          {wardrobeGrew ? '새 조합을 받아보세요' : '추천을 받거나 옷을 추가해 보세요'}
+          {wardrobeGrew ? '새 조합을 받아보세요' : '옷을 추가해 보세요'}
         </div>
       </div>
       <div style={{ marginTop: 'var(--s3)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Btn full size="sm" variant="soft" icon="sparkle" onClick={onRecommend}>새 코디 받기</Btn>
-        {!wardrobeGrew && (
-          <Btn full size="sm" variant="ghost" icon="plus" onClick={onAdd}>아이템 추가</Btn>
+        {wardrobeGrew ? (
+          <Btn full size="sm" variant="soft" icon="sparkle" onClick={onRecommend}>새 코디 받기</Btn>
+        ) : (
+          <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>아이템 추가</Btn>
         )}
       </div>
     </div>
@@ -283,7 +284,7 @@ function TodayScreen({ ctx }) {
     dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
-    dailyWardrobeGrew,
+    dailyWardrobeGrew, dailyTick,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -309,14 +310,21 @@ function TodayScreen({ ctx }) {
     requestDailyOutfits(preferredDailyStyle);
   }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
-  const picks = uniqueDailyOutfits(pool);
-  // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 추가 2개부터는 왼쪽부터 이어서 채움
-  const emptySlots = picks.length < COLS ? COLS - picks.length : 0;
+  // owned에 없는 아이템이 섞인 코디는 화면에서도 제외
+  const ownedIds = React.useMemo(
+    () => new Set((items || []).map((it) => String(it.id))),
+    [items],
+  );
+  const picks = uniqueDailyOutfits(pool).filter((o) => {
+    const ids = o.itemIds || [];
+    return ids.length >= 2 && ids.every((id) => ownedIds.has(String(id)));
+  });
+  void dailyTick; // prune/append 후 리렌더 트리거
+  // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
+  const emptySlots = isToday && picks.length < COLS ? COLS - picks.length : 0;
   const wardrobeGrew = !!dailyWardrobeGrew;
 
   const reshuffle = async () => {
-    // 칸이 비어 있어도 옷장 변화를 반영해 API를 먼저 호출한다.
-    // (이전: picks < COLS면 바로 "더 없어요" 팝업 → 옷 추가 후에도 막힘)
     setLoading(true);
     const result = await requestDailyOutfits(preferredDailyStyle, { force: true, quiet: true });
     setLoading(false);
@@ -357,15 +365,10 @@ function TodayScreen({ ctx }) {
     );
   }
 
-  const busy = dailyLoading || loading || (isToday && !dailyAllowed);
-  const stripAction = wide ? (
-    isToday ? (
-      <Btn size="sm" variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>
-        {busy ? '만드는 중… 최대 10초' : '다른 코디 추천받기'}
-      </Btn>
-    ) : (
-      <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
-    )
+  const busy = dailyLoading || loading || (isToday && !dailyAllowed && picks.length === 0);
+  // 헤더에는 지난날짜 복귀만. 추가 추천 CTA는 카드 아래 풀너비.
+  const stripAction = (!isToday && wide) ? (
+    <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
   ) : null;
   const ctxStrip = (
     <ContextStrip selected={selected} today={today}
@@ -433,11 +436,20 @@ function TodayScreen({ ctx }) {
             </>
           )}
       </div>
-      {!wide && (
+      {/* 4칸이 찬 뒤에만 풀너비 CTA — 2개씩 append, 계속 유지 */}
+      {isToday && picks.length >= COLS && (
         <div style={{ marginTop: 'var(--s5)' }}>
-          {isToday
-            ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '만드는 중… 최대 10초' : '다른 코디 추천받기'}</Btn>
-            : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
+          <Btn full size="lg" variant="soft" icon="sparkle" onClick={reshuffle} disabled={loading || dailyLoading}>
+            {loading || dailyLoading ? '만드는 중… 최대 10초' : '추가로 코디 추천받기'}
+          </Btn>
+          <p style={{ margin: '10px 0 0', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+            지금 추천은 유지하고 코디 2개를 더 받아요
+          </p>
+        </div>
+      )}
+      {!isToday && (
+        <div style={{ marginTop: 'var(--s5)' }}>
+          <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
         </div>
       )}
     </>
