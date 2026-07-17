@@ -464,43 +464,20 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     logo_text = str(meta.get("logo_text") or "").strip()
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
-    category = str(meta.get("category") or "")
-    name_l = str(name).lower()
-    is_shoes = category == "shoes" or any(
-        k in name_l
-        for k in ("신발", "슈즈", "슬리퍼", "쪼리", "스니커", "부츠", "샌들", "로퍼", "구두", "힐", "플립플롭", "shoe", "slipper", "sandal")
-    )
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     # 텍스트 로고/힌트가 있을 때만 고품질. 일반 추출은 low로 속도 우선.
     quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else "low"
-
-    shoe_pair_rule = (
-        "\n중요(신발): 결과에는 반드시 왼발+오른발 1쌍이 모두 보여야 해. "
-        "원본에 한 짝만 있으면, 그 신발을 좌우 반전한 반대쪽 짝을 만들어 나란히 배치해 완전한 1쌍으로 만들어. "
-        "두 짝의 색·재질·디테일은 원본 신발과 똑같이."
-    )
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
         prompt = f"""{hint}
 
 쇼핑몰 상품 컷처럼 요청한 아이템만 흰 배경에 단독으로 뽑아줘. 사람·팔·다른 옷은 넣지 마.
-원본 색·형태·재질은 그대로 유지해.
-"""
-        if is_shoes:
-            prompt += shoe_pair_rule
-    elif is_shoes:
-        prompt = f"""이 이미지의 {name}를 쇼핑몰 상품 컷처럼 만들어주세요.
-- 결과에는 반드시 왼발+오른발 신발 1쌍이 모두 보여야 함
-- 원본에 한 짝만 있으면, 그 신발을 좌우 반전한 반대쪽 짝을 생성해 나란히 배치 → 완전한 1쌍으로
-- 두 짝의 색·재질·로고·텍스처·디테일은 원본 신발과 동일하게 유지
-- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것
-- 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 오버레이만 제거
-- 두 짝이 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
-- 형태를 새로 창작하지 말 것 (반대쪽 짝만 좌우 대칭으로 생성)
+원본 색·형태·재질은 그대로 유지해. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
         prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
+- 신발처럼 원본에 여러 짝이 보이면 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것.
 - 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
@@ -513,7 +490,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
 
     print(
-        f"[extract] start hint={bool(hint)!r} shoes={is_shoes} hint_text={hint[:60]!r} model={model} quality={quality}",
+        f"[extract] start hint={bool(hint)!r} hint_text={hint[:60]!r} model={model} quality={quality}",
         flush=True,
     )
 
