@@ -449,9 +449,14 @@ function urlImportBlockedHint(raw) {
 }
 
 function AddSheet({ ctx }) {
-  const { addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, autoAddDetails, detectCount } = ctx;
-  const mode = addSheet.mode; // 'wardrobe' | 'anchor'
+  const {
+    addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource,
+    autoAddDetails, detectCount, liveReplaceItemImage, applyReextractItem,
+  } = ctx;
+  const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
+  const reextract = mode === 'reextract';
+  const replaceItem = addSheet.replaceItem || null;
   const CATS = LB_DATA.CATEGORIES.filter((c) => c !== '전체');
   const isTouch = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
 
@@ -476,7 +481,7 @@ function AddSheet({ ctx }) {
     if (!addSheet.open) return;
     setTab('photo'); setPicked(false); setUrl(''); setLoaded(false); setFile(null); setBusy(false); setErr('');
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
-  }, [addSheet.open, addSheet.mode]);
+  }, [addSheet.open, addSheet.mode, addSheet.replaceItem && addSheet.replaceItem.id]);
 
   // ---- detection: API "separates" one source image into N garments ----
   const runDetect = async (source = {}) => {
@@ -484,6 +489,20 @@ function AddSheet({ ctx }) {
     setBusy(true);
     setStage('analyzing');
     try {
+      // 이미지만 변경: 새 소스 → 기존 아이템 이미지 교체 (메타 유지)
+      if (reextract && replaceItem) {
+        const itemId = replaceItem.serverId || replaceItem.id;
+        const next = await liveReplaceItemImage({
+          itemId,
+          sourceType: source.sourceType || tab,
+          file: source.file || file,
+          url: source.url != null ? source.url : url,
+        });
+        if (!next) throw new Error('이미지를 바꾸지 못했어요');
+        applyReextractItem(next);
+        closeAdd();
+        return;
+      }
       const data = await liveImportSource({
         sourceType: source.sourceType || tab,
         file: source.file || file,
@@ -628,10 +647,16 @@ function AddSheet({ ctx }) {
   if (stage === 'select') { header = '담을 아이템을 골라주세요'; sub = `사진에서 ${detected.length}개를 찾았어요 · 고른 아이템을 하나씩 담아요`; }
   else if (stage === 'register') { header = null; sub = null; }
   else if (stage === 'analyzing') {
-    header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가';
-    sub = '아이템을 인식하고 있어요';
+    header = reextract ? '이미지만 변경' : (anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가');
+    sub = reextract ? '제품 컷을 만들고 있어요' : '아이템을 인식하고 있어요';
   }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
+  else if (reextract) {
+    header = '이미지만 변경';
+    sub = replaceItem
+      ? `"${replaceItem.name || '이 옷'}"의 이름·색상은 그대로 두고 제품 컷만 바꿔요.`
+      : '이름·색상은 그대로 두고 제품 컷만 바꿔요.';
+  }
   else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
 
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready';
@@ -725,9 +750,14 @@ function AddSheet({ ctx }) {
               )}
             </div>
 
-            {!anchor && (
+            {!anchor && !reextract && (
               <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
                 <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
+              </div>
+            )}
+            {reextract && (
+              <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
+                <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
             )}
 

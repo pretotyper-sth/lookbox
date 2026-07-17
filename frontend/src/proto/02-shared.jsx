@@ -129,15 +129,25 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
 /* ----------------------------------------------------------------
    ImageViewer — fullscreen garment preview (tap image to zoom)
 ---------------------------------------------------------------- */
-function ImageViewer({ open, item, onClose }) {
-  useEscapeClose(open && !!(item && item.img), onClose);
-  if (!open || !item || !item.img) return null;
+function ImageViewer({ open, item, outfit, items, onClose }) {
+  const outfitItems = (items || []).filter(Boolean);
+  const isOutfit = !!(outfit && (outfit.lookImg || outfitItems.length));
+  const Composite = window.LookComposite;
+  useEscapeClose(open && (!!(item && item.img) || isOutfit), onClose);
+  if (!open) return null;
+  if (!isOutfit && !(item && item.img)) return null;
+  const title = isOutfit
+    ? (outfit.label || '코디')
+    : (item.name || '옷');
+  const subtitle = isOutfit
+    ? [outfit.styleLabel || outfit.mood, outfitItems.length ? `${outfitItems.length}개 조합` : ''].filter(Boolean).join(' · ')
+    : [item.category, item.color].filter(Boolean).join(' · ');
   return (
     <div
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={(item.name || '옷') + ' 크게 보기'}
+      aria-label={title + ' 크게 보기'}
       style={{
         position: 'absolute', inset: 0, zIndex: 100,
         background: 'rgba(28, 26, 22, 0.88)',
@@ -163,24 +173,39 @@ function ImageViewer({ open, item, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 420, maxHeight: '78%',
-          background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
+          background: isOutfit ? 'transparent' : 'var(--thumb-bg)',
+          borderRadius: 'var(--r-lg)',
           boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           overflow: 'hidden',
         }}
       >
-        <img
-          src={item.img}
-          alt={item.name || ''}
-          style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', padding: '6%' }}
-        />
+        {isOutfit ? (
+          outfit.lookImg ? (
+            <img
+              src={outfit.lookImg}
+              alt={title}
+              style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--ivory)' }}
+            />
+          ) : (Composite ? (
+            <div style={{ width: '100%', maxHeight: '78vh' }}>
+              <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" />
+            </div>
+          ) : null)
+        ) : (
+          <img
+            src={item.img}
+            alt={item.name || ''}
+            style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', padding: '6%' }}
+          />
+        )}
       </div>
-      {(item.name || item.category) && (
+      {(title || subtitle) && (
         <div style={{ marginTop: 16, textAlign: 'center', color: 'rgba(255,255,255,0.88)', maxWidth: 360 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{item.name}</div>
-          <div style={{ fontSize: 12.5, marginTop: 4, opacity: 0.7 }}>
-            {[item.category, item.color].filter(Boolean).join(' · ')}
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{title}</div>
+          {subtitle ? (
+            <div style={{ fontSize: 12.5, marginTop: 4, opacity: 0.7 }}>{subtitle}</div>
+          ) : null}
         </div>
       )}
     </div>

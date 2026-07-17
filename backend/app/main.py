@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 import requests
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import OpenAI
@@ -1528,6 +1528,97 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
             or []
         )
         return {"item": live_item_payload(updated[0] if updated else {**row, "image_url": image_url, "storage_path": new_path, "metadata": meta})}
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+@app.post("/api/live/items/{item_id}/replace-image")
+async def live_replace_image(
+    item_id: str,
+    image: UploadFile | None = File(None),
+    url: str | None = Form(None),
+    user: UserContext = Depends(current_user),
+) -> dict[str, Any]:
+    """새 사진/URL로 제품 컷만 교체. 이름·색상·브랜드 등 메타는 유지."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="item_not_found")
+    row = rows[0]
+    if row.get("status") == "deleted":
+        raise HTTPException(status_code=404, detail="item_not_found")
+
+    raw: bytes | None = None
+    content_type = "image/jpeg"
+    suffix = ".jpg"
+    if image is not None and image.filename:
+        raw = await image.read()
+        content_type = image.content_type or "image/jpeg"
+        suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
+    elif (url or "").strip():
+        try:
+            page_url = _normalize_product_url(url.strip())
+            raw, content_type, _meta = _fetch_product_meta(page_url)
+            suffix = ".png" if "png" in (content_type or "") else ".jpg"
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요") from exc
+    else:
+        raise HTTPException(status_code=400, detail="사진 또는 URL을 넣어 주세요")
+
+    if not raw:
+        raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요")
+
+    meta = dict(row.get("metadata") or {})
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(raw)
+        tmp_path = tmp.name
+    try:
+        original_path = f"{user.id}/original/{uuid.uuid4().hex}{suffix}"
+        original_url = upload_bytes(original_path, raw, content_type)
+        gen_meta = {
+            "name": row.get("name") or "옷",
+            "category": row.get("category") or "top",
+            "color": row.get("color") or "",
+            "tags": meta.get("tags") or [],
+        }
+        product_bytes = generate_product_image(user.id, tmp_path, gen_meta)
+        image_path, image_url = original_path, original_url
+        if product_bytes:
+            image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
+            image_url = upload_bytes(image_path, product_bytes, "image/png")
+            meta["bg_norm"] = "cutout_v2"
+        meta["original_path"] = original_path
+        meta["original_url"] = original_url
+        updated = (
+            supabase_admin.table("wardrobe_items")
+            .update({"image_url": image_url, "storage_path": image_path, "metadata": meta})
+            .eq("id", item_id)
+            .eq("user_id", user.id)
+            .execute()
+            .data
+            or []
+        )
+        return {
+            "item": live_item_payload(
+                updated[0]
+                if updated
+                else {**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}
+            )
+        }
     finally:
         try:
             os.remove(tmp_path)

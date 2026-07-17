@@ -91,14 +91,24 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
 /* ============================================================
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
-function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView }) {
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
-        <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        <button
+          type="button"
+          onClick={() => onView && onView(outfit, items)}
+          aria-label="코디 크게 보기"
+          style={{
+            display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
+            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left',
+          }}
+        >
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
@@ -309,6 +319,7 @@ function TodayScreen({ ctx }) {
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
+    openOutfitViewer,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -459,7 +470,8 @@ function TodayScreen({ ctx }) {
                 <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
                   styleLabel={preferredStyleLabel}
                   saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
-                  worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)} />
+                  worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)}
+                  onView={openOutfitViewer} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (
                 <EmptyTodaySlot

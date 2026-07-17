@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, Thumb, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -326,7 +326,7 @@ function App() {
   const [detailLook, setDetailLook] = useState(pSaved === 'empty' ? null : LB_DATA.SAVED[0]);
   const [addedItemIds, setAddedItemIds] = useState([]);
   const [itemSheet, setItemSheet] = useState({ open: false, item: null });
-  const [imageViewer, setImageViewer] = useState({ open: false, item: null });
+  const [imageViewer, setImageViewer] = useState({ open: false, item: null, outfit: null, items: null });
   const [wornToday, setWornToday] = useState([]);   // 오늘 입은 데일리 코디 id들
   const [dailyAllowed, setDailyAllowed] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
@@ -474,8 +474,8 @@ function App() {
   const go = (id) => { setView(null); setTab(id); if (!isShowcase) persistTab(id); };
   const back = () => setView(null);
 
-  const openAdd = (mode) => setAddSheet({ open: true, mode });
-  const closeAdd = () => setAddSheet((s) => ({ ...s, open: false }));
+  const openAdd = (mode, extra = {}) => setAddSheet({ open: true, mode, ...extra });
+  const closeAdd = () => setAddSheet((s) => ({ ...s, open: false, replaceItem: null }));
   const startCombo = () => openAdd('anchor');
   const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;
   const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '원피스').length;
@@ -714,45 +714,41 @@ function App() {
 
   const openItem = (item) => setItemSheet({ open: true, item });
   const closeItem = () => setItemSheet((s) => ({ ...s, open: false }));
-  const openImageViewer = (item) => { if (item && item.img) setImageViewer({ open: true, item }); };
-  const closeImageViewer = () => setImageViewer((s) => ({ ...s, open: false }));
+  const openImageViewer = (item) => {
+    if (item && item.img) setImageViewer({ open: true, item, outfit: null, items: null });
+  };
+  const openOutfitViewer = (outfit, outfitItems) => {
+    if (!outfit) return;
+    const list = outfitItems || (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+    setImageViewer({ open: true, item: null, outfit, items: list });
+  };
+  const closeImageViewer = () => setImageViewer({ open: false, item: null, outfit: null, items: null });
 
-  const [reextractSheet, setReextractSheet] = useState({ open: false, item: null, busy: false });
   const requestReextract = (item) => {
     if (!item) return;
     closeRemove();
     closeItem();
-    setReextractSheet({ open: true, item, busy: false });
+    openAdd('reextract', { replaceItem: item });
   };
-  const closeReextract = () => {
-    if (reextractSheet.busy) return;
-    setReextractSheet({ open: false, item: null, busy: false });
+  const applyReextractItem = (next) => {
+    if (!next) return;
+    const merged = liveRememberItem(next);
+    setItems((arr) => arr.map((it) => (it.id === merged.id || it.serverId === merged.id ? { ...it, ...merged } : it)));
+    setArchived((arr) => arr.map((it) => (it.id === merged.id || it.serverId === merged.id ? { ...it, ...merged } : it)));
+    setItemSheet((s) => (s.item && (s.item.id === merged.id || s.item.serverId === merged.id)
+      ? { ...s, item: { ...s.item, ...merged } }
+      : s));
+    showToast('이미지를 바꿨어요', 'sparkle');
   };
-  const runReextract = async () => {
-    const target = reextractSheet.item;
-    if (!target) return;
-    const id = target.serverId || target.id;
-    if (!id) return;
-    setReextractSheet((s) => ({ ...s, busy: true }));
-    try {
-      const data = await liveJSON(`/api/live/items/${encodeURIComponent(id)}/reextract`, {
-        method: 'POST',
-        body: '{}',
-      });
-      const next = data && data.item ? liveRememberItem(data.item) : null;
-      if (next) {
-        setItems((arr) => arr.map((it) => (it.id === next.id || it.serverId === next.id ? { ...it, ...next } : it)));
-        setArchived((arr) => arr.map((it) => (it.id === next.id || it.serverId === next.id ? { ...it, ...next } : it)));
-        setItemSheet((s) => (s.item && (s.item.id === next.id || s.item.serverId === next.id)
-          ? { ...s, item: { ...s.item, ...next } }
-          : s));
-      }
-      setReextractSheet({ open: false, item: null, busy: false });
-      showToast('이미지를 다시 추출했어요', 'sparkle');
-    } catch (e) {
-      setReextractSheet((s) => ({ ...s, busy: false }));
-      showToast(e.message || '이미지 추출에 실패했어요');
-    }
+  const liveReplaceItemImage = async ({ itemId, sourceType, file, url }) => {
+    const fd = new FormData();
+    if (sourceType === 'url') fd.append('url', url);
+    else fd.append('image', file);
+    const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image`, {
+      method: 'POST',
+      body: fd,
+    });
+    return data && data.item ? data.item : null;
   };
 
   useEscapeClose(!tutorialDone && onboarded, finishTutorial);
@@ -967,7 +963,8 @@ function App() {
     wornToday, wearToday,
     addItemsBatch, liveImportSource,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
-    openItem, openImageViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
+    openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
+    liveReplaceItemImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
@@ -1106,7 +1103,13 @@ function App() {
         onSave={saveItemDetails}
         onViewImage={openImageViewer}
       />
-      <ImageViewer open={imageViewer.open} item={imageViewer.item} onClose={closeImageViewer} />
+      <ImageViewer
+        open={imageViewer.open}
+        item={imageViewer.item}
+        outfit={imageViewer.outfit}
+        items={imageViewer.items}
+        onClose={closeImageViewer}
+      />
       <ItemRemoveSheet
         open={removeSheet.open}
         item={removeSheet.item}
@@ -1121,26 +1124,6 @@ function App() {
           if (t && t.img) openImageViewer(t);
         }}
       />
-      <BottomSheet open={reextractSheet.open} onClose={closeReextract}>
-        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>이미지만 변경할까요?</h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-            이름·색상 등 정보는 그대로 두고<br />제품 컷만 다시 만들어요.<br />
-            <span style={{ color: 'var(--ink-3)' }}>최대 2분 걸릴 수 있어요.</span>
-          </p>
-          {reextractSheet.item && (
-            <div style={{ width: 88, margin: '18px auto 0' }}>
-              <Thumb item={reextractSheet.item} radius="var(--r-md)" />
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
-            <Btn full size="lg" icon="sparkle" disabled={reextractSheet.busy} onClick={runReextract}>
-              {reextractSheet.busy ? '변경 중… 최대 2분' : '이미지만 변경'}
-            </Btn>
-            <Btn full variant="ghost" disabled={reextractSheet.busy} onClick={closeReextract}>취소</Btn>
-          </div>
-        </div>
-      </BottomSheet>
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
       {unsaveTarget && (

@@ -91,13 +91,23 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
 /* ============================================================
    Outfit card — 오늘의 추천과 같은 컴팩트 카드 (2열 그리드용)
    ============================================================ */
-function OutfitCard({ outfit, saved, onSave, styleLabel }) {
+function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
-        <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        <button
+          type="button"
+          onClick={() => onView && onView(outfit, items)}
+          aria-label="코디 크게 보기"
+          style={{
+            display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
+            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left',
+          }}
+        >
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
@@ -148,6 +158,7 @@ function ResultsScreen({ ctx }) {
   const {
     back, anchor, loading, savedOutfitIds, saveOutfit, wide,
     loadMoreCombos, moreLoading, comboRev, preferredStyleLabel,
+    openOutfitViewer,
   } = ctx;
   const outfits = LB_DATA.OUTFITS;
   void comboRev;
@@ -191,7 +202,8 @@ function ResultsScreen({ ctx }) {
               ? [0, 1, 2, 3].map((i) => <OutfitSkeleton key={i} />)
               : outfits.map((o) => (
                   <OutfitCard key={o.id} outfit={o} styleLabel={preferredStyleLabel}
-                    saved={savedOutfitIds.includes(o.id)} onSave={() => saveOutfit(o.id)} />
+                    saved={savedOutfitIds.includes(o.id)} onSave={() => saveOutfit(o.id)}
+                    onView={openOutfitViewer} />
                 ))}
           </div>
 
