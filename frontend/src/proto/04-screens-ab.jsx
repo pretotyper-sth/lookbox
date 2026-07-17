@@ -593,7 +593,10 @@ function AddSheet({ ctx }) {
   let header, sub;
   if (stage === 'select') { header = '담을 아이템을 골라주세요'; sub = `사진에서 ${detected.length}개를 찾았어요 · 고른 아이템을 하나씩 담아요`; }
   else if (stage === 'register') { header = null; sub = null; }
-  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = '아이템을 인식하고 있어요 · 최대 2분'; }
+  else if (stage === 'analyzing') {
+    header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가';
+    sub = '아이템을 인식하고 있어요';
+  }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
   else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
 
@@ -705,27 +708,29 @@ function AddSheet({ ctx }) {
             lines + check slot) so the loading state previews what's coming */}
         {stage === 'analyzing' && (
           <div style={{ marginTop: 'var(--s6)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className="lb-scan" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, borderRadius: 'var(--r-md)' }}>
-              {[0, 1].map((i) => (
-                <div key={i} className="lb-detect-in" style={{
-                  animationDelay: (i * 180) + 'ms',
-                  display: 'flex', alignItems: 'center', gap: 'var(--s3)',
-                  padding: 'var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-                  boxShadow: 'inset 0 0 0 1px var(--line)',
-                }}>
-                  <div className="lb-skel" style={{ width: 54, height: 54, flex: 'none', borderRadius: 'var(--r-sm)' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="lb-skel" style={{ height: 13, borderRadius: 999, width: '62%' }} />
-                    <div className="lb-skel" style={{ height: 11, borderRadius: 999, width: '40%', marginTop: 8 }} />
-                  </div>
-                  <div className="lb-skel" style={{ width: 24, height: 24, flex: 'none', borderRadius: '50%' }} />
+            <div className="lb-scan" style={{ width: '100%', borderRadius: 'var(--r-md)' }}>
+              <div className="lb-detect-in" style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--s3)',
+                padding: 'var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                boxShadow: 'inset 0 0 0 1px var(--line)',
+              }}>
+                <div className="lb-skel" style={{ width: 54, height: 54, flex: 'none', borderRadius: 'var(--r-sm)' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="lb-skel" style={{ height: 13, borderRadius: 999, width: '62%' }} />
+                  <div className="lb-skel" style={{ height: 11, borderRadius: 999, width: '40%', marginTop: 8 }} />
                 </div>
-              ))}
+                <div className="lb-skel" style={{ width: 24, height: 24, flex: 'none', borderRadius: '50%' }} />
+              </div>
             </div>
             <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
-            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)', textAlign: 'center', maxWidth: '100%' }}>
+            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>
               {tab === 'url' ? '상품 이미지를 추출하는 중…' : '사진 속 의류를 찾는 중…'}
-              <span style={{ color: 'var(--ink-3)' }}> · 최대 2분</span>
+            </div>
+            <div style={{
+              marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)',
+              textAlign: 'center', letterSpacing: '-0.01em',
+            }}>
+              최대 2분 걸릴 수 있어요
             </div>
           </div>
         )}

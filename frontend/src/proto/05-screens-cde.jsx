@@ -75,7 +75,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
         return it.img
           ? (
             <div key={it.id} style={frame}>
-              <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
+              <img src={it.img} alt={it.name} loading="eager" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
                 filter: 'drop-shadow(0 8px 10px rgba(40,33,20,0.10))',
               }} />

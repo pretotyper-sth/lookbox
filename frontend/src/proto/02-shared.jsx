@@ -113,8 +113,14 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {item && item.img
-        ? <img src={item.img} alt={item.name || ''} loading="lazy" decoding="async"
-               style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }} />
+        ? <img
+            src={item.img}
+            alt={item.name || ''}
+            loading="eager"
+            decoding="async"
+            // 탭 keep-alive와 함께: 재마운트돼도 브라우저 디스크 캐시로 바로 그리게
+            style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }}
+          />
         : <Silhouette category={item ? item.category : '상의'} />}
     </div>
   );

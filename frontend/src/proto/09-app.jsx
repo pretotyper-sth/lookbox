@@ -184,13 +184,24 @@ function App() {
   const pSheet = param('sheet');            // wardrobe|anchor
   const isShowcase = !!pScreen;             // URL drives state → ignore tweak reseeds
 
-  const [tab, setTab] = useState(
+  const initialTab = (
     pScreen === 'lookbook' || pScreen === 'detail' ? 'lookbook'
     : pScreen === 'mypage' ? 'mypage'
     : pScreen === 'today' ? 'today'
     : pScreen ? 'wardrobe'   // 그 외 쇼케이스(wardrobe/results/add)
     : (readTabFromUrl() || 'wardrobe')  // 실서비스: URL ?tab= 유지
   );
+  const [tab, setTab] = useState(initialTab);
+  // 탭 전환 시 언마운트하면 이미지가 다시 디코드되며 깜빡임 → 한 번 연 탭은 유지
+  const [mountedTabs, setMountedTabs] = useState(() => ({
+    wardrobe: initialTab === 'wardrobe',
+    lookbook: initialTab === 'lookbook',
+    today: initialTab === 'today',
+    mypage: initialTab === 'mypage',
+  }));
+  useEffect(() => {
+    setMountedTabs((m) => (m[tab] ? m : { ...m, [tab]: true }));
+  }, [tab]);
   const [view, setView] = useState(pScreen === 'results' ? 'results' : pScreen === 'detail' ? 'detail' : null);
   const [items, setItems] = useState(() => {
     if (!isShowcase) { const c = readWardrobeCache(); if (c) return c.owned.map(liveRememberItem); }
@@ -722,15 +733,38 @@ function App() {
   }
 
   // ---- which screen ----
-  let screen;
-  if (view === 'results') screen = <ResultsScreen ctx={ctx} />;
-  else if (view === 'detail') screen = <DetailScreen ctx={ctx} />;
-  else if (tab === 'today') screen = <TodayScreen ctx={ctx} />;
-  else if (tab === 'lookbook') screen = <LookbookScreen ctx={ctx} />;
-  else if (tab === 'mypage') screen = <MyPageScreen ctx={ctx} />;
-  else screen = <WardrobeScreen ctx={ctx} />;
-
   const focused = view === 'results' || view === 'detail';
+  const focusedScreen = view === 'results'
+    ? <ResultsScreen ctx={ctx} />
+    : view === 'detail'
+      ? <DetailScreen ctx={ctx} />
+      : null;
+
+  const tabPane = (id, node) => (
+    mountedTabs[id] ? (
+      <div
+        key={id}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: (!focused && tab === id) ? 'flex' : 'none',
+          flexDirection: 'column',
+        }}
+        aria-hidden={focused || tab !== id}
+      >
+        {node}
+      </div>
+    ) : null
+  );
+
+  const mainTabs = (
+    <>
+      {tabPane('wardrobe', <WardrobeScreen ctx={ctx} />)}
+      {tabPane('lookbook', <LookbookScreen ctx={ctx} />)}
+      {tabPane('today', <TodayScreen ctx={ctx} />)}
+      {tabPane('mypage', <MyPageScreen ctx={ctx} />)}
+    </>
+  );
 
   return (
     <div ref={shellRef} className={'lb-app' + (wide ? ' lb-shell-wide' : '')}>
@@ -757,21 +791,23 @@ function App() {
             </div>
           </aside>
           <main className="lb-wide-main">
-            {focused
-              ? (
-                <div style={{
-                  width: '100%',
-                  maxWidth: view === 'results' ? 820 : 460,
-                  margin: '0 auto',
-                  flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
-                }}>{screen}</div>
-              )
-              : screen}
+            {mainTabs}
+            {focused && (
+              <div style={{
+                width: '100%',
+                maxWidth: view === 'results' ? 820 : 460,
+                margin: '0 auto',
+                flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
+              }}>{focusedScreen}</div>
+            )}
           </main>
         </>
       ) : (
         <>
-          <div className="lb-scroll">{screen}</div>
+          <div className="lb-scroll" style={{ display: 'flex', flexDirection: 'column' }}>
+            {mainTabs}
+            {focused ? focusedScreen : null}
+          </div>
           {!focused && <BottomNav tab={tab} go={go} />}
         </>
       )}
