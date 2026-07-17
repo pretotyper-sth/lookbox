@@ -1209,10 +1209,74 @@ def _detect_store(page_url: str, brand: str = "") -> str:
     return page_url
 
 
+# URL로 상품 컷을 못 여는 대표 마켓(봇 차단·SPA). 여기선 실패 전 안내.
+_MARKETPLACE_HOSTS = (
+    "coupang.com",
+    "smartstore.naver.com",
+    "brand.naver.com",
+    "shopping.naver.com",
+    "11st.co.kr",
+    "gmarket.co.kr",
+    "auction.co.kr",
+    "ssg.com",
+    "kurly.com",
+    "wemakeprice.com",
+    "tmon.co.kr",
+)
+_URL_BLOCKED_MSG = "쇼핑몰이 상품 이미지 자동 불러오기를 막아 두었어요. 사진으로 추가해 주세요."
+_BLOCKED_PAGE_HINTS = (
+    "access denied",
+    "요청이 차단",
+    "비정상적인 접근",
+    "captcha",
+    "robot",
+    "too many requests",
+    "시스템오류",
+    "에러페이지",
+    "오류페이지",
+    "error page",
+)
+
+
+def _normalize_product_url(url: str) -> str:
+    u = (url or "").strip()
+    if not u:
+        return u
+    if not re.match(r"^https?://", u, re.I):
+        u = "https://" + u.lstrip("/")
+    return u
+
+
+def _is_marketplace_host(page_url: str) -> bool:
+    host = _host_of(page_url)
+    return any(host == d or host.endswith("." + d) for d in _MARKETPLACE_HOSTS)
+
+
+def _page_looks_blocked(status: int, html: str) -> bool:
+    if status in (401, 403, 429, 503):
+        return True
+    low = (html or "")[:12000].lower()
+    return any(h in low for h in _BLOCKED_PAGE_HINTS)
+
+
 def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     """상품 이미지 바이트 + (brand, store, title) 컨텍스트."""
-    headers = {"User-Agent": "Mozilla/5.0 (LOOKBOX bot)"}
-    html = requests.get(page_url, headers=headers, timeout=15).text
+    page_url = _normalize_product_url(page_url)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "ko-KR,ko;q=0.9",
+    }
+    try:
+        page = requests.get(page_url, headers=headers, timeout=15)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG) from exc
+    html = page.text or ""
+    if _page_looks_blocked(page.status_code, html):
+        raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
+
     brand = _extract_brand(html, page_url)
     store = _detect_store(page_url, brand)
     title = _meta_content(html, "og:title") or _meta_content(html, "twitter:title", "name")
@@ -1238,13 +1302,22 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     if not match:
         match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
     if not match:
-        raise HTTPException(status_code=422, detail="상품 이미지를 찾지 못했어요")
+        # 마켓/차단 페이지는 '못 찾음'보다 원인(쇼핑몰 측 차단)을 짧게 안내
+        if _is_marketplace_host(page_url) or _page_looks_blocked(page.status_code, html):
+            raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
+        raise HTTPException(
+            status_code=422,
+            detail="상품 이미지를 찾지 못했어요. 사진으로 추가해 주세요.",
+        )
     img_url = match.group(1)
     if img_url.startswith("//"):
         img_url = "https:" + img_url
-    resp = requests.get(img_url, headers=headers, timeout=15)
-    resp.raise_for_status()
-    meta = {"brand": brand, "store": store, "title": title[:120], "color": color}
+    try:
+        resp = requests.get(img_url, headers=headers, timeout=15)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG) from exc
+    meta = {"brand": brand, "store": store, "title": (title or "")[:120], "color": color}
     return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
 
 
@@ -1427,7 +1500,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     require_supabase()
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
-    url = body.url.strip()
+    url = _normalize_product_url(body.url)
     t0 = time.perf_counter()
     raw, content_type, meta = _fetch_product_meta(url)
     suffix = ".png" if "png" in content_type else ".jpg"

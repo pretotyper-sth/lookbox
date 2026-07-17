@@ -436,6 +436,18 @@ function DetectRow({ item, on, onToggle }) {
   );
 }
 
+const URL_IMPORT_BLOCKED_MSG = '쇼핑몰이 상품 이미지 자동 불러오기를 막아 두었어요. 사진으로 추가해 주세요.';
+const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
+
+function urlImportBlockedHint(raw) {
+  try {
+    const href = /^https?:\/\//i.test(raw) ? raw : ('https://' + String(raw || '').replace(/^\/+/, ''));
+    const host = new URL(href).hostname.replace(/^www\./i, '');
+    if (URL_IMPORT_BLOCKED_HOST.test(host)) return URL_IMPORT_BLOCKED_MSG;
+  } catch (e) { /* noop */ }
+  return null;
+}
+
 function AddSheet({ ctx }) {
   const { addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, autoAddDetails, detectCount } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor'
@@ -515,9 +527,19 @@ function AddSheet({ ctx }) {
     runDetect({ sourceType: 'photo', file: f });
   };
   const onLoadUrl = async () => {
-    if (!url.trim()) return;
+    const raw = url.trim();
+    if (!raw) return;
+    // 대표 마켓은 분석 대기 없이 바로 안내 (서버도 동일 문구로 응답)
+    const blocked = urlImportBlockedHint(raw);
+    if (blocked) {
+      setErr(blocked);
+      setLoaded(false);
+      return;
+    }
     setLoaded(true);
-    await runDetect({ sourceType: 'url', url: url.trim() });
+    const normalized = /^https?:\/\//i.test(raw) ? raw : ('https://' + raw.replace(/^\/+/, ''));
+    if (normalized !== raw) setUrl(normalized);
+    await runDetect({ sourceType: 'url', url: normalized });
   };
 
   // ---- clipboard paste (PC: Ctrl/⌘+V, 모바일: 꾹 눌러 붙여넣기) ----
@@ -698,7 +720,10 @@ function AddSheet({ ctx }) {
             )}
 
             {err && (
-              <div style={{ marginTop: 'var(--s3)', color: '#B91C1C', fontSize: 13, fontWeight: 600 }}>{err}</div>
+              <div style={{
+                marginTop: 'var(--s3)', color: '#B91C1C', fontSize: 13, fontWeight: 600,
+                lineHeight: 1.45, textWrap: 'pretty',
+              }}>{err}</div>
             )}
           </>
         )}
