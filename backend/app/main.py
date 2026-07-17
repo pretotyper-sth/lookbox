@@ -164,6 +164,23 @@ def upload_bytes(path: str, data: bytes, content_type: str) -> str:
     return public_url(path)
 
 
+def to_webp(png_bytes: bytes, max_side: int = 1024, quality: int = 82) -> bytes:
+    """제품 컷을 WebP(알파 유지)로 변환 → 용량 대폭 축소로 로딩 버퍼 감소."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    if max(img.size) > max_side:
+        img.thumbnail((max_side, max_side))
+    out = io.BytesIO()
+    img.save(out, format="WEBP", quality=quality, method=6)
+    return out.getvalue()
+
+
+def save_product_image(user_id: str, product_bytes: bytes) -> tuple[str, str]:
+    """제품 컷을 WebP로 저장하고 (storage_path, public_url) 반환."""
+    data = to_webp(product_bytes)
+    path = f"{user_id}/items/{uuid.uuid4().hex}.webp"
+    return path, upload_bytes(path, data, "image/webp")
+
+
 def read_image_as_png_bytes(path: str, max_side: int = 1024) -> bytes:
     image = Image.open(path).convert("RGBA")
     if max(image.size) > max_side:
@@ -950,8 +967,7 @@ async def upload_item(
             "original_url": original_url,
         }
         if product_bytes:
-            image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
-            image_url = upload_bytes(image_path, product_bytes, "image/png")
+            image_path, image_url = save_product_image(user.id, product_bytes)
             item_meta["bg_norm"] = _BG_NORM_VERSION
         row = (
             supabase_admin.table("wardrobe_items")
@@ -1208,8 +1224,7 @@ def _store_uploaded_item(
         product_bytes = resolve_product_image(user_id, tmp_path, meta)
         image_path, image_url = original_path, original_url
         if product_bytes:
-            image_path = f"{user_id}/items/{uuid.uuid4().hex}.png"
-            image_url = upload_bytes(image_path, product_bytes, "image/png")
+            image_path, image_url = save_product_image(user_id, product_bytes)
         # brand/store/source_url은 스키마 변경 없이 metadata(jsonb)에 저장.
         # original_* 는 이미지 재추출 시 원본 소스로 사용.
         item_metadata: dict[str, Any] = {
@@ -1850,8 +1865,7 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
         product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         if not product_bytes:
             raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
-        new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
-        image_url = upload_bytes(new_path, product_bytes, "image/png")
+        new_path, image_url = save_product_image(user.id, product_bytes)
         meta["bg_norm"] = _BG_NORM_VERSION
         if "has_text_logo" in gen_meta:
             meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
@@ -1942,8 +1956,7 @@ async def live_replace_image(
         product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         image_path, image_url = original_path, original_url
         if product_bytes:
-            image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
-            image_url = upload_bytes(image_path, product_bytes, "image/png")
+            image_path, image_url = save_product_image(user.id, product_bytes)
             meta["bg_norm"] = _BG_NORM_VERSION
         if "has_text_logo" in gen_meta:
             meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
@@ -2000,9 +2013,9 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
             fixed = finalize_cutout(raw)
-            new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
-            image_url = upload_bytes(new_path, fixed, "image/png")
+            new_path, image_url = save_product_image(user.id, fixed)
             meta["bg_norm"] = _BG_NORM_VERSION
+            meta["cache_hdr"] = "v2"
             supabase_admin.table("wardrobe_items").update(
                 {"image_url": image_url, "storage_path": new_path, "metadata": meta}
             ).eq("id", row["id"]).eq("user_id", user.id).execute()
@@ -2030,7 +2043,7 @@ def live_refresh_cache(user: UserContext = Depends(current_user)) -> dict[str, A
     skipped = 0
     for row in rows:
         meta = dict(row.get("metadata") or {})
-        if meta.get("cache_hdr") == "v1":
+        if meta.get("cache_hdr") == "v2":
             skipped += 1
             continue
         path = row.get("storage_path")
@@ -2039,12 +2052,12 @@ def live_refresh_cache(user: UserContext = Depends(current_user)) -> dict[str, A
             continue
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
-            ctype = "image/png" if path.lower().endswith(".png") else "image/jpeg"
-            upload_bytes(path, raw, ctype)  # 같은 경로 upsert → 새 cache-control 적용
-            meta["cache_hdr"] = "v1"
-            supabase_admin.table("wardrobe_items").update({"metadata": meta}).eq(
-                "id", row["id"]
-            ).eq("user_id", user.id).execute()
+            # 무거운 PNG → 가벼운 WebP로 재인코딩 + 장기 캐시 헤더 (URL은 바뀌므로 DB 갱신)
+            new_path, image_url = save_product_image(user.id, raw)
+            meta["cache_hdr"] = "v2"
+            supabase_admin.table("wardrobe_items").update(
+                {"image_url": image_url, "storage_path": new_path, "metadata": meta}
+            ).eq("id", row["id"]).eq("user_id", user.id).execute()
             updated += 1
         except Exception as exc:  # noqa: BLE001
             print(f"[refresh-cache] skip {row.get('id')}: {exc}", flush=True)

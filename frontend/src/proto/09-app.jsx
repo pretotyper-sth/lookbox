@@ -507,10 +507,25 @@ function App() {
   // 기존 이미지 오브젝트에 장기 캐시 헤더 1회 백필 → 새로고침 깜빡임 방지
   useEffect(() => {
     if (isShowcase) return;
-    const key = 'lb_img_cache_hdr_v1';
+    const key = 'lb_img_cache_hdr_v2';
     try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
     liveJSON('/api/live/wardrobe/refresh-cache', { method: 'POST', body: '{}' })
-      .then(() => { try { localStorage.setItem(key, '1'); } catch (e) { /* noop */ } })
+      .then((res) => {
+        try { localStorage.setItem(key, '1'); } catch (e) { /* noop */ }
+        if (!res || !res.updated) return;
+        // WebP로 경로가 바뀌었으므로 목록을 다시 불러와 새 URL 반영
+        return Promise.all([
+          liveJSON('/api/live/wardrobe'),
+          liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
+        ]).then(([owned, arch]) => {
+          const liveItems = (owned.items || []).map(liveRememberItem);
+          const archItems = (arch.items || []).map(liveRememberItem);
+          setItems(liveItems);
+          setArchived(archItems);
+          syncAllFromWardrobe(liveItems, archItems);
+          bumpDaily();
+        });
+      })
       .catch(() => {});
   }, [isShowcase]);
 
