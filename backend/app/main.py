@@ -32,8 +32,8 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "wardrobe")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
-# 분류(이름·카테고리·색)만 더 싼 모델로 A/B. 추천 텍스트는 VISION 유지.
-OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL", "gpt-4o-mini")
+# 분류 전용(기본=비전과 동일). 싸게 A/B할 때만 OPENAI_CLASSIFY_MODEL로 덮어쓰기.
+OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION_MODEL
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
@@ -662,6 +662,11 @@ async def upload_item(
         tmp_path = tmp.name
     try:
         meta = classify_item(tmp_path)
+        item_name, item_color = _normalize_item_name_color(
+            meta.get("name") or "새 옷",
+            meta.get("color") or "neutral",
+        )
+        meta = {**meta, "name": item_name, "color": item_color}
         original_path = f"{user.id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
         product_bytes = generate_product_image(user.id, tmp_path, meta)
@@ -675,9 +680,9 @@ async def upload_item(
             .insert(
                 {
                     "user_id": user.id,
-                    "name": meta.get("name") or "새 옷",
+                    "name": item_name,
                     "category": meta.get("category") or "top",
-                    "color": meta.get("color") or "neutral",
+                    "color": item_color,
                     "image_url": image_url,
                     "storage_path": image_path,
                     "source": "upload",
@@ -902,6 +907,12 @@ def _store_uploaded_item(
         tmp_path = tmp.name
     try:
         meta = classify_item(tmp_path)
+        # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
+        item_name, item_color = _normalize_item_name_color(
+            (name_override or "").strip() or meta.get("name") or "새 옷",
+            (color_override or "").strip() or meta.get("color") or "neutral",
+        )
+        meta = {**meta, "name": item_name, "color": item_color}
         original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
         product_bytes = generate_product_image(user_id, tmp_path, meta)
@@ -922,9 +933,9 @@ def _store_uploaded_item(
             .insert(
                 {
                     "user_id": user_id,
-                    "name": (name_override or "").strip() or meta.get("name") or "새 옷",
+                    "name": item_name,
                     "category": meta.get("category") or "top",
-                    "color": (color_override or "").strip() or meta.get("color") or "neutral",
+                    "color": item_color,
                     "image_url": image_url,
                     "storage_path": image_path,
                     "source": source,
@@ -1026,18 +1037,27 @@ NON_COLOR_TAILS = frozenset({
     "fw", "ss", "ss24", "ss25", "ss26", "fw24", "fw25", "fw26",
 })
 
+# '블루 스트라이프'처럼 색 + 패턴 수식
+COLOR_MODIFIERS = (
+    "스트라이프", "stripe", "striped", "체크", "check", "checked", "도트", "dot", "dotted",
+    "솔리드", "solid", "멜란지", "헤링본", "플로럴", "프린트", "print", "페이즐리",
+    "카모", "카무플라주", "무지", "단색",
+)
+
 
 def _norm_color_token(s: str) -> str:
     return re.sub(r"\s+", "", (s or "").strip().lower())
 
 
 _COLOR_NORM = {_norm_color_token(w) for w in COLOR_WORDS}
+_COLOR_MOD_NORM = {_norm_color_token(w) for w in COLOR_MODIFIERS}
+_COLOR_NORM_BY_LEN = sorted(_COLOR_NORM, key=len, reverse=True)
 
 
 def _is_color_tail(tail: str) -> bool:
-    """상품명 `_뒤` / 옵션 값이 색상(변형)명으로 보이는지."""
+    """상품명 `_뒤` / 옵션 값이 색상(변형)명으로 보이는지. '블루 스트라이프' 포함."""
     t = (tail or "").strip()
-    if not t or len(t) > 16:
+    if not t or len(t) > 28:
         return False
     tn = _norm_color_token(t)
     if not tn or tn in NON_COLOR_TAILS:
@@ -1045,18 +1065,25 @@ def _is_color_tail(tail: str) -> bool:
     if tn in _COLOR_NORM:
         return True
     # 사이즈·SKU 제외
-    if re.fullmatch(r"(?i)(xxs|xs|s|m|l|xl|xxl|2xl|3xl|4xl|[0-9]{1,2})$", t):
+    if re.fullmatch(r"(?i)(xxs|xs|s|m|l|xl|xxl|2xl|3xl|4xl|[0-9]{1,2})$", t.strip()):
         return False
-    if re.fullmatch(r"[A-Za-z]*\d{2,}[A-Za-z0-9]*", t):
+    if re.fullmatch(r"[A-Za-z]*\d{2,}[A-Za-z0-9]*", t.strip()):
         return False
-    # 브랜드몰 관례: '_삭스', '_세이지'처럼 짧은 한글 토큰은 색상 변형명
-    if re.fullmatch(r"[가-힣]{1,10}", t):
+    # 알려진 색상으로 시작하고 나머지가 패턴 수식(또는 짧은 한글)인 경우
+    for cw in _COLOR_NORM_BY_LEN:
+        if tn.startswith(cw) and len(tn) > len(cw):
+            rest = tn[len(cw):]
+            if rest in _COLOR_MOD_NORM or re.fullmatch(r"[가-힣a-z]{1,12}", rest):
+                return True
+            break
+    # 브랜드몰 관례: '_삭스', '_세이지'처럼 짧은 한글(공백 무시)
+    if re.fullmatch(r"[가-힣]{1,12}", tn):
         return True
     return False
 
 
 def _split_color_from_title(title: str) -> tuple[str, str]:
-    """'…셔츠_삭스' → ('…셔츠', '삭스'). 색상으로 보일 때만 분리."""
+    """'…셔츠_블루 스트라이프' → ('…셔츠', '블루 스트라이프'). 색상으로 보일 때만 분리."""
     t = html_lib.unescape((title or "").strip())
     t = t.replace("\\_", "_").replace("＿", "_")
     if "_" in t:
@@ -1064,10 +1091,30 @@ def _split_color_from_title(title: str) -> tuple[str, str]:
         head, tail = head.strip(), tail.strip()
         if head and _is_color_tail(tail):
             return head, tail
-    m = re.search(r"^(.*?)[\s]*[\(\[]\s*([가-힣A-Za-z]{1,14})\s*[\)\]]\s*$", t)
+    m = re.search(r"^(.*?)[\s]*[\(\[]\s*([^\)\]]{1,28})\s*[\)\]]\s*$", t)
     if m and _is_color_tail(m.group(2)):
         return m.group(1).strip(), m.group(2).strip()
     return t, ""
+
+
+def _normalize_item_name_color(name: str, color: str) -> tuple[str, str]:
+    """저장 직전: 이름에 붙은 `_색상` 꼬리표를 분리. 모델이 통째로 넣어도 방어."""
+    n = (name or "").strip() or "새 옷"
+    c = (color or "").strip()
+    clean, split_c = _split_color_from_title(n)
+    if split_c:
+        n = clean
+        if not c or c.lower() in ("neutral", "unknown", "없음"):
+            c = split_c
+        elif _norm_color_token(c) == _norm_color_token(split_c):
+            c = split_c
+        elif split_c and _norm_color_token(split_c) not in _norm_color_token(c):
+            # 이름에 있던 꼬리표가 더 구체적이면(블루 스트라이프) 그걸 색으로
+            if len(split_c) >= len(c):
+                c = split_c
+    if not c:
+        c = "neutral"
+    return n, c
 
 
 def _extract_page_color(page_html: str) -> str:
@@ -1204,14 +1251,17 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
 @app.get("/api/live/extraction-stats")
 def live_extraction_stats() -> dict[str, Any]:
     """추출 소요시간 평균 (소스·개수별). 나중에 FE 대기 안내에 사용."""
-    rows = (
-        supabase_admin.table("extraction_timings")
-        .select("source,item_count,duration_ms")
-        .limit(10000)
-        .execute()
-        .data
-        or []
-    )
+    try:
+        rows = (
+            supabase_admin.table("extraction_timings")
+            .select("source,item_count,duration_ms")
+            .limit(10000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"by_count": [], "by_source": [], "error": str(exc)}
     by_count: dict[tuple[str, int], list[int]] = {}
     by_source: dict[str, list[int]] = {}
     for r in rows:
@@ -1224,13 +1274,33 @@ def live_extraction_stats() -> dict[str, Any]:
     def _avg(v: list[int]) -> float:
         return round(sum(v) / len(v), 1) if v else 0.0
 
+    def _p95(v: list[int]) -> float:
+        if not v:
+            return 0.0
+        s = sorted(v)
+        return float(s[max(0, int(round(0.95 * (len(s) - 1))))])
+
     return {
         "by_count": [
-            {"source": s, "item_count": c, "n": len(v), "avg_ms": _avg(v)}
+            {
+                "source": s,
+                "item_count": c,
+                "n": len(v),
+                "avg_ms": _avg(v),
+                "p95_ms": _p95(v),
+                "max_ms": max(v) if v else 0,
+            }
             for (s, c), v in sorted(by_count.items())
         ],
         "by_source": [
-            {"source": s, "n": len(v), "avg_ms": _avg(v)} for s, v in sorted(by_source.items())
+            {
+                "source": s,
+                "n": len(v),
+                "avg_ms": _avg(v),
+                "p95_ms": _p95(v),
+                "max_ms": max(v) if v else 0,
+            }
+            for s, v in sorted(by_source.items())
         ],
     }
 

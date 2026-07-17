@@ -348,7 +348,7 @@ function TodayScreen({ ctx }) {
   const stripAction = wide ? (
     isToday ? (
       <Btn size="sm" variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>
-        {busy ? '추천 만드는 중...' : '다른 코디 추천받기'}
+        {busy ? '만드는 중… 최대 10초' : '다른 코디 추천받기'}
       </Btn>
     ) : (
       <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
@@ -365,8 +365,14 @@ function TodayScreen({ ctx }) {
     <div style={{ marginBottom: 'var(--s5)' }}>
       <Eyebrow>오늘의 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
-        {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
+        {busy ? (
+          <>오늘의 추천을 준비 중이에요 <span style={{ fontWeight: 500, color: 'var(--ink-3)', fontSize: 13 }}>· 최대 10초</span></>
+        ) : (
+          <>
+            옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
+            {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
+          </>
+        )}
       </p>
       {ctxStrip}
     </div>
@@ -412,7 +418,7 @@ function TodayScreen({ ctx }) {
       {!wide && (
         <div style={{ marginTop: 'var(--s5)' }}>
           {isToday
-            ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '추천 만드는 중...' : '다른 코디 추천받기'}</Btn>
+            ? <Btn full variant="soft" icon="sparkle" onClick={reshuffle} disabled={busy}>{busy ? '만드는 중… 최대 10초' : '다른 코디 추천받기'}</Btn>
             : <Btn full variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>}
         </div>
       )}

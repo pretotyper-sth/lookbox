@@ -593,7 +593,7 @@ function AddSheet({ ctx }) {
   let header, sub;
   if (stage === 'select') { header = '담을 아이템을 골라주세요'; sub = `사진에서 ${detected.length}개를 찾았어요 · 고른 아이템을 하나씩 담아요`; }
   else if (stage === 'register') { header = null; sub = null; }
-  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = '아이템을 인식하고 있어요'; }
+  else if (stage === 'analyzing') { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = '아이템을 인식하고 있어요 · 최대 2분'; }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
   else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
 
@@ -723,8 +723,9 @@ function AddSheet({ ctx }) {
               ))}
             </div>
             <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
-            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)' }}>
+            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)', textAlign: 'center', maxWidth: '100%' }}>
               {tab === 'url' ? '상품 이미지를 추출하는 중…' : '사진 속 의류를 찾는 중…'}
+              <span style={{ color: 'var(--ink-3)' }}> · 최대 2분</span>
             </div>
           </div>
         )}

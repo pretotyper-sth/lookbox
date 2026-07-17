@@ -172,9 +172,12 @@ function ResultsScreen({ ctx }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{busy ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}</div>
-            {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{outfits.length}개</div>}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 'var(--s3)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, minWidth: 0 }}>
+              {busy ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}
+              {busy && <span style={{ fontWeight: 500, color: 'var(--ink-3)', fontSize: 12.5 }}> · 최대 10초</span>}
+            </div>
+            {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)', flex: 'none' }}>{outfits.length}개</div>}
           </div>
 
           <div style={{
@@ -195,7 +198,7 @@ function ResultsScreen({ ctx }) {
           {!busy && (
             <div style={{ marginTop: 'var(--s5)' }}>
               <Btn full variant="soft" icon="sparkle" onClick={loadMoreCombos} disabled={moreBusy}>
-                {moreBusy ? '추천 만드는 중...' : '2개 더 추천받기'}
+                {moreBusy ? '추천 만드는 중… 최대 10초' : '2개 더 추천받기'}
               </Btn>
             </div>
           )}
