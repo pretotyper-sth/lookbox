@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, CATEGORIES, Chip, Icon, IconBtn, LB_DATA, LabeledField, Skeleton, Thumb } = window;
+const { Badge, BottomSheet, Btn, CATEGORIES, Chip, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, Skeleton, Thumb } = window;
 
-/* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA */
+/* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
 
 const { useState: useS, useEffect: useE, useRef: useR } = React;
@@ -126,21 +126,17 @@ function WardrobeScreen({ ctx }) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 40px 80px' }}>
-          <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
-            <Icon name="hanger" size={40} stroke={1.4} />
-          </div>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>옷장에 옷을 담아보세요</h1>
-          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 260 }}>
-            가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
-          </p>
-          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
-            <Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
-          </div>
-          <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5 }}>
-            <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
-          </div>
-        </div>
+        <EmptyState
+          icon="hanger"
+          iconSize={40}
+          title="옷장에 옷을 담아보세요"
+          wide={wide}
+          padTop={false}
+          action={<Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>}
+          hint={<><Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요</>}
+        >
+          가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
+        </EmptyState>
       </div>
     );
   }

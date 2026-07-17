@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { Badge, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
 
 const { useState: useSc, useEffect: useEc } = React;
@@ -227,27 +227,19 @@ function LookbookScreen({ ctx }) {
 
   if (saved.length === 0) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          textAlign: 'center',
-          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 28px) 40px 80px',
-        }}>
-          <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
-            <Icon name="bookmark" size={38} stroke={1.4} />
-          </div>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>저장한 코디가 없어요</h1>
-          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 300 }}>
-            마음에 든 코디를 모아두는 공간이에요.<br />구매와 상관없이, 편하게 저장해두세요.
-          </p>
-          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
-            <Btn full size="lg" icon="sparkle" onClick={startComboOrWardrobe}>{hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}</Btn>
-          </div>
-          <div aria-hidden="true" style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5, visibility: 'hidden' }}>
-            <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        icon="bookmark"
+        title="저장한 코디가 없어요"
+        wide={wide}
+        action={(
+          <Btn full size="lg" icon="sparkle" onClick={startComboOrWardrobe}>
+            {hasWardrobe ? '조합 추천받기' : '옷장 채우러 가기'}
+          </Btn>
+        )}
+        hintHidden
+      >
+        마음에 든 코디를 모아두는 공간이에요.<br />구매와 상관없이, 편하게 저장해두세요.
+      </EmptyState>
     );
   }
 

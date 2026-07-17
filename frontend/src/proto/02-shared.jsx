@@ -459,4 +459,81 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, useEscapeClose });
+/* ============================================================
+   EmptyState — shared chrome for tab empty / gate screens.
+   Top-anchored (not flex-center) + fixed title/body/footer slots so
+   icon → CTA stay on the same Y across wardrobe / lookbook / today.
+   ============================================================ */
+function EmptyState({
+  icon,
+  iconSize = 38,
+  title,
+  children,
+  action,
+  hint,
+  hintHidden = false,
+  wide = false,
+  padTop = true,
+}) {
+  // Same optical start on every tab. flex-center shifts when copy length differs.
+  const boxPad = (!padTop || wide)
+    ? 'min(18vh, 168px) 40px 80px'
+    : 'calc(env(safe-area-inset-top, 0px) + min(14vh, 120px)) 40px 80px';
+  const footer = hint ?? (
+    <>
+      <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
+    </>
+  );
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+        textAlign: 'center',
+        padding: boxPad,
+        boxSizing: 'border-box',
+      }}>
+        <div style={{
+          width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)',
+          display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)', flex: 'none',
+        }}>
+          <Icon name={icon} size={iconSize} stroke={1.4} />
+        </div>
+        <h1 style={{
+          margin: 0, fontSize: 21, fontWeight: 700, lineHeight: 1.3,
+          minHeight: 28, width: '100%', maxWidth: 280,
+        }}>{title}</h1>
+        <p style={{
+          margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.55,
+          maxWidth: 280, width: '100%',
+          minHeight: Math.round(14.5 * 1.55 * 2),
+        }}>
+          {children}
+        </p>
+        <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280, flex: 'none' }}>
+          {action}
+        </div>
+        <div
+          aria-hidden={hintHidden || undefined}
+          style={{
+            marginTop: 'var(--s4)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            color: 'var(--ink-3)',
+            fontSize: 12.5,
+            lineHeight: 1.4,
+            minHeight: 20,
+            width: '100%',
+            maxWidth: 280,
+            visibility: hintHidden ? 'hidden' : 'visible',
+          }}
+        >
+          {footer}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, useEscapeClose, EmptyState });

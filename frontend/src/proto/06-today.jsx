@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb } = window;
+const { BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, BottomSheet */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, BottomSheet, EmptyState */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -316,52 +316,31 @@ function TodayScreen({ ctx }) {
   /* ---- 설정에서 미허용 (디폴트 off) ---- */
   if (!dailyEnabled) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          textAlign: 'center',
-          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 28px) 40px 80px',
-        }}>
-          <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
-            <Icon name="sparkle" size={38} stroke={1.4} />
-          </div>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>오늘의 추천 코디</h1>
-          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.55, maxWidth: 280 }}>
-            마이페이지에서 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>오늘의 추천 코디</b>를<br />
-            허용해야 매일 코디를 받을 수 있어요.
-          </p>
-          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
-            <Btn full size="lg" icon="user" onClick={() => go ? go('mypage') : null}>마이페이지로 이동</Btn>
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        icon="sparkle"
+        title="오늘의 추천 코디"
+        wide={wide}
+        action={<Btn full size="lg" icon="user" onClick={() => go ? go('mypage') : null}>마이페이지로 이동</Btn>}
+        hintHidden
+      >
+        마이페이지에서 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>오늘의 추천 코디</b>를<br />
+        허용해야 매일 코디를 받을 수 있어요.
+      </EmptyState>
     );
   }
 
   /* ---- 잠금 상태 (상의·하의 미달) ---- */
   if (!ready) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          textAlign: 'center',
-          padding: wide ? '0 40px 80px' : 'calc(env(safe-area-inset-top, 0px) + 28px) 40px 80px',
-        }}>
-          <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)', marginBottom: 'var(--s5)' }}>
-            <Icon name="sparkle" size={38} stroke={1.4} />
-          </div>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700 }}>오늘의 코디를 받아보세요</h1>
-          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, maxWidth: 270 }}>
-            옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.
-          </p>
-          <div style={{ marginTop: 'var(--s7)', width: '100%', maxWidth: 280 }}>
-            <Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>
-          </div>
-          <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)', fontSize: 12.5 }}>
-            <Icon name="lock" size={14} /> 상의·하의를 담으면 추천이 열려요
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        icon="sparkle"
+        title="오늘의 코디를 받아보세요"
+        wide={wide}
+        action={<Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>}
+        hint={<><Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요</>}
+      >
+        옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.
+      </EmptyState>
     );
   }
 
