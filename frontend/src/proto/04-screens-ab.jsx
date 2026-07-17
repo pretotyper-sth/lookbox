@@ -436,7 +436,7 @@ function DetectRow({ item, on, onToggle }) {
   );
 }
 
-const URL_IMPORT_BLOCKED_MSG = '쇼핑몰이 상품 이미지 자동 불러오기를 막아 두었어요. 사진으로 추가해 주세요.';
+const URL_IMPORT_BLOCKED_MSG = '쇼핑몰이 이미지 자동 불러오기를 막았어요. 사진으로 추가해 주세요.';
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
 
 function urlImportBlockedHint(raw) {
