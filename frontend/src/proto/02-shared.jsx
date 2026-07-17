@@ -102,6 +102,39 @@ function Silhouette({ category, scale = 1 }) {
 }
 
 /* ----------------------------------------------------------------
+   SmartImg — 이미지 로드가 간헐적으로 실패해도 자동 재시도 → 폴백.
+   (새로고침 때 랜덤하게 안 뜨는 문제 방지: 실패한 칸이 빈 채로 남지 않음)
+---------------------------------------------------------------- */
+function SmartImg({ src, alt, style, fallback }) {
+  const [attempt, setAttempt] = useState(0);
+  const [dead, setDead] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => {
+    setAttempt(0);
+    setDead(false);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [src]);
+  if (!src || dead) return fallback || null;
+  // 첫 시도는 원본 URL(디스크 캐시 활용), 재시도부터만 캐시버스트
+  const url = attempt > 0 ? (src + (src.indexOf('?') >= 0 ? '&' : '?') + 'cb=' + attempt) : src;
+  return (
+    <img
+      key={attempt}
+      src={url}
+      alt={alt}
+      loading="eager"
+      decoding="async"
+      style={style}
+      onError={() => {
+        if (attempt >= 3) { setDead(true); return; }
+        const next = attempt + 1;
+        timer.current = setTimeout(() => setAttempt(next), 250 * next);
+      }}
+    />
+  );
+}
+
+/* ----------------------------------------------------------------
    Thumb — square garment tile. Photo OR silhouette on soft gray plate.
 ---------------------------------------------------------------- */
 function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' }) {
@@ -113,13 +146,11 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {item && item.img
-        ? <img
+        ? <SmartImg
             src={item.img}
             alt={item.name || ''}
-            loading="eager"
-            decoding="async"
-            // 탭 keep-alive와 함께: 재마운트돼도 브라우저 디스크 캐시로 바로 그리게
             style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }}
+            fallback={<Silhouette category={item ? item.category : '상의'} />}
           />
         : <Silhouette category={item ? item.category : '상의'} />}
     </div>
