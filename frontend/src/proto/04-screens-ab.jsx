@@ -467,6 +467,7 @@ function AddSheet({ ctx }) {
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
   const [hint, setHint] = useS('');
+  const [showHint, setShowHint] = useS(false);
   const [busy, setBusy] = useS(false);
   const [err, setErr] = useS('');
   const fileInput = useR(null);
@@ -503,7 +504,7 @@ function AddSheet({ ctx }) {
 
   const resetLocalDraft = () => {
     setPreviewFromFile(null);
-    setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint('');
+    setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
     setBusy(false); setErr('');
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
     draftIdsRef.current = [];
@@ -852,26 +853,39 @@ function AddSheet({ ctx }) {
                 />
               )}
 
-              <div style={{ marginTop: 'var(--s4)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>
-                  추출 힌트 <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
+              <button
+                type="button"
+                onClick={() => setShowHint((v) => !v)}
+                style={{
+                  marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
+                }}
+              >
+                <Icon name="plus" size={15} /> 추출 힌트 추가
+                <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
+                <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+                  <Icon name="chevL" size={14} />
+                </span>
+              </button>
+              {showHint && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    className="lb-input"
+                    rows={2}
+                    value={hint}
+                    onChange={(e) => setHint(e.target.value)}
+                    placeholder={'예) 이 이미지에서 가방만 추출해줘'}
+                    style={{
+                      width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                      outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
+                    여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.
+                  </div>
                 </div>
-                <textarea
-                  className="lb-input"
-                  rows={2}
-                  value={hint}
-                  onChange={(e) => setHint(e.target.value)}
-                  placeholder={'예) 이 이미지에서 가방만 추출해줘'}
-                  style={{
-                    width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
-                    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
-                    outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
-                  }}
-                />
-                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                  여러 아이템·사람이 함께 찍힌 사진에서 원하는 것만 지정할 때 써요.
-                </div>
-              </div>
+              )}
 
               <div style={{ marginTop: 'var(--s5)' }}>
                 <Btn full size="lg" icon="sparkle" onClick={onSubmitAdd} disabled={!canSubmit || busy}>
