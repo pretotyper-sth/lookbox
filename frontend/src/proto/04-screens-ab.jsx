@@ -790,14 +790,11 @@ function AddSheet({ ctx }) {
               </div>
             </div>
             <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>옷을 인식하고 있어요</div>
-            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>
-              {tab === 'url' ? '상품 이미지를 추출하는 중…' : '사진 속 의류를 찾는 중…'}
-            </div>
             <div style={{
-              marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)',
+              marginTop: 6, fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
               textAlign: 'center', letterSpacing: '-0.01em',
             }}>
-              최대 2분 걸릴 수 있어요
+              최대 2분 소요
             </div>
           </div>
         )}
