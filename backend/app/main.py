@@ -436,10 +436,8 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         print("[extract] openai client missing", flush=True)
         meta["_extract_fail"] = "no_openai"
         return None
-    if not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
-        print(f"[extract] no credits user={user_id}", flush=True)
-        meta["_extract_fail"] = "no_credits"
-        return None
+    # 크레딧 게이트 비활성(테스트). charge는 no-op이지만 호출해 ledger 경로를 유지하지 않음.
+    charge_credit(user_id, "product_image", {"name": meta.get("name")})
     if "has_text_logo" not in meta:
         meta.update(detect_garment_text(path))
     else:
@@ -548,8 +546,6 @@ def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byte
     if hint:
         fail = meta.get("_extract_fail") or "edit_failed"
         print(f"[extract] hint extract failed ({fail}) — no local fallback", flush=True)
-        if fail == "no_credits":
-            raise HTTPException(status_code=402, detail="이미지 생성 크레딧이 부족해요")
         raise HTTPException(
             status_code=502,
             detail="요청한 아이템을 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -862,12 +858,17 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
         return None
 
 
+DEPLOY_REV = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "dev"
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
         "ok": True,
         "openai": bool(openai_client),
         "supabase": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
+        "rev": (DEPLOY_REV or "")[:12],
+        "credits_gated": False,
     }
 
 
