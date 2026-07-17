@@ -35,8 +35,9 @@ OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
 # 분류 전용(기본=비전과 동일). 싸게 A/B할 때만 OPENAI_CLASSIFY_MODEL로 덮어쓰기.
 OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION_MODEL
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
+# 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 상위 모델·품질 (비용↑, 글자 보존↑)
+OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
-# 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 고품질 (비용↑, 글자 보존↑)
 OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
@@ -342,6 +343,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         meta.update(detect_garment_text(path))
     has_text = bool(meta.get("has_text_logo"))
     logo_text = str(meta.get("logo_text") or "").strip()
+    model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
 - 배경은 완전히 투명하게 (배경 완전 제거)
@@ -359,7 +361,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         buf = io.BytesIO(img_bytes)
         buf.name = "source.png"
         result = openai_client.images.edit(
-            model=OPENAI_IMAGE_MODEL,
+            model=model,
             image=buf,
             prompt=prompt,
             size="1024x1536",
@@ -369,7 +371,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         log_ai_usage(
             user_id,
             "product_image",
-            OPENAI_IMAGE_MODEL,
+            model,
             {"quality": quality, "has_text_logo": has_text, "logo_text": logo_text[:40]},
         )
         raw = base64.b64decode(result.data[0].b64_json)
@@ -381,7 +383,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             buf = io.BytesIO(img_bytes)
             buf.name = "source.png"
             result = openai_client.images.edit(
-                model=OPENAI_IMAGE_MODEL,
+                model=model,
                 image=buf,
                 prompt=prompt,
                 size="1024x1536",
@@ -390,12 +392,36 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             log_ai_usage(
                 user_id,
                 "product_image",
-                OPENAI_IMAGE_MODEL,
+                model,
                 {"quality": quality, "has_text_logo": has_text, "fallback": True},
             )
             raw = base64.b64decode(result.data[0].b64_json)
             return make_transparent_cutout(raw)
         except Exception:
+            # 텍스트용 상위 모델 실패 시 기본 모델로 한 번 더
+            if model != OPENAI_IMAGE_MODEL:
+                try:
+                    img_bytes = read_image_as_png_bytes(path)
+                    buf = io.BytesIO(img_bytes)
+                    buf.name = "source.png"
+                    result = openai_client.images.edit(
+                        model=OPENAI_IMAGE_MODEL,
+                        image=buf,
+                        prompt=prompt,
+                        size="1024x1536",
+                        quality=quality,
+                        background="transparent",
+                    )
+                    log_ai_usage(
+                        user_id,
+                        "product_image",
+                        OPENAI_IMAGE_MODEL,
+                        {"quality": quality, "has_text_logo": has_text, "fallback_model": True},
+                    )
+                    raw = base64.b64decode(result.data[0].b64_json)
+                    return make_transparent_cutout(raw)
+                except Exception:
+                    return None
             return None
 
 
