@@ -861,7 +861,7 @@ function AddSheet({ ctx }) {
                   rows={2}
                   value={hint}
                   onChange={(e) => setHint(e.target.value)}
-                  placeholder={'예) 이 이미지에서 가방만 따로 빼서 상품 컷처럼 만들어줘'}
+                  placeholder={'예) 이 이미지에서 가방만 추출해줘'}
                   style={{
                     width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
                     background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
