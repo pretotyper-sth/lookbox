@@ -309,10 +309,11 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
+_BG_NORM_VERSION = "cutout_v3"
 
 
 def make_transparent_cutout(png_bytes: bytes) -> bytes:
-    """가장자리에서 이어진 순백·연회색 배경을 투명으로 바꿔 옷만 남김."""
+    """가장자리에서 이어진 순백·연회색 스튜디오 배경을 투명으로 바꿔 옷만 남김."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     w, h = img.size
     px = img.load()
@@ -323,13 +324,19 @@ def make_transparent_cutout(png_bytes: bytes) -> bytes:
         r, g, b, a = px[x, y]
         if a < 12:
             return True
-        # 순백에 가깝거나, 예전 스튜디오 그레이에 가까우면 배경으로 취급
+        # 순백
         if r >= 248 and g >= 248 and b >= 248:
             return True
+        # 밝고 채도 낮은 스튜디오 그레이/아이보리 판 (가장자리 flood-fill만 적용)
+        mx, mn = max(r, g, b), min(r, g, b)
+        if mn >= 218 and (mx - mn) <= 14:
+            return True
+        if mn >= 232 and (mx - mn) <= 22:
+            return True
         return (
-            abs(r - _STUDIO_BG[0]) <= 10
-            and abs(g - _STUDIO_BG[1]) <= 10
-            and abs(b - _STUDIO_BG[2]) <= 10
+            abs(r - _STUDIO_BG[0]) <= 14
+            and abs(g - _STUDIO_BG[1]) <= 14
+            and abs(b - _STUDIO_BG[2]) <= 14
         )
 
     seeds = [
@@ -353,6 +360,14 @@ def make_transparent_cutout(png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def local_product_cutout(path: str) -> bytes | None:
+    """AI 추출 실패 시에도 원본 스튜디오 배경을 걷어 카드 톤을 맞춤."""
+    try:
+        return make_transparent_cutout(read_image_as_png_bytes(path))
+    except Exception:
+        return None
+
+
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
@@ -370,10 +385,10 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-- 배경은 완전히 투명하게 (배경 완전 제거)
+- 배경은 완전히 투명하게 (배경 완전 제거). 원본이 이미 스튜디오 제품컷이어도 회색·흰색·아이보리 배경 판을 절대 남기지 말 것
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
-- 아이템 전체가 잘리지 않게 중앙 배치
+- 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
 - 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
     if has_text:
@@ -447,6 +462,14 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
                 except Exception:
                     return None
             return None
+
+
+def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
+    """AI 추출을 시도하고, 실패해도 로컬 컷아웃으로 카드 톤을 통일."""
+    product = generate_product_image(user_id, path, meta)
+    if product:
+        return product
+    return local_product_cutout(path)
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -807,12 +830,20 @@ async def upload_item(
         meta = {**meta, "name": item_name, "color": item_color}
         original_path = f"{user.id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
-        product_bytes = generate_product_image(user.id, tmp_path, meta)
+        product_bytes = resolve_product_image(user.id, tmp_path, meta)
         image_path = original_path
         image_url = original_url
+        item_meta: dict[str, Any] = {
+            "tags": meta.get("tags") or [],
+            "has_text_logo": bool(meta.get("has_text_logo")),
+            "logo_text": str(meta.get("logo_text") or "").strip()[:80],
+            "original_path": original_path,
+            "original_url": original_url,
+        }
         if product_bytes:
             image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(image_path, product_bytes, "image/png")
+            item_meta["bg_norm"] = _BG_NORM_VERSION
         row = (
             supabase_admin.table("wardrobe_items")
             .insert(
@@ -825,11 +856,7 @@ async def upload_item(
                     "storage_path": image_path,
                     "source": "upload",
                     "status": status if status in {"owned", "considering"} else "owned",
-                    "metadata": {
-                        "tags": meta.get("tags") or [],
-                        "has_text_logo": bool(meta.get("has_text_logo")),
-                        "logo_text": str(meta.get("logo_text") or "").strip()[:80],
-                    },
+                    "metadata": item_meta,
                 }
             )
             .execute()
@@ -1059,7 +1086,7 @@ def _store_uploaded_item(
         meta = {**meta, "name": item_name, "color": item_color}
         original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
-        product_bytes = generate_product_image(user_id, tmp_path, meta)
+        product_bytes = resolve_product_image(user_id, tmp_path, meta)
         image_path, image_url = original_path, original_url
         if product_bytes:
             image_path = f"{user_id}/items/{uuid.uuid4().hex}.png"
@@ -1073,6 +1100,8 @@ def _store_uploaded_item(
             "has_text_logo": bool(meta.get("has_text_logo")),
             "logo_text": str(meta.get("logo_text") or "").strip()[:80],
         }
+        if product_bytes:
+            item_metadata["bg_norm"] = _BG_NORM_VERSION
         if (brand or "").strip():
             item_metadata["brand"] = brand.strip()
         if (store or "").strip():
@@ -1695,12 +1724,12 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
         if "has_text_logo" in meta:
             gen_meta["has_text_logo"] = bool(meta.get("has_text_logo"))
             gen_meta["logo_text"] = str(meta.get("logo_text") or "").strip()[:80]
-        product_bytes = generate_product_image(user.id, tmp_path, gen_meta)
+        product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         if not product_bytes:
             raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
         new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
         image_url = upload_bytes(new_path, product_bytes, "image/png")
-        meta["bg_norm"] = "cutout_v2"
+        meta["bg_norm"] = _BG_NORM_VERSION
         if "has_text_logo" in gen_meta:
             meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
             meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
@@ -1784,12 +1813,12 @@ async def live_replace_image(
             "color": row.get("color") or "",
             "tags": meta.get("tags") or [],
         }
-        product_bytes = generate_product_image(user.id, tmp_path, gen_meta)
+        product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         image_path, image_url = original_path, original_url
         if product_bytes:
             image_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(image_path, product_bytes, "image/png")
-            meta["bg_norm"] = "cutout_v2"
+            meta["bg_norm"] = _BG_NORM_VERSION
         if "has_text_logo" in gen_meta:
             meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
             meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
@@ -1835,7 +1864,7 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
     skipped = 0
     for row in rows:
         meta = dict(row.get("metadata") or {})
-        if meta.get("bg_norm") == "cutout_v2":
+        if meta.get("bg_norm") == _BG_NORM_VERSION:
             skipped += 1
             continue
         path = row.get("storage_path")
@@ -1847,7 +1876,7 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             fixed = make_transparent_cutout(raw)
             new_path = f"{user.id}/items/{uuid.uuid4().hex}.png"
             image_url = upload_bytes(new_path, fixed, "image/png")
-            meta["bg_norm"] = "cutout_v2"
+            meta["bg_norm"] = _BG_NORM_VERSION
             supabase_admin.table("wardrobe_items").update(
                 {"image_url": image_url, "storage_path": new_path, "metadata": meta}
             ).eq("id", row["id"]).eq("user_id", user.id).execute()
