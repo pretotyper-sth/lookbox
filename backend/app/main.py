@@ -238,7 +238,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 }
 규칙:
 - color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
-- category: 가방이면 반드시 bag, 신발이면 shoes.
+- category: 가방이면 반드시 bag, 신발·슬리퍼·쪼리·스니커·샌들이면 반드시 shoes.
+- 신발이 한 쌍으로 찍혀 있어도 아이템은 1개(신발 카테고리)로 본다. name에는 '슬리퍼'처럼 제품명만.
 - has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
   false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
@@ -449,8 +450,19 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     logo_text = str(meta.get("logo_text") or "").strip()
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
+    category = str(meta.get("category") or "")
+    name_l = str(name).lower()
+    is_shoes = category == "shoes" or any(
+        k in name_l
+        for k in ("신발", "슈즈", "슬리퍼", "쪼리", "스니커", "부츠", "샌들", "로퍼", "구두", "힐", "플립플롭", "shoe", "slipper", "sandal")
+    )
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else OPENAI_IMAGE_QUALITY
+
+    shoe_pair_rule = (
+        "\n중요(신발): 반드시 왼발+오른발 1쌍을 모두 한 장에 담아. "
+        "한쪽만 단독으로 뽑지 마. 원본에 두 짝이 보이면 둘 다 유지하고 배치·각도·재질을 원본처럼."
+    )
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
@@ -458,6 +470,17 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
 
 쇼핑몰 상품 컷처럼 요청한 아이템만 흰 배경에 단독으로 뽑아줘. 사람·팔·다른 옷은 넣지 마.
 원본 색·형태·재질은 그대로 유지해.
+"""
+        if is_shoes:
+            prompt += shoe_pair_rule
+    elif is_shoes:
+        prompt = f"""이 이미지에서 {name} 신발 1쌍(왼발+오른발)을 추출해 깔끔한 제품 컷으로 만들어주세요.
+- 반드시 왼발과 오른발을 모두 한 장에 포함. 한쪽만 단독으로 만들지 말 것
+- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것
+- 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 오버레이만 제거
+- 신발 표면의 로고·글자·텍스처는 원본 그대로 유지
+- 두 짝이 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
+- 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
     else:
         prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
@@ -473,7 +496,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
 
     print(
-        f"[extract] start hint={bool(hint)!r} hint_text={hint[:60]!r} model={model} quality={quality}",
+        f"[extract] start hint={bool(hint)!r} shoes={is_shoes} hint_text={hint[:60]!r} model={model} quality={quality}",
         flush=True,
     )
 
