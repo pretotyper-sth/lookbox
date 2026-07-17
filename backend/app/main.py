@@ -153,7 +153,13 @@ def upload_bytes(path: str, data: bytes, content_type: str) -> str:
     supabase_admin.storage.from_(SUPABASE_BUCKET).upload(
         path,
         data,
-        file_options={"content-type": content_type, "upsert": "true"},
+        # 파일명이 UUID로 고정(불변)이라 장기 캐시 안전 → 새로고침마다 재다운로드/깜빡임 방지.
+        # 값은 초 단위만 넣는다(라이브러리가 max-age=<값>으로 감쌈). 1년 = 31536000초.
+        file_options={
+            "content-type": content_type,
+            "upsert": "true",
+            "cache-control": "31536000",
+        },
     )
     return public_url(path)
 
@@ -2003,6 +2009,45 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             updated += 1
         except Exception as exc:  # noqa: BLE001
             print(f"[normalize-bg] skip {row.get('id')}: {exc}", flush=True)
+            skipped += 1
+    return {"updated": updated, "skipped": skipped}
+
+
+@app.post("/api/live/wardrobe/refresh-cache")
+def live_refresh_cache(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """기존 이미지 오브젝트를 같은 경로에 다시 올려 장기 캐시 헤더를 입힌다(URL 불변, OpenAI 미사용)."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("id,storage_path,metadata")
+        .eq("user_id", user.id)
+        .neq("status", "deleted")
+        .execute()
+        .data
+        or []
+    )
+    updated = 0
+    skipped = 0
+    for row in rows:
+        meta = dict(row.get("metadata") or {})
+        if meta.get("cache_hdr") == "v1":
+            skipped += 1
+            continue
+        path = row.get("storage_path")
+        if not path:
+            skipped += 1
+            continue
+        try:
+            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
+            ctype = "image/png" if path.lower().endswith(".png") else "image/jpeg"
+            upload_bytes(path, raw, ctype)  # 같은 경로 upsert → 새 cache-control 적용
+            meta["cache_hdr"] = "v1"
+            supabase_admin.table("wardrobe_items").update({"metadata": meta}).eq(
+                "id", row["id"]
+            ).eq("user_id", user.id).execute()
+            updated += 1
+        except Exception as exc:  # noqa: BLE001
+            print(f"[refresh-cache] skip {row.get('id')}: {exc}", flush=True)
             skipped += 1
     return {"updated": updated, "skipped": skipped}
 

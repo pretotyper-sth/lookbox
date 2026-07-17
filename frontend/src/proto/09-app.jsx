@@ -504,6 +504,16 @@ function App() {
     return () => { dead = true; };
   }, [isShowcase, bumpDaily]);
 
+  // 기존 이미지 오브젝트에 장기 캐시 헤더 1회 백필 → 새로고침 깜빡임 방지
+  useEffect(() => {
+    if (isShowcase) return;
+    const key = 'lb_img_cache_hdr_v1';
+    try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
+    liveJSON('/api/live/wardrobe/refresh-cache', { method: 'POST', body: '{}' })
+      .then(() => { try { localStorage.setItem(key, '1'); } catch (e) { /* noop */ } })
+      .catch(() => {});
+  }, [isShowcase]);
+
   // Persist the wardrobe locally so the next load paints instantly.
   useEffect(() => {
     if (isShowcase) return;
