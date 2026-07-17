@@ -1223,7 +1223,7 @@ _MARKETPLACE_HOSTS = (
     "wemakeprice.com",
     "tmon.co.kr",
 )
-_URL_BLOCKED_MSG = "쇼핑몰이 이미지 자동 불러오기를 막았어요. 사진으로 추가해 주세요."
+_URL_BLOCKED_MSG = "이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요."
 _BLOCKED_PAGE_HINTS = (
     "access denied",
     "요청이 차단",
