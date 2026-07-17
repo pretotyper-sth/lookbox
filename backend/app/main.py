@@ -32,6 +32,8 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "wardrobe")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
+# 분류(이름·카테고리·색)만 더 싼 모델로 A/B. 추천 텍스트는 VISION 유지.
+OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL", "gpt-4o-mini")
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
@@ -219,7 +221,7 @@ def classify_item(path: str) -> dict[str, Any]:
 """
     try:
         response = openai_client.chat.completions.create(
-            model=OPENAI_VISION_MODEL,
+            model=OPENAI_CLASSIFY_MODEL,
             messages=[
                 {
                     "role": "user",
