@@ -535,6 +535,22 @@ function App() {
     writeWardrobeCache(items, archived);
   }, [items, archived, isShowcase]);
 
+  // 이미지 프리로드: 목록이 생기는 즉시(상호작용 없이) 브라우저 캐시로 미리 받아 디코드해 둔다.
+  // → 그리드가 그려질 때 캐시에서 바로 페인트되어 '클릭해야 뜨는' 지연을 없앰.
+  useEffect(() => {
+    if (isShowcase) return;
+    const urls = [...(items || []), ...(archived || [])]
+      .map((it) => it && it.img)
+      .filter(Boolean);
+    urls.forEach((u) => {
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = u;
+      // decode()로 디코딩까지 미리 끝내 페인트를 즉시화 (실패 무시)
+      if (im.decode) im.decode().catch(() => {});
+    });
+  }, [items, archived, isShowcase]);
+
   // ---- actions ----
   const savedOutfitIds = savedLooks.map((l) => l.outfitId);
   const go = (id) => { setView(null); setTab(id); if (!isShowcase) persistTab(id); };
