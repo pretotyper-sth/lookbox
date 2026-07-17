@@ -216,8 +216,16 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
     }
     if not openai_client:
         return fallback
-    hint = (extract_hint or "").strip()[:240]
-    prompt = """이미지의 주요 패션 아이템 1개를 분석하세요. JSON만 응답하세요.
+    hint = (extract_hint or "").strip()[:500]
+    prompt = ""
+    if hint:
+        prompt += f"""사용자 지시(최우선·반드시 준수):
+"{hint}"
+
+위 지시에 해당하는 아이템 1개만 골라 분석하세요. 사람·팔·몸통·다른 옷·지시와 무관한 물건은 무시합니다.
+
+"""
+    prompt += """이미지의 패션 아이템을 분석하세요. JSON만 응답하세요.
 형식:
 {
   "name": "한국어 이름",
@@ -229,12 +237,11 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 }
 규칙:
 - color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
+- category: 가방이면 반드시 bag, 신발이면 shoes.
 - has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
   false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 """
-    if hint:
-        prompt += f'\n사용자 지시(최우선): "{hint}" — 이 지시에 맞는 아이템 1개만 분석하세요. 다른 옷/사람은 무시.'
     try:
         response = openai_client.chat.completions.create(
             model=OPENAI_CLASSIFY_MODEL,
@@ -438,16 +445,27 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     logo_text = str(meta.get("logo_text") or "").strip()
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
-    prompt = f"""이 이미지에서 {meta.get('name') or '패션 아이템'} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
+    hint = str(meta.get("extract_hint") or "").strip()[:500]
+    name = meta.get("name") or "패션 아이템"
+    if hint:
+        # ChatGPT처럼 사용자 문장을 맨 앞에 두고, 그 아래 공통 규칙을 붙임
+        prompt = f"""{hint}
+
+위 사용자 요청을 최우선으로 따르세요. 요청한 아이템만 분리해 쇼핑몰 상품 컷처럼 만들어주세요.
+- 요청한 아이템만 남기고, 사람·팔·몸통·얼굴·다른 옷·무관한 소품은 모두 제거
+- 배경은 완전히 투명(알파). 흰색·회색 사각형 배경 판 금지. 아이템만 떠 있는 PNG
+- 아이템 전체가 잘리지 않게 중앙 배치
+- 원본의 색상·실루엣·재질·주름·광택을 유지. 형태를 새로 창작하지 말 것
+- 아이템 표면의 로고·글자·그래픽은 철자·간격 그대로 유지
+"""
+    else:
+        prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
 - 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
 - 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
 - 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
-    hint = str(meta.get("extract_hint") or "").strip()[:240]
-    if hint:
-        prompt += f'\n- USER FOCUS (highest priority): "{hint}". Extract ONLY that item. Ignore other garments, the person, and unrelated objects.'
     if has_text:
         prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
         prompt += "\n- Still output a transparent background — logo preservation must not keep a white/gray studio plate."
@@ -469,7 +487,12 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             user_id,
             "product_image",
             model,
-            {"quality": quality, "has_text_logo": has_text, "logo_text": logo_text[:40]},
+            {
+                "quality": quality,
+                "has_text_logo": has_text,
+                "logo_text": logo_text[:40],
+                "extract_hint": hint[:80],
+            },
         )
         raw = base64.b64decode(result.data[0].b64_json)
         return finalize_cutout(raw)
@@ -1140,7 +1163,7 @@ def _store_uploaded_item(
     color_override: str | None = None,
     extract_hint: str | None = None,
 ) -> dict[str, Any]:
-    hint = (extract_hint or "").strip()[:240]
+    hint = (extract_hint or "").strip()[:500]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
@@ -1869,7 +1892,7 @@ async def live_replace_image(
         raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요")
 
     meta = dict(row.get("metadata") or {})
-    hint = (extract_hint or "").strip()[:240]
+    hint = (extract_hint or "").strip()[:500]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name

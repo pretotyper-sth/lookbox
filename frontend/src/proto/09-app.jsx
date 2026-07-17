@@ -276,7 +276,7 @@ async function liveImportSource({ sourceType, file, url, status, extractHint }) 
   const fd = new FormData();
   fd.append('image', file);
   fd.append('status', status || 'owned');
-  if (hint) fd.append('extract_hint', hint);
+  fd.append('extract_hint', hint);
   return liveJSON('/api/live/import/photo', { method: 'POST', body: fd });
 }
 
@@ -749,8 +749,7 @@ function App() {
     const fd = new FormData();
     if (sourceType === 'url') fd.append('url', url);
     else fd.append('image', file);
-    const hint = (extractHint || '').trim();
-    if (hint) fd.append('extract_hint', hint);
+    fd.append('extract_hint', (extractHint || '').trim());
     const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image`, {
       method: 'POST',
       body: fd,
