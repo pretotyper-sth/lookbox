@@ -20,34 +20,47 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)' };
   const isToday = ymd(selected) === ymd(today);
   const dlabel = `${selected.getMonth() + 1}월 ${selected.getDate()}일 (${WD[selected.getDay()]})`;
+  const btnRef = React.useRef(null);
+  const [calPos, setCalPos] = useTd(null);
+
+  useTe(() => {
+    if (!calOpen || !btnRef.current) {
+      setCalPos(null);
+      return undefined;
+    }
+    const place = () => {
+      const r = btnRef.current.getBoundingClientRect();
+      const width = Math.min(300, window.innerWidth - 24);
+      let left = r.left;
+      if (left + width > window.innerWidth - 12) left = Math.max(12, window.innerWidth - width - 12);
+      setCalPos({ top: r.bottom + 8, left, width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [calOpen]);
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, marginTop: 'var(--s4)',
       minWidth: 0,
     }}>
+      <div style={{ flex: 'none' }}>
+        <button ref={btnRef} type="button" onClick={() => setCalOpen((o) => !o)} aria-label="날짜 선택" aria-expanded={calOpen}
+          style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none', whiteSpace: 'nowrap' }}>
+          {isToday ? `오늘 · ${dlabel}` : dlabel}
+          <Icon name="chevD" size={13} stroke={2} style={{ transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur) var(--ease)' }} />
+        </button>
+      </div>
       <div style={{
         display: 'flex', flexWrap: 'nowrap', gap: 8, flex: 1, minWidth: 0,
         overflowX: 'auto', WebkitOverflowScrolling: 'touch',
         marginLeft: -2, paddingLeft: 2, paddingRight: 2,
       }}>
-        <div style={{ position: 'relative', flex: 'none' }}>
-          <button onClick={() => setCalOpen((o) => !o)} aria-label="날짜 선택"
-            style={{ ...pill, cursor: 'pointer', color: isToday ? 'var(--ink-2)' : 'var(--accent-ink)', background: isToday ? 'var(--surface)' : 'var(--accent)', boxShadow: isToday ? 'inset 0 0 0 1px var(--line)' : 'none', whiteSpace: 'nowrap' }}>
-            {isToday ? `오늘 · ${dlabel}` : dlabel}
-            <Icon name="chevD" size={13} stroke={2} style={{ transform: calOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur) var(--ease)' }} />
-          </button>
-          {calOpen && (
-            <>
-              <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, width: 300, maxWidth: '86vw', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: '0 12px 36px -8px color-mix(in srgb, var(--ink) 26%, transparent), 0 0 0 1px var(--line)' }}>
-                <HistoryCalendar today={today} selected={selected}
-                  onSelect={(d) => { onSelect(d); setCalOpen(false); }}
-                  view={view} onPrevMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
-                  onNextMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() + 1, 1))} />
-              </div>
-            </>
-          )}
-        </div>
         <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
           {w.city} {w.temp}° {w.cond}
@@ -55,6 +68,22 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
         <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
       </div>
       {action ? <div style={{ flex: 'none' }}>{action}</div> : null}
+      {calOpen && calPos && (
+        <>
+          <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
+          <div style={{
+            position: 'fixed', top: calPos.top, left: calPos.left, zIndex: 90,
+            width: calPos.width,
+            background: 'var(--surface)', borderRadius: 'var(--r-md)',
+            boxShadow: '0 12px 36px -8px color-mix(in srgb, var(--ink) 26%, transparent), 0 0 0 1px var(--line)',
+          }}>
+            <HistoryCalendar today={today} selected={selected}
+              onSelect={(d) => { onSelect(d); setCalOpen(false); }}
+              view={view} onPrevMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
+              onNextMonth={() => setView((v) => new Date(v.getFullYear(), v.getMonth() + 1, 1))} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -242,25 +271,20 @@ function HistoryCalendar({ today, selected, onSelect, view, onPrevMonth, onNextM
           const cy = ymd(d);
           const future = cy > todayYmd;
           const isSel = cy === selYmd;
-          const isToday = cy === todayYmd;
-          const worn = !future && buildDayFor(d).wornId;
+          const isTodayCell = cy === todayYmd;
           return (
-            <button key={cy} onClick={future ? undefined : () => onSelect(d)} disabled={future}
+            <button key={cy} type="button" onClick={future ? undefined : () => onSelect(d)} disabled={future}
               style={{
                 height: 30, border: 'none', borderRadius: 'var(--r-sm)', position: 'relative',
                 display: 'grid', placeItems: 'center', fontSize: 12.5,
-                fontWeight: isSel ? 800 : isToday ? 700 : 500,
+                fontWeight: isSel ? 800 : isTodayCell ? 700 : 500,
                 cursor: future ? 'default' : 'pointer',
                 color: future ? 'var(--ink-4, color-mix(in srgb, var(--ink-3) 55%, transparent))'
                   : isSel ? 'var(--accent-ink)' : 'var(--ink)',
                 background: isSel ? 'var(--accent)' : 'transparent',
-                outline: isToday && !isSel ? '1.5px solid var(--line-2)' : 'none', outlineOffset: -1.5,
-                transition: 'background var(--dur) var(--ease)',
+                outline: isTodayCell && !isSel ? '1.5px solid var(--line-2)' : 'none', outlineOffset: -1.5,
               }}>
               {d.getDate()}
-              {worn && !isSel && (
-                <span style={{ position: 'absolute', bottom: 3, width: 3.5, height: 3.5, borderRadius: '50%', background: 'var(--accent-ink)' }} />
-              )}
             </button>
           );
         })}
@@ -310,14 +334,24 @@ function TodayScreen({ ctx }) {
     requestDailyOutfits(preferredDailyStyle);
   }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
-  // owned에 없는 아이템이 섞인 코디는 화면에서도 제외
+  // owned에 없는 아이템·상의/하의 미달 코디는 화면에서도 제외
   const ownedIds = React.useMemo(
     () => new Set((items || []).map((it) => String(it.id))),
     [items],
   );
   const picks = uniqueDailyOutfits(pool).filter((o) => {
     const ids = o.itemIds || [];
-    return ids.length >= 2 && ids.every((id) => ownedIds.has(String(id)));
+    if (ids.length < 2 || !ids.every((id) => ownedIds.has(String(id)))) return false;
+    const buckets = ids.map((id) => {
+      const it = LB_DATA.ALL[id] || items.find((x) => String(x.id) === String(id));
+      const cat = ((it && it.category) || '').toLowerCase();
+      if (cat === '상의' || cat === '아우터' || cat === 'top' || cat === 'outer') return 'top';
+      if (cat === '하의' || cat === 'bottom') return 'bottom';
+      if (cat === '원피스' || cat === 'dress') return 'dress';
+      return 'other';
+    });
+    if (buckets.includes('dress')) return true;
+    return buckets.includes('top') && buckets.includes('bottom');
   });
   void dailyTick; // prune/append 후 리렌더 트리거
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
@@ -365,7 +399,9 @@ function TodayScreen({ ctx }) {
     );
   }
 
-  const busy = dailyLoading || loading || (isToday && !dailyAllowed && picks.length === 0);
+  const isFirstLoad = isToday && picks.length === 0 && (dailyLoading || !dailyAllowed || loading);
+  const isAppending = isToday && picks.length > 0 && (loading || dailyLoading);
+  const busy = isFirstLoad;
   // 헤더에는 지난날짜 복귀만. 추가 추천 CTA는 카드 아래 풀너비.
   const stripAction = (!isToday && wide) ? (
     <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
@@ -415,7 +451,7 @@ function TodayScreen({ ctx }) {
         gridTemplateColumns: gridCols,
         gap: wide ? 'var(--s4)' : 'var(--s3)',
       }}>
-        {busy
+        {isFirstLoad
           ? Array.from({ length: COLS }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
           : (
             <>
@@ -432,6 +468,10 @@ function TodayScreen({ ctx }) {
                   onRecommend={reshuffle}
                   onAdd={() => openAdd ? openAdd('wardrobe') : startComboOrWardrobe()}
                 />
+              ))}
+              {/* 추가 추천 중: 기존 카드는 유지하고 새 자리만 스켈레톤 */}
+              {isAppending && Array.from({ length: 2 }).map((_, i) => (
+                <TodayCardSkeleton key={'ask' + i} />
               ))}
             </>
           )}

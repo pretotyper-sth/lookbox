@@ -124,7 +124,7 @@ const DAILY_APPEND_BATCH = 2;
 function ownedIdSet(ownedItems) {
   return new Set((ownedItems || []).map((it) => it && (it.id || it.serverId)).filter(Boolean).map(String));
 }
-/** owned에 있는 id만 남긴 코디. 2개 미만이면 버린다. */
+/** owned에 있는 id만 남긴 코디. 2개 미만·상의/하의 미달이면 버린다. */
 function sanitizeDailyOutfit(outfit, owned) {
   if (!outfit) return null;
   const ids = (outfit.itemIds || []).map(String).filter((id) => owned.has(id));
@@ -132,12 +132,28 @@ function sanitizeDailyOutfit(outfit, owned) {
   if (ids.length === (outfit.itemIds || []).length) return outfit;
   return { ...outfit, itemIds: ids };
 }
+function outfitHasTopAndBottom(outfit, ownedItems) {
+  const byId = {};
+  (ownedItems || []).forEach((it) => {
+    if (it && it.id != null) byId[String(it.id)] = it;
+  });
+  const buckets = (outfit.itemIds || []).map((id) => {
+    const it = byId[String(id)] || LB_DATA.ALL[id];
+    const cat = ((it && it.category) || '').toLowerCase();
+    if (cat === '상의' || cat === '아우터' || cat === 'top' || cat === 'outer') return 'top';
+    if (cat === '하의' || cat === 'bottom') return 'bottom';
+    if (cat === '원피스' || cat === 'dress') return 'dress';
+    return 'other';
+  });
+  if (buckets.includes('dress')) return true;
+  return buckets.includes('top') && buckets.includes('bottom');
+}
 function filterDailyOutfitsByOwned(outfits, ownedItems) {
   const owned = ownedIdSet(ownedItems);
   const out = [];
   (outfits || []).forEach((o) => {
     const next = sanitizeDailyOutfit(o, owned);
-    if (next) out.push(next);
+    if (next && outfitHasTopAndBottom(next, ownedItems)) out.push(next);
   });
   return out;
 }
@@ -1089,7 +1105,6 @@ function App() {
         onClose={closeItem}
         onSave={saveItemDetails}
         onViewImage={openImageViewer}
-        onReextract={requestReextract}
       />
       <ImageViewer open={imageViewer.open} item={imageViewer.item} onClose={closeImageViewer} />
       <ItemRemoveSheet
@@ -1108,7 +1123,7 @@ function App() {
       />
       <BottomSheet open={reextractSheet.open} onClose={closeReextract}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>이미지를 다시 추출할까요?</h3>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>이미지만 변경할까요?</h3>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
             이름·색상 등 정보는 그대로 두고<br />제품 컷만 다시 만들어요.<br />
             <span style={{ color: 'var(--ink-3)' }}>최대 2분 걸릴 수 있어요.</span>
@@ -1120,7 +1135,7 @@ function App() {
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="sparkle" disabled={reextractSheet.busy} onClick={runReextract}>
-              {reextractSheet.busy ? '추출 중… 최대 2분' : '다시 추출하기'}
+              {reextractSheet.busy ? '변경 중… 최대 2분' : '이미지만 변경'}
             </Btn>
             <Btn full variant="ghost" disabled={reextractSheet.busy} onClick={closeReextract}>취소</Btn>
           </div>

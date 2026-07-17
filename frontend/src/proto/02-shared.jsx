@@ -340,7 +340,7 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
-function ItemDetailSheet({ open, item, onClose, onSave, onViewImage, onReextract }) {
+function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const [draft, setDraft] = useState({});
   useEffect(() => {
     if (open && item) {
@@ -402,19 +402,6 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage, onReextract
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6 }}>
                 {item.category} · {draft.color || item.color || '색상 미정'}
               </div>
-              {onReextract && (
-                <button
-                  type="button"
-                  onClick={() => onReextract(item)}
-                  style={{
-                    marginTop: 8, padding: 0, border: 'none', background: 'transparent',
-                    fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', cursor: 'pointer',
-                    textDecoration: 'underline', textUnderlineOffset: 3,
-                  }}
-                >
-                  이미지 다시 추출
-                </button>
-              )}
             </div>
           </div>
           <IconBtn name="x" label="닫기" onClick={onClose} style={{ marginRight: -8, flex: 'none' }} />
@@ -468,7 +455,7 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
             <Btn full size="lg" variant="soft" icon="expand" onClick={onExpand}>이미지 크게 보기</Btn>
           )}
           {onReextract && (
-            <Btn full size="lg" variant="soft" icon="sparkle" onClick={() => onReextract(item)}>이미지 다시 추출</Btn>
+            <Btn full size="lg" variant="soft" icon="sparkle" onClick={() => onReextract(item)}>이미지만 변경</Btn>
           )}
           {isArchived
             ? <Btn full size="lg" variant="soft" icon="hanger" onClick={onRestore}>옷장으로 꺼내기</Btn>

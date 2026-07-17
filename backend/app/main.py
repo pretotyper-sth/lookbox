@@ -427,7 +427,10 @@ def recommend_text(
 {exclude_note}
 규칙:
 - item_ids에는 위 목록에 있는 id만 넣기
-- 한 코디에는 상의/하의/신발 중심으로 2~4개 구성
+- 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 원피스)를 포함. 상의+신발만, 하의 없는 조합 금지
+- 원피스 1벌이면 상의·하의 요건을 충족한 것으로 봄
+- 그 외 신발·액세서리는 선택
+- 한 코디는 2~4개 구성
 - 기준 아이템이 있으면 반드시 포함
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
 - 이미 보여준 조합은 절대 다시 쓰지 말 것
@@ -448,7 +451,7 @@ def recommend_text(
             temperature=0.45,
         )
         data = json.loads(response.choices[0].message.content or "{}")
-        valid = {item["id"] for item in items}
+        valid = {item["id"]: item for item in items}
         allowed_styles = set(uniq_styles)
         combos = []
         seen: set[tuple[str, ...]] = set(exclude_keys)
@@ -458,6 +461,8 @@ def recommend_text(
                 ids = [anchor["id"], *ids]
             ids = ids[:4]
             if len(ids) < 2:
+                continue
+            if not _combo_has_top_and_bottom(ids, valid):
                 continue
             key = tuple(sorted(ids))
             if key in seen:
@@ -495,6 +500,14 @@ def _item_bucket(item: dict[str, Any]) -> str:
     return "other"
 
 
+def _combo_has_top_and_bottom(ids: list[str], by_id: dict[str, Any]) -> bool:
+    """상의(또는 아우터/원피스) + 하의(또는 원피스) 필수."""
+    buckets = [_item_bucket(by_id[i]) for i in ids if i in by_id]
+    if "dress" in buckets:
+        return True
+    return ("top" in buckets) and ("bottom" in buckets)
+
+
 def fallback_combos(
     items: list[dict[str, Any]],
     anchor: dict[str, Any] | None,
@@ -507,6 +520,7 @@ def fallback_combos(
     tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
     bottoms = [i for i in items if _item_bucket(i) in ("bottom", "dress")]
     shoes = [i for i in items if _item_bucket(i) == "shoes"]
+    by_id = {i["id"]: i for i in items}
     combos: list[dict[str, Any]] = []
     seen: set[tuple[str, ...]] = set(exclude_keys or ())
     style_cycle = [s for s in (styles or []) if s] or []
@@ -516,6 +530,8 @@ def fallback_combos(
             return
         if anchor and anchor["id"] not in ids:
             ids = [anchor["id"], *[x for x in ids if x != anchor["id"]]]
+        if not _combo_has_top_and_bottom(ids, by_id):
+            return
         key = tuple(sorted(ids[:4]))
         if key in seen:
             return
@@ -541,10 +557,14 @@ def fallback_combos(
             if len(combos) >= max_combos:
                 return combos
 
-    # 페어가 거의 없으면 인접 아이템으로 최소 조합만
-    if not combos and len(items) >= 2:
-        ids = [items[0]["id"], items[1]["id"]]
-        _push(ids, "데일리 조합")
+    # 원피스만으로 최소 조합
+    dresses = [i for i in items if _item_bucket(i) == "dress"]
+    for d in dresses:
+        ids = [d["id"]]
+        if shoes:
+            ids.append(shoes[0]["id"])
+        if len(ids) >= 2:
+            _push(ids, f"추천 코디 {len(combos) + 1}")
         if len(combos) >= max_combos:
             return combos
 
@@ -1640,6 +1660,8 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     outfits, used = [], {}
     for idx, combo in enumerate(combos):
         ids = [item_id for item_id in combo["item_ids"] if item_id in by_id]
+        if not _combo_has_top_and_bottom(ids, by_id):
+            continue
         for item_id in ids:
             used[item_id] = by_id[item_id]
         outfits.append(
