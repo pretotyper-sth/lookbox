@@ -429,225 +429,10 @@ def local_product_cutout(path: str) -> bytes | None:
         return None
 
 
-def locate_item_bbox(
-    path: str,
-    *,
-    hint: str = "",
-    name: str = "",
-    category: str = "",
-) -> tuple[float, float, float, float] | None:
-    """힌트/카테고리에 맞는 아이템의 정규화 bbox (x1,y1,x2,y2) 0~1. 실패 시 None."""
-    if not openai_client:
-        return None
-    target = (hint or "").strip() or f"{name} ({category})".strip()
-    if not target:
-        return None
-    prompt = f"""Locate the single fashion product the user wants to extract.
-User instruction / target: "{target}"
-Category hint: {category or "unknown"}
-Name hint: {name or "unknown"}
-
-Return JSON only:
-{{"x1":0.0,"y1":0.0,"x2":1.0,"y2":1.0}}
-Coordinates are normalized 0~1 relative to image width/height.
-Draw a TIGHT box around ONLY that product (e.g. bag body + straps).
-Exclude as much of the person, arms, hands, face, and other clothes as possible.
-If unsure, prefer a smaller box on the product rather than the whole photo.
-"""
-    try:
-        response = openai_client.chat.completions.create(
-            model=OPENAI_VISION_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": image_to_data_url(path)}},
-                    ],
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        data = json.loads(response.choices[0].message.content or "{}")
-        x1, y1, x2, y2 = float(data["x1"]), float(data["y1"]), float(data["x2"]), float(data["y2"])
-        x1, y1 = max(0.0, min(1.0, x1)), max(0.0, min(1.0, y1))
-        x2, y2 = max(0.0, min(1.0, x2)), max(0.0, min(1.0, y2))
-        if x2 - x1 < 0.08 or y2 - y1 < 0.08:
-            return None
-        if x2 - x1 > 0.98 and y2 - y1 > 0.98:
-            return None  # 사실상 전체 프레임 → 크롭 무의미
-        return (x1, y1, x2, y2)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[extract] locate_item_bbox failed: {exc}", flush=True)
-        return None
-
-
-def crop_image_to_bbox(
-    path: str,
-    bbox: tuple[float, float, float, float],
-    *,
-    pad: float = 0.06,
-) -> str | None:
-    """bbox로 크롭한 PNG 임시 경로. 호출측에서 삭제."""
-    try:
-        img = Image.open(path).convert("RGBA")
-        w, h = img.size
-        x1, y1, x2, y2 = bbox
-        pw, ph = (x2 - x1) * pad, (y2 - y1) * pad
-        left = max(0, int((x1 - pw) * w))
-        top = max(0, int((y1 - ph) * h))
-        right = min(w, int((x2 + pw) * w))
-        bottom = min(h, int((y2 + ph) * h))
-        if right - left < 32 or bottom - top < 32:
-            return None
-        cropped = img.crop((left, top, right, bottom))
-        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        cropped.save(tmp.name, format="PNG")
-        tmp.close()
-        return tmp.name
-    except Exception as exc:  # noqa: BLE001
-        print(f"[extract] crop_image_to_bbox failed: {exc}", flush=True)
-        return None
-
-
-def _product_edit_prompt(meta: dict[str, Any], *, isolation: bool) -> str:
-    hint = str(meta.get("extract_hint") or "").strip()[:500]
-    name = meta.get("name") or "패션 아이템"
-    category = meta.get("category") or ""
-    has_text = bool(meta.get("has_text_logo"))
-    logo_text = str(meta.get("logo_text") or "").strip()
-    if hint or isolation:
-        prompt = f"""USER REQUEST (highest priority, follow exactly):
-"{hint or f'Extract only the {name}'}"
-
-Create a clean e-commerce PRODUCT CUTOUT of ONLY that item.
-Output: the product alone, centered, on a plain white opaque studio background.
-CRITICAL hard rules:
-- Remove EVERY person, face, arm, hand, shoulder, hair, skin, and any other garment
-- If this is a bag/shoes/accessory worn or held by someone, show the product alone as a catalog shot — NOT a lifestyle photo
-- Do NOT return the original photo composition
-- Do NOT keep the wearer or carrier
-- Preserve the product's exact color, material, wrinkles, gloss, silhouette
-- Full product visible, not cropped
-- No price tags, watermarks, UI overlays
-Category: {category or "unknown"} / Name: {name}
-"""
-    else:
-        prompt = f"""Extract the product ({name}) from the input image and place it on a plain white opaque background.
-Output: centered product, crisp silhouette, no halos/fringing.
-Preserve product geometry and fabric details exactly.
-Remove people, mannequins, floating price tags, watermarks, and UI overlays.
-Do not restyle the product; only isolate it and lightly polish.
-"""
-    if has_text:
-        prompt += (
-            "\nCRITICAL: This product has printed/embroidered text or a logo. "
-            "Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
-        )
-        if logo_text:
-            prompt += f'\nThe visible logo/text must remain exactly: "{logo_text}".'
-    return prompt
-
-
-def _images_edit_once(
-    user_id: str,
-    path: str,
-    prompt: str,
-    *,
-    model: str,
-    quality: str,
-    has_text: bool,
-    hint: str,
-    extra_meta: dict[str, Any] | None = None,
-) -> bytes | None:
-    """images.edit 1회. transparent 실패 시 opaque 폴백."""
-    img_bytes = read_image_as_png_bytes(path)
-    usage_meta = {
-        "quality": quality,
-        "has_text_logo": has_text,
-        "extract_hint": hint[:80],
-        **(extra_meta or {}),
-    }
-    try:
-        buf = io.BytesIO(img_bytes)
-        buf.name = "source.png"
-        result = openai_client.images.edit(
-            model=model,
-            image=buf,
-            prompt=prompt,
-            size="1024x1536",
-            quality=quality,
-            background="opaque",
-        )
-        log_ai_usage(user_id, "product_image", model, usage_meta)
-        return base64.b64decode(result.data[0].b64_json)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[extract] images.edit opaque failed model={model}: {exc}", flush=True)
-        try:
-            buf = io.BytesIO(img_bytes)
-            buf.name = "source.png"
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "image": buf,
-                "prompt": prompt,
-                "size": "1024x1536",
-                "quality": quality,
-            }
-            # gpt-image-1 계열은 transparent 가능. 2는 opaque만.
-            if "image-2" not in (model or ""):
-                kwargs["background"] = "transparent"
-            result = openai_client.images.edit(**kwargs)
-            log_ai_usage(
-                user_id,
-                "product_image",
-                model,
-                {**usage_meta, "fallback": True},
-            )
-            return base64.b64decode(result.data[0].b64_json)
-        except Exception as exc2:  # noqa: BLE001
-            print(f"[extract] images.edit fallback failed model={model}: {exc2}", flush=True)
-            return None
-
-
-def _output_still_has_person(png_bytes: bytes) -> bool:
-    """추출 결과에 사람/팔/손이 남아 있는지 비전으로 확인."""
-    if not openai_client:
-        return False
-    try:
-        data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
-        response = openai_client.chat.completions.create(
-            model=OPENAI_VISION_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                "Is this an isolated product cutout, or does it still show a person "
-                                "(face, arm, hand, shoulder, torso, hair, or worn clothing on a body)? "
-                                'JSON only: {"has_person": true}'
-                            ),
-                        },
-                        {"type": "image_url", "image_url": {"url": data_url}},
-                    ],
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        data = json.loads(response.choices[0].message.content or "{}")
-        return bool(data.get("has_person"))
-    except Exception as exc:  # noqa: BLE001
-        print(f"[extract] person-check failed: {exc}", flush=True)
-        return False
-
-
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
+    """ChatGPT images.edit와 같은 단순 경로: 이미지 + 프롬프트 1회(실패 시 폴백만)."""
     if not openai_client or not charge_credit(user_id, "product_image", {"name": meta.get("name")}):
         return None
-    # 분류 단계에서 이미 넣었으면 재사용, 재추출/이미지만 변경 등은 여기서 감지
     if "has_text_logo" not in meta:
         meta.update(detect_garment_text(path))
     else:
@@ -661,117 +446,91 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     quality = OPENAI_IMAGE_QUALITY_TEXT if has_text else OPENAI_IMAGE_QUALITY
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
-    category = str(meta.get("category") or "")
-    isolation = bool(hint) or category in ("bag", "shoes", "accessory")
 
-    work_path = path
-    crop_tmp: str | None = None
-    try:
-        if isolation:
-            bbox = locate_item_bbox(path, hint=hint, name=name, category=category)
-            if bbox:
-                crop_tmp = crop_image_to_bbox(path, bbox)
-                if crop_tmp:
-                    work_path = crop_tmp
-                    print(f"[extract] cropped to bbox={bbox}", flush=True)
+    # 힌트 있으면 사용자 문장을 맨 앞(ChatGPT와 동일). 없으면 기존 서비스 톤 추출.
+    if hint:
+        prompt = f"""{hint}
 
-        prompt = _product_edit_prompt(meta, isolation=isolation)
-        raw = _images_edit_once(
+위 요청을 최우선으로 따르세요. 요청한 것만 쇼핑몰 상품 컷처럼 뽑아 주세요.
+- 요청한 아이템만 남기고 사람·팔·몸통·얼굴·다른 옷은 제거
+- 깔끔한 흰 스튜디오 배경, 아이템 중앙 배치, 전체가 잘리지 않게
+- 원본의 색·실루엣·재질·주름·광택 유지 (새로 창작하지 말 것)
+- 아이템 위 로고·글자는 철자·간격 그대로
+"""
+    else:
+        prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
+- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
+- 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
+- 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
+- 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
+- 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
+"""
+    if has_text:
+        prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
+        if logo_text:
+            prompt += f'\n- The visible logo/text must remain exactly: "{logo_text}" (same spelling, spacing, and layout).'
+
+    def _edit(use_model: str, *, transparent: bool) -> bytes:
+        img_bytes = read_image_as_png_bytes(path)
+        buf = io.BytesIO(img_bytes)
+        buf.name = "source.png"
+        kwargs: dict[str, Any] = {
+            "model": use_model,
+            "image": buf,
+            "prompt": prompt,
+            "size": "1024x1536",
+            "quality": quality,
+        }
+        if transparent:
+            kwargs["background"] = "transparent"
+        result = openai_client.images.edit(**kwargs)
+        log_ai_usage(
             user_id,
-            work_path,
-            prompt,
-            model=model,
-            quality=quality,
-            has_text=has_text,
-            hint=hint,
-            extra_meta={"cropped": work_path != path, "logo_text": logo_text[:40]},
+            "product_image",
+            use_model,
+            {
+                "quality": quality,
+                "has_text_logo": has_text,
+                "logo_text": logo_text[:40],
+                "extract_hint": hint[:80],
+                "transparent": transparent,
+            },
         )
-        if raw is None and model != OPENAI_IMAGE_MODEL:
-            raw = _images_edit_once(
-                user_id,
-                work_path,
-                prompt,
-                model=OPENAI_IMAGE_MODEL,
-                quality=quality,
-                has_text=has_text,
-                hint=hint,
-                extra_meta={"fallback_model": True, "cropped": work_path != path},
-            )
-        if raw is None and work_path != path:
-            raw = _images_edit_once(
-                user_id,
-                path,
-                prompt,
-                model=OPENAI_IMAGE_MODEL,
-                quality=quality,
-                has_text=has_text,
-                hint=hint,
-                extra_meta={"retry_full_frame": True},
-            )
-        if raw is None:
-            return None
+        return base64.b64decode(result.data[0].b64_json)
 
-        # 사람과 함께 남은 '가짜 성공'이면 더 강한 프롬프트로 1회 재시도
-        if isolation and _output_still_has_person(raw):
-            print("[extract] person still present — retry harder isolation", flush=True)
-            hard = (
-                prompt
-                + "\n\nPREVIOUS OUTPUT FAILED: a person or body part was still visible. "
-                "Regenerate. Show ONLY the product floating alone. Zero human body parts."
-            )
-            retry_path = work_path if work_path != path else path
-            raw2 = _images_edit_once(
-                user_id,
-                retry_path,
-                hard,
-                model=OPENAI_IMAGE_MODEL,
-                quality=quality,
-                has_text=has_text,
-                hint=hint,
-                extra_meta={"person_retry": True},
-            )
-            if raw2 is not None and not _output_still_has_person(raw2):
-                raw = raw2
-            else:
-                print("[extract] refusing output that still includes a person", flush=True)
-                return None
+    # 힌트: ChatGPT처럼 opaque 상품 컷 우선. 무힌트: 기존처럼 transparent 우선.
+    attempts: list[tuple[str, bool]] = []
+    if hint:
+        attempts.append((model, False))
+        if "image-2" not in model:
+            attempts.append((model, True))
+        if model != OPENAI_IMAGE_MODEL:
+            attempts.append((OPENAI_IMAGE_MODEL, False))
+    else:
+        attempts.append((model, True))
+        attempts.append((model, False))
+        if model != OPENAI_IMAGE_MODEL:
+            attempts.append((OPENAI_IMAGE_MODEL, True))
 
-        return finalize_cutout(raw)
-    finally:
-        if crop_tmp:
-            try:
-                os.remove(crop_tmp)
-            except OSError:
-                pass
+    seen: set[tuple[str, bool]] = set()
+    for use_model, transparent in attempts:
+        key = (use_model, transparent)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            raw = _edit(use_model, transparent=transparent)
+            return finalize_cutout(raw)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[extract] edit failed model={use_model} transparent={transparent}: {exc}", flush=True)
+    return None
 
 
 def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
-    """AI 추출 시도. 힌트가 있으면 전체 사진 로컬 컷아웃으로 속이지 않음."""
-    hint = str(meta.get("extract_hint") or "").strip()
+    """AI 추출을 시도하고, 실패해도 로컬 컷아웃으로 카드 톤을 통일."""
     product = generate_product_image(user_id, path, meta)
     if product:
         return product
-    if hint:
-        # AI 실패 시라도 대상 bbox 크롭만이라도 — 사람 전신 원본을 '추출 성공'처럼 쓰지 않음
-        print("[extract] AI failed with hint — try bbox crop only", flush=True)
-        bbox = locate_item_bbox(
-            path,
-            hint=hint,
-            name=str(meta.get("name") or ""),
-            category=str(meta.get("category") or ""),
-        )
-        crop_tmp = crop_image_to_bbox(path, bbox) if bbox else None
-        if crop_tmp:
-            try:
-                return finalize_cutout(read_image_as_png_bytes(crop_tmp))
-            except Exception:
-                return None
-            finally:
-                try:
-                    os.remove(crop_tmp)
-                except OSError:
-                    pass
-        return None
     return local_product_cutout(path)
 
 
