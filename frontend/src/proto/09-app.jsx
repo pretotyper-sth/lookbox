@@ -78,6 +78,9 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+function wardrobeSigOf(list) {
+  return (list || []).map((it) => it && it.id).filter(Boolean).map(String).sort().join(',');
+}
 function readDailyCache() {
   try {
     const parsed = JSON.parse(localStorage.getItem(DAILY_CACHE_KEY) || 'null');
@@ -85,15 +88,34 @@ function readDailyCache() {
     return parsed;
   } catch (e) { return null; }
 }
-function writeDailyCache({ style, outfits, items }) {
+function writeDailyCache({ style, outfits, items, wardrobeSig, wardrobeCount }) {
   try {
+    const sig = wardrobeSig != null ? wardrobeSig : wardrobeSigOf(items);
     localStorage.setItem(DAILY_CACHE_KEY, JSON.stringify({
-      date: localYmd(), style: style || '', outfits: outfits || [], items: items || [],
+      date: localYmd(),
+      style: style || '',
+      outfits: outfits || [],
+      items: items || [],
+      wardrobeSig: sig || '',
+      wardrobeCount: wardrobeCount != null ? wardrobeCount : (items || []).length,
     }));
   } catch (e) { /* noop */ }
 }
 function clearDailyCache() {
   try { localStorage.removeItem(DAILY_CACHE_KEY); } catch (e) { /* noop */ }
+}
+function dailyWardrobeGrewSinceCache(ownedItems) {
+  const cached = readDailyCache();
+  if (!cached) return false;
+  const nowSig = wardrobeSigOf(ownedItems);
+  if (cached.wardrobeSig) return cached.wardrobeSig !== nowSig;
+  if (typeof cached.wardrobeCount === 'number') return (ownedItems || []).length > cached.wardrobeCount;
+  // 레거시 캐시(시그니처 없음): 추천에 쓰인 아이템보다 옷장이 넓으면 늘었을 가능성으로 본다
+  const used = new Set();
+  (cached.outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
+  const owned = ownedItems || [];
+  if (owned.some((it) => it && it.id && !used.has(String(it.id)))) return true;
+  return owned.length > used.size;
 }
 
 function liveRememberItem(item) {
@@ -404,7 +426,9 @@ function App() {
 
   const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
     const force = !!(opts && opts.force);
-    if (!prefs.dailyEnabled) return;
+    const quiet = !!(opts && opts.quiet);
+    if (!prefs.dailyEnabled) return { added: 0, wardrobeGrew: false };
+    const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     if (!force) {
       const cached = readDailyCache();
       if (cached) {
@@ -413,7 +437,7 @@ function App() {
         setDailyStyle(cached.style || style);
         setDailyAllowed(true);
         setItems((arr) => arr.slice());
-        return;
+        return { added: 0, wardrobeGrew, fromCache: true };
       }
     }
     setDailyStyle(style);
@@ -421,11 +445,15 @@ function App() {
     setDailyLoading(true);
     try {
       const baseCount = Math.max(1, parseInt(t.dailyCount, 10) || 4);
+      const ownedSig = wardrobeSigOf(items);
       if (force && LB_DATA.DAILY.length > 0) {
+        // 칸이 비어 있으면 그만큼, 아니면 2개씩 추가. 옷장이 늘었으면 새 조합을 우선 시도.
+        const need = Math.max(0, baseCount - LB_DATA.DAILY.length);
+        const maxCombos = Math.max(need > 0 ? need : 2, 2);
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
           body: JSON.stringify({
-            max_combos: 2,
+            max_combos: maxCombos,
             style,
             styles: preferredStyles,
             exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
@@ -437,11 +465,19 @@ function App() {
         const byId = {};
         (prev && prev.items ? prev.items : []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
         (payload.items || []).forEach((it) => { if (it && it.id) byId[it.id] = it; });
-        writeDailyCache({ style, outfits: LB_DATA.DAILY.slice(), items: Object.values(byId) });
+        // 옷장 시그니처는 현재 owned 기준 (캐시 items가 일부만일 수 있음)
+        writeDailyCache({
+          style,
+          outfits: LB_DATA.DAILY.slice(),
+          items: Object.values(byId),
+          wardrobeSig: ownedSig,
+          wardrobeCount: items.length,
+        });
         setItems((arr) => arr.slice());
-        if (!added.length) showToast('더 추천할 조합이 없어요');
-        else showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
-        return;
+        // quiet: 0건일 때 Today 시트가 안내하므로 토스트 생략. 성공은 항상 토스트.
+        if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
+        else if (!quiet) showToast('더 추천할 조합이 없어요');
+        return { added: added.length, wardrobeGrew };
       }
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
@@ -453,12 +489,20 @@ function App() {
       });
       stampOutfitStyle(payload.outfits);
       liveApplyPayload(payload, 'daily');
-      writeDailyCache({ style, outfits: payload.outfits || LB_DATA.DAILY.slice(), items: payload.items || [] });
+      writeDailyCache({
+        style,
+        outfits: payload.outfits || LB_DATA.DAILY.slice(),
+        items: payload.items || [],
+        wardrobeSig: ownedSig,
+        wardrobeCount: items.length,
+      });
       setItems((arr) => arr.slice());
-      showToast('오늘의 코디를 만들었어요', 'sparkle');
+      if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
+      return { added: (payload.outfits || []).length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '오늘의 코디 추천에 실패했어요');
+      return { added: 0, wardrobeGrew, error: true };
     } finally {
       setDailyLoading(false);
     }
@@ -736,6 +780,7 @@ function App() {
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
+    dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday,
     addItemsBatch, liveImportSource,

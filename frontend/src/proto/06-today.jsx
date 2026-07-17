@@ -112,7 +112,7 @@ function TodayCardSkeleton() {
 }
 
 /* 기본 4칸 중 고유 조합이 부족할 때 채우는 빈 슬롯 */
-function EmptyTodaySlot({ onAdd }) {
+function EmptyTodaySlot({ wardrobeGrew, onRecommend, onAdd }) {
   return (
     <div style={{
       background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)',
@@ -125,13 +125,20 @@ function EmptyTodaySlot({ onAdd }) {
         textAlign: 'center', padding: '14px 10px', color: 'var(--ink-3)',
       }}>
         <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--surface)', display: 'grid', placeItems: 'center', marginBottom: 10, color: 'var(--ink-2)' }}>
-          <Icon name="plus" size={20} />
+          <Icon name={wardrobeGrew ? 'sparkle' : 'plus'} size={20} />
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', lineHeight: 1.35, wordBreak: 'keep-all' }}>더 많은 코디</div>
-        <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.4, color: 'var(--ink-3)', wordBreak: 'keep-all' }}>옷을 추가해 보세요</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', lineHeight: 1.35, wordBreak: 'keep-all' }}>
+          {wardrobeGrew ? '옷장이 늘었어요' : '더 많은 코디'}
+        </div>
+        <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.4, color: 'var(--ink-3)', wordBreak: 'keep-all' }}>
+          {wardrobeGrew ? '새 조합을 받아보세요' : '추천을 받거나 옷을 추가해 보세요'}
+        </div>
       </div>
-      <div style={{ marginTop: 'var(--s3)' }}>
-        <Btn full size="sm" variant="soft" icon="plus" onClick={onAdd}>아이템 추가</Btn>
+      <div style={{ marginTop: 'var(--s3)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Btn full size="sm" variant="soft" icon="sparkle" onClick={onRecommend}>새 코디 받기</Btn>
+        {!wardrobeGrew && (
+          <Btn full size="sm" variant="ghost" icon="plus" onClick={onAdd}>아이템 추가</Btn>
+        )}
       </div>
     </div>
   );
@@ -276,6 +283,7 @@ function TodayScreen({ ctx }) {
     dailyAllowed, dailyLoading, requestDailyOutfits, comboReady,
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
+    dailyWardrobeGrew,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -283,6 +291,8 @@ function TodayScreen({ ctx }) {
 
   const [loading, setLoading] = useTd(false);
   const [needMoreOpen, setNeedMoreOpen] = useTd(false);
+  // exhausted | grewButNone — API 실패 없이 0건일 때 팝업 문구 분기
+  const [needMoreKind, setNeedMoreKind] = useTd('exhausted');
 
   // 날짜 선택 — 오늘이면 데일리 추천, 지난 날짜면 그날 추천 기록
   const today = React.useMemo(() => startOfDay(new Date()), []);
@@ -302,15 +312,18 @@ function TodayScreen({ ctx }) {
   const picks = uniqueDailyOutfits(pool);
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 추가 2개부터는 왼쪽부터 이어서 채움
   const emptySlots = picks.length < COLS ? COLS - picks.length : 0;
+  const wardrobeGrew = !!dailyWardrobeGrew;
 
   const reshuffle = async () => {
-    if (picks.length < COLS) {
-      setNeedMoreOpen(true);
-      return;
-    }
+    // 칸이 비어 있어도 옷장 변화를 반영해 API를 먼저 호출한다.
+    // (이전: picks < COLS면 바로 "더 없어요" 팝업 → 옷 추가 후에도 막힘)
     setLoading(true);
-    await requestDailyOutfits(preferredDailyStyle, { force: true });
+    const result = await requestDailyOutfits(preferredDailyStyle, { force: true, quiet: true });
     setLoading(false);
+    if (!result || result.error) return;
+    if (result.added > 0) return;
+    setNeedMoreKind(result.wardrobeGrew || wardrobeGrew ? 'grewButNone' : 'exhausted');
+    setNeedMoreOpen(true);
   };
 
   /* ---- 설정에서 미허용 (디폴트 off) ---- */
@@ -410,7 +423,12 @@ function TodayScreen({ ctx }) {
                   worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (
-                <EmptyTodaySlot key={'empty' + i} onAdd={() => openAdd ? openAdd('wardrobe') : startComboOrWardrobe()} />
+                <EmptyTodaySlot
+                  key={'empty' + i}
+                  wardrobeGrew={wardrobeGrew}
+                  onRecommend={reshuffle}
+                  onAdd={() => openAdd ? openAdd('wardrobe') : startComboOrWardrobe()}
+                />
               ))}
             </>
           )}
@@ -438,10 +456,21 @@ function TodayScreen({ ctx }) {
       </div>
       <BottomSheet open={needMoreOpen} onClose={() => setNeedMoreOpen(false)}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>더 추천할 코디가 없어요</h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-            지금 옷장으로는 만들 수 있는 조합을<br />모두 보여드렸어요.<br />옷을 더 담으면 새로운 코디를 추천해드려요.
-          </p>
+          {needMoreKind === 'grewButNone' ? (
+            <>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>새 조합을 찾지 못했어요</h3>
+              <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                옷장에 옷이 늘었지만,<br />지금 추천과 겹치지 않는 새 코디를<br />더 만들지 못했어요.<br />다른 스타일 옷을 담아보거나<br />내일 다시 받아보세요.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>더 추천할 코디가 없어요</h3>
+              <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                지금 옷장으로는 만들 수 있는 조합을<br />모두 보여드렸어요.<br />옷을 더 담으면 새로운 코디를 추천해드려요.
+              </p>
+            </>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setNeedMoreOpen(false); openAdd ? openAdd('wardrobe') : startComboOrWardrobe(); }}>아이템 추가</Btn>
             <Btn full variant="ghost" onClick={() => setNeedMoreOpen(false)}>취소</Btn>
