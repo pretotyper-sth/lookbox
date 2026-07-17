@@ -589,8 +589,20 @@ function AddSheet({ ctx }) {
   const patchStep = (patch) => setSteps((arr) => arr.map((x, i) => (i === stepIdx ? { ...x, ...patch } : x)));
   const setStepDraft = (k) => (v) => setSteps((arr) => arr.map((x, i) => (i === stepIdx ? { ...x, draft: { ...x.draft, [k]: v } } : x)));
   const toItem = (s) => {
-    const clean = Object.fromEntries(Object.entries(s.draft).filter(([, v]) => v && String(v).trim()));
-    return { ...s, name: s.name || s.cat + ' 아이템', category: s.cat || s.category, color: s.color || '뉴트럴', img: s.img || null, ...clean };
+    const clean = Object.fromEntries(Object.entries(s.draft || {}).filter(([, v]) => v && String(v).trim()));
+    const cat = s.cat || s.category || '상의';
+    return {
+      ...s,
+      name: (s.name || '').trim() || (cat + ' 아이템'),
+      category: cat,
+      cat,
+      color: (clean.color || s.color || '').trim() || '뉴트럴',
+      img: s.img || null,
+      brand: clean.brand || s.brand || '',
+      size: clean.size || s.size || '',
+      store: clean.store || s.store || '',
+      note: clean.note || s.note || '',
+    };
   };
   const advance = (keep) => {
     const updated = steps.map((x, i) => (i === stepIdx ? { ...x, added: keep } : x));

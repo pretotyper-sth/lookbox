@@ -689,16 +689,36 @@ function App() {
       liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: skippedIds, status: 'delete' }) }).catch(() => {});
     }
     if (!list || !list.length) return;
-    let finalList = list;
+    // 1) pending → owned
     try {
-      const committed = await liveJSON('/api/live/items/status', {
+      await liveJSON('/api/live/items/status', {
         method: 'POST',
         body: JSON.stringify({ ids: list.map((it) => it.id), status: 'owned' }),
       });
-      if (committed.items && committed.items.length) finalList = committed.items;
     } catch (e) {
       showToast(e.message || '저장은 됐지만 서버 반영 확인에 실패했어요');
     }
+    // 2) 등록 화면에서 고친 이름·분류·상세를 서버에 반영 (status만 바꾸면 AI 초깃값으로 덮임)
+    const finalList = await Promise.all(list.map(async (it) => {
+      const id = it.serverId || it.id;
+      const patch = {
+        name: (it.name || '').trim() || '옷',
+        category: it.category || it.cat || '',
+        color: it.color || '',
+        brand: it.brand || '',
+        size: it.size || '',
+        store: it.store || '',
+        note: it.note || '',
+      };
+      try {
+        const res = await liveJSON('/api/live/items/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        });
+        if (res && res.item) return liveRememberItem({ ...it, ...res.item });
+      } catch (e) { /* keep local edits */ }
+      return liveRememberItem({ ...it, ...patch });
+    }));
     putLiveItems(finalList, true);
     showToast(finalList.length + '개 담았어요', 'check');
   };

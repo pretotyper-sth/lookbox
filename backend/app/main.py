@@ -78,6 +78,7 @@ CATEGORY_KO = {
     "bag": "가방",
     "accessory": "액세서리",
 }
+CATEGORY_EN = {v: k for k, v in CATEGORY_KO.items()}
 
 
 class UserContext(BaseModel):
@@ -886,6 +887,7 @@ class LiveItemUpdate(BaseModel):
     size: str | None = None
     store: str | None = None
     note: str | None = None
+    category: str | None = None  # KO('상의') 또는 EN('top')
 
 
 def _store_uploaded_item(
@@ -1417,6 +1419,12 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         patch["color"] = body.color
     if body.note is not None:
         patch["note"] = body.note
+    if body.category is not None:
+        cat = (body.category or "").strip()
+        if cat in CATEGORY_KO:
+            patch["category"] = cat
+        elif cat in CATEGORY_EN:
+            patch["category"] = CATEGORY_EN[cat]
     if body.brand is not None:
         meta["brand"] = body.brand
     if body.size is not None:
