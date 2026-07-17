@@ -46,7 +46,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
     return (
-      <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      <div style={{ background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
         <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
@@ -54,7 +54,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const used = {};
   const hasSide = cleanItems.some((it) => it.category === '신발' || it.category === '가방' || it.category === '액세서리');
   return (
-    <div style={{ position: 'relative', background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+    <div style={{ position: 'relative', background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
       {cleanItems.map((it) => {
         const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
         const n = used[it.category] || 0; used[it.category] = n + 1;
@@ -144,7 +144,7 @@ function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
 function OutfitSkeleton() {
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)' }}>
-      <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
+      <div style={{ background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
       <div style={{ padding: '11px 3px 0' }}><Skeleton w="70%" h={15} /><Skeleton w="50%" h={11} style={{ marginTop: 8 }} /></div>
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>{[0, 1].map((i) => <Skeleton key={i} w={40} h={40} radius="var(--r-sm)" />)}</div>
     </div>

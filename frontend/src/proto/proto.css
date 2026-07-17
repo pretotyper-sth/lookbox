@@ -78,8 +78,8 @@ http://scripts.sil.org/OFL
 
 :root {
   /* ---- Color ---- */
-  --ivory:      #EFEDE8;   /* page + every garment thumbnail bg → things float */
-  --thumb-bg:   #F3F3F1;   /* product cut plate — soft gray, not pure white */
+  --ivory:      #EFEDE8;   /* page — garments float above this */
+  --thumb-bg:   #E5E3DE;   /* product plate — soft warm gray so white clothes read clearly */
   --surface:    #F7F5F0;   /* cards / sheets, a touch lighter than page */
   --surface-2:  #FBFAF7;
   --ink:        #1A1A1A;   /* primary text */

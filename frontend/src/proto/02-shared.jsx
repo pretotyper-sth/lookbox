@@ -185,7 +185,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
             <img
               src={outfit.lookImg}
               alt={title}
-              style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--ivory)' }}
+              style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)' }}
             />
           ) : (Composite ? (
             <div style={{ width: '100%', maxHeight: '78vh' }}>

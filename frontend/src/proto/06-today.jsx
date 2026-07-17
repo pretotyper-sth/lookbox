@@ -143,7 +143,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView }) 
 function TodayCardSkeleton() {
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)' }}>
-      <div style={{ background: 'var(--ivory)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
+      <div style={{ background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
       <div style={{ padding: '11px 3px 0' }}><Skeleton w="70%" h={15} /><Skeleton w="50%" h={11} style={{ marginTop: 8 }} /><Skeleton w="90%" h={11} style={{ marginTop: 9 }} /></div>
       <Skeleton h={34} radius="var(--r-pill)" style={{ marginTop: 'var(--s3)' }} />
     </div>
@@ -159,7 +159,7 @@ function EmptyTodaySlot({ wardrobeGrew, onRecommend, onAdd }) {
       boxShadow: 'inset 0 0 0 1.5px dashed var(--line-2)',
     }}>
       <div style={{
-        flex: 1, minHeight: 0, aspectRatio: '4 / 5', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+        flex: 1, minHeight: 0, aspectRatio: '4 / 5', borderRadius: 'var(--r-md)', background: 'var(--thumb-bg)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         textAlign: 'center', padding: '14px 10px', color: 'var(--ink-3)',
       }}>

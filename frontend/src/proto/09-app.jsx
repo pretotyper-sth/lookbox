@@ -28,8 +28,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 })();
 
 const TONES = {
-  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--thumb-bg': '#F3F3F1', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
-  paper: { '--ivory': '#F2F1EE', '--surface': '#FBFAF8', '--surface-2': '#FFFFFF', '--thumb-bg': '#F3F3F1', '--line': '#E7E5DF', '--line-2': '#DAD7CF', '--badge-bg': '#ECEAE3' },
+  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--thumb-bg': '#E5E3DE', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
+  paper: { '--ivory': '#F2F1EE', '--surface': '#FBFAF8', '--surface-2': '#FFFFFF', '--thumb-bg': '#E6E4DF', '--line': '#E7E5DF', '--line-2': '#DAD7CF', '--badge-bg': '#ECEAE3' },
 };
 
 function param(name) {
