@@ -819,9 +819,11 @@ function AddSheet({ ctx }) {
                     <div style={{
                       position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
                       background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                      aspectRatio: '1 / 1', display: 'grid', placeItems: 'center',
                     }}>
-                      <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '6%' }} />
+                      {/* 원본 비율 그대로, 박스보다 길면 스크롤로 전체를 볼 수 있게 (축소해서 안 보이는 것 방지) */}
+                      <div style={{ maxHeight: 420, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                        <img src={previewUrl} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                      </div>
                       <button
                         type="button"
                         onClick={clearPhoto}

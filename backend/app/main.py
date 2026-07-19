@@ -507,8 +507,19 @@ def _edge_plate_ratio(png_bytes: bytes) -> float:
     return hits / len(samples)
 
 
-def finalize_cutout(png_bytes: bytes) -> bytes:
-    """1차 컷아웃 후 가장자리에 흰 판이 남으면 더 강하게 한 번 더."""
+def finalize_cutout(png_bytes: bytes, *, already_transparent: bool = False) -> bytes:
+    """1차 컷아웃 후 가장자리에 흰 판이 남으면 더 강하게 한 번 더.
+
+    already_transparent=True는 OpenAI images.edit에 background="transparent"로
+    요청해 AI가 이미 알파를 만든 결과라는 뜻. 우리 쪽 색상 기반 플러드필은 흰/
+    오프화이트 원단을 배경으로 오인해 옷 자체를 지워버릴 수 있어서(원단과 배경
+    밝기가 겹쳐 색으로는 구분이 안 되는 경우), AI가 만든 가장자리가 이미
+    깨끗하면 우리가 다시 손대지 않고 그대로 믿는다. gpt-image-2 등이 가끔
+    남기는 불투명 판이 실제로 있을 때만(에지에 판이 남아 있을 때만) 복구한다.
+    """
+    if already_transparent and _edge_plate_ratio(png_bytes) < 0.12:
+        print("[cutout] already clean (AI transparent bg) — skip flood-fill repair", flush=True)
+        return png_bytes
     out = make_transparent_cutout(png_bytes, aggressive=False)
     if _edge_plate_ratio(out) >= 0.12:
         out = make_transparent_cutout(out, aggressive=True)
@@ -550,7 +561,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
         prompt = f"""{hint}
 
-쇼핑몰 상품 컷처럼 요청한 아이템만 흰 배경에 단독으로 뽑아줘. 사람·팔·다른 옷은 넣지 마.
+쇼핑몰 상품 컷처럼 요청한 아이템만 단독으로 뽑아줘. 배경은 완전히 투명하게(투명 PNG, 흰색·회색 배경 판 남기지 말 것). 사람·팔·다른 옷은 넣지 마.
 원본 색·형태·재질은 그대로 유지해. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
@@ -601,11 +612,16 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         return base64.b64decode(result.data[0].b64_json)
 
     # 한 요청이 오래 걸리지 않도록 시도는 최대 2회로 제한.
+    # 힌트가 있어도 없어도 항상 먼저 투명 배경을 요청한다 — AI 자체 알파가 우리
+    # 색상 기반 플러드필보다 훨씬 정확하다(특히 흰옷: 원단과 배경이 색으로 안
+    # 구분됨). 실패하거나 판이 남으면만 두 번째 시도/우리 쪽 복구로 넘어간다.
     attempts: list[tuple[str, bool]] = []
     if hint:
-        attempts.append((model, False))
+        attempts.append((model, True))
         if model != OPENAI_IMAGE_MODEL:
-            attempts.append((OPENAI_IMAGE_MODEL, False))
+            attempts.append((OPENAI_IMAGE_MODEL, True))
+        else:
+            attempts.append((model, False))
     else:
         attempts.append((model, True))
         attempts.append((model, False))
@@ -625,7 +641,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             raw = _edit(use_model, transparent=transparent)
             print(f"[extract] ok model={use_model} transparent={transparent}", flush=True)
             meta["_extract_mode"] = "ai"
-            return finalize_cutout(raw)
+            return finalize_cutout(raw, already_transparent=transparent)
         except (APITimeoutError, APIConnectionError) as exc:
             # 타임아웃/연결 지연이면 재시도해도 또 오래 걸리므로 즉시 중단
             meta["_extract_fail"] = "timeout"
