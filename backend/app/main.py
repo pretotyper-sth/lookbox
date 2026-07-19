@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 import uuid
 from collections import deque
@@ -18,7 +19,7 @@ import requests
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
 from PIL import Image, ImageChops, ImageFilter
 from pydantic import BaseModel
@@ -84,6 +85,42 @@ app.add_middleware(
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     # The ported prototype reads error messages from `data.error`.
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+
+def stream_with_keepalive(work) -> StreamingResponse:
+    """오래 걸리는 작업(AI 추출 등)을 keep-alive 스트리밍 응답으로 감싼다.
+
+    Render 프록시는 응답이 시작되지 않은 요청을 ~100초에 끊지만, 스트리밍은
+    100분까지 허용한다. 작업이 도는 동안 10초마다 공백을 흘려 연결을 유지하고
+    (공백은 JSON 선행 문자로 유효해 프론트의 res.json()이 그대로 동작),
+    끝나면 결과 JSON을 보낸다. 스트림 시작 후엔 상태코드를 바꿀 수 없으므로
+    에러는 {"error": ...} 본문으로 전달한다 (프론트 liveJSON이 던져줌).
+    """
+    def gen():
+        result: dict[str, Any] = {}
+        error: list[str] = []
+
+        def run() -> None:
+            try:
+                result["data"] = work()
+            except HTTPException as exc:
+                error.append(str(exc.detail))
+            except Exception as exc:  # noqa: BLE001
+                print(f"[stream] work failed: {exc}", flush=True)
+                error.append("요청 처리 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+        while t.is_alive():
+            t.join(timeout=10)
+            if t.is_alive():
+                yield " "
+        if error:
+            yield json.dumps({"error": error[0]}, ensure_ascii=False)
+        else:
+            yield json.dumps(result.get("data") or {}, ensure_ascii=False, default=str)
+
+    return StreamingResponse(gen(), media_type="application/json")
 
 
 CATEGORY_KO = {
@@ -2270,7 +2307,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
 
 
 @app.post("/api/live/items/{item_id}/reextract")
-def live_reextract_item(item_id: str, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+def live_reextract_item(item_id: str, user: UserContext = Depends(current_user)) -> StreamingResponse:
     """이름·메타는 유지하고 제품 컷(이미지 추출)만 다시 생성."""
     require_supabase()
     rows = (
@@ -2300,44 +2337,49 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
-    try:
-        gen_meta = {
-            "name": row.get("name") or "옷",
-            "category": row.get("category") or "top",
-            "color": row.get("color") or "",
-            "tags": meta.get("tags") or [],
-            # 첫 추출이 마음에 안 들어 다시 시도하는 경우이므로 고품질로
-            "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
-        }
-        # 예전 아이템은 메타에 없을 수 있음 → generate 안에서 감지
-        if "has_text_logo" in meta:
-            gen_meta["has_text_logo"] = bool(meta.get("has_text_logo"))
-            gen_meta["logo_text"] = str(meta.get("logo_text") or "").strip()[:80]
-        product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
-        if not product_bytes:
-            raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
-        new_path, image_url = save_product_image(user.id, product_bytes)
-        meta["bg_norm"] = _BG_NORM_VERSION
-        if "has_text_logo" in gen_meta:
-            meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
-            meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
-        if not meta.get("original_path"):
-            meta["original_path"] = source_path
-        updated = (
-            supabase_admin.table("wardrobe_items")
-            .update({"image_url": image_url, "storage_path": new_path, "metadata": meta})
-            .eq("id", item_id)
-            .eq("user_id", user.id)
-            .execute()
-            .data
-            or []
-        )
-        return {"item": live_item_payload(updated[0] if updated else {**row, "image_url": image_url, "storage_path": new_path, "metadata": meta})}
-    finally:
+    uid = user.id
+
+    def work() -> dict[str, Any]:
         try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+            gen_meta = {
+                "name": row.get("name") or "옷",
+                "category": row.get("category") or "top",
+                "color": row.get("color") or "",
+                "tags": meta.get("tags") or [],
+                # 첫 추출이 마음에 안 들어 다시 시도하는 경우이므로 고품질로
+                "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
+            }
+            # 예전 아이템은 메타에 없을 수 있음 → generate 안에서 감지
+            if "has_text_logo" in meta:
+                gen_meta["has_text_logo"] = bool(meta.get("has_text_logo"))
+                gen_meta["logo_text"] = str(meta.get("logo_text") or "").strip()[:80]
+            product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
+            if not product_bytes:
+                raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
+            new_path, image_url = save_product_image(uid, product_bytes)
+            meta["bg_norm"] = _BG_NORM_VERSION
+            if "has_text_logo" in gen_meta:
+                meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
+                meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
+            if not meta.get("original_path"):
+                meta["original_path"] = source_path
+            updated = (
+                supabase_admin.table("wardrobe_items")
+                .update({"image_url": image_url, "storage_path": new_path, "metadata": meta})
+                .eq("id", item_id)
+                .eq("user_id", uid)
+                .execute()
+                .data
+                or []
+            )
+            return {"item": live_item_payload(updated[0] if updated else {**row, "image_url": image_url, "storage_path": new_path, "metadata": meta})}
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+    return stream_with_keepalive(work)
 
 
 @app.post("/api/live/items/{item_id}/replace-image")
@@ -2348,7 +2390,7 @@ async def live_replace_image(
     extract_hint: str = Form(""),
     commit: bool = Form(True),
     user: UserContext = Depends(current_user),
-) -> dict[str, Any]:
+) -> StreamingResponse:
     """새 사진/URL로 제품 컷만 교체. 이름·색상·브랜드 등 메타는 유지.
 
     commit=False면 추출까지만 하고 DB에는 반영하지 않는다 — 프론트에서 결과를
@@ -2399,56 +2441,62 @@ async def live_replace_image(
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
-    try:
-        original_path = f"{user.id}/original/{uuid.uuid4().hex}{suffix}"
-        original_url = upload_bytes(original_path, raw, content_type)
-        # 새 이미지 기준이므로 로고 여부를 다시 감지 (generate 안에서 처리)
-        gen_meta = {
-            "name": row.get("name") or "옷",
-            "category": row.get("category") or "top",
-            "color": row.get("color") or "",
-            "tags": meta.get("tags") or [],
-            "extract_hint": hint,
-            # 첫 추출이 마음에 안 들어 교체하는 경우이므로 고품질로
-            "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
-        }
-        product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
-        image_path, image_url = original_path, original_url
-        if product_bytes:
-            image_path, image_url = save_product_image(user.id, product_bytes)
-            meta["bg_norm"] = _BG_NORM_VERSION
-        if "has_text_logo" in gen_meta:
-            meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
-            meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
-        meta["original_path"] = original_path
-        meta["original_url"] = original_url
-        if not commit:
-            # DB는 그대로 두고 미리보기만 반환. pending을 그대로 /confirm에 보내면 반영된다.
-            return {
-                "item": live_item_payload({**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}),
-                "pending": {"storagePath": image_path, "imageUrl": image_url, "metadata": meta},
-            }
-        updated = (
-            supabase_admin.table("wardrobe_items")
-            .update({"image_url": image_url, "storage_path": image_path, "metadata": meta})
-            .eq("id", item_id)
-            .eq("user_id", user.id)
-            .execute()
-            .data
-            or []
-        )
-        return {
-            "item": live_item_payload(
-                updated[0]
-                if updated
-                else {**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}
-            )
-        }
-    finally:
+    uid = user.id
+    raw_bytes = raw
+
+    def work() -> dict[str, Any]:
         try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+            original_path = f"{uid}/original/{uuid.uuid4().hex}{suffix}"
+            original_url = upload_bytes(original_path, raw_bytes, content_type)
+            # 새 이미지 기준이므로 로고 여부를 다시 감지 (generate 안에서 처리)
+            gen_meta = {
+                "name": row.get("name") or "옷",
+                "category": row.get("category") or "top",
+                "color": row.get("color") or "",
+                "tags": meta.get("tags") or [],
+                "extract_hint": hint,
+                # 첫 추출이 마음에 안 들어 교체하는 경우이므로 고품질로
+                "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
+            }
+            product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
+            image_path, image_url = original_path, original_url
+            if product_bytes:
+                image_path, image_url = save_product_image(uid, product_bytes)
+                meta["bg_norm"] = _BG_NORM_VERSION
+            if "has_text_logo" in gen_meta:
+                meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))
+                meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
+            meta["original_path"] = original_path
+            meta["original_url"] = original_url
+            if not commit:
+                # DB는 그대로 두고 미리보기만 반환. pending을 그대로 /confirm에 보내면 반영된다.
+                return {
+                    "item": live_item_payload({**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}),
+                    "pending": {"storagePath": image_path, "imageUrl": image_url, "metadata": meta},
+                }
+            updated = (
+                supabase_admin.table("wardrobe_items")
+                .update({"image_url": image_url, "storage_path": image_path, "metadata": meta})
+                .eq("id", item_id)
+                .eq("user_id", uid)
+                .execute()
+                .data
+                or []
+            )
+            return {
+                "item": live_item_payload(
+                    updated[0]
+                    if updated
+                    else {**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}
+                )
+            }
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+    return stream_with_keepalive(work)
 
 
 @app.post("/api/live/items/{item_id}/replace-image/confirm")
@@ -2570,50 +2618,55 @@ async def live_import_photo(
     status: str = Form("owned"),
     extract_hint: str = Form(""),
     user: UserContext = Depends(current_user),
-) -> dict[str, Any]:
+) -> StreamingResponse:
     require_supabase()
-    t0 = time.perf_counter()
     suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
+    content_type = image.content_type or "image/jpeg"
     raw = await image.read()
-    row = _store_uploaded_item(
-        user.id,
-        raw,
-        suffix,
-        image.content_type or "image/jpeg",
-        status,
-        extract_hint=extract_hint,
-    )
-    items = [live_item_payload(row)]
-    _record_extraction_timing(user.id, "photo", len(items), (time.perf_counter() - t0) * 1000)
-    return {"items": items, "primary_idx": 0}
+    uid = user.id
+
+    def work() -> dict[str, Any]:
+        t0 = time.perf_counter()
+        row = _store_uploaded_item(uid, raw, suffix, content_type, status, extract_hint=extract_hint)
+        items = [live_item_payload(row)]
+        _record_extraction_timing(uid, "photo", len(items), (time.perf_counter() - t0) * 1000)
+        return {"items": items, "primary_idx": 0}
+
+    # AI 추출(high)은 100초를 넘을 수 있는데 Render 프록시가 미응답 요청을 끊음 → keep-alive 스트리밍
+    return stream_with_keepalive(work)
 
 
 @app.post("/api/live/import/url")
-def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_user)) -> StreamingResponse:
     require_supabase()
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
     url = _normalize_product_url(body.url)
-    t0 = time.perf_counter()
-    raw, content_type, meta = _fetch_product_meta(url)
-    suffix = ".png" if "png" in content_type else ".jpg"
-    row = _store_uploaded_item(
-        user.id,
-        raw,
-        suffix,
-        content_type,
-        body.status,
-        source="url",
-        name_override=meta.get("title") or None,
-        source_url=url,
-        brand=meta.get("brand") or None,
-        store=meta.get("store") or None,
-        color_override=meta.get("color") or None,
-        extract_hint=body.extract_hint,
-    )
-    items = [live_item_payload(row)]
-    _record_extraction_timing(user.id, "url", len(items), (time.perf_counter() - t0) * 1000)
-    return {"items": items, "primary_idx": 0}
+    uid = user.id
+
+    def work() -> dict[str, Any]:
+        t0 = time.perf_counter()
+        raw, content_type, meta = _fetch_product_meta(url)
+        suffix = ".png" if "png" in content_type else ".jpg"
+        row = _store_uploaded_item(
+            uid,
+            raw,
+            suffix,
+            content_type,
+            body.status,
+            source="url",
+            name_override=meta.get("title") or None,
+            source_url=url,
+            brand=meta.get("brand") or None,
+            store=meta.get("store") or None,
+            color_override=meta.get("color") or None,
+            extract_hint=body.extract_hint,
+        )
+        items = [live_item_payload(row)]
+        _record_extraction_timing(uid, "url", len(items), (time.perf_counter() - t0) * 1000)
+        return {"items": items, "primary_idx": 0}
+
+    return stream_with_keepalive(work)
 
 
 @app.post("/api/live/coordinate")

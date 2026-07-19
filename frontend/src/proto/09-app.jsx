@@ -311,6 +311,8 @@ async function liveJSON(url, options = {}) {
   clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || '요청에 실패했어요');
+  // keep-alive 스트리밍 응답은 항상 200이므로 본문의 error 필드로 실패를 전달한다
+  if (data && data.error) throw new Error(data.error);
   return data;
 }
 
