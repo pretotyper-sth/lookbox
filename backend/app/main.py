@@ -61,7 +61,9 @@ supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # 타임아웃 명시 + 재시도 0 → 지연돼도 연결을 오래 붙잡지 않고 빠르게 실패.
 # (재시도가 시간을 배로 늘려 3분+ 걸리던 문제 방지)
-OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "80"))
+# high 품질 + input_fidelity=high는 60~120초까지 걸릴 수 있어 80초면 정상 요청도 잘림.
+# 프론트 요청 타임아웃(150초) 안에서 최대한 여유 있게.
+OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "130"))
 openai_client = (
     OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_IMAGE_TIMEOUT, max_retries=0)
     if OPENAI_API_KEY
@@ -338,8 +340,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
   벨트·시계·주얼리·스카프·장갑·양말·선글라스 등 나머지 소품은 misc.
   신발·슬리퍼·쪼리·스니커·샌들이면 반드시 shoes.
 - 신발이 한 쌍으로 찍혀 있어도 아이템은 1개(신발 카테고리)로 본다. name에는 '슬리퍼'처럼 제품명만.
-- has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
-  false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
+- has_text_logo: 가슴·등·소매 등 원단 겉면에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
+  false로 둘 것: 안쪽 목·허리의 브랜드 라벨/택, 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 - seasons: 원단 두께·소재·기장·보온성으로 판단. 반팔/린넨/메시 → summer. 니트/코듀로이/기모 → winter.
   얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
@@ -390,8 +392,8 @@ def detect_garment_text(path: str) -> dict[str, Any]:
     if not openai_client:
         return empty
     prompt = """이 이미지의 주요 옷에 '읽을 수 있는 브랜드명·슬로건'이 크게 인쇄/자수되어 있는지 보세요.
-true 조건: 가슴·등·소매 등 눈에 띄는 글자 3자 이상 (예: IAB STUDIO, NIKE).
-false 조건: 작은 이니셜, 케어라벨, 사이즈택, 글자 없는 마크, 가격표/워터마크/UI, 애매함.
+true 조건: 가슴·등·소매 등 원단 겉면에 눈에 띄는 글자 3자 이상 (예: IAB STUDIO, NIKE).
+false 조건: 안쪽 목·허리 브랜드 라벨/택, 작은 이니셜, 케어라벨, 사이즈택, 글자 없는 마크, 가격표/워터마크/UI, 애매함.
 JSON만 응답:
 {"has_text_logo": false, "logo_text": ""}
 logo_text는 true일 때만 원문 철자, 아니면 "".
