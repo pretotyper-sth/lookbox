@@ -37,9 +37,11 @@ OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 상위 모델·품질 (비용↑, 글자 보존↑)
 OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
-# high 기본: medium은 결과가 소프트/뭉개져 ChatGPT 대비 품질 차이가 눈에 띔 (비용↑ 감수)
-OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "high")
+# 비용 설계: 첫 추출은 medium($0.063/장) — 단색 상품컷은 어차피 로컬 컷아웃($0)으로 빠짐.
+# 마음에 안 들어 다시 시도하는 재추출/이미지 변경만 high($0.25/장)로 올린다.
+OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
 OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
+OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
     origin.strip()
@@ -757,9 +759,11 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     # 흰 옷은 gpt-image-1이 특히 자주 왜곡 → 텍스트 로고와 동일하게 고충실 모델/품질로
     whiteish = not hint and _source_is_whiteish(path)
     model = OPENAI_IMAGE_MODEL_TEXT if (has_text or whiteish) else OPENAI_IMAGE_MODEL
-    # 텍스트 로고/힌트가 있을 때만 고품질. 일반 추출도 원본 디테일(포켓·택 등)이
-    # 자주 누락돼 저품질(low)은 포기 — 기본 품질(OPENAI_IMAGE_QUALITY, 보통 medium) 사용.
+    # 텍스트 로고(글자 깨짐 방지)·힌트·흰옷(왜곡 방지)은 고품질, 그 외 첫 추출은 medium.
+    # 재추출/이미지 변경은 호출부가 _quality_override로 high를 지정한다.
     quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint or whiteish) else OPENAI_IMAGE_QUALITY
+    if meta.get("_quality_override"):
+        quality = str(meta["_quality_override"])
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
@@ -2240,6 +2244,8 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
             "category": row.get("category") or "top",
             "color": row.get("color") or "",
             "tags": meta.get("tags") or [],
+            # 첫 추출이 마음에 안 들어 다시 시도하는 경우이므로 고품질로
+            "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
         }
         # 예전 아이템은 메타에 없을 수 있음 → generate 안에서 감지
         if "has_text_logo" in meta:
@@ -2341,6 +2347,8 @@ async def live_replace_image(
             "color": row.get("color") or "",
             "tags": meta.get("tags") or [],
             "extract_hint": hint,
+            # 첫 추출이 마음에 안 들어 교체하는 경우이므로 고품질로
+            "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
         }
         product_bytes = resolve_product_image(user.id, tmp_path, gen_meta)
         image_path, image_url = original_path, original_url
