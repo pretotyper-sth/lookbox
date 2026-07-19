@@ -564,22 +564,26 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
     model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
-    # 텍스트 로고/힌트가 있을 때만 고품질. 일반 추출은 low로 속도 우선.
-    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else "low"
+    # 텍스트 로고/힌트가 있을 때만 고품질. 일반 추출도 원본 디테일(포켓·택 등)이
+    # 자주 누락돼 저품질(low)은 포기 — 기본 품질(OPENAI_IMAGE_QUALITY, 보통 medium) 사용.
+    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else OPENAI_IMAGE_QUALITY
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
         prompt = f"""{hint}
 
 쇼핑몰 상품 컷처럼 요청한 아이템만 단독으로 뽑아줘. 배경은 완전히 투명하게(투명 PNG, 흰색·회색 배경 판 남기지 말 것). 사람·팔·다른 옷은 넣지 마.
-원본 색·형태·재질은 그대로 유지해. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
+새로 그리지 말고 원본 그대로 배경만 제거해: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
         prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
+새로운 옷을 그리는 게 아니라, 원본 사진을 그대로 배경만 제거하는 작업입니다.
 - 신발처럼 원본에 여러 짝이 보이면 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것.
 - 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
+- CRITICAL: 원본에 있는 요소(가슴 포켓, 안쪽 목 라벨/택, 단추 개수·위치, 스티치, 밑단 커브 등)는 하나도 빠뜨리거나 단순화하지 말 것. 없는 걸 추가하지도 말 것.
+- CRITICAL: 원단 색상을 정확히 그대로 유지. 더 밝거나 어둡게, 더 회색/베이지로 바꾸지 말 것 (오프화이트를 순백으로, 순백을 오프화이트로 바꾸는 것도 금지).
 - 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
 - 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
 """
@@ -606,6 +610,10 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         }
         if transparent:
             kwargs["background"] = "transparent"
+        # input_fidelity=high: 포켓·택·정확한 색상 같은 원본 디테일을 훨씬 잘 보존한다.
+        # gpt-image-2는 이 파라미터를 안 받고 항상 고충실도로 처리하므로 gpt-image-1류에만 지정.
+        if "gpt-image-2" not in use_model:
+            kwargs["input_fidelity"] = "high"
         result = openai_client.images.edit(**kwargs)
         log_ai_usage(
             user_id,
