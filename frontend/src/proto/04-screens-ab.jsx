@@ -162,15 +162,13 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
 
-  // 계절은 카테고리(분류)와 다른 축의 필터 — 라벨 + 옅은 톤의 작은 태그로 구분해
-  // "카테고리 목록의 일부"처럼 안 보이게 하고, 여러 개를 동시에 켤 수 있게 한다.
+  // 계절은 카테고리와 AND로 겹치는 부가 필터. 구분선 없이 '그리고' 라벨 + 살짝 옅은 글자색으로만 구분.
   const seasonChips = (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, width: '100%',
-      padding: wide ? '10px 0 26px' : '8px 18px 12px',
-      borderTop: '1px solid color-mix(in srgb, var(--line) 70%, transparent)',
+      padding: wide ? '4px 0 26px' : '0 18px 12px',
     }}>
-      <span style={{ flex: 'none', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)' }}>계절</span>
+      <span style={{ flex: 'none', fontSize: 12.5, fontWeight: 500, color: 'var(--ink-3)' }}>그리고</span>
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', minWidth: 0 }}>
         {seasons.map((s) => (
           <button key={s.id} onClick={() => toggleSeason(s.id)} className="lb-chip" style={{
@@ -860,10 +858,11 @@ function AddSheet({ ctx }) {
                       position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
                       background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
                     }}>
-                      {/* 원본 비율 그대로, 박스보다 길면 스크롤로 전체를 볼 수 있게 (축소해서 안 보이는 것 방지) */}
-                      <div style={{ maxHeight: 420, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                        <img src={previewUrl} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
-                      </div>
+                      {/* 표시만 축소(원본 그대로 업로드): 시트 안에서 '추가하기' 버튼이 스크롤 없이 보이도록 높이 제한 */}
+                      <img src={previewUrl} alt="" style={{
+                        width: '100%', height: 'auto', maxHeight: 'min(300px, 34dvh)',
+                        objectFit: 'contain', display: 'block',
+                      }} />
                       <button
                         type="button"
                         onClick={clearPhoto}

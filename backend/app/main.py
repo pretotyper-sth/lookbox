@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter
 from pydantic import BaseModel
 from supabase import Client, create_client
 
@@ -544,6 +544,178 @@ def local_product_cutout(path: str) -> bytes | None:
         return None
 
 
+def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], float]:
+    """테두리 픽셀 분석: (균일한 밝은 스튜디오 판인지, 대표 배경색, 편차 p90)."""
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    px = rgb.load()
+    samples: list[tuple[int, int, int]] = []
+    step = max(1, min(w, h) // 80)
+    for x in range(0, w, step):
+        samples.append(px[x, 0])
+        samples.append(px[x, h - 1])
+    for y in range(0, h, step):
+        samples.append(px[0, y])
+        samples.append(px[w - 1, y])
+    n = len(samples)
+    med = tuple(sorted(s[i] for s in samples)[n // 2] for i in range(3))
+    diffs = sorted(max(abs(s[i] - med[i]) for i in range(3)) for s in samples)
+    close = sum(1 for d in diffs if d <= 10) / n
+    spread = float(diffs[int(n * 0.9)])
+    bright = min(med) >= 230 and (max(med) - min(med)) <= 14
+    return (close >= 0.97 and bright), med, spread
+
+
+def studio_product_cutout(path: str) -> bytes | None:
+    """밝고 균일한 스튜디오 배경의 '흰/밝은 옷 상품컷'은 AI 재생성 없이
+    원본 픽셀 그대로 배경만 제거한다.
+
+    images.edit는 이미지를 다시 그리기 때문에 흰 셔츠에서 칼라가 들리거나
+    포켓·실루엣이 미묘하게 달라지는 왜곡을 프롬프트로 완전히 못 막는다.
+    배경이 진짜 단색 판이면 색상 기반 제거가 원본을 100% 보존한다.
+
+    흰 원단은 배경과 픽셀 값이 부분적으로 겹쳐 단순 플러드필은 옷 안으로
+    샌다(스트릭 형태 구멍). 그래서 배경 후보 마스크를 침식(MinFilter)해
+    좁은 누수 통로를 끊은 뒤 테두리에서 플러드필하고, 침식으로 깎인 경계
+    띠만 제한 팽창(≤4px)으로 복원한다. 판정이 애매하면 None → 기존 AI 경로.
+    """
+    try:
+        img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
+    except Exception:
+        return None
+    clean, bg, _spread = _border_bg_stats(img)
+    if not clean:
+        return None
+    w, h = img.size
+    if w < 16 or h < 16:
+        return None
+    tol = 3
+
+    # 배경색과 거의 같은 픽셀 마스크(255=배경 후보) → 침식으로 누수 통로 차단
+    rgb = img.convert("RGB")
+    diff_bands = ImageChops.difference(rgb, Image.new("RGB", (w, h), bg)).split()
+    maxdiff = ImageChops.lighter(ImageChops.lighter(diff_bands[0], diff_bands[1]), diff_bands[2])
+    cand = maxdiff.point(lambda v: 255 if v <= tol else 0)
+    core = cand.filter(ImageFilter.MinFilter(5))
+
+    core_px = core.load()
+    cand_px = cand.load()
+    visited = bytearray(w * h)
+    q: deque[tuple[int, int]] = deque()
+
+    def seed(x: int, y: int) -> None:
+        if core_px[x, y] and not visited[y * w + x]:
+            visited[y * w + x] = 1
+            q.append((x, y))
+
+    for x in range(w):
+        seed(x, 0)
+        seed(x, h - 1)
+    for y in range(h):
+        seed(0, y)
+        seed(w - 1, y)
+    bg_set = bytearray(w * h)
+    boundary: deque[tuple[int, int, int]] = deque()
+    while q:
+        x, y = q.popleft()
+        bg_set[y * w + x] = 1
+        boundary.append((x, y, 0))
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not visited[ny * w + nx] and core_px[nx, ny]:
+                visited[ny * w + nx] = 1
+                q.append((nx, ny))
+    if not boundary:
+        return None
+    # 제한 팽창: 침식으로 깎인 경계 띠 복원 (옷 쪽으로는 최대 4px)
+    while boundary:
+        x, y, dep = boundary.popleft()
+        if dep >= 4:
+            continue
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not bg_set[ny * w + nx] and cand_px[nx, ny]:
+                bg_set[ny * w + nx] = 1
+                boundary.append((nx, ny, dep + 1))
+
+    px = img.load()
+    removed = 0
+    for y in range(h):
+        base = y * w
+        for x in range(w):
+            if bg_set[base + x]:
+                r, g, b, _a = px[x, y]
+                px[x, y] = (r, g, b, 0)
+                removed += 1
+
+    # ---- 검증: 실패로 보이면 None을 돌려 기존 AI 경로로 넘긴다 ----
+    fg_frac = 1.0 - removed / (w * h)
+    if not (0.06 <= fg_frac <= 0.9):
+        return None
+    alpha = img.getchannel("A")
+    bbox = alpha.getbbox()
+    if not bbox:
+        return None
+    # 옷 중심부가 뚫려 있으면(배경 제거가 원단으로 샌 흔적) 신뢰하지 않는다
+    bx0, by0, bx1, by1 = bbox
+    cw, ch = bx1 - bx0, by1 - by0
+    hole = 0
+    total_c = 0
+    step_c = max(1, min(cw, ch) // 60)
+    for y in range(by0 + ch // 4, by1 - ch // 4, step_c):
+        for x in range(bx0 + cw // 4, bx1 - cw // 4, step_c):
+            total_c += 1
+            if px[x, y][3] < 128:
+                hole += 1
+    if total_c and hole / total_c > 0.1:
+        return None
+    # 흰/밝은 옷일 때만 이 경로 사용 — 유색 옷은 기존 AI 추출을 유지(변경 최소화)
+    light = 0
+    total_o = 0
+    step_o = max(1, min(w, h) // 80)
+    for y in range(by0, by1, step_o):
+        for x in range(bx0, bx1, step_o):
+            r, g, b, a = px[x, y]
+            if a < 128:
+                continue
+            total_o += 1
+            if (r + g + b) >= 3 * 165 and (max(r, g, b) - min(r, g, b)) <= 48:
+                light += 1
+    if not total_o or light / total_o < 0.55:
+        return None
+
+    # 가장자리 안티앨리어싱 + 내용 기준 크롭(원본 프레임 여백 제거)
+    img.putalpha(alpha.filter(ImageFilter.GaussianBlur(1)))
+    bbox = img.getchannel("A").getbbox() or bbox
+    pad = round(0.04 * max(w, h))
+    img = img.crop((
+        max(0, bbox[0] - pad), max(0, bbox[1] - pad),
+        min(w, bbox[2] + pad), min(h, bbox[3] + pad),
+    ))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _source_is_whiteish(path: str) -> bool:
+    """원본 중앙부(옷이 있을 자리)가 대체로 밝고 채도 낮은지 — 흰 옷 판정 휴리스틱."""
+    try:
+        rgb = Image.open(path).convert("RGB")
+    except Exception:
+        return False
+    rgb.thumbnail((160, 160))
+    w, h = rgb.size
+    px = rgb.load()
+    x0, y0, x1, y1 = int(w * 0.2), int(h * 0.2), int(w * 0.8), int(h * 0.8)
+    light = 0
+    total = 0
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            r, g, b = px[x, y]
+            total += 1
+            if (r + g + b) >= 3 * 180 and (max(r, g, b) - min(r, g, b)) <= 32:
+                light += 1
+    return total > 0 and light / total >= 0.5
+
+
 def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
     """이미지 + 프롬프트로 images.edit. 힌트면 사용자 문장 우선(ChatGPT와 동일)."""
     if not openai_client:
@@ -563,10 +735,22 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     logo_text = str(meta.get("logo_text") or "").strip()
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
-    model = OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL
+
+    # 흰/밝은 옷 + 단색 스튜디오 상품컷: AI 재생성은 어떤 프롬프트를 줘도 형태를
+    # 미묘하게 다시 그린다(칼라 들림 등). 이 경우엔 생성 없이 원본 배경만 제거.
+    if not hint:
+        studio = studio_product_cutout(path)
+        if studio:
+            print("[extract] studio cutout — light garment on clean plate, skip AI", flush=True)
+            meta["_extract_mode"] = "studio_cutout"
+            return studio
+
+    # 흰 옷은 gpt-image-1이 특히 자주 왜곡 → 텍스트 로고와 동일하게 고충실 모델/품질로
+    whiteish = not hint and _source_is_whiteish(path)
+    model = OPENAI_IMAGE_MODEL_TEXT if (has_text or whiteish) else OPENAI_IMAGE_MODEL
     # 텍스트 로고/힌트가 있을 때만 고품질. 일반 추출도 원본 디테일(포켓·택 등)이
     # 자주 누락돼 저품질(low)은 포기 — 기본 품질(OPENAI_IMAGE_QUALITY, 보통 medium) 사용.
-    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint) else OPENAI_IMAGE_QUALITY
+    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint or whiteish) else OPENAI_IMAGE_QUALITY
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
