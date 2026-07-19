@@ -37,7 +37,8 @@ OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 상위 모델·품질 (비용↑, 글자 보존↑)
 OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
-OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
+# high 기본: medium은 결과가 소프트/뭉개져 ChatGPT 대비 품질 차이가 눈에 띔 (비용↑ 감수)
+OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "high")
 OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
@@ -765,28 +766,25 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         prompt = f"""{hint}
 
 쇼핑몰 상품 컷처럼 요청한 아이템만 단독으로 뽑아줘. 배경은 완전히 투명하게(투명 PNG, 흰색·회색 배경 판 남기지 말 것). 사람·팔·다른 옷은 넣지 마.
-새로 그리지 말고 원본 그대로 배경만 제거해: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
+원본 이미지를 최대한 해치지 않는 선에서: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
+        # ChatGPT에 사용자가 직접 넣는 문장과 같은 구조: '상품컷처럼 만들어줘 +
+        # 원본을 해치지 않는 선에서'. 금지 조항을 길게 쌓으면 모델이 소극적으로
+        # 원본의 흐릿함까지 복사하므로, 선명한 상품컷으로 재구성할 여지를 준다.
         category = str(meta.get("category") or "")
         others = [str(o).strip() for o in (meta.get("other_items") or []) if str(o).strip()][:6]
-        prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
-새로운 옷을 그리는 게 아니라, 원본 사진을 그대로 배경만 제거하는 작업입니다.
-- CRITICAL: 결과에는 {name}만 있어야 합니다. 함께 착용·배치된 다른 아이템(상의·하의·신발·양말·벨트·모자·가방 등)은 겹쳐 있어도 전부 잘라내고 절대 포함하지 말 것.
-  바지·스커트라면 밑단에서 끝나야 하며, 밑단에 신발이 겹쳐 보여도 신발은 반드시 제외.
+        prompt = f"""여기 있는 {name}만 추출해서 쇼핑몰 상품컷 이미지처럼 만들어줘. 원본 이미지를 최대한 해치지 않는 선에서.
+
+- 원단 색상·워싱, 실루엣, 디테일(포켓, 단추 개수·위치, 스티치, 밑단 처리)을 원본 그대로 유지하고 없는 요소를 추가하지 말 것
+- 결과에는 {name}만: 함께 착용된 다른 아이템(상의·하의·신발·양말·벨트·모자 등)과 사람·마네킹은 포함하지 말 것. 바지·스커트는 밑단에서 끝나야 함
+- 배경은 완전히 투명하게 (흰색·회색 배경 판 금지), 아이템 전체가 잘리지 않게 중앙 배치
+- 옷에 인쇄·자수된 로고/글자는 철자·위치 그대로 유지. 가격표·워터마크·화면 UI는 제거
 """
         if others:
-            prompt += f"- 이 사진에는 {', '.join(others)}도 보이지만 이들은 추출 대상이 아님. 결과에 일부라도 넣지 말 것.\n"
+            prompt += f"- 사진에 함께 보이는 {', '.join(others)}은(는) 추출 대상이 아님. 일부라도 넣지 말 것\n"
         if category == "shoes":
-            prompt += "- 신발은 원본에 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것.\n"
-        prompt += """- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
-- 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
-- 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
-- CRITICAL: 원본에 있는 요소(가슴 포켓, 안쪽 목 라벨/택, 단추 개수·위치, 스티치, 밑단 커브 등)는 하나도 빠뜨리거나 단순화하지 말 것. 없는 걸 추가하지도 말 것.
-- CRITICAL: 원단 색상을 정확히 그대로 유지. 더 밝거나 어둡게, 더 회색/베이지로 바꾸지 말 것 (오프화이트를 순백으로, 순백을 오프화이트로 바꾸는 것도 금지).
-- 아이템 전체가 잘리지 않게 중앙 배치. 원본 JPEG 프레임/여백을 그대로 두지 말 것
-- 원본 색상·실루엣·재질 디테일은 유지. 형태를 새로 창작하지 말 것
-"""
+            prompt += "- 신발은 원본에 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것\n"
     if has_text:
         prompt += "\n- CRITICAL: This garment has printed/embroidered text or a logo on the fabric. Preserve it pixel-faithfully. Do not redraw, invent, or alter any letter."
         if logo_text:
