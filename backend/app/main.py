@@ -241,6 +241,21 @@ def _record_extraction_timing(user_id: str | None, source: str, item_count: int,
     print(f"[timing] source={source} items={item_count} duration_ms={ms} ({ms / 1000:.1f}s)", flush=True)
 
 
+def _record_recommendation_timing(user_id: str | None, pool_size: int, combo_count: int, duration_ms: float) -> None:
+    """코디 추천(live_coordinate) 소요시간 기록 — 옷장 크기별 평균 산출용. 실패해도 요청은 계속."""
+    ms = int(duration_ms)
+    try:
+        supabase_admin.table("recommendation_timings").insert(
+            {"user_id": user_id, "pool_size": int(pool_size), "combo_count": int(combo_count), "duration_ms": ms}
+        ).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[timing] recommend record failed: {exc}", flush=True)
+    print(
+        f"[timing] recommend pool={pool_size} combos={combo_count} duration_ms={ms} ({ms / 1000:.1f}s)",
+        flush=True,
+    )
+
+
 def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
     fallback = {
         "name": "새로 추가한 옷",
@@ -696,7 +711,12 @@ def recommend_text(
     if exclude_keys:
         lines = [", ".join(k) for k in list(exclude_keys)[:20]]
         exclude_note = "\n이미 보여준 조합(제외):\n" + "\n".join(f"- {ln}" for ln in lines) + "\n"
+    print(
+        f"[recommend] start pool={len(items)} styles={uniq_styles} max_combos={max_combos} anchor={bool(anchor)}",
+        flush=True,
+    )
     if not openai_client:
+        print("[recommend] no openai client — fallback", flush=True)
         return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
@@ -763,8 +783,13 @@ def recommend_text(
             if len(combos) >= max_combos:
                 break
         log_ai_usage(user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)})
-        return combos or fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
-    except Exception:
+        if not combos:
+            print("[recommend] ai returned 0 usable combos — fallback", flush=True)
+            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
+        print(f"[recommend] ok via=ai combos={len(combos)}", flush=True)
+        return combos
+    except Exception as exc:  # noqa: BLE001
+        print(f"[recommend] ai call failed: {exc} — fallback", flush=True)
         return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
 
 
@@ -1200,6 +1225,8 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "note": row.get("note") or meta.get("note") or "",
         "sourceUrl": meta.get("source_url") or "",
         "extractWarning": meta.get("extract_warning") or "",
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
     }
 
 
@@ -1776,6 +1803,57 @@ def live_extraction_stats() -> dict[str, Any]:
     }
 
 
+@app.get("/api/live/recommend-stats")
+def live_recommend_stats() -> dict[str, Any]:
+    """코디 추천(live_coordinate) 소요시간 평균 (옷장 크기별) — 대기 안내·성능 판단용."""
+    try:
+        rows = (
+            supabase_admin.table("recommendation_timings")
+            .select("pool_size,combo_count,duration_ms")
+            .limit(10000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"overall": {}, "by_pool_size": [], "error": str(exc)}
+    by_pool: dict[int, list[int]] = {}
+    all_ms: list[int] = []
+    for r in rows:
+        pool = int(r.get("pool_size") or 0)
+        ms = int(r.get("duration_ms") or 0)
+        by_pool.setdefault(pool, []).append(ms)
+        all_ms.append(ms)
+
+    def _avg(v: list[int]) -> float:
+        return round(sum(v) / len(v), 1) if v else 0.0
+
+    def _p95(v: list[int]) -> float:
+        if not v:
+            return 0.0
+        s = sorted(v)
+        return float(s[max(0, int(round(0.95 * (len(s) - 1))))])
+
+    return {
+        "overall": {
+            "n": len(all_ms),
+            "avg_ms": _avg(all_ms),
+            "p95_ms": _p95(all_ms),
+            "max_ms": max(all_ms) if all_ms else 0,
+        },
+        "by_pool_size": [
+            {
+                "pool_size": pool,
+                "n": len(v),
+                "avg_ms": _avg(v),
+                "p95_ms": _p95(v),
+                "max_ms": max(v) if v else 0,
+            }
+            for pool, v in sorted(by_pool.items())
+        ],
+    }
+
+
 @app.get("/api/live/wardrobe")
 def live_wardrobe(status: str = "owned", user: UserContext = Depends(current_user)) -> dict[str, Any]:
     target = LIVE_STATUS_MAP.get(status, status)
@@ -2142,6 +2220,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
 
 @app.post("/api/live/coordinate")
 def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    t0 = time.perf_counter()
     owned = (
         supabase_admin.table("wardrobe_items")
         .select("*")
@@ -2196,6 +2275,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 "lookImg": None,
             }
         )
+    _record_recommendation_timing(user.id, len(pool), len(outfits), (time.perf_counter() - t0) * 1000)
     return {"outfits": outfits, "items": [live_item_payload(row) for row in used.values()]}
 
 

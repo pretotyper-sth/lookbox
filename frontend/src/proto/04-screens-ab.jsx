@@ -195,7 +195,7 @@ function WardrobeScreen({ ctx }) {
       <div style={{
         flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         padding: wide ? '28px 0 36px' : '16px 18px',
-        paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : undefined),
+        paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : 72),
       }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (

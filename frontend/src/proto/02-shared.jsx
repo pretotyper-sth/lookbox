@@ -397,6 +397,17 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
+/* 'yymmdd' — 추가일/수정일 표시용. 수정 불가한 값이라 입력칸이 아닌 요약줄에 텍스트로만 노출. */
+function formatYYMMDD(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const yy = String(d.getFullYear() % 100).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return yy + mm + dd;
+}
+
 function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const [draft, setDraft] = useState({});
   useEffect(() => {
@@ -459,6 +470,11 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6 }}>
                 {item.category} · {draft.color || item.color || '색상 미정'}
               </div>
+              {formatYYMMDD(item.createdAt) && (
+                <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
+                  추가 {formatYYMMDD(item.createdAt)} · 수정 {formatYYMMDD(item.updatedAt) || formatYYMMDD(item.createdAt)}
+                </div>
+              )}
             </div>
           </div>
           <IconBtn name="x" label="닫기" onClick={onClose} style={{ marginRight: -8, flex: 'none' }} />

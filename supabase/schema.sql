@@ -80,6 +80,30 @@ create table if not exists public.extraction_timings (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.recommendation_timings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  pool_size int not null default 0,
+  combo_count int not null default 0,
+  duration_ms int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- wardrobe_items.updated_at: 앱 코드가 매번 세팅하지 않아도 UPDATE 시 자동으로 now()를 채움.
+create or replace function public.set_wardrobe_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists wardrobe_items_set_updated_at on public.wardrobe_items;
+create trigger wardrobe_items_set_updated_at
+  before update on public.wardrobe_items
+  for each row
+  execute function public.set_wardrobe_updated_at();
+
 create index if not exists idx_wardrobe_items_user_status on public.wardrobe_items(user_id, status);
 create index if not exists idx_outfits_user_created on public.outfits(user_id, created_at desc);
 create index if not exists idx_generated_images_user_cache on public.generated_images(user_id, cache_key);
@@ -91,8 +115,9 @@ alter table public.outfits enable row level security;
 alter table public.generated_images enable row level security;
 alter table public.ai_usage_logs enable row level security;
 alter table public.credit_ledger enable row level security;
--- extraction_timings: 백엔드(service role)만 기록/집계. anon 접근은 RLS로 차단(정책 없음).
+-- extraction_timings / recommendation_timings: 백엔드(service role)만 기록/집계. anon 접근은 RLS로 차단(정책 없음).
 alter table public.extraction_timings enable row level security;
+alter table public.recommendation_timings enable row level security;
 
 drop policy if exists "profiles own rows" on public.profiles;
 create policy "profiles own rows" on public.profiles
