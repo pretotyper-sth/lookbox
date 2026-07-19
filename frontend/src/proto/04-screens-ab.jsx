@@ -481,7 +481,7 @@ function urlImportBlockedHint(raw) {
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
-    autoAddDetails, detectCount, liveReplaceItemImage, applyReextractItem, showToast,
+    autoAddDetails, detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -518,11 +518,12 @@ function AddSheet({ ctx }) {
   };
 
   // stage machine
-  const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready
+  const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready | reextract-confirm
   const [detected, setDetected] = useS([]);
   const [sel, setSel] = useS([]); // selected detected ids
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
   const [stepIdx, setStepIdx] = useS(0);
+  const [pendingReplace, setPendingReplace] = useS(null); // { item, pending } — 이미지 변경 미리보기 (아직 DB 미반영)
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
@@ -536,7 +537,7 @@ function AddSheet({ ctx }) {
     setPreviewFromFile(null);
     setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
     setBusy(false); setErr('');
-    setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
+    setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
 
@@ -572,20 +573,22 @@ function AddSheet({ ctx }) {
     setBusy(true);
     setStage('analyzing');
     try {
-      // 이미지만 변경: 새 소스 → 기존 아이템 이미지 교체 (메타 유지)
+      // 이미지만 변경: 새 소스로 추출만 먼저 해보고, DB에는 바로 반영하지 않는다.
+      // (결과가 마음에 안 들 수 있어 확인 단계를 거친 뒤에만 실제로 반영)
       if (reextract && replaceItem) {
         const itemId = replaceItem.serverId || replaceItem.id;
-        const next = await liveReplaceItemImage({
+        const result = await liveReplaceItemImage({
           itemId,
           sourceType: source.sourceType || tab,
           file: source.file || file,
           url: source.url != null ? source.url : url,
           extractHint: source.extractHint != null ? source.extractHint : hint,
+          commit: false,
         });
         if (cancelledRef.current) return;
-        if (!next) throw new Error('이미지를 바꾸지 못했어요');
-        applyReextractItem(next);
-        closeAdd();
+        if (!result || !result.item) throw new Error('이미지를 바꾸지 못했어요');
+        setPendingReplace(result);
+        setStage('reextract-confirm');
         return;
       }
       const data = await liveImportSource({
@@ -752,7 +755,32 @@ function AddSheet({ ctx }) {
       setStage('input'); setDetected([]); setSel([]);
     } else if (stage === 'register') {
       if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select');
+    } else if (stage === 'reextract-confirm') {
+      setPendingReplace(null);
+      setStage('input');
     }
+  };
+
+  // ---- reextract confirm: 미리보기를 실제로 반영할지, 다시 시도할지 ----
+  const confirmReplace = async () => {
+    if (!pendingReplace || !replaceItem) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const itemId = replaceItem.serverId || replaceItem.id;
+      const finalItem = await liveConfirmReplaceImage(itemId, pendingReplace.pending);
+      if (!finalItem) throw new Error('반영하지 못했어요');
+      applyReextractItem(finalItem);
+      closeAdd();
+    } catch (e) {
+      setErr(e.message || '반영하지 못했어요');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const retryReplace = () => {
+    setPendingReplace(null);
+    setStage('input');
   };
 
   // ---- header copy ----
@@ -764,6 +792,7 @@ function AddSheet({ ctx }) {
     sub = null; // 본문 로딩 카피로만 안내 (헤더 중복 방지)
   }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
+  else if (stage === 'reextract-confirm') { header = '추출 결과 확인'; sub = '이대로 반영할지, 다른 사진으로 다시 시도할지 골라주세요.'; }
   else if (reextract) {
     header = '이미지만 변경';
     sub = replaceItem
@@ -772,7 +801,7 @@ function AddSheet({ ctx }) {
   }
   else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
 
-  const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready';
+  const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready' || stage === 'reextract-confirm';
 
   return (
     <BottomSheet open={addSheet.open} onClose={requestClose}>
@@ -1001,6 +1030,35 @@ function AddSheet({ ctx }) {
                 조합 추천받기
               </Btn>
             </div>
+          </>
+        )}
+
+        {/* ---------- REEXTRACT CONFIRM (새로 추출된 이미지를 실제 반영 전에 확인) ---------- */}
+        {stage === 'reextract-confirm' && pendingReplace && (
+          <>
+            <div style={{
+              position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
+              background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)', marginTop: 'var(--s5)',
+            }}>
+              {/* 축소해서 보여주면 잘렸는지 판단이 안 되니, 원본 비율 그대로 + 스크롤로 전체 확인 */}
+              <div style={{ maxHeight: 420, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <img src={pendingReplace.item.img} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 'var(--s6)', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <Btn full size="lg" icon="check" onClick={confirmReplace} disabled={busy}>
+                {busy ? '반영 중…' : '이대로 변경'}
+              </Btn>
+              <Btn full size="lg" variant="soft" icon="sparkle" onClick={retryReplace} disabled={busy}>
+                다른 이미지로 다시 시도
+              </Btn>
+            </div>
+            {err && (
+              <div style={{
+                marginTop: 'var(--s3)', color: '#B91C1C', fontSize: 13, fontWeight: 600,
+                lineHeight: 1.45, textWrap: 'pretty',
+              }}>{err}</div>
+            )}
           </>
         )}
 

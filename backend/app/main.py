@@ -1307,6 +1307,12 @@ class LiveItemUpdate(BaseModel):
     seasons: list[str] | None = None  # ["spring","autumn"] 등, 다중 선택
 
 
+class ReplaceImageConfirm(BaseModel):
+    storage_path: str
+    image_url: str
+    metadata: dict[str, Any] = {}
+
+
 def _store_uploaded_item(
     user_id: str,
     raw: bytes,
@@ -2066,9 +2072,15 @@ async def live_replace_image(
     image: UploadFile | None = File(None),
     url: str | None = Form(None),
     extract_hint: str = Form(""),
+    commit: bool = Form(True),
     user: UserContext = Depends(current_user),
 ) -> dict[str, Any]:
-    """새 사진/URL로 제품 컷만 교체. 이름·색상·브랜드 등 메타는 유지."""
+    """새 사진/URL로 제품 컷만 교체. 이름·색상·브랜드 등 메타는 유지.
+
+    commit=False면 추출까지만 하고 DB에는 반영하지 않는다 — 프론트에서 결과를
+    보여주고 사용자가 "이대로 변경"을 눌러야 /replace-image/confirm으로 실제
+    반영된다. 추출 결과가 마음에 안 들 때 옷장의 기존 이미지를 잃지 않기 위함.
+    """
     require_supabase()
     rows = (
         supabase_admin.table("wardrobe_items")
@@ -2134,6 +2146,12 @@ async def live_replace_image(
             meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
         meta["original_path"] = original_path
         meta["original_url"] = original_url
+        if not commit:
+            # DB는 그대로 두고 미리보기만 반환. pending을 그대로 /confirm에 보내면 반영된다.
+            return {
+                "item": live_item_payload({**row, "image_url": image_url, "storage_path": image_path, "metadata": meta}),
+                "pending": {"storagePath": image_path, "imageUrl": image_url, "metadata": meta},
+            }
         updated = (
             supabase_admin.table("wardrobe_items")
             .update({"image_url": image_url, "storage_path": image_path, "metadata": meta})
@@ -2155,6 +2173,40 @@ async def live_replace_image(
             os.remove(tmp_path)
         except OSError:
             pass
+
+
+@app.post("/api/live/items/{item_id}/replace-image/confirm")
+def live_replace_image_confirm(
+    item_id: str, body: ReplaceImageConfirm, user: UserContext = Depends(current_user)
+) -> dict[str, Any]:
+    """replace-image(commit=False) 미리보기를 사용자가 승인했을 때 실제로 반영."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="item_not_found")
+    row = rows[0]
+    if row.get("status") == "deleted":
+        raise HTTPException(status_code=404, detail="item_not_found")
+    patch = {"image_url": body.image_url, "storage_path": body.storage_path, "metadata": body.metadata}
+    updated = (
+        supabase_admin.table("wardrobe_items")
+        .update(patch)
+        .eq("id", item_id)
+        .eq("user_id", user.id)
+        .execute()
+        .data
+        or []
+    )
+    return {"item": live_item_payload(updated[0] if updated else {**row, **patch})}
 
 
 @app.post("/api/live/wardrobe/normalize-bg")

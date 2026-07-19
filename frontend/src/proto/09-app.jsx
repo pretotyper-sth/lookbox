@@ -851,14 +851,31 @@ function App() {
       : s));
     showToast('이미지를 바꿨어요', 'sparkle');
   };
-  const liveReplaceItemImage = async ({ itemId, sourceType, file, url, extractHint }) => {
+  const liveReplaceItemImage = async ({ itemId, sourceType, file, url, extractHint, commit = true }) => {
     const fd = new FormData();
     if (sourceType === 'url') fd.append('url', url);
     else fd.append('image', file);
     fd.append('extract_hint', (extractHint || '').trim());
+    fd.append('commit', commit ? 'true' : 'false');
     const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image`, {
       method: 'POST',
       body: fd,
+    });
+    if (!data || !data.item) return null;
+    // commit=false면 아직 DB에 반영 안 된 미리보기라, 나중에 confirm할 때 필요한
+    // pending(storage 경로 등)까지 같이 돌려준다.
+    return commit ? data.item : { item: data.item, pending: data.pending };
+  };
+  // 미리보기(commit=false)로 받은 결과를 실제로 반영
+  const liveConfirmReplaceImage = async (itemId, pending) => {
+    if (!pending) return null;
+    const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        storage_path: pending.storagePath,
+        image_url: pending.imageUrl,
+        metadata: pending.metadata || {},
+      }),
     });
     return data && data.item ? data.item : null;
   };
@@ -1085,7 +1102,7 @@ function App() {
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
-    liveReplaceItemImage, applyReextractItem,
+    liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
 
