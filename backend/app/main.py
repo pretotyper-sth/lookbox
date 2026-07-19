@@ -90,6 +90,28 @@ CATEGORY_KO = {
 }
 CATEGORY_EN = {v: k for k, v in CATEGORY_KO.items()}
 
+# 계절(다중 선택 가능) — 마이페이지 퍼스널컬러의 'autumn' 표기와 맞춤(fall 아님)
+SEASON_KO = {
+    "spring": "봄",
+    "summer": "여름",
+    "autumn": "가을",
+    "winter": "겨울",
+}
+VALID_SEASONS = set(SEASON_KO)
+
+
+def _clean_seasons(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in value:
+        s = str(v or "").strip().lower()
+        if s in VALID_SEASONS and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
 
 class UserContext(BaseModel):
     id: str
@@ -264,6 +286,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         "tags": [],
         "has_text_logo": False,
         "logo_text": "",
+        "seasons": [],
     }
     if not openai_client:
         return fallback
@@ -284,7 +307,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
   "color": "대표 색상",
   "tags": ["키워드"],
   "has_text_logo": false,
-  "logo_text": ""
+  "logo_text": "",
+  "seasons": ["spring|summer|autumn|winter 중 해당하는 것만, 1~2개"]
 }
 규칙:
 - color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
@@ -293,6 +317,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 - has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
   false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
+- seasons: 원단 두께·소재·기장·보온성으로 판단. 반팔/린넨/메시 → summer. 니트/코듀로이/기모 → winter.
+  얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
 """
     try:
         response = openai_client.chat.completions.create(
@@ -321,6 +347,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         )
         if not data["has_text_logo"]:
             data["logo_text"] = ""
+        data["seasons"] = _clean_seasons(data.get("seasons"))
         return {**fallback, **data}
     except Exception:
         return fallback
@@ -1239,6 +1266,7 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "extractWarning": meta.get("extract_warning") or "",
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
+        "seasons": _clean_seasons(meta.get("seasons")),
     }
 
 
@@ -1250,6 +1278,7 @@ class LiveItemUpdate(BaseModel):
     store: str | None = None
     note: str | None = None
     category: str | None = None  # KO('상의') 또는 EN('top')
+    seasons: list[str] | None = None  # ["spring","autumn"] 등, 다중 선택
 
 
 def _store_uploaded_item(
@@ -1289,6 +1318,7 @@ def _store_uploaded_item(
         # original_* 는 이미지 재추출 시 원본 소스로 사용.
         item_metadata: dict[str, Any] = {
             "tags": meta.get("tags") or [],
+            "seasons": _clean_seasons(meta.get("seasons")),
             "original_path": original_path,
             "original_url": original_url,
             "has_text_logo": bool(meta.get("has_text_logo")),
@@ -1917,7 +1947,9 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         meta["size"] = body.size
     if body.store is not None:
         meta["store"] = body.store
-    if body.brand is not None or body.size is not None or body.store is not None:
+    if body.seasons is not None:
+        meta["seasons"] = _clean_seasons(body.seasons)
+    if body.brand is not None or body.size is not None or body.store is not None or body.seasons is not None:
         patch["metadata"] = meta
     if not patch:
         return {"item": live_item_payload(row)}

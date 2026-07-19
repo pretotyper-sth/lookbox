@@ -397,6 +397,22 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
+/* 다중 선택 칩 필드 — 계절처럼 값 여러 개를 토글로 고르는 항목용 (LabeledField의 칩 버전) */
+function ChipMultiField({ label, options, value, onChange }) {
+  const picked = value || [];
+  const toggle = (id) => onChange(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id]);
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {options.map((o) => (
+          <Chip key={o.id} active={picked.includes(o.id)} onClick={() => toggle(o.id)}>{o.name}</Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* 'yy.mm.dd' — 생성일/수정일 표시용. 수정 불가한 값이라 입력칸이 아닌 요약줄에 텍스트로만 노출. */
 function formatDotDate(iso) {
   if (!iso) return '';
@@ -419,6 +435,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
         color: item.color || '',
         store: item.store || '',
         note: item.note || '',
+        seasons: item.seasons || [],
       });
     }
   }, [open, item && item.id]);
@@ -491,6 +508,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
             <div style={{ flex: 1 }}><LabeledField label="사이즈" value={draft.size} onChange={set('size')} placeholder="예) M" /></div>
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
+          <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
           <LabeledField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사 · 오프라인" />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
         </div>

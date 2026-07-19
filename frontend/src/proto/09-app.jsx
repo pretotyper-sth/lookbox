@@ -981,6 +981,7 @@ function App() {
       color: draft.color || '',
       store: draft.store || '',
       note: draft.note || '',
+      seasons: draft.seasons || [],
     };
     setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
     setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));

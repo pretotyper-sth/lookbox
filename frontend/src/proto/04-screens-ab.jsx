@@ -98,16 +98,20 @@ function WardrobeScreen({ ctx }) {
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
   } = ctx;
   const [cat, setCat] = useS('전체');
+  const [seasonFilter, setSeasonFilter] = useS([]); // multi-select season ids, [] = 전체
   const [sel, setSel] = useS([]); // multi-select ids
   const [selectMode, setSelectMode] = useS(false); // mobile: explicit select mode (no hover)
   const [hoverId, setHoverId] = useS(null);
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const cats = LB_DATA.CATEGORIES;
+  const seasons = LB_DATA.SEASONS;
   const viewingArchive = cat === '보관';
+  const toggleSeason = (id) => setSeasonFilter((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   // 보관 탭을 보던 중 보관함이 비면 전체로 되돌린다
   useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
-  useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat]);
-  const filtered = viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat));
+  useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat, seasonFilter]);
+  const bySeason = (i) => seasonFilter.length === 0 || (i.seasons || []).some((s) => seasonFilter.includes(s));
+  const filtered = (viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat))).filter(bySeason);
   const count = items.length;
   const ready = comboReady;
   const selCount = sel.length;
@@ -146,7 +150,7 @@ function WardrobeScreen({ ctx }) {
     <div style={{
       display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
       overscrollBehaviorX: 'contain', minWidth: 0, width: '100%',
-      padding: wide ? '0 0 30px' : '4px 18px 14px',
+      padding: wide ? '0 0 8px' : '4px 18px 8px',
     }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
       {archived.length > 0 && (
@@ -155,6 +159,19 @@ function WardrobeScreen({ ctx }) {
           <Chip key="보관" active={viewingArchive} onClick={() => setCat('보관')}>보관 {archived.length}</Chip>
         </>
       )}
+    </div>
+  );
+
+  // 계절은 카테고리와 별개 축(중복 필터) — 여러 계절을 동시에 켤 수 있음
+  const seasonChips = (
+    <div style={{
+      display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      overscrollBehaviorX: 'contain', minWidth: 0, width: '100%',
+      padding: wide ? '0 0 30px' : '0 18px 14px',
+    }}>
+      {seasons.map((s) => (
+        <Chip key={s.id} active={seasonFilter.includes(s.id)} onClick={() => toggleSeason(s.id)}>{s.name}</Chip>
+      ))}
     </div>
   );
   return (
@@ -189,6 +206,7 @@ function WardrobeScreen({ ctx }) {
             )}
           />
           {chips}
+          {seasonChips}
         </div>
       )}
 
@@ -205,6 +223,7 @@ function WardrobeScreen({ ctx }) {
           </div>
         )}
         {wide && chips}
+        {wide && seasonChips}
         {!viewingArchive && !ready && !wardrobeLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none' }}>

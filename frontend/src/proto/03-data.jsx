@@ -13,6 +13,14 @@ const IMG = {
 
 const CATEGORIES = ['전체', '상의', '하의', '아우터', '신발', '액세서리'];
 
+// 옷 계절 태그 — 다중 선택 가능 (예: 가디건 = 봄+가을)
+const SEASONS = [
+  { id: 'spring', name: '봄' },
+  { id: 'summer', name: '여름' },
+  { id: 'autumn', name: '가을' },
+  { id: 'winter', name: '겨울' },
+];
+
 // Wardrobe items the user already owns. inWardrobe: true.
 const WARDROBE = [
   { id: 'w1', name: '네이비 헨리넥 티', category: '상의',   color: '네이비',     img: IMG.topNavy },
@@ -129,7 +137,7 @@ const DEFAULT_PREFS = {
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
 };
 
-Object.assign(window, { LB_DATA: { CATEGORIES, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
 
 
 /* @prototype-ported: real-service start = empty user content */
