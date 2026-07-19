@@ -11,7 +11,7 @@ const IMG = {
   sandalBlack: R('sandalBlack', 'app/img/sandal-black-cut.png'),
 };
 
-const CATEGORIES = ['전체', '상의', '하의', '아우터', '신발', '액세서리'];
+const CATEGORIES = ['전체', '상의', '하의', '아우터', '원피스', '스커트', '신발', '가방', '모자', '소품'];
 
 // 옷 계절 태그 — 다중 선택 가능 (예: 가디건 = 봄+가을)
 const SEASONS = [
@@ -24,12 +24,12 @@ const SEASONS = [
 // Wardrobe items the user already owns. inWardrobe: true.
 const WARDROBE = [
   { id: 'w1', name: '네이비 헨리넥 티', category: '상의',   color: '네이비',     img: IMG.topNavy },
-  { id: 'w2', name: '화이트 데님 스커트', category: '하의', color: '화이트',     img: IMG.skirtWhite },
+  { id: 'w2', name: '화이트 데님 스커트', category: '스커트', color: '화이트',     img: IMG.skirtWhite },
   { id: 'w3', name: '블랙 토 샌들',       category: '신발',   color: '블랙',       img: IMG.sandalBlack },
   { id: 'w4', name: '가디건',     category: '아우터', color: '베이지',     img: null },
   { id: 'w5', name: '슬랙스',          category: '하의',   color: '라이트그레이', img: null },
   { id: 'w6', name: '셔츠',       category: '상의',   color: '화이트',     img: null },
-  { id: 'w7', name: '가방',          category: '액세서리', color: '블랙',     img: null },
+  { id: 'w7', name: '가방',          category: '가방', color: '블랙',     img: null },
   { id: 'w8', name: '로퍼',            category: '신발',   color: '브라운',     img: null },
 ];
 
@@ -90,7 +90,7 @@ const SAVED = [
 const DETECT = [
   { category: '상의',     name: '네이비 니트 베스트', color: '네이비',   conf: 0.97 },
   { category: '하의',     name: '와이드 데님 팬츠',   color: '인디고',   conf: 0.95 },
-  { category: '액세서리', name: '브라운 레더 벨트',   color: '브라운',   conf: 0.89 },
+  { category: '소품',     name: '브라운 레더 벨트',   color: '브라운',   conf: 0.89 },
   { category: '신발',     name: '스웨이드 더비 슈즈', color: '탠',       conf: 0.86 },
 ];
 

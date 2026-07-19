@@ -575,7 +575,7 @@ function App() {
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false, replaceItem: null }));
   const startCombo = () => openAdd('anchor');
   const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;
-  const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '원피스').length;
+  const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '스커트' || it.category === '원피스').length;
   // 조합 추천은 최소 상의 2벌 + 하의 2벌(총 4벌) 필요.
   const comboTopsNeed = Math.max(0, 2 - comboTops);
   const comboBottomsNeed = Math.max(0, 2 - comboBottoms);
@@ -766,7 +766,7 @@ function App() {
         setLoading(false);
       }
     } else {
-      const cats = ['상의', '하의', '아우터', '신발', '액세서리'];
+      const cats = ['상의', '하의', '아우터', '원피스', '스커트', '신발', '가방', '모자', '소품'];
       const clean = details ? Object.fromEntries(Object.entries(details).filter(([, v]) => v && String(v).trim())) : {};
       const it = { id: 'n' + (_newId++), name: clean.brand ? clean.brand + ' 아이템' : '새로 담은 옷', category: cats[items.length % cats.length], color: '뉴트럴', img: null, ...clean };
       putLiveItems([it], true);

@@ -26,10 +26,13 @@ const LOOK_SLOT = {
   '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1 },
   '상의':     { cx: 50, cy: 28, w: 48, h: 40, z: 3 },
   '하의':     { cx: 50, cy: 66, w: 48, h: 50, z: 2 },
+  '스커트':   { cx: 50, cy: 66, w: 46, h: 42, z: 2 },
   '원피스':   { cx: 50, cy: 50, w: 56, h: 68, z: 2 },
   '신발':     { cx: 72, cy: 84, w: 34, h: 24, z: 4 },
   '가방':     { cx: 78, cy: 48, w: 28, h: 34, z: 4 },
-  '액세서리': { cx: 78, cy: 22, w: 24, h: 24, z: 5 },
+  '모자':     { cx: 78, cy: 22, w: 24, h: 24, z: 5 },
+  '소품':     { cx: 22, cy: 22, w: 22, h: 22, z: 5 },
+  '액세서리': { cx: 78, cy: 22, w: 24, h: 24, z: 5 }, // 구버전 데이터 호환
 };
 const LOOK_SCALE = 1.25;
 
@@ -52,7 +55,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
     );
   }
   const used = {};
-  const hasSide = cleanItems.some((it) => it.category === '신발' || it.category === '가방' || it.category === '액세서리');
+  const hasSide = cleanItems.some((it) => ['신발', '가방', '모자', '소품', '액세서리'].includes(it.category));
   return (
     <div style={{ position: 'relative', background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
       {cleanItems.map((it) => {
@@ -61,7 +64,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
         let cx = base.cx + n * 6;
         const cy = base.cy + n * 4;
         // 상의·하의만이면 가운데 정렬
-        if (!hasSide && (it.category === '상의' || it.category === '하의' || it.category === '아우터' || it.category === '원피스')) {
+        if (!hasSide && ['상의', '하의', '스커트', '아우터', '원피스'].includes(it.category)) {
           cx = 50 + n * 4;
         }
         const w = Math.min(92, base.w * LOOK_SCALE);

@@ -84,11 +84,21 @@ CATEGORY_KO = {
     "bottom": "하의",
     "outer": "아우터",
     "dress": "원피스",
+    "skirt": "스커트",
     "shoes": "신발",
     "bag": "가방",
-    "accessory": "액세서리",
+    "hat": "모자",
+    "misc": "소품",
 }
 CATEGORY_EN = {v: k for k, v in CATEGORY_KO.items()}
+# 구버전 데이터 호환: 이전엔 가방·모자·소품을 전부 'accessory' 하나로 저장했음.
+# CATEGORY_KO에는 안 넣는다 — 넣으면 KO 값이 겹쳐 CATEGORY_EN 역매핑이 애매해짐.
+_LEGACY_CATEGORY_KO = {"accessory": "소품"}
+
+
+def _category_display(category: str | None) -> str:
+    cat = category or ""
+    return CATEGORY_KO.get(cat) or _LEGACY_CATEGORY_KO.get(cat) or cat or "상의"
 
 # 계절(다중 선택 가능) — 마이페이지 퍼스널컬러의 'autumn' 표기와 맞춤(fall 아님)
 SEASON_KO = {
@@ -303,7 +313,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 형식:
 {
   "name": "한국어 이름",
-  "category": "top|bottom|outer|dress|shoes|bag|accessory",
+  "category": "top|bottom|skirt|outer|dress|shoes|bag|hat|misc",
   "color": "대표 색상",
   "tags": ["키워드"],
   "has_text_logo": false,
@@ -312,7 +322,10 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 }
 규칙:
 - color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
-- category: 가방이면 반드시 bag, 신발·슬리퍼·쪼리·스니커·샌들이면 반드시 shoes.
+- category: 치마·스커트류는 반드시 skirt(하의 bottom과 구분). 원피스·드레스는 dress.
+  가방(백팩·크로스백·클러치 등)은 반드시 bag. 모자(캡·버킷햇·비니 등)는 반드시 hat.
+  벨트·시계·주얼리·스카프·장갑·양말·선글라스 등 나머지 소품은 misc.
+  신발·슬리퍼·쪼리·스니커·샌들이면 반드시 shoes.
 - 신발이 한 쌍으로 찍혀 있어도 아이템은 1개(신발 카테고리)로 본다. name에는 '슬리퍼'처럼 제품명만.
 - has_text_logo: 가슴·등·소매 등에 읽을 수 있는 브랜드명·슬로건(글자 3자 이상)이 크게 인쇄·자수된 경우만 true.
   false로 둘 것: 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
@@ -338,9 +351,6 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         data = json.loads(response.choices[0].message.content or "{}")
         if data.get("category") not in CATEGORY_KO:
             data["category"] = fallback["category"]
-        # 가방은 별도 카테고리가 없으므로 액세서리로 취급 (프론트에 '가방' 필터 없음 → 미분류 방지)
-        if data.get("category") == "bag":
-            data["category"] = "accessory"
         data["logo_text"] = str(data.get("logo_text") or "").strip()[:80]
         data["has_text_logo"] = _significant_garment_logo(
             bool(data.get("has_text_logo")), data["logo_text"]
@@ -688,7 +698,7 @@ def item_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row.get("name") or "옷",
-        "category": CATEGORY_KO.get(row.get("category"), row.get("category") or "상의"),
+        "category": _category_display(row.get("category")),
         "categoryKey": row.get("category"),
         "color": _canonicalize_color(raw_color) if raw_color else "뉴트럴",
         "imageUrl": row.get("image_url"),
@@ -783,9 +793,9 @@ def recommend_text(
 {exclude_note}
 규칙:
 - item_ids에는 위 목록에 있는 id만 넣기
-- 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 원피스)를 포함. 상의+신발만, 하의 없는 조합 금지
+- 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 스커트/원피스)를 포함. 상의+신발만, 하의 없는 조합 금지
 - 원피스 1벌이면 상의·하의 요건을 충족한 것으로 봄
-- 그 외 신발·액세서리는 선택
+- 그 외 신발·가방·모자·소품은 선택
 - 한 코디는 2~4개 구성
 - 기준 아이템이 있으면 반드시 포함
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
@@ -852,7 +862,7 @@ def _item_bucket(item: dict[str, Any]) -> str:
     cat = (item.get("category") or "").lower()
     if cat in ("top", "상의", "outer", "아우터"):
         return "top"
-    if cat in ("bottom", "하의"):
+    if cat in ("bottom", "하의", "skirt", "스커트"):
         return "bottom"
     if cat in ("dress", "원피스"):
         return "dress"
@@ -1270,7 +1280,7 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "id": row["id"],
         "serverId": row["id"],
         "name": row.get("name") or "옷",
-        "category": CATEGORY_KO.get(row.get("category"), row.get("category") or "상의"),
+        "category": _category_display(row.get("category")),
         "color": _canonicalize_color(raw_color) if raw_color else "",
         "img": row.get("image_url"),
         "status": row.get("status"),

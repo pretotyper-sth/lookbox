@@ -162,16 +162,27 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
 
-  // 계절은 카테고리와 별개 축(중복 필터) — 여러 계절을 동시에 켤 수 있음
+  // 계절은 카테고리(분류)와 다른 축의 필터 — 라벨 + 옅은 톤의 작은 태그로 구분해
+  // "카테고리 목록의 일부"처럼 안 보이게 하고, 여러 개를 동시에 켤 수 있게 한다.
   const seasonChips = (
     <div style={{
-      display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-      overscrollBehaviorX: 'contain', minWidth: 0, width: '100%',
-      padding: wide ? '0 0 30px' : '0 18px 14px',
+      display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, width: '100%',
+      padding: wide ? '10px 0 26px' : '8px 18px 12px',
+      borderTop: '1px solid color-mix(in srgb, var(--line) 70%, transparent)',
     }}>
-      {seasons.map((s) => (
-        <Chip key={s.id} active={seasonFilter.includes(s.id)} onClick={() => toggleSeason(s.id)}>{s.name}</Chip>
-      ))}
+      <span style={{ flex: 'none', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)' }}>계절</span>
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', minWidth: 0 }}>
+        {seasons.map((s) => (
+          <button key={s.id} onClick={() => toggleSeason(s.id)} className="lb-chip" style={{
+            flex: 'none', padding: '5px 12px', borderRadius: 'var(--r-pill)',
+            fontSize: 12.5, fontWeight: seasonFilter.includes(s.id) ? 600 : 500,
+            color: seasonFilter.includes(s.id) ? 'var(--accent-ink)' : 'var(--ink-3)',
+            background: seasonFilter.includes(s.id) ? 'var(--accent)' : 'transparent',
+            boxShadow: seasonFilter.includes(s.id) ? 'none' : 'inset 0 0 0 1px color-mix(in srgb, var(--line) 65%, transparent)',
+            transition: 'all var(--dur) var(--ease)',
+          }}>{s.name}</button>
+        ))}
+      </div>
     </div>
   );
   return (

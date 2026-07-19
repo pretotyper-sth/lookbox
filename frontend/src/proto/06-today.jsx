@@ -357,7 +357,7 @@ function TodayScreen({ ctx }) {
       const it = LB_DATA.ALL[id] || items.find((x) => String(x.id) === String(id));
       const cat = ((it && it.category) || '').toLowerCase();
       if (cat === '상의' || cat === '아우터' || cat === 'top' || cat === 'outer') return 'top';
-      if (cat === '하의' || cat === 'bottom') return 'bottom';
+      if (cat === '하의' || cat === '스커트' || cat === 'bottom' || cat === 'skirt') return 'bottom';
       if (cat === '원피스' || cat === 'dress') return 'dress';
       return 'other';
     });
