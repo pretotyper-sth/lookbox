@@ -422,7 +422,49 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v5"
+_BG_NORM_VERSION = "cutout_v6"  # v6: 카테고리별 균일 크기 캔버스 정규화 추가
+
+# 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
+# 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
+_CANVAS_SIZE = 1024
+_CATEGORY_FILL = {
+    "top": 0.86,
+    "outer": 0.88,
+    "dress": 0.9,
+    "bottom": 0.9,
+    "skirt": 0.8,
+    "shoes": 0.62,
+    "bag": 0.74,
+    "hat": 0.56,
+    "misc": 0.66,
+    "accessory": 0.66,  # 레거시 키
+}
+
+
+def normalize_product_canvas(png_bytes: bytes, category: str | None) -> bytes:
+    """추출 컷을 알파 bbox로 트리밍한 뒤 카테고리 비율로 정사각 캔버스에 중앙 배치.
+
+    AI가 작게 그려준 컷은 확대(LANCZOS)까지 해서 채우므로, 어떤 추출 경로를
+    타든 같은 카테고리는 옷장 카드·코디 합성에서 같은 크기로 보인다.
+    """
+    try:
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+        bbox = img.getchannel("A").getbbox()
+        if bbox:
+            img = img.crop(bbox)
+        fill = _CATEGORY_FILL.get((category or "").strip(), 0.8)
+        target = int(_CANVAS_SIZE * fill)
+        w, h = img.size
+        scale = target / max(w, h)
+        nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+        img = img.resize((nw, nh), Image.LANCZOS)
+        canvas = Image.new("RGBA", (_CANVAS_SIZE, _CANVAS_SIZE), (0, 0, 0, 0))
+        canvas.paste(img, ((_CANVAS_SIZE - nw) // 2, (_CANVAS_SIZE - nh) // 2), img)
+        buf = io.BytesIO()
+        canvas.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return png_bytes
 
 
 def make_transparent_cutout(png_bytes: bytes, *, aggressive: bool = False) -> bytes:
@@ -770,7 +812,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         prompt = f"""{hint}
 
 쇼핑몰 상품 컷처럼 요청한 아이템만 단독으로 뽑아줘. 배경은 완전히 투명하게(투명 PNG, 흰색·회색 배경 판 남기지 말 것). 사람·팔·다른 옷은 넣지 마.
-원본 이미지를 최대한 해치지 않는 선에서: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
+원본 이미지를 최대한 해치지 않는 선에서: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 니트 조직·멜란지·데님 워싱 같은 원단 질감도 뭉개지 말고 그대로. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
         # ChatGPT에 사용자가 직접 넣는 문장과 같은 구조: '상품컷처럼 만들어줘 +
@@ -781,6 +823,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         prompt = f"""여기 있는 {name}만 추출해서 쇼핑몰 상품컷 이미지처럼 만들어줘. 원본 이미지를 최대한 해치지 않는 선에서.
 
 - 원단 색상·워싱, 실루엣, 디테일(포켓, 단추 개수·위치, 스티치, 밑단 처리)을 원본 그대로 유지하고 없는 요소를 추가하지 말 것
+- 원단 질감을 살릴 것: 니트 조직·멜란지 얼룩·데님 워싱·코듀로이 골 같은 표면의 결과 노이즈를 매끈하게 뭉개거나 단색으로 펴바르지 말고 원본처럼 표현
 - 결과에는 {name}만: 함께 착용된 다른 아이템(상의·하의·신발·양말·벨트·모자 등)과 사람·마네킹은 포함하지 말 것. 바지·스커트는 밑단에서 끝나야 함
 - 배경은 완전히 투명하게 (흰색·회색 배경 판 금지), 아이템 전체가 잘리지 않게 중앙 배치
 - 옷에 인쇄·자수된 로고/글자는 철자·위치 그대로 유지. 가격표·워터마크·화면 UI는 제거
@@ -887,7 +930,7 @@ def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byte
     hint = str(meta.get("extract_hint") or "").strip()
     product = generate_product_image(user_id, path, meta)
     if product:
-        return product
+        return normalize_product_canvas(product, meta.get("category"))
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
     # 힌트 추출은 로컬 배경제거로 대체하면 의도와 달라지므로 명확히 실패 처리
@@ -899,7 +942,7 @@ def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byte
     if local:
         meta["_extract_mode"] = "local"
         meta["_extract_warning"] = msg
-        return local
+        return normalize_product_canvas(local, meta.get("category"))
     raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
 
 
@@ -2449,7 +2492,7 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             continue
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
-            fixed = finalize_cutout(raw)
+            fixed = normalize_product_canvas(finalize_cutout(raw), row.get("category"))
             new_path, image_url = save_product_image(user.id, fixed)
             meta["bg_norm"] = _BG_NORM_VERSION
             meta["cache_hdr"] = "v2"
