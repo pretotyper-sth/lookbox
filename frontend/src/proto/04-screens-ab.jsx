@@ -494,7 +494,6 @@ function AddSheet({ ctx }) {
   const [url, setUrl] = useS('');
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
-  const [previewBg, setPreviewBg] = useS(''); // 이미지 가장자리에서 샘플링한 배경색 — 레터박스가 티 안 나게
   const [hint, setHint] = useS('');
   const [showHint, setShowHint] = useS(false);
   const [busy, setBusy] = useS(false);
@@ -515,46 +514,6 @@ function AddSheet({ ctx }) {
     previewUrlRef.current = next;
     setPreviewUrl(next);
   };
-
-  // 미리보기 카드 배경을 이미지 테두리 픽셀의 중앙값 색으로 — 사진의 스튜디오 배경과
-  // 카드 배경이 달라 레터박스 경계가 보이는 것을 API 호출 없이 로컬 캔버스로 해소.
-  useE(() => {
-    if (!previewUrl) { setPreviewBg(''); return undefined; }
-    let alive = true;
-    const img = new Image();
-    img.onload = () => {
-      if (!alive) return;
-      try {
-        const size = 64;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, size, size);
-        const d = ctx.getImageData(0, 0, size, size).data;
-        const rs = []; const gs = []; const bs = [];
-        const push = (x, y) => {
-          const i = (y * size + x) * 4;
-          if (d[i + 3] < 200) return; // 투명 PNG 가장자리는 무시 → 기본 배경 유지
-          rs.push(d[i]); gs.push(d[i + 1]); bs.push(d[i + 2]);
-        };
-        for (let t = 0; t < size; t += 1) { push(t, 0); push(t, size - 1); push(0, t); push(size - 1, t); }
-        if (rs.length < size) { setPreviewBg(''); return; }
-        const med = (arr) => arr.slice().sort((a, b) => a - b)[arr.length >> 1];
-        const r = med(rs); const g = med(gs); const b = med(bs);
-        let close = 0;
-        for (let i = 0; i < rs.length; i += 1) {
-          if (Math.abs(rs[i] - r) <= 16 && Math.abs(gs[i] - g) <= 16 && Math.abs(bs[i] - b) <= 16) close += 1;
-        }
-        // 테두리가 균일한 단색일 때만 적용 (착용컷 등 복잡한 배경은 기본 배경 유지)
-        setPreviewBg(close / rs.length >= 0.72 ? `rgb(${r}, ${g}, ${b})` : '');
-      } catch (e) {
-        setPreviewBg('');
-      }
-    };
-    img.onerror = () => { if (alive) setPreviewBg(''); };
-    img.src = previewUrl;
-    return () => { alive = false; };
-  }, [previewUrl]);
 
   // stage machine
   const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready | reextract-confirm
@@ -897,12 +856,16 @@ function AddSheet({ ctx }) {
                   {picked && previewUrl ? (
                     <div style={{
                       position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
-                      background: previewBg || 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                      transition: 'background var(--dur)',
+                      background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
                     }}>
+                      {/* 레터박스 여백을 이미지 자체의 블러 확대본으로 채움 — 어떤 사진이든 경계 없이 한 박스처럼 보임 */}
+                      <img src={previewUrl} alt="" aria-hidden style={{
+                        position: 'absolute', inset: 0, width: '100%', height: '100%',
+                        objectFit: 'cover', filter: 'blur(26px)', transform: 'scale(1.2)',
+                      }} />
                       {/* 표시만 축소(원본 그대로 업로드): 시트 안에서 '추가하기' 버튼이 스크롤 없이 보이도록 높이 제한 */}
                       <img src={previewUrl} alt="" style={{
-                        width: '100%', height: 'auto', maxHeight: 'min(300px, 34dvh)',
+                        position: 'relative', width: '100%', height: 'auto', maxHeight: 'min(300px, 34dvh)',
                         objectFit: 'contain', display: 'block',
                       }} />
                       <button
