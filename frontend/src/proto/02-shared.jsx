@@ -344,7 +344,7 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 /* ----------------------------------------------------------------
    BottomSheet — bottom sheet on mobile, centered modal on desktop
 ---------------------------------------------------------------- */
-function BottomSheet({ open, onClose, children, maxW = 460 }) {
+function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const [wide, setWide] = useState(typeof window !== 'undefined' && window.innerWidth >= 760);
@@ -360,7 +360,7 @@ function BottomSheet({ open, onClose, children, maxW = 460 }) {
   if (!mounted) return null;
   const hiddenTf = wide ? 'translateY(10px) scale(0.97)' : 'translateY(101%)';
   return (
-    <div onClick={onClose} style={{
+    <div onClick={dismissOnScrim ? onClose : undefined} style={{
       position: 'absolute', inset: 0, zIndex: 60, display: 'flex',
       alignItems: wide ? 'center' : 'flex-end', justifyContent: 'center',
       background: shown ? 'rgba(30,27,21,0.42)' : 'rgba(30,27,21,0)',

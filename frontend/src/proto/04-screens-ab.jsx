@@ -802,7 +802,8 @@ function AddSheet({ ctx }) {
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready' || stage === 'reextract-confirm';
 
   return (
-    <BottomSheet open={addSheet.open} onClose={requestClose}>
+    // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
+    <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'}>
       <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>

@@ -309,10 +309,24 @@ async function liveJSON(url, options = {}) {
     throw new Error('네트워크 연결이 불안정해요. 잠시 후 다시 시도해 주세요.');
   }
   clearTimeout(timer);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || '요청에 실패했어요');
+  // keep-alive 스트리밍은 헤더가 먼저 오고 본문이 늦게 끝난다 — 본문이 중간에
+  // 끊기거나 공백만 오면(서버 재시작 등) 성공으로 오인하지 말고 명확히 실패 처리.
+  let text = '';
+  try {
+    text = await res.text();
+  } catch (e) {
+    throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
+  }
+  const trimmed = text.trim();
+  let data = {};
+  let parsed = false;
+  if (trimmed) {
+    try { data = JSON.parse(trimmed); parsed = true; } catch (e) { parsed = false; }
+  }
+  if (!res.ok) throw new Error((parsed && data.error) || '요청에 실패했어요');
   // keep-alive 스트리밍 응답은 항상 200이므로 본문의 error 필드로 실패를 전달한다
-  if (data && data.error) throw new Error(data.error);
+  if (parsed && data && data.error) throw new Error(data.error);
+  if (!parsed) throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
   return data;
 }
 

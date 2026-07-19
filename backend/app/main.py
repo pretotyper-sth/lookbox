@@ -63,13 +63,20 @@ supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # 타임아웃 명시 + 재시도 0 → 지연돼도 연결을 오래 붙잡지 않고 빠르게 실패.
 # (재시도가 시간을 배로 늘려 3분+ 걸리던 문제 방지)
 # high 품질 + input_fidelity=high는 60~120초까지 걸릴 수 있어 80초면 정상 요청도 잘림.
-# 프론트 요청 타임아웃(150초) 안에서 최대한 여유 있게.
 OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "130"))
+# 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
+# OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
+OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
 openai_client = (
     OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_IMAGE_TIMEOUT, max_retries=0)
     if OPENAI_API_KEY
     else None
 )
+
+
+def _vision_client():
+    """짧은 타임아웃의 분류/감지용 클라이언트. 타임아웃 시 각자 폴백으로 진행."""
+    return openai_client.with_options(timeout=OPENAI_VISION_TIMEOUT)
 
 app = FastAPI(title="LOOKBOX API")
 app.add_middleware(
@@ -384,7 +391,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
   얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
 """
     try:
-        response = openai_client.chat.completions.create(
+        response = _vision_client().chat.completions.create(
             model=OPENAI_CLASSIFY_MODEL,
             messages=[
                 {
@@ -436,7 +443,7 @@ JSON만 응답:
 logo_text는 true일 때만 원문 철자, 아니면 "".
 """
     try:
-        response = openai_client.chat.completions.create(
+        response = _vision_client().chat.completions.create(
             model=OPENAI_CLASSIFY_MODEL,
             messages=[
                 {
@@ -1119,7 +1126,8 @@ def recommend_text(
 {{"combos":[{{"label":"", "mood":"", "styles":["minimal"], "item_ids":["..."]}}]}}
 """
     try:
-        response = openai_client.chat.completions.create(
+        # 추천은 실패해도 fallback_combos가 있으니, Render 프록시(~100초)보다 짧게 제한
+        response = openai_client.with_options(timeout=60).chat.completions.create(
             model=OPENAI_VISION_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
