@@ -497,11 +497,6 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 6 }}>
                 {item.category} · {draft.color || item.color || '색상 미정'}
               </div>
-              {formatDotDate(item.createdAt) && (
-                <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
-                  생성 {formatDotDate(item.createdAt)} · 수정 {formatDotDate(item.updatedAt) || formatDotDate(item.createdAt)}
-                </div>
-              )}
             </div>
           </div>
           <IconBtn name="x" label="닫기" onClick={onClose} style={{ marginRight: -8, flex: 'none' }} />
@@ -521,6 +516,11 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
           <LabeledField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사 · 오프라인" />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
+          {formatDotDate(item.createdAt) && (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+              생성 {formatDotDate(item.createdAt)} · 수정 {formatDotDate(item.updatedAt) || formatDotDate(item.createdAt)}
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 26 }}>
