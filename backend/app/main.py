@@ -297,6 +297,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         "has_text_logo": False,
         "logo_text": "",
         "seasons": [],
+        "other_items": [],
     }
     if not openai_client:
         return fallback
@@ -318,9 +319,14 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
   "tags": ["키워드"],
   "has_text_logo": false,
   "logo_text": "",
-  "seasons": ["spring|summer|autumn|winter 중 해당하는 것만, 1~2개"]
+  "seasons": ["spring|summer|autumn|winter 중 해당하는 것만, 1~2개"],
+  "other_items": ["주 아이템 외에 함께 보이는 착용 아이템의 짧은 한국어 이름"]
 }
 규칙:
+- 여러 아이템이 함께 보이면(착용컷 등) '주 아이템' 하나를 기준으로 name/category/color를 정한다.
+  주 아이템 = 사진에서 차지하는 면적이 가장 크고 프레이밍의 중심인 것.
+  예: 상반신이 프레임에서 잘리고 바지가 화면 대부분이면 주 아이템은 바지 (신발·상의가 아님).
+- other_items: 주 아이템 외에 부분적으로라도 보이는 착용 아이템 전부 (예: ["화이트 셔츠", "블랙 부츠"]). 없으면 [].
 - color: 패션 음차만 사용 (블랙, 화이트, 그레이, 네이비, 블루, 베이지…). 검정/회색/흰색/남색 같은 일상어·영어(Black) 금지.
 - category: 치마·스커트류는 반드시 skirt(하의 bottom과 구분). 원피스·드레스는 dress.
   가방(백팩·크로스백·클러치 등)은 반드시 bag. 모자(캡·버킷햇·비니 등)는 반드시 hat.
@@ -358,6 +364,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         if not data["has_text_logo"]:
             data["logo_text"] = ""
         data["seasons"] = _clean_seasons(data.get("seasons"))
+        raw_others = data.get("other_items") if isinstance(data.get("other_items"), list) else []
+        data["other_items"] = [str(o).strip()[:40] for o in raw_others if str(o).strip()][:6]
         return {**fallback, **data}
     except Exception:
         return fallback
@@ -760,10 +768,18 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
 새로 그리지 말고 원본 그대로 배경만 제거해: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
     else:
+        category = str(meta.get("category") or "")
+        others = [str(o).strip() for o in (meta.get("other_items") or []) if str(o).strip()][:6]
         prompt = f"""이 이미지에서 {name} 하나만 추출해 깔끔한 제품 컷으로 만들어주세요.
 새로운 옷을 그리는 게 아니라, 원본 사진을 그대로 배경만 제거하는 작업입니다.
-- 신발처럼 원본에 여러 짝이 보이면 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것.
-- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
+- CRITICAL: 결과에는 {name}만 있어야 합니다. 함께 착용·배치된 다른 아이템(상의·하의·신발·양말·벨트·모자·가방 등)은 겹쳐 있어도 전부 잘라내고 절대 포함하지 말 것.
+  바지·스커트라면 밑단에서 끝나야 하며, 밑단에 신발이 겹쳐 보여도 신발은 반드시 제외.
+"""
+        if others:
+            prompt += f"- 이 사진에는 {', '.join(others)}도 보이지만 이들은 추출 대상이 아님. 결과에 일부라도 넣지 말 것.\n"
+        if category == "shoes":
+            prompt += "- 신발은 원본에 보이는 대로 (두 짝이면 두 짝, 한 짝이면 한 짝) 유지. 짝을 새로 만들거나 지우지 말 것.\n"
+        prompt += """- 배경은 완전히 투명하게 (알파 채널). 흰색·회색 사각형 배경 판을 절대 남기지 말 것. 옷만 떠 있는 PNG처럼.
 - 사람, 마네킹, 그림자, 가격표·워터마크·화면 UI 같은 떠 있는 오버레이 텍스트/스티커만 제거
 - 옷에 인쇄·자수·패치로 들어간 로고·글자·그래픽은 절대 지우거나 다시 그리지 말 것. 철자·간격·위치·크기·색을 원본 그대로 유지
 - CRITICAL: 원본에 있는 요소(가슴 포켓, 안쪽 목 라벨/택, 단추 개수·위치, 스티치, 밑단 커브 등)는 하나도 빠뜨리거나 단순화하지 말 것. 없는 걸 추가하지도 말 것.
