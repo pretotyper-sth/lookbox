@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
-from PIL import Image
+from PIL import Image, ImageFilter
 from pydantic import BaseModel
 from supabase import Client, create_client
 
@@ -374,13 +374,19 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v4"
+_BG_NORM_VERSION = "cutout_v5"
 
 
 def make_transparent_cutout(png_bytes: bytes, *, aggressive: bool = False) -> bytes:
     """가장자리에서 이어진 순백·연회색 스튜디오 배경을 투명으로 바꿔 옷만 남김.
 
     gpt-image-2 등이 불투명 흰 판을 남기는 경우가 있어, aggressive=True면 임계를 더 낮춤.
+
+    흰/오프화이트 옷은 원단 밝기가 배경과 거의 같아서(픽셀 값이 실제로 겹침) 색상만으로는
+    옷과 배경을 구분할 방법이 없다 — 그대로 두면 플러드필이 가장자리에서 옷 안쪽까지 그대로
+    뚫고 들어가 옷을 거의 다 지워버린다. 그래서 가장자리 기준 진입 깊이(BFS hop)에
+    상한(max_depth)을 둬서, 실제 스튜디오 배경 여백보다는 넓지만 옷 내부까지는 못 뚫도록
+    막는다. 그 상한 경계에서 생기는 계단(zigzag) 모양은 알파 채널에 약한 미디언 필터로 다듬는다.
     """
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     w, h = img.size
@@ -390,10 +396,12 @@ def make_transparent_cutout(png_bytes: bytes, *, aggressive: bool = False) -> by
         return buf.getvalue()
     px = img.load()
     visited = [[False] * w for _ in range(h)]
-    q: deque[tuple[int, int]] = deque()
+    q: deque[tuple[int, int, int]] = deque()
     white_floor = 235 if aggressive else 242
     gray_floor = 200 if aggressive else 218
     chroma_max = 18 if aggressive else 14
+    # 가장자리에서 이 깊이(픽셀 hop)보다 더 들어가면 배경이 아니라 옷 내부로 본다.
+    max_depth = int(min(w, h) * (0.34 if aggressive else 0.30))
 
     def is_plate(x: int, y: int) -> bool:
         r, g, b, a = px[x, y]
@@ -425,15 +433,19 @@ def make_transparent_cutout(png_bytes: bytes, *, aggressive: bool = False) -> by
     for x, y in seeds:
         if 0 <= x < w and 0 <= y < h and is_plate(x, y) and not visited[y][x]:
             visited[y][x] = True
-            q.append((x, y))
+            q.append((x, y, 0))
     while q:
-        x, y = q.popleft()
+        x, y, depth = q.popleft()
         r, g, b, _a = px[x, y]
         px[x, y] = (r, g, b, 0)
+        if depth >= max_depth:
+            continue
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
             if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and is_plate(nx, ny):
                 visited[ny][nx] = True
-                q.append((nx, ny))
+                q.append((nx, ny, depth + 1))
+    # max_depth 경계에서 생기는 계단 모양을 완화 (실제 옷 윤곽선은 거의 안 건드림)
+    img.putalpha(img.getchannel("A").filter(ImageFilter.MedianFilter(size=7)))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
