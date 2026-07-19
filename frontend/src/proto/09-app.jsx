@@ -493,7 +493,7 @@ function App() {
   // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
     if (isShowcase) return;
-    const key = 'lb_bg_norm_cutout_v6'; // v6: 카테고리별 균일 크기 캔버스 — 기존 아이템 1회 재정규화
+    const key = 'lb_bg_norm_cutout_v7'; // v7: 알파 노이즈 bbox 수정 — 기존 아이템 1회 재정규화
     try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
     let dead = false;
     liveJSON('/api/live/wardrobe/normalize-bg', { method: 'POST', body: '{}' })

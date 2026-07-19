@@ -42,6 +42,8 @@ OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
 OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
+# 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
+OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
     origin.strip()
@@ -422,7 +424,7 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v6"  # v6: 카테고리별 균일 크기 캔버스 정규화 추가
+_BG_NORM_VERSION = "cutout_v7"  # v7: 캔버스 정규화 bbox가 알파 노이즈에 무력화되던 것 수정
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -449,7 +451,9 @@ def normalize_product_canvas(png_bytes: bytes, category: str | None) -> bytes:
     """
     try:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-        bbox = img.getchannel("A").getbbox()
+        # AI 투명 PNG에는 알파 1~10짜리 노이즈가 프레임 전체에 깔린 경우가 있어
+        # 그대로 bbox를 잡으면 트리밍이 무력화됨 → 보이는 픽셀(알파≥24)만 기준.
+        bbox = img.getchannel("A").point(lambda a: 255 if a >= 24 else 0).getbbox()
         if bbox:
             img = img.crop(bbox)
         fill = _CATEGORY_FILL.get((category or "").strip(), 0.8)
@@ -801,9 +805,22 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     # 흰 옷은 gpt-image-1이 특히 자주 왜곡 → 텍스트 로고와 동일하게 고충실 모델/품질로
     whiteish = not hint and _source_is_whiteish(path)
     model = OPENAI_IMAGE_MODEL_TEXT if (has_text or whiteish) else OPENAI_IMAGE_MODEL
-    # 텍스트 로고(글자 깨짐 방지)·힌트·흰옷(왜곡 방지)은 고품질, 그 외 첫 추출은 medium.
+    # 배경이 단색 판이 아닌 소스(착용컷·스크린샷)는 생성 난이도가 높아 medium이면
+    # 질감·원본 느낌이 뭉개짐 → 처음부터 high. 단색 상품컷만 medium으로 절약.
+    hard_source = False
+    try:
+        src_img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
+        hard_source = not _border_bg_stats(src_img)[0]
+    except Exception:
+        pass
+    # 품질: 텍스트 로고(글자 깨짐 방지)·힌트·흰옷(왜곡 방지) > 지저분한 배경 > 단색 상품컷.
     # 재추출/이미지 변경은 호출부가 _quality_override로 high를 지정한다.
-    quality = OPENAI_IMAGE_QUALITY_TEXT if (has_text or hint or whiteish) else OPENAI_IMAGE_QUALITY
+    if has_text or hint or whiteish:
+        quality = OPENAI_IMAGE_QUALITY_TEXT
+    elif hard_source:
+        quality = OPENAI_IMAGE_QUALITY_HARD
+    else:
+        quality = OPENAI_IMAGE_QUALITY
     if meta.get("_quality_override"):
         quality = str(meta["_quality_override"])
 
