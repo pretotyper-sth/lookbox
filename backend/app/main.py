@@ -10,6 +10,7 @@ import threading
 import time
 import uuid
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -60,10 +61,9 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-# 이미지 편집은 한 번만 호출한다. 실측상 일반 생성도 75초를 넘을 수 있어
-# 일반 120초·고난도 150초를 허용한다. 비전 호출을 더해도 프론트 240초 안에 끝난다.
-OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "150"))
-OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "120"))
+# 일반 추출은 60초 안에 끝내고, 실제 고난도 케이스만 120초 예산을 준다.
+OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "120"))
+OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "60"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
 # OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
 OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
@@ -479,7 +479,7 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
 _BG_NORM_VERSION = "cutout_v8"  # v8: 흰 의류 보호 + 보이는 본체 기준 정규화
-_EXTRACTION_PROFILE = "extract_v8"
+_EXTRACTION_PROFILE = "extract_v9"
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -830,7 +830,54 @@ def _source_is_whiteish(path: str) -> bool:
     return total > 0 and light / total >= 0.5
 
 
-def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
+def _fast_extract_triage(path: str, hint: str) -> dict[str, Any]:
+    """LLM 호출 전, 스튜디오 컷·배경 난이도·밝은 원단을 빠르게 판별한다."""
+    clean_plate = False
+    try:
+        img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
+        clean_plate = _border_bg_stats(img)[0]
+    except Exception:
+        pass
+    return {
+        "clean_plate": clean_plate,
+        "messy_background": not clean_plate,
+        "whiteish": _source_is_whiteish(path),
+        "studio": studio_product_cutout(path) if not hint and clean_plate else None,
+    }
+
+
+def _resolve_extract_policy(meta: dict[str, Any], triage: dict[str, Any], hint: str) -> dict[str, Any]:
+    """기본은 medium, 로고·사용자 지시·복잡한 배경만 고품질로 승격한다."""
+    has_text = bool(meta.get("has_text_logo"))
+    override = str(meta.get("_quality_override") or "").strip()
+    messy_background = bool(triage.get("messy_background"))
+    if override:
+        tier, quality, timeout = "retry", override, OPENAI_IMAGE_TIMEOUT
+    elif has_text:
+        tier, quality, timeout = "text", OPENAI_IMAGE_QUALITY_TEXT, OPENAI_IMAGE_TIMEOUT
+    elif hint:
+        tier, quality, timeout = "hint", OPENAI_IMAGE_QUALITY_HARD, OPENAI_IMAGE_TIMEOUT
+    elif messy_background:
+        tier, quality, timeout = "hard_background", OPENAI_IMAGE_QUALITY_HARD, OPENAI_IMAGE_TIMEOUT
+    else:
+        tier, quality, timeout = "standard", OPENAI_IMAGE_QUALITY, OPENAI_IMAGE_TIMEOUT_FAST
+    return {
+        "tier": tier,
+        "model": OPENAI_IMAGE_MODEL_TEXT if has_text else OPENAI_IMAGE_MODEL,
+        "quality": quality,
+        "timeout_s": timeout,
+        "difficulty": [name for name, enabled in (
+            ("text", has_text),
+            ("hint", bool(hint)),
+            ("messy_background", messy_background),
+            ("light", bool(triage.get("whiteish"))),
+        ) if enabled],
+    }
+
+
+def generate_product_image(
+    user_id: str, path: str, meta: dict[str, Any], triage: dict[str, Any] | None = None
+) -> bytes | None:
     """이미지 + 프롬프트로 images.edit. 힌트면 사용자 문장 우선(ChatGPT와 동일)."""
     if not openai_client:
         print("[extract] openai client missing", flush=True)
@@ -850,37 +897,20 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
 
-    # 흰/밝은 옷 + 단색 스튜디오 상품컷: AI 재생성은 어떤 프롬프트를 줘도 형태를
-    # 미묘하게 다시 그린다(칼라 들림 등). 이 경우엔 생성 없이 원본 배경만 제거.
-    if not hint:
-        studio = studio_product_cutout(path)
-        if studio:
-            print("[extract] studio cutout — light garment on clean plate, skip AI", flush=True)
-            meta["_extract_mode"] = "studio_cutout"
-            return studio
+    triage = triage or _fast_extract_triage(path, hint)
+    studio = triage.get("studio")
+    if studio:
+        print("[extract] studio cutout — skip AI", flush=True)
+        meta["_extract_mode"] = "studio_cutout"
+        meta["_extract_policy"] = {"tier": "studio", "quality": "local", "timeout_s": 0}
+        return studio
 
-    # 고품질은 정말 어려운 경우에만 쓴다. 단순히 배경이 단색이 아니라는 이유만으로
-    # high를 고르면 대부분의 휴대폰 사진이 느린 경로를 타 전체 시간이 급격히 늘어난다.
-    whiteish = _source_is_whiteish(path)
-    other_items = [str(o).strip() for o in (meta.get("other_items") or []) if str(o).strip()]
-    difficult = bool(has_text or hint or whiteish or other_items)
-    model = OPENAI_IMAGE_MODEL_TEXT if (has_text or whiteish) else OPENAI_IMAGE_MODEL
-    if difficult:
-        quality = OPENAI_IMAGE_QUALITY_TEXT
-    else:
-        quality = OPENAI_IMAGE_QUALITY
-    if meta.get("_quality_override"):
-        quality = str(meta["_quality_override"])
-        difficult = True
-    request_timeout = OPENAI_IMAGE_TIMEOUT if difficult else OPENAI_IMAGE_TIMEOUT_FAST
-    meta["_extract_policy"] = {
-        "difficulty": [name for name, enabled in (
-            ("text", has_text), ("hint", bool(hint)), ("light", whiteish), ("multiple_items", bool(other_items))
-        ) if enabled],
-        "model": model,
-        "quality": quality,
-        "timeout_s": request_timeout,
-    }
+    policy = _resolve_extract_policy(meta, triage, hint)
+    model = str(policy["model"])
+    quality = str(policy["quality"])
+    request_timeout = float(policy["timeout_s"])
+    whiteish = bool(triage.get("whiteish"))
+    meta["_extract_policy"] = policy
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
@@ -974,10 +1004,12 @@ _EXTRACT_FAIL_MSG = {
 }
 
 
-def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
+def resolve_product_image(
+    user_id: str, path: str, meta: dict[str, Any], triage: dict[str, Any] | None = None
+) -> bytes | None:
     """AI 추출. 실패한 결과를 색상 기반 로컬 컷아웃으로 덮어쓰지 않는다."""
     hint = str(meta.get("extract_hint") or "").strip()
-    product = generate_product_image(user_id, path, meta)
+    product = generate_product_image(user_id, path, meta, triage)
     if product:
         return normalize_product_canvas(product, meta.get("category"))
     fail = meta.get("_extract_fail") or "edit_failed"
@@ -1614,7 +1646,7 @@ def _find_cached_extraction(user_id: str, source_hash: str, hint: str) -> dict[s
     try:
         rows = (
             supabase_admin.table("wardrobe_items")
-            .select("image_url,storage_path,metadata")
+            .select("name,category,color,image_url,storage_path,metadata")
             .eq("user_id", user_id)
             .neq("status", "deleted")
             .contains(
@@ -1658,21 +1690,55 @@ def _store_uploaded_item(
         tmp.write(raw)
         tmp_path = tmp.name
     try:
-        classify_started = time.perf_counter()
-        meta = classify_item(tmp_path, extract_hint=hint)
-        classify_ms = int((time.perf_counter() - classify_started) * 1000)
-        # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
+        original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
+        cached = _find_cached_extraction(user_id, source_hash, hint)
+        if cached:
+            # 같은 원본은 메타와 제품 컷을 재사용한다. Vision/이미지 생성을 다시
+            # 호출하지 않는 것이 캐시의 핵심이며, 원본만 새 아이템에 연결해 둔다.
+            cached_meta = dict(cached.get("metadata") or {})
+            meta = {
+                "name": cached.get("name") or "새 옷",
+                "category": cached.get("category") or "top",
+                "color": cached.get("color") or "neutral",
+                "tags": cached_meta.get("tags") or [],
+                "seasons": cached_meta.get("seasons") or [],
+                "has_text_logo": bool(cached_meta.get("has_text_logo")),
+                "logo_text": str(cached_meta.get("logo_text") or ""),
+                "extract_hint": hint,
+                "_extract_mode": "cache",
+                "_extract_policy": {"tier": "cache", "quality": "cached", "timeout_s": 0},
+            }
+            original_url = upload_bytes(original_path, raw, content_type)
+            classify_ms = 0
+            extract_ms = 0
+            triage: dict[str, Any] = {}
+            product_bytes = None
+        else:
+            # I/O·Vision·로컬 트리아지는 서로 의존하지 않는다. 병렬화해 AI 편집
+            # 이전의 고정 대기 시간을 한 단계로 줄인다.
+            classify_started = time.perf_counter()
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                classify_future = pool.submit(classify_item, tmp_path, hint)
+                triage_future = pool.submit(_fast_extract_triage, tmp_path, hint)
+                upload_future = pool.submit(upload_bytes, original_path, raw, content_type)
+                meta = classify_future.result()
+                triage = triage_future.result()
+                original_url = upload_future.result()
+            classify_ms = int((time.perf_counter() - classify_started) * 1000)
+            # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
+            item_name, item_color = _normalize_item_name_color(
+                (name_override or "").strip() or meta.get("name") or "새 옷",
+                (color_override or "").strip() or meta.get("color") or "neutral",
+            )
+            meta = {**meta, "name": item_name, "color": item_color, "extract_hint": hint}
+            extract_started = time.perf_counter()
+            product_bytes = resolve_product_image(user_id, tmp_path, meta, triage)
+            extract_ms = int((time.perf_counter() - extract_started) * 1000)
         item_name, item_color = _normalize_item_name_color(
             (name_override or "").strip() or meta.get("name") or "새 옷",
             (color_override or "").strip() or meta.get("color") or "neutral",
         )
-        meta = {**meta, "name": item_name, "color": item_color, "extract_hint": hint}
-        original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
-        original_url = upload_bytes(original_path, raw, content_type)
-        cached = _find_cached_extraction(user_id, source_hash, hint)
-        extract_started = time.perf_counter()
-        product_bytes = None if cached else resolve_product_image(user_id, tmp_path, meta)
-        extract_ms = int((time.perf_counter() - extract_started) * 1000)
+        meta["name"], meta["color"] = item_name, item_color
         image_path, image_url = original_path, original_url
         if cached:
             image_path, image_url = cached["storage_path"], cached["image_url"]
@@ -2521,8 +2587,6 @@ async def live_replace_image(
                 "color": row.get("color") or "",
                 "tags": meta.get("tags") or [],
                 "extract_hint": hint,
-                # 첫 추출이 마음에 안 들어 교체하는 경우이므로 고품질로
-                "_quality_override": OPENAI_IMAGE_QUALITY_RETRY,
             }
             product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
             image_path, image_url = original_path, original_url
