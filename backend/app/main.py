@@ -60,10 +60,10 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-# 타임아웃 명시 + 재시도 0 → 지연돼도 연결을 오래 붙잡지 않고 빠르게 실패.
-# (재시도가 시간을 배로 늘려 3분+ 걸리던 문제 방지)
-# high 품질 + input_fidelity=high는 60~120초까지 걸릴 수 있어 80초면 정상 요청도 잘림.
-OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "130"))
+# 이미지 편집은 한 번만 호출한다. 일반 사진은 75초, 고난도 사진은 110초 안에서
+# 끝내 전체 요청이 2분을 넘기지 않게 한다.
+OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "110"))
+OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "75"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
 # OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
 OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
@@ -312,13 +312,21 @@ def log_ai_usage(user_id: str, feature: str, model: str, metadata: dict[str, Any
     ).execute()
 
 
-def _record_extraction_timing(user_id: str | None, source: str, item_count: int, duration_ms: float) -> None:
+def _record_extraction_timing(
+    user_id: str | None, source: str, item_count: int, duration_ms: float, details: dict[str, Any] | None = None
+) -> None:
     """추출(사진·URL) 소요시간 기록 — 개수별 평균 산출용. 실패해도 요청은 계속."""
     ms = int(duration_ms)
     try:
-        supabase_admin.table("extraction_timings").insert(
-            {"user_id": user_id, "source": source, "item_count": int(item_count), "duration_ms": ms}
-        ).execute()
+        payload = {"user_id": user_id, "source": source, "item_count": int(item_count), "duration_ms": ms}
+        if details:
+            payload.update({
+                "classify_ms": int(details.get("classify_ms") or 0),
+                "extract_ms": int(details.get("extract_ms") or 0),
+                "cache_hit": bool(details.get("cache_hit")),
+                "policy": details.get("policy") or {},
+            })
+        supabase_admin.table("extraction_timings").insert(payload).execute()
     except Exception as exc:  # noqa: BLE001
         print(f"[timing] record failed: {exc}", flush=True)
     print(f"[timing] source={source} items={item_count} duration_ms={ms} ({ms / 1000:.1f}s)", flush=True)
@@ -470,14 +478,15 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v7"  # v7: 캔버스 정규화 bbox가 알파 노이즈에 무력화되던 것 수정
+_BG_NORM_VERSION = "cutout_v8"  # v8: 흰 의류 보호 + 보이는 본체 기준 정규화
+_EXTRACTION_PROFILE = "extract_v8"
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
 _CANVAS_SIZE = 1024
 _CATEGORY_FILL = {
-    "top": 0.86,
-    "outer": 0.88,
+    "top": 0.90,
+    "outer": 0.90,
     "dress": 0.9,
     "bottom": 0.9,
     "skirt": 0.8,
@@ -497,9 +506,9 @@ def normalize_product_canvas(png_bytes: bytes, category: str | None) -> bytes:
     """
     try:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-        # AI 투명 PNG에는 알파 1~10짜리 노이즈가 프레임 전체에 깔린 경우가 있어
-        # 그대로 bbox를 잡으면 트리밍이 무력화됨 → 보이는 픽셀(알파≥24)만 기준.
-        bbox = img.getchannel("A").point(lambda a: 255 if a >= 24 else 0).getbbox()
+        # AI 투명 PNG의 가장자리 알파 노이즈/그림자는 본체 크기에 포함하지 않는다.
+        # 같은 셔츠가 경로마다 작아지는 문제를 막기 위해 보이는 본체(알파≥64)만 쓴다.
+        bbox = img.getchannel("A").point(lambda a: 255 if a >= 64 else 0).getbbox()
         if bbox:
             img = img.crop(bbox)
         fill = _CATEGORY_FILL.get((category or "").strip(), 0.8)
@@ -620,7 +629,9 @@ def _edge_plate_ratio(png_bytes: bytes) -> float:
     return hits / len(samples)
 
 
-def finalize_cutout(png_bytes: bytes, *, already_transparent: bool = False) -> bytes:
+def finalize_cutout(
+    png_bytes: bytes, *, already_transparent: bool = False, protect_light_garment: bool = False
+) -> bytes:
     """1차 컷아웃 후 가장자리에 흰 판이 남으면 더 강하게 한 번 더.
 
     already_transparent=True는 OpenAI images.edit에 background="transparent"로
@@ -630,7 +641,7 @@ def finalize_cutout(png_bytes: bytes, *, already_transparent: bool = False) -> b
     깨끗하면 우리가 다시 손대지 않고 그대로 믿는다. gpt-image-2 등이 가끔
     남기는 불투명 판이 실제로 있을 때만(에지에 판이 남아 있을 때만) 복구한다.
     """
-    if already_transparent and _edge_plate_ratio(png_bytes) < 0.12:
+    if already_transparent and (protect_light_garment or _edge_plate_ratio(png_bytes) < 0.12):
         print("[cutout] already clean (AI transparent bg) — skip flood-fill repair", flush=True)
         return png_bytes
     out = make_transparent_cutout(png_bytes, aggressive=False)
@@ -848,27 +859,28 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
             meta["_extract_mode"] = "studio_cutout"
             return studio
 
-    # 흰 옷은 gpt-image-1이 특히 자주 왜곡 → 텍스트 로고와 동일하게 고충실 모델/품질로
-    whiteish = not hint and _source_is_whiteish(path)
+    # 고품질은 정말 어려운 경우에만 쓴다. 단순히 배경이 단색이 아니라는 이유만으로
+    # high를 고르면 대부분의 휴대폰 사진이 느린 경로를 타 전체 시간이 급격히 늘어난다.
+    whiteish = _source_is_whiteish(path)
+    other_items = [str(o).strip() for o in (meta.get("other_items") or []) if str(o).strip()]
+    difficult = bool(has_text or hint or whiteish or other_items)
     model = OPENAI_IMAGE_MODEL_TEXT if (has_text or whiteish) else OPENAI_IMAGE_MODEL
-    # 배경이 단색 판이 아닌 소스(착용컷·스크린샷)는 생성 난이도가 높아 medium이면
-    # 질감·원본 느낌이 뭉개짐 → 처음부터 high. 단색 상품컷만 medium으로 절약.
-    hard_source = False
-    try:
-        src_img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
-        hard_source = not _border_bg_stats(src_img)[0]
-    except Exception:
-        pass
-    # 품질: 텍스트 로고(글자 깨짐 방지)·힌트·흰옷(왜곡 방지) > 지저분한 배경 > 단색 상품컷.
-    # 재추출/이미지 변경은 호출부가 _quality_override로 high를 지정한다.
-    if has_text or hint or whiteish:
+    if difficult:
         quality = OPENAI_IMAGE_QUALITY_TEXT
-    elif hard_source:
-        quality = OPENAI_IMAGE_QUALITY_HARD
     else:
         quality = OPENAI_IMAGE_QUALITY
     if meta.get("_quality_override"):
         quality = str(meta["_quality_override"])
+        difficult = True
+    request_timeout = OPENAI_IMAGE_TIMEOUT if difficult else OPENAI_IMAGE_TIMEOUT_FAST
+    meta["_extract_policy"] = {
+        "difficulty": [name for name, enabled in (
+            ("text", has_text), ("hint", bool(hint)), ("light", whiteish), ("multiple_items", bool(other_items))
+        ) if enabled],
+        "model": model,
+        "quality": quality,
+        "timeout_s": request_timeout,
+    }
 
     if hint:
         # ChatGPT에 넣던 것과 같이: 사용자 요청이 본체, 톤은 짧게
@@ -922,7 +934,7 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         # gpt-image-2는 이 파라미터를 안 받고 항상 고충실도로 처리하므로 gpt-image-1류에만 지정.
         if "gpt-image-2" not in use_model:
             kwargs["input_fidelity"] = "high"
-        result = openai_client.images.edit(**kwargs)
+        result = openai_client.with_options(timeout=request_timeout).images.edit(**kwargs)
         log_ai_usage(
             user_id,
             "product_image",
@@ -937,45 +949,19 @@ def generate_product_image(user_id: str, path: str, meta: dict[str, Any]) -> byt
         )
         return base64.b64decode(result.data[0].b64_json)
 
-    # 한 요청이 오래 걸리지 않도록 시도는 최대 2회로 제한.
-    # 힌트가 있어도 없어도 항상 먼저 투명 배경을 요청한다 — AI 자체 알파가 우리
-    # 색상 기반 플러드필보다 훨씬 정확하다(특히 흰옷: 원단과 배경이 색으로 안
-    # 구분됨). 실패하거나 판이 남으면만 두 번째 시도/우리 쪽 복구로 넘어간다.
-    attempts: list[tuple[str, bool]] = []
-    if hint:
-        attempts.append((model, True))
-        if model != OPENAI_IMAGE_MODEL:
-            attempts.append((OPENAI_IMAGE_MODEL, True))
-        else:
-            attempts.append((model, False))
-    else:
-        attempts.append((model, True))
-        attempts.append((model, False))
-
-    seen: set[tuple[str, bool]] = set()
-    deadline = time.monotonic() + OPENAI_IMAGE_TIMEOUT + 5
-    for use_model, transparent in attempts:
-        key = (use_model, transparent)
-        if key in seen:
-            continue
-        seen.add(key)
-        if time.monotonic() >= deadline:
-            meta["_extract_fail"] = "timeout"
-            print("[extract] deadline reached — stop", flush=True)
-            break
-        try:
-            raw = _edit(use_model, transparent=transparent)
-            print(f"[extract] ok model={use_model} transparent={transparent}", flush=True)
-            meta["_extract_mode"] = "ai"
-            return finalize_cutout(raw, already_transparent=transparent)
-        except (APITimeoutError, APIConnectionError) as exc:
-            # 타임아웃/연결 지연이면 재시도해도 또 오래 걸리므로 즉시 중단
-            meta["_extract_fail"] = "timeout"
-            print(f"[extract] timeout/conn model={use_model}: {exc}", flush=True)
-            break
-        except Exception as exc:  # noqa: BLE001
-            meta["_extract_fail"] = "api_error"
-            print(f"[extract] edit failed model={use_model} transparent={transparent}: {exc}", flush=True)
+    # 투명 배경 요청 한 번만 사용한다. 과거의 불투명 재시도는 다시 플러드필을 타
+    # 흰 원단을 지우고 최대 대기 시간을 두 배로 만들었다.
+    try:
+        raw = _edit(model, transparent=True)
+        print(f"[extract] ok model={model} transparent=True", flush=True)
+        meta["_extract_mode"] = "ai"
+        return finalize_cutout(raw, already_transparent=True, protect_light_garment=whiteish)
+    except (APITimeoutError, APIConnectionError) as exc:
+        meta["_extract_fail"] = "timeout"
+        print(f"[extract] timeout/conn model={model}: {exc}", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        meta["_extract_fail"] = "api_error"
+        print(f"[extract] edit failed model={model}: {exc}", flush=True)
     meta["_extract_fail"] = meta.get("_extract_fail") or "edit_failed"
     return None
 
@@ -989,23 +975,16 @@ _EXTRACT_FAIL_MSG = {
 
 
 def resolve_product_image(user_id: str, path: str, meta: dict[str, Any]) -> bytes | None:
-    """AI 추출. 실패/타임아웃이면 구체적 사유로 안내. 힌트 없으면 로컬 폴백으로 저장은 유지."""
+    """AI 추출. 실패한 결과를 색상 기반 로컬 컷아웃으로 덮어쓰지 않는다."""
     hint = str(meta.get("extract_hint") or "").strip()
     product = generate_product_image(user_id, path, meta)
     if product:
         return normalize_product_canvas(product, meta.get("category"))
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
-    # 힌트 추출은 로컬 배경제거로 대체하면 의도와 달라지므로 명확히 실패 처리
-    if hint:
-        print(f"[extract] hint extract failed ({fail}) — no local fallback", flush=True)
-        raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
-    # 힌트 없는 일반 추출: 항목은 로컬 컷아웃으로 저장(유실 방지)하되 경고를 남겨 '이미지 변경'으로 재시도 안내
-    local = local_product_cutout(path)
-    if local:
-        meta["_extract_mode"] = "local"
-        meta["_extract_warning"] = msg
-        return normalize_product_canvas(local, meta.get("category"))
+    # 흰 옷·저대비 원단은 로컬 색상 제거로 대체하면 결과가 빠르게 나와도 일부가
+    # 사라질 수 있다. 원본은 이미 보관되어 있으므로 안전하게 실패를 돌려준다.
+    print(f"[extract] failed ({fail}) — preserve original, no local fallback", flush=True)
     raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
 
 
@@ -1630,6 +1609,34 @@ class ReplaceImageConfirm(BaseModel):
     metadata: dict[str, Any] = {}
 
 
+def _find_cached_extraction(user_id: str, source_hash: str, hint: str) -> dict[str, Any] | None:
+    """같은 원본과 동일한 추출 규격의 성공 결과만 재사용한다."""
+    try:
+        rows = (
+            supabase_admin.table("wardrobe_items")
+            .select("image_url,storage_path,metadata")
+            .eq("user_id", user_id)
+            .neq("status", "deleted")
+            .contains(
+                "metadata",
+                {
+                    "source_hash": source_hash,
+                    "extract_profile": _EXTRACTION_PROFILE,
+                    "extract_hint": hint[:200],
+                },
+            )
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        row = rows[0] if rows else None
+        return row if row and row.get("image_url") and row.get("storage_path") else None
+    except Exception as exc:  # noqa: BLE001
+        print(f"[extract] cache lookup skipped: {exc}", flush=True)
+        return None
+
+
 def _store_uploaded_item(
     user_id: str,
     raw: bytes,
@@ -1646,11 +1653,14 @@ def _store_uploaded_item(
     extract_hint: str | None = None,
 ) -> dict[str, Any]:
     hint = (extract_hint or "").strip()[:500]
+    source_hash = hashlib.sha256(raw).hexdigest()
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = tmp.name
     try:
+        classify_started = time.perf_counter()
         meta = classify_item(tmp_path, extract_hint=hint)
+        classify_ms = int((time.perf_counter() - classify_started) * 1000)
         # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
         item_name, item_color = _normalize_item_name_color(
             (name_override or "").strip() or meta.get("name") or "새 옷",
@@ -1659,9 +1669,15 @@ def _store_uploaded_item(
         meta = {**meta, "name": item_name, "color": item_color, "extract_hint": hint}
         original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
         original_url = upload_bytes(original_path, raw, content_type)
-        product_bytes = resolve_product_image(user_id, tmp_path, meta)
+        cached = _find_cached_extraction(user_id, source_hash, hint)
+        extract_started = time.perf_counter()
+        product_bytes = None if cached else resolve_product_image(user_id, tmp_path, meta)
+        extract_ms = int((time.perf_counter() - extract_started) * 1000)
         image_path, image_url = original_path, original_url
-        if product_bytes:
+        if cached:
+            image_path, image_url = cached["storage_path"], cached["image_url"]
+            meta["_extract_mode"] = "cache"
+        elif product_bytes:
             image_path, image_url = save_product_image(user_id, product_bytes)
         # brand/store/source_url은 스키마 변경 없이 metadata(jsonb)에 저장.
         # original_* 는 이미지 재추출 시 원본 소스로 사용.
@@ -1672,15 +1688,23 @@ def _store_uploaded_item(
             "original_url": original_url,
             "has_text_logo": bool(meta.get("has_text_logo")),
             "logo_text": str(meta.get("logo_text") or "").strip()[:80],
+            "source_hash": source_hash,
+            "extract_profile": _EXTRACTION_PROFILE,
+            "extraction_timing": {
+                "classify_ms": classify_ms,
+                "extract_ms": extract_ms,
+                "cache_hit": bool(cached),
+            },
         }
-        if product_bytes:
+        if cached or product_bytes:
             item_metadata["bg_norm"] = _BG_NORM_VERSION
             if meta.get("_extract_mode"):
                 item_metadata["extract_mode"] = meta["_extract_mode"]
             if meta.get("_extract_warning"):
                 item_metadata["extract_warning"] = meta["_extract_warning"]
-        if hint:
-            item_metadata["extract_hint"] = hint[:200]
+        item_metadata["extract_hint"] = hint[:200]
+        if meta.get("_extract_policy"):
+            item_metadata["extract_policy"] = meta["_extract_policy"]
         if (brand or "").strip():
             item_metadata["brand"] = brand.strip()
         if (store or "").strip():
@@ -2143,22 +2167,28 @@ def live_extraction_stats() -> dict[str, Any]:
     try:
         rows = (
             supabase_admin.table("extraction_timings")
-            .select("source,item_count,duration_ms")
+            .select("source,item_count,duration_ms,classify_ms,extract_ms,cache_hit,policy")
             .limit(10000)
             .execute()
             .data
             or []
         )
     except Exception as exc:  # noqa: BLE001
-        return {"by_count": [], "by_source": [], "error": str(exc)}
+        return {"overall": {}, "by_count": [], "by_source": [], "by_policy": [], "error": str(exc)}
     by_count: dict[tuple[str, int], list[int]] = {}
     by_source: dict[str, list[int]] = {}
+    by_policy: dict[str, list[int]] = {}
+    all_ms: list[int] = []
     for r in rows:
         src = r.get("source") or "unknown"
         cnt = int(r.get("item_count") or 0)
         ms = int(r.get("duration_ms") or 0)
         by_count.setdefault((src, cnt), []).append(ms)
         by_source.setdefault(src, []).append(ms)
+        policy = r.get("policy") or {}
+        quality = str(policy.get("quality") or "legacy")
+        by_policy.setdefault(quality, []).append(ms)
+        all_ms.append(ms)
 
     def _avg(v: list[int]) -> float:
         return round(sum(v) / len(v), 1) if v else 0.0
@@ -2168,8 +2198,19 @@ def live_extraction_stats() -> dict[str, Any]:
             return 0.0
         s = sorted(v)
         return float(s[max(0, int(round(0.95 * (len(s) - 1))))])
+    def _p50(v: list[int]) -> float:
+        if not v:
+            return 0.0
+        s = sorted(v)
+        return float(s[len(s) // 2])
 
     return {
+        "overall": {
+            "n": len(all_ms),
+            "avg_ms": _avg(all_ms),
+            "p50_ms": _p50(all_ms),
+            "p95_ms": _p95(all_ms),
+        },
         "by_count": [
             {
                 "source": s,
@@ -2190,6 +2231,10 @@ def live_extraction_stats() -> dict[str, Any]:
                 "max_ms": max(v) if v else 0,
             }
             for s, v in sorted(by_source.items())
+        ],
+        "by_policy": [
+            {"quality": quality, "n": len(v), "avg_ms": _avg(v), "p50_ms": _p50(v), "p95_ms": _p95(v)}
+            for quality, v in sorted(by_policy.items())
         ],
     }
 
@@ -2567,7 +2612,9 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             continue
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
-            fixed = normalize_product_canvas(finalize_cutout(raw), row.get("category"))
+            # 기존 이미지에는 흰 원단과 배경을 픽셀만으로 구분할 근거가 없다.
+            # 마이그레이션이 옷을 지우는 것보다 기존 결과를 보존하는 편이 안전하다.
+            fixed = normalize_product_canvas(raw, row.get("category"))
             new_path, image_url = save_product_image(user.id, fixed)
             meta["bg_norm"] = _BG_NORM_VERSION
             meta["cache_hdr"] = "v2"
@@ -2637,7 +2684,10 @@ async def live_import_photo(
         t0 = time.perf_counter()
         row = _store_uploaded_item(uid, raw, suffix, content_type, status, extract_hint=extract_hint)
         items = [live_item_payload(row)]
-        _record_extraction_timing(uid, "photo", len(items), (time.perf_counter() - t0) * 1000)
+        meta = row.get("metadata") or {}
+        timing = dict(meta.get("extraction_timing") or {})
+        timing["policy"] = meta.get("extract_policy") or {}
+        _record_extraction_timing(uid, "photo", len(items), (time.perf_counter() - t0) * 1000, timing)
         return {"items": items, "primary_idx": 0}
 
     # AI 추출(high)은 100초를 넘을 수 있는데 Render 프록시가 미응답 요청을 끊음 → keep-alive 스트리밍
@@ -2671,7 +2721,10 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
             extract_hint=body.extract_hint,
         )
         items = [live_item_payload(row)]
-        _record_extraction_timing(uid, "url", len(items), (time.perf_counter() - t0) * 1000)
+        item_meta = row.get("metadata") or {}
+        timing = dict(item_meta.get("extraction_timing") or {})
+        timing["policy"] = item_meta.get("extract_policy") or {}
+        _record_extraction_timing(uid, "url", len(items), (time.perf_counter() - t0) * 1000, timing)
         return {"items": items, "primary_idx": 0}
 
     return stream_with_keepalive(work)

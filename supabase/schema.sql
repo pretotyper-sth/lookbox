@@ -77,8 +77,17 @@ create table if not exists public.extraction_timings (
   source text not null,
   item_count int not null default 0,
   duration_ms int not null default 0,
+  classify_ms int not null default 0,
+  extract_ms int not null default 0,
+  cache_hit boolean not null default false,
+  policy jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.extraction_timings add column if not exists classify_ms int not null default 0;
+alter table public.extraction_timings add column if not exists extract_ms int not null default 0;
+alter table public.extraction_timings add column if not exists cache_hit boolean not null default false;
+alter table public.extraction_timings add column if not exists policy jsonb not null default '{}'::jsonb;
 
 create table if not exists public.recommendation_timings (
   id uuid primary key default gen_random_uuid(),

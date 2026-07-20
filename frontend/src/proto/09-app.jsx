@@ -289,9 +289,9 @@ function liveAppendDaily(payload, ownedItems) {
 }
 
 async function liveJSON(url, options = {}) {
-  // 안전망 타임아웃: 서버가 오래 걸려도 무한 대기하지 않고 명확한 메시지로 실패.
-  // high 품질 추출은 OpenAI 쪽에서만 2분 가까이 걸릴 수 있어 서버 예산(130s+분류)보다 여유 있게.
-  const timeoutMs = options.timeoutMs || 210000;
+  // 서버는 일반 추출 75초, 고난도 추출 110초로 제한한다. 비전 분류 시간을
+  // 포함해도 이 안전망 안에서 끝나므로, 실패한 요청을 3분 반까지 붙잡지 않는다.
+  const timeoutMs = options.timeoutMs || 165000;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
