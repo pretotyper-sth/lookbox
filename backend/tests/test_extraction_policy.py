@@ -3,8 +3,11 @@ import unittest
 from pathlib import Path
 
 
+MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
+
+
 def load_policy():
-    source = Path(__file__).parents[1].joinpath("app/main.py").read_text()
+    source = MAIN_PATH.read_text()
     tree = ast.parse(source)
     policy = next(
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_resolve_extract_policy"
@@ -45,6 +48,11 @@ class ExtractionPolicyTest(unittest.TestCase):
         self.assertEqual((logo["model"], logo["quality"]), ("gpt-image-2", "high"))
         self.assertEqual((background["model"], background["quality"]), ("gpt-image-1", "high"))
         self.assertEqual(background["timeout_s"], 120)
+
+    def test_studio_cutout_does_not_blur_light_garment_alpha(self):
+        source = MAIN_PATH.read_text()
+        studio = source[source.index("def studio_product_cutout"):source.index("def _source_is_whiteish")]
+        self.assertNotIn("alpha.filter(ImageFilter.GaussianBlur(1))", studio)
 
 
 if __name__ == "__main__":

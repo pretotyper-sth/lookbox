@@ -796,8 +796,10 @@ def studio_product_cutout(path: str) -> bytes | None:
     if not total_o or light / total_o < 0.55:
         return None
 
-    # 가장자리 안티앨리어싱 + 내용 기준 크롭(원본 프레임 여백 제거)
-    img.putalpha(alpha.filter(ImageFilter.GaussianBlur(1)))
+    # 이 경로는 흰 옷과 흰 배경을 다루므로 알파를 흐리면 배경의 밝은 RGB가
+    # 반투명 가장자리로 번져 검은 카드 위에서 물결/테두리처럼 보인다. 마스크는
+    # 이미 원본 해상도에서 계산했으므로 이진 알파를 그대로 유지한다.
+    img.putalpha(alpha)
     bbox = img.getchannel("A").getbbox() or bbox
     pad = round(0.04 * max(w, h))
     img = img.crop((
