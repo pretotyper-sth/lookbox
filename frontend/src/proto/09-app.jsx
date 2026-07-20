@@ -289,9 +289,9 @@ function liveAppendDaily(payload, ownedItems) {
 }
 
 async function liveJSON(url, options = {}) {
-  // 서버는 일반 추출 75초, 고난도 추출 110초로 제한한다. 비전 분류 시간을
-  // 포함해도 이 안전망 안에서 끝나므로, 실패한 요청을 3분 반까지 붙잡지 않는다.
-  const timeoutMs = options.timeoutMs || 165000;
+  // 일반/고난도 이미지 생성에 비전 분류 시간이 더해질 수 있다. 서버 최대 예산
+  // 150초보다 넉넉히 잡아 정상 요청을 클라이언트가 먼저 끊지 않게 한다.
+  const timeoutMs = options.timeoutMs || 240000;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;

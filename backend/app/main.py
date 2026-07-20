@@ -60,10 +60,10 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-# 이미지 편집은 한 번만 호출한다. 일반 사진은 75초, 고난도 사진은 110초 안에서
-# 끝내 전체 요청이 2분을 넘기지 않게 한다.
-OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "110"))
-OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "75"))
+# 이미지 편집은 한 번만 호출한다. 실측상 일반 생성도 75초를 넘을 수 있어
+# 일반 120초·고난도 150초를 허용한다. 비전 호출을 더해도 프론트 240초 안에 끝난다.
+OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "150"))
+OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "120"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
 # OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
 OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
@@ -2174,7 +2174,20 @@ def live_extraction_stats() -> dict[str, Any]:
             or []
         )
     except Exception as exc:  # noqa: BLE001
-        return {"overall": {}, "by_count": [], "by_source": [], "by_policy": [], "error": str(exc)}
+        # 코드가 먼저 배포되고 SQL 마이그레이션이 뒤따르는 동안에도 기존 이력은
+        # 계속 읽을 수 있어야 한다. 새 세부 컬럼이 없으면 구 스키마로 폴백한다.
+        try:
+            rows = (
+                supabase_admin.table("extraction_timings")
+                .select("source,item_count,duration_ms")
+                .limit(10000)
+                .execute()
+                .data
+                or []
+            )
+            print(f"[timing] detailed stats unavailable, using legacy columns: {exc}", flush=True)
+        except Exception as fallback_exc:  # noqa: BLE001
+            return {"overall": {}, "by_count": [], "by_source": [], "by_policy": [], "error": str(fallback_exc)}
     by_count: dict[tuple[str, int], list[int]] = {}
     by_source: dict[str, list[int]] = {}
     by_policy: dict[str, list[int]] = {}
