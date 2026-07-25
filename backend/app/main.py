@@ -46,6 +46,10 @@ OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 # 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
 OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
+# UX/UI 테스트용 무비용 모드: 켜면 OpenAI(vision/image) 호출을 전부 건너뛰고
+# 로컬 폴백(분류 기본값·추천 폴백·PIL 컷아웃/콜라주)만 써서 과금이 0원.
+# 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
+AI_TEST_MODE = os.environ.get("AI_TEST_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
     origin.strip()
@@ -72,6 +76,11 @@ openai_client = (
     if OPENAI_API_KEY
     else None
 )
+if AI_TEST_MODE:
+    print("=" * 60, flush=True)
+    print("[AI_TEST_MODE] ON — OpenAI 호출 전부 차단, 과금 $0 (로컬 폴백만)", flush=True)
+    print("  끄려면 .env에서 AI_TEST_MODE 삭제/0 후 서버 재시작", flush=True)
+    print("=" * 60, flush=True)
 
 
 def _vision_client():
@@ -358,7 +367,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         "seasons": [],
         "other_items": [],
     }
-    if not openai_client:
+    if not openai_client or AI_TEST_MODE:
         return fallback
     hint = (extract_hint or "").strip()[:500]
     prompt = ""
@@ -441,7 +450,7 @@ def _significant_garment_logo(has_text_logo: bool, logo_text: str) -> bool:
 def detect_garment_text(path: str) -> dict[str, Any]:
     """옷 표면 인쇄/자수 텍스트·로고만 감지 (분류 메타에 없을 때 재추출·교체용)."""
     empty = {"has_text_logo": False, "logo_text": ""}
-    if not openai_client:
+    if not openai_client or AI_TEST_MODE:
         return empty
     prompt = """이 이미지의 주요 옷에 '읽을 수 있는 브랜드명·슬로건'이 크게 인쇄/자수되어 있는지 보세요.
 true 조건: 가슴·등·소매 등 원단 겉면에 눈에 띄는 글자 3자 이상 (예: IAB STUDIO, NIKE).
@@ -885,6 +894,11 @@ def generate_product_image(
         print("[extract] openai client missing", flush=True)
         meta["_extract_fail"] = "no_openai"
         return None
+    if AI_TEST_MODE:
+        print("[extract] TEST MODE — 로컬 컷아웃만, AI 미호출 ($0)", flush=True)
+        meta["_extract_mode"] = "test_local_cutout"
+        meta["_extract_policy"] = {"tier": "test", "quality": "local", "timeout_s": 0}
+        return local_product_cutout(path)
     # 크레딧 게이트 비활성(테스트). charge는 no-op이지만 호출해 ledger 경로를 유지하지 않음.
     charge_credit(user_id, "product_image", {"name": meta.get("name")})
     if "has_text_logo" not in meta:
@@ -1109,8 +1123,8 @@ def recommend_text(
         f"[recommend] start pool={len(items)} styles={uniq_styles} max_combos={max_combos} anchor={bool(anchor)}",
         flush=True,
     )
-    if not openai_client:
-        print("[recommend] no openai client — fallback", flush=True)
+    if not openai_client or AI_TEST_MODE:
+        print("[recommend] no openai client / TEST MODE — fallback ($0)", flush=True)
         return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
     prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
@@ -1290,7 +1304,9 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
     )
     if cached:
         return cached[0].get("image_url")
-    if not openai_client or not charge_credit(user_id, "look_image", {"cache_key": key}):
+    if not AI_TEST_MODE and (
+        not openai_client or not charge_credit(user_id, "look_image", {"cache_key": key})
+    ):
         return None
     board = Image.new("RGB", (1024, 1024), (244, 237, 232))
     slots = [(64, 64, 448, 448), (576, 64, 960, 448), (64, 576, 448, 960), (576, 576, 960, 960)]
@@ -1316,20 +1332,25 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
 - 쇼핑몰 스타일의 깔끔한 제품 플랫레이
 """
     try:
-        result = openai_client.images.edit(
-            model=OPENAI_IMAGE_MODEL,
-            image=source,
-            prompt=prompt,
-            size="1024x1536",
-            quality=OPENAI_IMAGE_QUALITY,
-        )
-        out = base64.b64decode(result.data[0].b64_json)
+        if AI_TEST_MODE:
+            print("[look] TEST MODE — 로컬 콜라주만, AI 미호출 ($0)", flush=True)
+            out = source.getvalue()  # 위에서 만든 콜라주 보드를 그대로 사용
+        else:
+            result = openai_client.images.edit(
+                model=OPENAI_IMAGE_MODEL,
+                image=source,
+                prompt=prompt,
+                size="1024x1536",
+                quality=OPENAI_IMAGE_QUALITY,
+            )
+            out = base64.b64decode(result.data[0].b64_json)
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")
         supabase_admin.table("generated_images").insert(
             {"user_id": user_id, "cache_key": key, "kind": "look", "storage_path": storage_path, "image_url": image_url}
         ).execute()
-        log_ai_usage(user_id, "look_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
+        if not AI_TEST_MODE:
+            log_ai_usage(user_id, "look_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
         return image_url
     except Exception:
         return None
