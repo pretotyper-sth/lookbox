@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, Thumb, useEscapeClose, WARDROBE, Wordmark } = window;
+const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, useEscapeClose, WARDROBE, Wordmark } = window;
 
 /* global React, Btn, Chip, Icon, Wordmark, Eyebrow, LabeledField, Thumb, LB_DATA */
 // LOOKBOX — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
@@ -62,81 +62,207 @@ const PC_DETAIL = {
 /* ----------------------------------------------------------------
    Landing — 첫 진입(홈) 화면. '시작하기'를 누르면 회원가입 단계로 진입.
 ---------------------------------------------------------------- */
+// 한국어 본문은 기본값(break-word)이면 어절 중간에서 잘려 어색하다.
+// keep-all + balance/pretty = '띄어쓰기 단위 + 줄 길이 균등' 자동 줄바꿈.
+const KEEP = { wordBreak: 'keep-all' };
+
+// 랜딩 히어로 — 어드민 계정 옷장에서 가져온 실제 누끼 리소스로 구성한 코디 3벌.
+// '사고 싶은 옷'(앵커)은 고정, 내 옷장 아이템만 바뀐다. 겹침 합성 대신
+// 각 옷이 잘리지 않고 온전히 보이는 그리드 타일 — 결과물이 깔끔해야 신뢰를 준다.
+const HERO_ANCHOR = { id: 'hero-anchor', name: '수피마 코튼 셔츠', key: 'lookAnchorShirt' };
+const HERO_LOOKS = [
+  { id: 'l1', label: '주말 데님 캐주얼', items: [
+    { id: 'l1a', name: '스트레이트 데님', key: 'lookDenimBlue' },
+    { id: 'l1b', name: '아디다스 삼바', key: 'lookSamba' },
+    { id: 'l1c', name: '브라운 숄더백', key: 'lookBagBrown' },
+  ] },
+  { id: 'l2', label: '차분한 시티 미니멀', items: [
+    { id: 'l2a', name: '와이드 데님', key: 'lookDenimWide' },
+    { id: 'l2b', name: '뉴발란스 993', key: 'lookNb993' },
+    { id: 'l2c', name: '블랙 선글라스', key: 'lookSunglasses' },
+  ] },
+  { id: 'l3', label: '쌀쌀한 날 레이어드', items: [
+    { id: 'l3a', name: '블랙 가디건', key: 'lookCardigan' },
+    { id: 'l3b', name: '블랙 와이드 데님', key: 'lookDenimBlack' },
+    { id: 'l3c', name: '스웨이드 부츠', key: 'lookBoots' },
+  ] },
+];
+
+// 코디 타일 — 옷 하나가 한 칸을 온전히 차지한다 (objectFit:contain, 잘림 없음).
+// 앵커는 링 + 강조 칩, 옷장 아이템은 중립 칩으로 '새 옷 1 + 내 옷 3' 구조를 즉시 읽힌다.
+function HeroTile({ img, name, anchor, swap }) {
+  return (
+    <div className={swap ? 'lb-fade-swap' : undefined} style={{
+      position: 'relative', aspectRatio: '1 / 1', borderRadius: 'var(--r-md)',
+      background: 'var(--thumb-bg, var(--ivory))', overflow: 'hidden',
+      boxShadow: anchor ? 'inset 0 0 0 2px var(--accent)' : 'inset 0 0 0 1px var(--line)',
+    }}>
+      <img src={img} alt={name} loading="eager" decoding="async" style={{
+        position: 'absolute', inset: '5%', width: '90%', height: '90%', objectFit: 'contain',
+        filter: 'drop-shadow(0 6px 8px rgba(40,33,20,0.08))',
+      }} />
+      <span style={{
+        position: 'absolute', top: 6, left: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.01em',
+        padding: '2px 7px', borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
+        background: anchor ? 'var(--accent)' : 'rgba(255,255,255,0.85)',
+        color: anchor ? 'var(--accent-ink)' : 'var(--ink-2)',
+        boxShadow: anchor ? 'none' : 'inset 0 0 0 1px var(--line)',
+      }}>
+        {anchor ? '사고 싶은 옷' : '내 옷장'}
+      </span>
+    </div>
+  );
+}
+
+// '올리면 → 매칭 → 결정' 3단계 — 그리드(결과물)를 보기 전에 서비스 동작을 한 줄로 심는다.
+// 모바일에서도 절대 줄바꿈되지 않도록 짧게 유지한다 (폰트도 뷰포트에 맞춰 줄어듦).
+const HERO_STEPS = ['옷 올리기', '내 옷장 매칭', '코디 보고 결정'];
+
 function Landing({ onStart }) {
-  // 랜딩 히어로 미리보기 — 실서비스는 사용자 데이터(WARDROBE)를 비우므로
-  // 마케팅용 샘플 이미지는 비워지지 않는 IMG 리소스에서 직접 구성한다.
-  const anchorItem = { id: 'hero-anchor', category: '상의', img: LB_DATA.IMG.topNavy };
-  const wardrobeItems = [
-    { id: 'hero-w1', category: '하의', img: LB_DATA.IMG.skirtWhite },
-    { id: 'hero-w2', category: '신발', img: LB_DATA.IMG.sandalBlack },
-  ].filter((it) => it.img);
+  // 화면 순서는 '질문 → 동작 → 답 → 행동'. 카드는 판정("잘 어울려요")이 아니라
+  // 결과물(입을 수 있는 조합)만 보여준다 — 그게 제품의 약속이라서.
+  const anchor = { ...HERO_ANCHOR, img: LB_DATA.IMG[HERO_ANCHOR.key] };
+  const looks = HERO_LOOKS
+    .map((lk) => ({ ...lk, items: lk.items.map((it) => ({ ...it, img: LB_DATA.IMG[it.key] })).filter((it) => it.img) }))
+    .filter((lk) => lk.items.length);
+
+  const [idx, setIdx] = useState(0);
+  const [manual, setManual] = useState(false);
+  const touchX = React.useRef(null);
+
+  // 4초마다 자동 슬라이드. 점 탭·스와이프로 한 번이라도 직접 옮기면 멈춘다.
+  // prefers-reduced-motion이면 자동 전환만 끄고, 수동 전환은 그대로 둔다.
+  React.useEffect(() => {
+    if (manual || looks.length < 2) return undefined;
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) return undefined;
+    const t = setInterval(() => setIdx((i) => (i + 1) % looks.length), 4000);
+    return () => clearInterval(t);
+  }, [manual, looks.length]);
+
+  const goTo = (i) => {
+    setManual(true);
+    setIdx(((i % looks.length) + looks.length) % looks.length);
+  };
+  // pointer 이벤트 하나로 터치·마우스 스와이프를 처리 (touch+pointer 이중 발화 방지)
+  const onSwipeStart = (e) => { touchX.current = e.clientX; };
+  const onSwipeEnd = (e) => {
+    if (touchX.current == null) return;
+    const dx = e.clientX - touchX.current;
+    touchX.current = null;
+    if (Math.abs(dx) < 40) return;
+    setManual(true);
+    setIdx((i) => (i + (dx < 0 ? 1 : -1) + looks.length) % looks.length);
+  };
+
+  const look = looks[idx] || looks[0];
+
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, margin: '0 auto', padding: '0 26px' }}>
-        <div style={{ paddingTop: 28 }}><Wordmark size={20} /></div>
+      {/* overflow:hidden — 짧은 모바일에서도 스크롤 없이 한 화면에 맞춤.
+          남는 세로가 부족하면 코디 그리드만 비율 유지하며 줄어든다. */}
+      <div style={{
+        width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column',
+        minHeight: 0, margin: '0 auto', padding: '0 20px', overflow: 'hidden',
+      }}>
+        <div style={{ flex: 'none', paddingTop: 14 }}><Wordmark size={18} /></div>
 
-        {/* 본문 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0, paddingBottom: 8 }}>
-          {/* 구매 전 조합 미리보기 — 사고 싶은 옷 + 내 옷장 → 여러 코디 */}
-          <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', boxShadow: 'inset 0 0 0 1px var(--line)', padding: 16, marginBottom: 30 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, color: 'var(--ink-2)' }}>
-              <Icon name="sparkle" size={15} stroke={2} />
-              <span style={{ fontSize: 12, fontWeight: 700 }}>구매 전 조합 추천</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* 사고 싶은 옷 (앵커) */}
-              <div style={{ width: 92, flex: 'none' }}>
-                <div style={{ position: 'relative', borderRadius: 'var(--r-md)', boxShadow: '0 0 0 2px var(--accent)' }}>
-                  <Thumb item={anchorItem} radius="var(--r-md)" />
-                  <span style={{
-                    position: 'absolute', left: 6, top: 6, fontSize: 10, fontWeight: 700,
-                    color: 'var(--accent-ink)', background: 'var(--accent)',
-                    padding: '3px 7px', borderRadius: 'var(--r-pill)',
-                  }}>사고 싶은 옷</span>
-                </div>
-              </div>
-
-              <Icon name="plus" size={16} stroke={2.4} style={{ color: 'var(--ink-3)', flex: 'none' }} />
-
-              {/* 내 옷장 */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 6 }}>내 옷장</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  {wardrobeItems.map((it) => <Thumb key={it.id} item={it} radius="var(--r-sm)" />)}
-                </div>
-              </div>
-            </div>
-
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              marginTop: 14, padding: '9px 0', borderRadius: 'var(--r-pill)',
-              background: 'var(--ivory)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 700,
+        {/* 텍스트는 로고 아래 여유 두고 위쪽, 코디는 아래 빈 공간을 쓰며 내려감.
+            가운데 spacer가 둘 사이를 벌려 주고, 짧은 화면에선 그리드만 줄어듦. */}
+        <div style={{
+          flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+          // 텍스트만 로고에서 조금 더 아래로 (직전 +10의 절반인 +5 추가 → 27)
+          paddingTop: 27, paddingBottom: 4, overflow: 'hidden',
+        }}>
+          {/* 타이틀 위치 고정 */}
+          <div style={{ flex: 'none' }}>
+            <h1 style={{
+              margin: '0 0 6px', fontSize: 'clamp(22px, 6.2vw, 28px)', fontWeight: 800,
+              lineHeight: 1.25, letterSpacing: '-0.03em', textWrap: 'balance', ...KEEP,
             }}>
-              <Icon name="check" size={14} stroke={2.4} style={{ color: 'var(--accent-ink, var(--ink))' }} />
-              어울리는 코디 3개 완성
+              내 옷들이랑 어울릴까?
+            </h1>
+            <p style={{ margin: 0, fontSize: 'clamp(12px, 3.4vw, 14px)', color: 'var(--ink-2)', lineHeight: 1.45, ...KEEP }}>
+              <span style={{ display: 'block' }}>고민 중인 옷을 올리면,</span>
+              <span style={{ display: 'block' }}>이미 갖고 있는 옷들로 코디를 만들어 보여드려요.</span>
+            </p>
+          </div>
+
+          {/* 서브카피 ↔ 프로세스 간격↑. 늘어난 만큼 아래 spacer(프로세스↔이미지)가 줄어 이미지 위치 유지 */}
+          <div style={{
+            flex: 'none', display: 'flex', alignItems: 'center', gap: 5,
+            whiteSpace: 'nowrap', marginTop: 22,
+          }}>
+            {HERO_STEPS.map((s, n) => (
+              <React.Fragment key={s}>
+                {n > 0 && <Icon name="chevR" size={10} style={{ color: 'var(--ink-3)', flex: 'none' }} />}
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 'clamp(10px, 2.8vw, 12px)', fontWeight: 600, color: 'var(--ink-2)',
+                }}>
+                  <span style={{
+                    width: 14, height: 14, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                    fontSize: 8.5, fontWeight: 800, background: 'var(--accent)', color: 'var(--accent-ink)', flex: 'none',
+                  }}>{n + 1}</span>
+                  {s}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* 프로세스 ↔ 코디. 서브카피↔프로세스 간격↑분만큼 여기가 자연히 줄어듦. */}
+          <div style={{ flex: '3 1 16px', minHeight: 12 }} />
+
+          <div
+            onPointerDown={onSwipeStart}
+            onPointerUp={onSwipeEnd}
+            onPointerCancel={() => { touchX.current = null; }}
+            style={{
+              flex: 'none', width: 'min(100%, calc(100dvh - 360px))', maxWidth: '100%',
+              margin: '0 auto', alignSelf: 'center', touchAction: 'pan-y', userSelect: 'none',
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <HeroTile img={anchor.img} name={anchor.name} anchor />
+              {look.items.map((it) => (
+                <HeroTile key={look.id + it.id} img={it.img} name={it.name} swap />
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: 4 }}>
+              {looks.map((lk, i) => (
+                <button
+                  key={lk.id}
+                  onClick={() => goTo(i)}
+                  aria-label={`${lk.label} 코디 보기`}
+                  aria-current={i === idx}
+                  style={{
+                    border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0,
+                    height: 24, width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: 0,
+                  }}
+                >
+                  <span style={{
+                    display: 'block', width: i === idx ? 14 : 5, height: 5, borderRadius: 3,
+                    background: i === idx ? 'var(--accent)' : 'var(--line-2)',
+                    transition: 'width var(--dur) var(--ease), background var(--dur) var(--ease)',
+                  }} />
+                </button>
+              ))}
             </div>
           </div>
 
-          <h1 style={{ margin: '0 0 14px', fontSize: 30, fontWeight: 800, lineHeight: 1.18, letterSpacing: '-0.02em', textWrap: 'balance' }}>
-            이 옷, 내 옷장이랑<br />어울릴까?
-          </h1>
-          <p style={{ margin: 0, fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.55, textWrap: 'pretty' }}>
-            사고 싶은 옷을 올리면, 내 옷장 옷들과<br />
-            어울리는 코디를 미리 만들어드려요.<br />
-            매일의 데일리 추천은 덤이에요.
-          </p>
+          <div style={{ flex: '1 1 8px', minHeight: 4 }} />
         </div>
 
-        {/* 진입 버튼 */}
-        <div style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}>
+        <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
           <Btn full size="lg" icon="sparkle" onClick={onStart}>시작하기</Btn>
-          <button onClick={onStart} className="lb-btn" style={{
-            width: '100%', marginTop: 12, background: 'transparent', color: 'var(--ink-2)',
-            fontSize: 13.5, fontWeight: 600, padding: '8px',
-          }}>
-            이미 계정이 있으신가요? <span style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: 3 }}>로그인</span>
-          </button>
+          <div style={{ marginTop: 10, textAlign: 'center', fontSize: 13, color: 'var(--ink-2)', ...KEEP }}>
+            이미 계정이 있으신가요?{' '}
+            <button onClick={onStart} className="lb-btn" style={{
+              background: 'transparent', color: 'var(--ink)', fontSize: 13, fontWeight: 700,
+              padding: '12px 6px', margin: '-12px 0', textDecoration: 'underline', textUnderlineOffset: 3,
+            }}>로그인</button>
+          </div>
         </div>
       </div>
     </div>

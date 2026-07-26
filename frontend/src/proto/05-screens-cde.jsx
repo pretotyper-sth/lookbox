@@ -45,11 +45,12 @@ function lookJitterRot(id) {
   return r === 0 ? ((h & 1) ? 3 : -3) : r;
 }
 
-function LookComposite({ outfit, items, ratio = '4 / 5' }) {
+// bg/scale/slotMap — 온보딩 랜딩은 카드 박스 없이 페이지 위에 크게, 겹침을 줄여 펼쳐 쓴다.
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, slotMap = LOOK_SLOT }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
     return (
-      <div style={{ background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      <div style={{ background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
         <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
@@ -57,9 +58,9 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
   const used = {};
   const hasSide = cleanItems.some((it) => ['신발', '가방', '모자', '소품', '액세서리'].includes(it.category));
   return (
-    <div style={{ position: 'relative', background: 'var(--thumb-bg)', borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+    <div style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
       {cleanItems.map((it) => {
-        const base = LOOK_SLOT[it.category] || LOOK_SLOT['상의'];
+        const base = slotMap[it.category] || slotMap['상의'];
         const n = used[it.category] || 0; used[it.category] = n + 1;
         let cx = base.cx + n * 6;
         const cy = base.cy + n * 4;
@@ -67,8 +68,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5' }) {
         if (!hasSide && ['상의', '하의', '스커트', '아우터', '원피스'].includes(it.category)) {
           cx = 50 + n * 4;
         }
-        const w = Math.min(92, base.w * LOOK_SCALE);
-        const h = Math.min(92, base.h * LOOK_SCALE);
+        const w = Math.min(92, base.w * scale);
+        const h = Math.min(92, base.h * scale);
         const rot = lookJitterRot(it.id);
         const frame = {
           position: 'absolute', left: cx + '%', top: cy + '%', width: w + '%', height: h + '%',

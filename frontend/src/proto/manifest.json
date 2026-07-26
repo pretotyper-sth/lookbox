@@ -14,6 +14,9 @@
     "sandalBlack": "/prototype-assets/sandalBlack.png",
     "skirtWhite": "/prototype-assets/skirtWhite.png",
     "topNavy": "/prototype-assets/topNavy.png",
+    "denimIndigo": "/prototype-assets/denimIndigo.png",
+    "denimBlack": "/prototype-assets/denimBlack.png",
+    "shirtCheck": "/prototype-assets/shirtCheck.png",
     "styleDandy": "/prototype-assets/styleDandy.jpg",
     "styleClassic": "/prototype-assets/styleClassic.jpg",
     "styleAmekaji": "/prototype-assets/styleAmekaji.jpg",
@@ -25,6 +28,16 @@
     "stylePreppy": "/prototype-assets/stylePreppy.jpg",
     "styleGorpcore": "/prototype-assets/styleGorpcore.jpg",
     "styleHiphop": "/prototype-assets/styleHiphop.jpg",
-    "styleY2k": "/prototype-assets/styleY2k.jpg"
+    "styleY2k": "/prototype-assets/styleY2k.jpg",
+    "lookAnchorShirt": "/prototype-assets/lookAnchorShirt.webp",
+    "lookDenimBlue": "/prototype-assets/lookDenimBlue.webp",
+    "lookSamba": "/prototype-assets/lookSamba.webp",
+    "lookBagBrown": "/prototype-assets/lookBagBrown.webp",
+    "lookDenimWide": "/prototype-assets/lookDenimWide.webp",
+    "lookNb993": "/prototype-assets/lookNb993.webp",
+    "lookSunglasses": "/prototype-assets/lookSunglasses.webp",
+    "lookCardigan": "/prototype-assets/lookCardigan.webp",
+    "lookDenimBlack": "/prototype-assets/lookDenimBlack.webp",
+    "lookBoots": "/prototype-assets/lookBoots.webp"
   }
 }

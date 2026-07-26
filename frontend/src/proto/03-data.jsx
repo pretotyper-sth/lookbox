@@ -9,6 +9,21 @@ const IMG = {
   topNavy: R('topNavy', 'app/img/top-navy-cut.png'),
   skirtWhite: R('skirtWhite', 'app/img/skirt-white-cut.png'),
   sandalBlack: R('sandalBlack', 'app/img/sandal-black-cut.png'),
+  // 랜딩 히어로에서 코디 3벌을 서로 다르게 보여주기 위한 옷장 샘플
+  denimIndigo: R('denimIndigo', 'app/img/denim-indigo-cut.png'),
+  denimBlack: R('denimBlack', 'app/img/denim-black-cut.png'),
+  shirtCheck: R('shirtCheck', 'app/img/shirt-check-cut.png'),
+  // 랜딩 히어로 — 어드민 계정 옷장에서 가져온 실제 누끼 리소스 (잘림·합성 없음)
+  lookAnchorShirt: R('lookAnchorShirt', '/prototype-assets/lookAnchorShirt.webp'),
+  lookDenimBlue: R('lookDenimBlue', '/prototype-assets/lookDenimBlue.webp'),
+  lookSamba: R('lookSamba', '/prototype-assets/lookSamba.webp'),
+  lookBagBrown: R('lookBagBrown', '/prototype-assets/lookBagBrown.webp'),
+  lookDenimWide: R('lookDenimWide', '/prototype-assets/lookDenimWide.webp'),
+  lookNb993: R('lookNb993', '/prototype-assets/lookNb993.webp'),
+  lookSunglasses: R('lookSunglasses', '/prototype-assets/lookSunglasses.webp'),
+  lookCardigan: R('lookCardigan', '/prototype-assets/lookCardigan.webp'),
+  lookDenimBlack: R('lookDenimBlack', '/prototype-assets/lookDenimBlack.webp'),
+  lookBoots: R('lookBoots', '/prototype-assets/lookBoots.webp'),
 };
 
 const CATEGORIES = ['전체', '상의', '하의', '아우터', '원피스', '스커트', '신발', '가방', '모자', '소품'];

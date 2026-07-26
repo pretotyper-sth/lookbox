@@ -185,6 +185,11 @@ img { display: block; max-width: 100%; }
 @keyframes lb-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .lb-anim-in { animation: none; } }
 
+/* 랜딩 코디 전환 — 교체되는 칸만 부드럽게 들어온다(앵커는 자리를 지킴) */
+.lb-fade-swap { animation: lb-fade-swap 320ms var(--ease) both; }
+@keyframes lb-fade-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lb-fade-swap { animation: none; } }
+
 /* ---- press / hover states ---- */
 .lb-btn:active { transform: scale(0.98); }
 .lb-btn:hover { opacity: 0.92; }
