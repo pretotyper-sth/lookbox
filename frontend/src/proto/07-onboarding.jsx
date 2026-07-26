@@ -174,8 +174,8 @@ function Landing({ onStart }) {
           // 텍스트만 로고에서 조금 더 아래로 (직전 +10의 절반인 +5 추가 → 27)
           paddingTop: 27, paddingBottom: 4, overflow: 'hidden',
         }}>
-          {/* 타이틀 위치 고정 */}
-          <div style={{ flex: 'none' }}>
+          {/* 데스크탑만 .lb-landing-copy로 +10px 하향. 모바일은 그대로, 이미지 y는 spacer가 흡수. */}
+          <div className="lb-landing-copy" style={{ flex: 'none' }}>
             <h1 style={{
               margin: '0 0 6px', fontSize: 'clamp(22px, 6.2vw, 28px)', fontWeight: 800,
               lineHeight: 1.25, letterSpacing: '-0.03em', textWrap: 'balance', ...KEEP,
@@ -186,28 +186,26 @@ function Landing({ onStart }) {
               <span style={{ display: 'block' }}>고민 중인 옷을 올리면,</span>
               <span style={{ display: 'block' }}>이미 갖고 있는 옷들로 코디를 만들어 보여드려요.</span>
             </p>
-          </div>
-
-          {/* 서브카피 ↔ 프로세스 간격↑. 늘어난 만큼 아래 spacer(프로세스↔이미지)가 줄어 이미지 위치 유지 */}
-          <div style={{
-            flex: 'none', display: 'flex', alignItems: 'center', gap: 5,
-            whiteSpace: 'nowrap', marginTop: 22,
-          }}>
-            {HERO_STEPS.map((s, n) => (
-              <React.Fragment key={s}>
-                {n > 0 && <Icon name="chevR" size={10} style={{ color: 'var(--ink-3)', flex: 'none' }} />}
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 'clamp(10px, 2.8vw, 12px)', fontWeight: 600, color: 'var(--ink-2)',
-                }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              whiteSpace: 'nowrap', marginTop: 22,
+            }}>
+              {HERO_STEPS.map((s, n) => (
+                <React.Fragment key={s}>
+                  {n > 0 && <Icon name="chevR" size={10} style={{ color: 'var(--ink-3)', flex: 'none' }} />}
                   <span style={{
-                    width: 14, height: 14, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                    fontSize: 8.5, fontWeight: 800, background: 'var(--accent)', color: 'var(--accent-ink)', flex: 'none',
-                  }}>{n + 1}</span>
-                  {s}
-                </span>
-              </React.Fragment>
-            ))}
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 'clamp(10px, 2.8vw, 12px)', fontWeight: 600, color: 'var(--ink-2)',
+                  }}>
+                    <span style={{
+                      width: 14, height: 14, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                      fontSize: 8.5, fontWeight: 800, background: 'var(--accent)', color: 'var(--accent-ink)', flex: 'none',
+                    }}>{n + 1}</span>
+                    {s}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
           </div>
 
           {/* 프로세스 ↔ 코디. 서브카피↔프로세스 간격↑분만큼 여기가 자연히 줄어듦. */}

@@ -190,6 +190,11 @@ img { display: block; max-width: 100%; }
 @keyframes lb-fade-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lb-fade-swap { animation: none; } }
 
+/* 랜딩 카피 — 데스크탑에서만 텍스트 블록을 15px 아래로 (모바일 유지) */
+@media (min-width: 760px) {
+  .lb-landing-copy { margin-top: 15px; }
+}
+
 /* ---- press / hover states ---- */
 .lb-btn:active { transform: scale(0.98); }
 .lb-btn:hover { opacity: 0.92; }
