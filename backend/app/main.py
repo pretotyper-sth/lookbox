@@ -2915,3 +2915,63 @@ def live_items_status(body: LiveStatus, user: UserContext = Depends(current_user
         or []
     )
     return {"items": [live_item_payload(row) for row in rows]}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 로컬 개발용 옷장 시드 — .env의 DEV_SEED_SOURCE_USER가 있을 때만 열린다.
+# 로컬은 접속할 때마다 새 익명 유저라 옷장이 비어 있어서, 기준 계정의 owned 아이템을
+# 현재 유저 밑으로 복제해 실제 옷장처럼 쓴다(조합 추천·수정·삭제 모두 동작).
+# 이 블록과 frontend/src/dev/ 폴더만 지우면 흔적 없이 제거된다.
+# ─────────────────────────────────────────────────────────────────────────────
+DEV_SEED_SOURCE_USER = os.environ.get("DEV_SEED_SOURCE_USER", "").strip()
+_DEV_SEED_COLUMNS = ("name", "category", "color", "image_url", "storage_path", "source", "status", "note", "metadata")
+
+
+def _dev_seed_source(user: UserContext) -> str:
+    if not DEV_SEED_SOURCE_USER:
+        raise HTTPException(status_code=404, detail="dev_seed_disabled")
+    # 기준 계정 본인이면 원본을 건드릴 수 있으므로 무조건 막는다.
+    if user.id == DEV_SEED_SOURCE_USER:
+        raise HTTPException(status_code=400, detail="source_account_protected")
+    require_supabase()
+    return DEV_SEED_SOURCE_USER
+
+
+@app.post("/api/live/dev/wardrobe/seed")
+def dev_seed_wardrobe(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    source = _dev_seed_source(user)
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select(",".join(_DEV_SEED_COLUMNS))
+        .eq("user_id", source)
+        .eq("status", "owned")
+        .execute()
+        .data
+        or []
+    )
+    supabase_admin.table("wardrobe_items").delete().eq("user_id", user.id).execute()
+    # 익명 세션이 바뀔 때마다 복제본이 쌓이지 않도록 지난 세션의 시드도 함께 걷어낸다.
+    supabase_admin.table("wardrobe_items").delete().contains(
+        "metadata", {"dev_seed": True}
+    ).neq("user_id", source).execute()
+    if not rows:
+        return {"seeded": 0}
+    # image_url/storage_path는 그대로 재사용한다. 버킷이 퍼블릭이고, 아이템 삭제가
+    # status만 바꾸므로 복제본을 지워도 원본 이미지에는 영향이 없다.
+    payload = [
+        {
+            **{col: row.get(col) for col in _DEV_SEED_COLUMNS},
+            "user_id": user.id,
+            "metadata": {**(row.get("metadata") or {}), "dev_seed": True},
+        }
+        for row in rows
+    ]
+    supabase_admin.table("wardrobe_items").insert(payload).execute()
+    return {"seeded": len(payload)}
+
+
+@app.post("/api/live/dev/wardrobe/clear")
+def dev_clear_wardrobe(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    _dev_seed_source(user)
+    removed = supabase_admin.table("wardrobe_items").delete().eq("user_id", user.id).execute().data or []
+    return {"cleared": len(removed)}
