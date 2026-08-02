@@ -26,7 +26,8 @@ const IMG = {
   lookBoots: R('lookBoots', '/prototype-assets/lookBoots.webp'),
 };
 
-const CATEGORIES = ['전체', '상의', '하의', '아우터', '원피스', '스커트', '신발', '가방', '모자', '소품'];
+// 노출 순서 = 겉에서 안으로, 위에서 아래로. 필터 칩·추가 시트·직접 만들기 시트가 모두 이 순서를 쓴다.
+const CATEGORIES = ['전체', '아우터', '상의', '하의', '원피스', '스커트', '신발', '가방', '모자', '소품'];
 
 // 옷 계절 태그 — 다중 선택 가능 (예: 가디건 = 봄+가을)
 const SEASONS = [

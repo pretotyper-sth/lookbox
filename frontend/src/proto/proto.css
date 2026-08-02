@@ -108,6 +108,11 @@ http://scripts.sil.org/OFL
   --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
   --s5: 20px; --s6: 24px; --s7: 32px; --s8: 40px; --s9: 56px;
 
+  /* 페이지 상단(타이틀·상단바·필터 칩)과 그 아래 첫 콘텐츠 사이 간격.
+     옷장의 계절 칩 ↔ 옷 카드 간격이 기준값이고, 모든 탭·상세가 이 값을 쓴다.
+     모바일에서는 상단 패딩이 헤더 쪽과 나뉘어 있어도 합이 이 값이 되게 맞춘다. */
+  --gap-header: 28px;
+
   /* ---- Radii ---- */
   --r-sm: 10px;
   --r-md: 14px;
@@ -205,6 +210,10 @@ img { display: block; max-width: 100%; }
 .lb-save:active { transform: scale(0.96); }
 .lb-savedcard { transition: transform var(--dur) var(--ease); }
 .lb-savedcard:hover { transform: translateY(-2px); }
+/* 룩북 상세(데스크탑) 우측 레일 — 현재 코디만 선명하고 나머지는 물러나 있게 */
+.lb-rail-card { transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.lb-rail-card:hover { opacity: 0.85; transform: translateY(-2px); }
+.lb-rail-card[aria-current='true']:hover { opacity: 1; }
 .lb-input:focus { border-color: var(--ink-2); }
 .lb-itembtn { transition: transform var(--dur) var(--ease); }
 .lb-itembtn:active { transform: scale(0.97); }

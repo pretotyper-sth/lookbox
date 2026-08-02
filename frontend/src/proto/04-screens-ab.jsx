@@ -133,13 +133,13 @@ function WardrobeScreen({ ctx }) {
         <EmptyState
           icon="hanger"
           iconSize={40}
-          title="옷장에 옷을 담아보세요"
+          title="옷장에 아이템을 담아보세요"
           wide={wide}
           padTop={false}
           action={<Btn full size="lg" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>}
           hint={<><Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요</>}
         >
-          가진 옷을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
+          가진 아이템을 모아두면, 구매 전<br />어울리는 조합을 미리 확인할 수 있어요.
         </EmptyState>
       </div>
     );
@@ -166,7 +166,9 @@ function WardrobeScreen({ ctx }) {
   const seasonChips = (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, width: '100%',
-      padding: wide ? '4px 0 26px' : '0 18px 12px',
+      // 칩 아래 첫 카드까지가 --gap-header. 모바일은 헤더 블록(12px)과
+      // 스크롤 영역 상단 패딩(16px)으로 나뉘어 합이 같아진다.
+      padding: wide ? '4px 0 var(--gap-header)' : '0 18px 12px',
     }}>
       <span style={{ flex: 'none', fontSize: 12.5, fontWeight: 500, color: 'var(--ink-3)' }}>그리고</span>
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', minWidth: 0 }}>

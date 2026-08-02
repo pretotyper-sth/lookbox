@@ -15,7 +15,7 @@ function todayLabel() {
 }
 
 /* 날씨 · 날짜 메타 라인 — 날짜는 눌러서 지난 추천을 되짚어보는 진입점 */
-function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect, action }) {
+function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect }) {
   const w = LB_DATA.WEATHER;
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)' };
   const isToday = ymd(selected) === ymd(today);
@@ -67,7 +67,6 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
         </span>
         <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
       </div>
-      {action ? <div style={{ flex: 'none' }}>{action}</div> : null}
       {calOpen && calPos && (
         <>
           <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
@@ -91,8 +90,9 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
 /* ============================================================
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
-function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView }) {
-  const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+// itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
+function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView, itemsById }) {
+  const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -130,12 +130,23 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView }) 
         ) : null}
       </div>
 
-      {/* 오늘 입기 — 데일리 추천 고유 액션 */}
-      <div style={{ marginTop: 'var(--s3)' }}>
-        <Btn full size="sm" variant={worn ? 'soft' : 'primary'} icon={worn ? 'check' : 'hanger'} onClick={onWear}>
-          {worn ? '오늘 입음' : '오늘 입기'}
-        </Btn>
-      </div>
+      {/* 오늘 입기 — 데일리 추천 고유 액션. 지난 날짜는 기록만 보여준다. */}
+      {onWear ? (
+        <div style={{ marginTop: 'var(--s3)' }}>
+          <Btn full size="sm" variant={worn ? 'soft' : 'primary'} icon={worn ? 'check' : 'hanger'} onClick={onWear}>
+            {worn ? '오늘 입음' : '오늘 입기'}
+          </Btn>
+        </div>
+      ) : (
+        // 입지 않은 날의 카드도 같은 높이를 유지해야 그리드가 들쭉날쭉하지 않다.
+        <div style={{
+          marginTop: 'var(--s3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+          height: 34, borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 700,
+          color: 'var(--ink-2)', background: worn ? 'var(--surface-2)' : 'transparent',
+        }}>
+          {worn ? <><Icon name="check" size={13} stroke={3} /> 이 날 입었어요</> : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -205,14 +216,9 @@ const HMON = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9
 
 function ymd(d) { return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
-
-// 특정 날짜에 그날 추천받았던 코디를 결정적으로 생성 (데모용)
-function buildDayFor(date) {
-  const pool = LB_DATA.DAILY;
-  const seed = Math.floor(startOfDay(date).getTime() / 86400000);
-  const picks = [0, 1, 2, 3].map((i) => pool[(seed * 3 + i) % pool.length]);
-  const wornId = seed % 2 === 0 ? picks[seed % picks.length].id : null;
-  return { picks, wornId };
+// 09-app.jsx의 히스토리 키와 같은 형식 (YYYY-MM-DD)
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function HistoryLook({ outfit, worn, saved, onSave }) {
@@ -319,7 +325,7 @@ function TodayScreen({ ctx }) {
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
-    openOutfitViewer,
+    openOutfitViewer, getDayRecord,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -336,13 +342,28 @@ function TodayScreen({ ctx }) {
   const [calOpen, setCalOpen] = useTd(false);
   const [view, setView] = useTd(new Date(today.getFullYear(), today.getMonth(), 1));
   const isToday = ymd(selected) === ymd(today);
-  const pastDay = isToday ? null : buildDayFor(selected);
+  // 지난 날짜는 그날 실제로 추천했던 기록만 보여준다. 기록이 없으면 새로 만들지 않는다.
+  const pastRecord = React.useMemo(
+    () => (isToday || !getDayRecord ? null : getDayRecord(dayKey(selected))),
+    [isToday, selected, getDayRecord],
+  );
+  const pastItemsById = React.useMemo(() => {
+    const map = {};
+    ((pastRecord && pastRecord.items) || []).forEach((it) => { if (it) map[it.id] = it; });
+    return map;
+  }, [pastRecord]);
 
-  // 설정에서 허용한 경우에만 자동 추천 (비용 효율)
+  // 탭에 들어오면 오늘 이미 받아둔 코디만 복원한다. 새로 만드는 건 크레딧이 드니
+  // 사용자가 '코디 추천받기'를 눌렀을 때만. restoreDone 전에는 스켈레톤을 유지해
+  // 복원될 코디가 있는데도 CTA가 잠깐 깜빡이는 걸 막는다.
+  const [restoreDone, setRestoreDone] = useTd(false);
   useTe(() => {
-    if (!dailyEnabled || !ready || !isToday) return;
-    if (dailyAllowed || dailyLoading) return;
-    requestDailyOutfits(preferredDailyStyle);
+    if (!dailyEnabled || !ready || !isToday) return undefined;
+    if (dailyAllowed || dailyLoading) { setRestoreDone(true); return undefined; }
+    let alive = true;
+    Promise.resolve(requestDailyOutfits(preferredDailyStyle, { restoreOnly: true }))
+      .finally(() => { if (alive) setRestoreDone(true); });
+    return () => { alive = false; };
   }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
   // owned에 없는 아이템·상의/하의 미달 코디는 화면에서도 제외
@@ -410,22 +431,38 @@ function TodayScreen({ ctx }) {
     );
   }
 
-  const isFirstLoad = isToday && picks.length === 0 && (dailyLoading || !dailyAllowed || loading);
+  /* ---- 오늘 아직 받은 코디가 없음 — 들어온 것만으로 만들지 않고 버튼을 기다린다 ---- */
+  if (isToday && restoreDone && picks.length === 0 && !dailyLoading && !loading) {
+    return (
+      <EmptyState
+        icon="sparkle"
+        title="오늘의 코디를 받아보세요"
+        wide={wide}
+        action={(
+          <Btn full size="lg" icon="sparkle" onClick={() => requestDailyOutfits(preferredDailyStyle)}>
+            코디 추천받기
+          </Btn>
+        )}
+        hintHidden
+      >
+        옷장 속 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>{items.length}개</b>로<br />
+        오늘 입을 코디를 만들어드려요.
+      </EmptyState>
+    );
+  }
+
+  const isFirstLoad = isToday && picks.length === 0 && (dailyLoading || loading || !restoreDone);
   const isAppending = isToday && picks.length > 0 && (loading || dailyLoading);
   const busy = isFirstLoad;
-  // 헤더에는 지난날짜 복귀만. 추가 추천 CTA는 카드 아래 풀너비.
-  const stripAction = (!isToday && wide) ? (
-    <Btn size="sm" variant="ghost" onClick={() => setSelected(today)}>오늘 추천으로 돌아가기</Btn>
-  ) : null;
+  // 오늘로 돌아가는 버튼은 카드 아래 풀너비 하나로 통일한다.
   const ctxStrip = (
     <ContextStrip selected={selected} today={today}
       calOpen={calOpen} setCalOpen={setCalOpen} view={view} setView={setView}
-      onSelect={(d) => setSelected(startOfDay(d))}
-      action={stripAction} />
+      onSelect={(d) => setSelected(startOfDay(d))} />
   );
 
   const header = isToday ? (
-    <div style={{ marginBottom: 'var(--s5)' }}>
+    <div style={{ marginBottom: 'var(--gap-header)' }}>
       <Eyebrow>오늘의 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         {busy ? (
@@ -440,23 +477,42 @@ function TodayScreen({ ctx }) {
       {ctxStrip}
     </div>
   ) : (
-    <div style={{ marginBottom: 'var(--s5)' }}>
+    <div style={{ marginBottom: 'var(--gap-header)' }}>
       <Eyebrow>지난 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>에 추천받았던 코디예요.
+        <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>
+        {pastRecord ? '에 추천받았던 코디예요.' : '에는 받아둔 코디가 없어요.'}
       </p>
       {ctxStrip}
     </div>
   );
 
-  const shown = isToday ? picks : uniqueDailyOutfits(pastDay.picks).slice(0, COLS);
-  const empty = isToday ? emptySlots : Math.max(0, COLS - shown.length);
+  const shown = isToday ? picks : uniqueDailyOutfits((pastRecord && pastRecord.outfits) || []);
+  const pastWorn = (pastRecord && pastRecord.wornIds) || [];
+  // 지난 날짜에는 빈 슬롯도, 추가 추천 CTA도 두지 않는다. 그날 기록이 전부다.
+  const empty = isToday ? emptySlots : 0;
   const gridCols = wide
     ? `repeat(${COLS}, minmax(0, 1fr))`
     : 'repeat(2, minmax(0,1fr))';
 
+  const pastEmpty = (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+      padding: wide ? '64px 24px' : '52px 24px', background: 'var(--surface)', borderRadius: 'var(--r-lg)',
+    }}>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
+        <Icon name="sparkle" size={24} />
+      </div>
+      <div style={{ marginTop: 14, fontSize: 15.5, fontWeight: 700 }}>이 날 받은 코디가 없어요</div>
+      <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
+        추천 코디는 그날 받아둔 것만 남아요.<br />지난 날짜에는 새로 만들지 않아요.
+      </p>
+    </div>
+  );
+
   const list = (
     <>
+      {(!isToday && !pastRecord) ? pastEmpty : (
       <div style={{
         display: 'grid',
         gridTemplateColumns: gridCols,
@@ -470,7 +526,9 @@ function TodayScreen({ ctx }) {
                 <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
                   styleLabel={preferredStyleLabel}
                   saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
-                  worn={wornToday.includes(o.id)} onWear={() => wearToday(o.id)}
+                  worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
+                  onWear={isToday ? () => wearToday(o.id) : null}
+                  itemsById={isToday ? null : pastItemsById}
                   onView={openOutfitViewer} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (
@@ -488,6 +546,7 @@ function TodayScreen({ ctx }) {
             </>
           )}
       </div>
+      )}
       {/* 4칸이 찬 뒤에만 풀너비 CTA — 2개씩 append, 계속 유지 */}
       {isToday && picks.length >= COLS && (
         <div style={{ marginTop: 'var(--s5)' }}>

@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -100,12 +100,38 @@ function writeDailyCache({ style, outfits, items, wardrobeSig, wardrobeCount }) 
       wardrobeSig: sig || '',
       wardrobeCount: wardrobeCount != null ? wardrobeCount : (items || []).length,
     }));
+    // 오늘 보여준 코디를 그대로 히스토리에도 남긴다. 아이템 스냅샷까지 함께 저장해야
+    // 나중에 그 옷을 지워도 지난 기록이 깨지지 않는다.
+    if ((outfits || []).length) {
+      writeDailyRecord(localYmd(), { style: style || '', outfits, items: items || [] });
+    }
   } catch (e) { /* noop */ }
 }
 function clearDailyCache() {
   try {
     localStorage.removeItem(DAILY_CACHE_KEY);
     DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* noop */ }
+}
+
+// 날짜별 추천 기록 — 당일 캐시는 하루가 지나면 무효가 되므로, 그날 실제로 보여준
+// 코디를 따로 남겨 캘린더에서 되짚어볼 수 있게 한다. 기록이 없는 날은 없는 대로 둔다.
+const DAILY_HISTORY_KEY = 'lb_daily_history_v1';
+const DAILY_HISTORY_MAX_DAYS = 120;
+function readDailyHistory() {
+  try { return JSON.parse(localStorage.getItem(DAILY_HISTORY_KEY) || 'null') || {}; } catch (e) { return {}; }
+}
+function readDailyRecord(dateKey) {
+  const rec = readDailyHistory()[dateKey];
+  return rec && rec.outfits && rec.outfits.length ? rec : null;
+}
+function writeDailyRecord(dateKey, patch) {
+  try {
+    const all = readDailyHistory();
+    all[dateKey] = { ...(all[dateKey] || {}), ...patch };
+    const keys = Object.keys(all).sort();
+    keys.slice(0, Math.max(0, keys.length - DAILY_HISTORY_MAX_DAYS)).forEach((k) => delete all[k]);
+    localStorage.setItem(DAILY_HISTORY_KEY, JSON.stringify(all));
   } catch (e) { /* noop */ }
 }
 function dailyWardrobeGrewSinceCache(ownedItems) {
@@ -399,7 +425,8 @@ function App() {
   const [addedItemIds, setAddedItemIds] = useState([]);
   const [itemSheet, setItemSheet] = useState({ open: false, item: null });
   const [imageViewer, setImageViewer] = useState({ open: false, item: null, outfit: null, items: null });
-  const [wornToday, setWornToday] = useState([]);   // 오늘 입은 데일리 코디 id들
+  // 오늘 입은 데일리 코디 id들 — 새로고침해도 그날 기록은 이어간다.
+  const [wornToday, setWornToday] = useState(() => (readDailyRecord(localYmd()) || {}).wornIds || []);
   const [dailyAllowed, setDailyAllowed] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyStyle, setDailyStyle] = useState('dandy');
@@ -431,9 +458,14 @@ function App() {
   });
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
-  const [phase, setPhase] = useState('landing');   // landing → onboarding → (app)
+  const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
   const persistPrefs = (p) => { try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ } };
   const completeOnboarding = (p) => { setPrefs(p); persistPrefs(p); setOnboarded(true); };
+  // 로그인 — 기기에 남아 있는 선호 정보를 이어서 쓰고, 없으면 기본값으로 시작.
+  const completeLogin = (email) => {
+    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, email };
+    setPrefs(p); persistPrefs(p); setOnboarded(true);
+  };
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
@@ -681,6 +713,9 @@ function App() {
         clearDailyCache();
       }
     }
+    // 탭에 들어온 것만으로는 새로 만들지 않는다. 여기까지 왔다는 건 캐시가 없다는 뜻이고,
+    // 다음 줄부터는 크레딧을 쓰는 실제 추천이라 사용자가 직접 눌렀을 때만 진행한다.
+    if (opts && opts.restoreOnly) return { added: 0, wardrobeGrew, restored: false };
     setDailyStyle(style);
     setDailyAllowed(true);
     setDailyLoading(true);
@@ -830,6 +865,19 @@ function App() {
       return [{ id: 'live-' + outfitId, outfitId, label: o ? o.label : '저장한 코디', savedAt: '방금' }, ...arr];
     });
   };
+  // 옷장에서 직접 고른 조합을 룩북에 저장 — 추천을 거치지 않는 수동 경로
+  const createManualLook = (itemIds, label) => {
+    const ids = (itemIds || []).map(String);
+    if (ids.length < 2) return;
+    const outfitId = 'manual-' + Date.now().toString(36);
+    const name = (label || '').trim() || '내가 만든 코디';
+    LB_DATA.OUTFIT_BY_ID[outfitId] = {
+      id: outfitId, label: name, mood: '직접 만든 코디', styles: [], itemIds: ids, lookImg: null,
+    };
+    setSavedLooks((arr) => [{ id: 'look-' + outfitId, outfitId, label: name, savedAt: '방금' }, ...arr]);
+    showToast('룩북에 저장했어요', 'bookmark');
+  };
+
   // 룩북 저장된 코디를 해제할 때는 확인을 받는다 (룩북에서도 사라지므로)
   const [unsaveTarget, setUnsaveTarget] = useState(null);
   const requestUnsave = (outfitId) => setUnsaveTarget(outfitId);
@@ -1002,9 +1050,11 @@ function App() {
   // 오늘의 코디 — '오늘 입기' 착장 기록 (룩북 저장과는 별개)
   const wearToday = (outfitId) => {
     setWornToday((arr) => {
-      if (arr.includes(outfitId)) { showToast('오늘 입기를 취소했어요'); return arr.filter((x) => x !== outfitId); }
-      showToast('오늘의 코디로 기록했어요', 'check');
-      return [outfitId, ...arr];
+      const next = arr.includes(outfitId) ? arr.filter((x) => x !== outfitId) : [outfitId, ...arr];
+      showToast(arr.includes(outfitId) ? '오늘 입기를 취소했어요' : '오늘의 코디로 기록했어요',
+        arr.includes(outfitId) ? undefined : 'check');
+      writeDailyRecord(localYmd(), { wornIds: next });
+      return next;
     });
   };
   const saveItemDetails = async (itemId, draft) => {
@@ -1115,9 +1165,9 @@ function App() {
     dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
-    wornToday, wearToday,
+    wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, openDetail, addToWardrobe, back,
+    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
@@ -1128,7 +1178,10 @@ function App() {
     if (phase === 'onboarding') {
       return <Onboarding mode="signup" onDone={completeOnboarding} onCancel={() => setPhase('landing')} />;
     }
-    return <Landing onStart={() => setPhase('onboarding')} />;
+    if (phase === 'login') {
+      return <Login onDone={completeLogin} onCancel={() => setPhase('landing')} onSignup={() => setPhase('onboarding')} />;
+    }
+    return <Landing onStart={() => setPhase('onboarding')} onLogin={() => setPhase('login')} />;
   }
 
   // ---- which screen ----
@@ -1159,8 +1212,8 @@ function App() {
   const mainTabs = (
     <>
       {tabPane('wardrobe', <WardrobeScreen ctx={ctx} />)}
-      {tabPane('lookbook', <LookbookScreen ctx={ctx} />)}
       {tabPane('today', <TodayScreen ctx={ctx} />)}
+      {tabPane('lookbook', <LookbookScreen ctx={ctx} />)}
       {tabPane('mypage', <MyPageScreen ctx={ctx} />)}
     </>
   );
@@ -1174,11 +1227,11 @@ function App() {
             <button className={'lb-navitem' + (tab === 'wardrobe' && !focused ? ' on' : '')} onClick={() => go('wardrobe')}>
               <Icon name="hanger" size={20} fill={tab === 'wardrobe' && !focused ? 'currentColor' : 'none'} stroke={tab === 'wardrobe' && !focused ? 0 : 1.7} /> 옷장
             </button>
-            <button className={'lb-navitem' + (tab === 'lookbook' && !focused ? ' on' : '')} onClick={() => go('lookbook')}>
-              <Icon name="bookmark" size={20} fill={tab === 'lookbook' && !focused ? 'currentColor' : 'none'} stroke={tab === 'lookbook' && !focused ? 0 : 1.7} /> 룩북
-            </button>
             <button className={'lb-navitem' + (tab === 'today' && !focused ? ' on' : '')} onClick={() => go('today')}>
               <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘의 추천 코디
+            </button>
+            <button className={'lb-navitem' + (tab === 'lookbook' && !focused ? ' on' : '')} onClick={() => go('lookbook')}>
+              <Icon name="bookmark" size={20} fill={tab === 'lookbook' && !focused ? 'currentColor' : 'none'} stroke={tab === 'lookbook' && !focused ? 0 : 1.7} /> 룩북
             </button>
             <button className={'lb-navitem' + (tab === 'mypage' && !focused ? ' on' : '')} onClick={() => go('mypage')}>
               <Icon name="user" size={20} fill={tab === 'mypage' && !focused ? 'currentColor' : 'none'} stroke={tab === 'mypage' && !focused ? 0 : 1.7} /> 마이페이지
@@ -1194,7 +1247,7 @@ function App() {
             {focused && (
               <div style={{
                 width: '100%',
-                maxWidth: view === 'results' ? 820 : 460,
+                maxWidth: view === 'results' ? 820 : 1040,
                 margin: '0 auto',
                 flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
               }}>{focusedScreen}</div>
@@ -1222,7 +1275,7 @@ function App() {
             <div style={{ display: 'grid', gap: 0, marginTop: 18 }}>
               {[
                 ['1', '사진으로 아이템 추가', '사진을 올리면 상의·하의·신발을 자동으로 나눠 담아요.'],
-                ['2', '옷장 확인', '분류와 색상이 맞는지 보고 필요한 정보만 간단히 고쳐요.'],
+                ['2', '옷장 확인', '카테고리, 색상 등 필요한 정보만 간단히 고쳐요.'],
                 ['3', '추천 사용', '옷이 모이면 구매 전 조합과 오늘 코디를 볼 수 있어요.'],
               ].map(([n, title, desc]) => (
                 <div key={n} style={{ display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 12, alignItems: 'start', padding: '10px 0', borderTop: n === '1' ? 'none' : '1px solid color-mix(in srgb, var(--line) 72%, transparent)' }}>

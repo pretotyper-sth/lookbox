@@ -118,7 +118,7 @@ function HeroTile({ img, name, anchor, swap }) {
 // 모바일에서도 절대 줄바꿈되지 않도록 짧게 유지한다 (폰트도 뷰포트에 맞춰 줄어듦).
 const HERO_STEPS = ['옷 올리기', '내 옷장 매칭', '코디 보고 결정'];
 
-function Landing({ onStart }) {
+function Landing({ onStart, onLogin }) {
   // 화면 순서는 '질문 → 동작 → 답 → 행동'. 카드는 판정("잘 어울려요")이 아니라
   // 결과물(입을 수 있는 조합)만 보여준다 — 그게 제품의 약속이라서.
   const anchor = { ...HERO_ANCHOR, img: LB_DATA.IMG[HERO_ANCHOR.key] };
@@ -188,7 +188,7 @@ function Landing({ onStart }) {
             </p>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              whiteSpace: 'nowrap', marginTop: 22,
+              whiteSpace: 'nowrap', marginTop: 14,
             }}>
               {HERO_STEPS.map((s, n) => (
                 <React.Fragment key={s}>
@@ -208,8 +208,8 @@ function Landing({ onStart }) {
             </div>
           </div>
 
-          {/* 프로세스 ↔ 코디. 서브카피↔프로세스 간격↑분만큼 여기가 자연히 줄어듦. */}
-          <div style={{ flex: '3 1 16px', minHeight: 12 }} />
+          {/* 프로세스 ↔ 코디. 아래 spacer보다 grow가 커서 코디가 위로 붙고, 점↔CTA 여백이 늘어난다. */}
+          <div style={{ flex: '5 1 16px', minHeight: 12 }} />
 
           <div
             onPointerDown={onSwipeStart}
@@ -249,16 +249,20 @@ function Landing({ onStart }) {
             </div>
           </div>
 
-          <div style={{ flex: '1 1 8px', minHeight: 4 }} />
+          <div style={{ flex: '3 1 8px', minHeight: 4 }} />
         </div>
 
+        {/* CTA와 로그인은 탭 영역이 겹치지 않게 확실히 띄운다. */}
         <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
           <Btn full size="lg" icon="sparkle" onClick={onStart}>시작하기</Btn>
-          <div style={{ marginTop: 10, textAlign: 'center', fontSize: 13, color: 'var(--ink-2)', ...KEEP }}>
-            이미 계정이 있으신가요?{' '}
-            <button onClick={onStart} className="lb-btn" style={{
+          <div style={{
+            marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 2, fontSize: 13, color: 'var(--ink-2)', ...KEEP,
+          }}>
+            이미 계정이 있으신가요?
+            <button onClick={onLogin} className="lb-btn" style={{
               background: 'transparent', color: 'var(--ink)', fontSize: 13, fontWeight: 700,
-              padding: '12px 6px', margin: '-12px 0', textDecoration: 'underline', textUnderlineOffset: 3,
+              padding: '11px 12px', textDecoration: 'underline', textUnderlineOffset: 3,
             }}>로그인</button>
           </div>
         </div>
@@ -267,6 +271,78 @@ function Landing({ onStart }) {
   );
 }
 
+
+/* ----------------------------------------------------------------
+   Login — 이미 계정이 있는 사용자. 가입 온보딩과 분리된 화면.
+---------------------------------------------------------------- */
+function Login({ onDone, onCancel, onSignup }) {
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6;
+  const submit = () => { if (valid) onDone(email.trim()); };
+
+  const field = {
+    width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+    outline: 'none', boxSizing: 'border-box',
+  };
+
+  return (
+    <div className="lb-app" style={{ alignItems: 'center' }}>
+      {/* 랜딩과 같은 셸: 좌우 20px, 로고 상단 14px. 닫기 버튼은 absolute라 로고 위치를 밀지 않는다. */}
+      <div style={{
+        width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column',
+        minHeight: 0, margin: '0 auto', padding: '0 20px',
+      }}>
+        <div style={{ flex: 'none', paddingTop: 14 }}>
+          <div style={{ position: 'relative' }}>
+            <Wordmark size={18} />
+            <button onClick={onCancel} aria-label="닫기" className="lb-iconbtn"
+              style={{
+                position: 'absolute', right: -8, top: '50%', transform: 'translateY(-50%)',
+                width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)',
+              }}>
+              <Icon name="x" size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingTop: 27 }}>
+          <Eyebrow>로그인</Eyebrow>
+          <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>다시 만나서 반가워요</h1>
+          <p style={{ margin: '0 0 24px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+            가입한 이메일로 로그인하면 옷장과 룩북을 이어서 볼 수 있어요.
+          </p>
+          <form onSubmit={(e) => { e.preventDefault(); submit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <label style={{ display: 'block' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>이메일</div>
+              <input className="lb-input" type="email" autoComplete="email" value={email} placeholder="you@example.com"
+                onChange={(e) => setEmail(e.target.value)} style={field} />
+            </label>
+            <label style={{ display: 'block' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>비밀번호</div>
+              <input className="lb-input" type="password" autoComplete="current-password" value={pw} placeholder="6자 이상"
+                onChange={(e) => setPw(e.target.value)} style={field} />
+            </label>
+            {/* 엔터로 제출되도록 하는 숨김 버튼 */}
+            <button type="submit" aria-hidden style={{ display: 'none' }} />
+          </form>
+        </div>
+
+        <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
+          <Btn full size="lg" disabled={!valid} onClick={submit}>로그인</Btn>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, fontSize: 13, color: 'var(--ink-2)' }}>
+            아직 계정이 없으신가요?
+            <button onClick={onSignup} className="lb-btn" style={{
+              background: 'transparent', color: 'var(--ink)', fontSize: 13, fontWeight: 700,
+              padding: '11px 12px', textDecoration: 'underline', textUnderlineOffset: 3,
+            }}>회원가입</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ----------------------------------------------------------------
    선호 스타일 카드 — 대표 이미지는 빈칸(placeholder). style.img 가 있으면 사진 표시.
@@ -526,21 +602,26 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
     <div className="lb-app" style={{ alignItems: 'center' }}>
       <div style={{ width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, margin: '0 auto' }}>
         {/* 헤더: 워드마크 + 진행 바 */}
-        <div style={{ padding: '20px 22px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Wordmark size={18} />
-          <button onClick={() => (onCancel ? onCancel() : null)} aria-label="닫기" className="lb-iconbtn"
-            style={{ width: 36, height: 36, borderRadius: '50%', display: onCancel ? 'grid' : 'none', placeItems: 'center', color: 'var(--ink-2)' }}>
-            <Icon name="x" size={20} />
-          </button>
+        <div style={{ padding: '14px 20px 4px' }}>
+          <div style={{ position: 'relative' }}>
+            <Wordmark size={18} />
+            <button onClick={() => (onCancel ? onCancel() : null)} aria-label="닫기" className="lb-iconbtn"
+              style={{
+                position: 'absolute', right: -8, top: '50%', transform: 'translateY(-50%)',
+                width: 36, height: 36, borderRadius: '50%', display: onCancel ? 'grid' : 'none', placeItems: 'center', color: 'var(--ink-2)',
+              }}>
+              <Icon name="x" size={20} />
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, padding: '12px 22px 0' }}>
+        <div style={{ display: 'flex', gap: 6, padding: '12px 20px 0' }}>
           {steps.map((s, n) => (
             <div key={s.key} style={{ flex: 1, height: 4, borderRadius: 999, background: n <= i ? 'var(--accent)' : 'var(--line-2)', transition: 'background var(--dur) var(--ease)' }} />
           ))}
         </div>
 
         {/* 본문 (스크롤) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '26px 22px 16px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '26px 20px 16px' }}>
           <div className="lb-anim-in" key={step.key}>
             <Eyebrow>{`${i + 1} / ${steps.length} · ${step.eyebrow}`}</Eyebrow>
             <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>{step.title}</h1>
@@ -550,7 +631,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
         </div>
 
         {/* 푸터 */}
-        <div style={{ display: 'flex', gap: 10, padding: '12px 22px max(env(safe-area-inset-bottom), 18px)', borderTop: '1px solid var(--line)', background: 'var(--ivory)' }}>
+        <div style={{ display: 'flex', gap: 10, padding: '12px 20px max(env(safe-area-inset-bottom), 16px)', borderTop: '1px solid var(--line)', background: 'var(--ivory)' }}>
           {(i > 0 || onCancel) && (
             <Btn variant="soft" size="lg" onClick={prev} style={{ flex: 'none', paddingLeft: 22, paddingRight: 22 }}>
               {i === 0 ? '취소' : '이전'}
@@ -700,4 +781,4 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   );
 }
 
-Object.assign(window, { Onboarding, Landing });
+Object.assign(window, { Onboarding, Landing, Login });
