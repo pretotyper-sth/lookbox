@@ -28,23 +28,52 @@ function MetaChips({ item }) {
    재보면 셔츠 575px, 청바지 576px다. 여기서 그 비율을 되돌려, 화면에 그릴 때만
    실제 옷 크기(청바지 105cm, 셔츠 70cm, 신발 29cm …)에 맞춘 크기로 되돌린다.
 
-   size = 아이템을 담는 정사각 박스의 한 변(코디 가로폭 대비 %).
-   캔버스가 정사각이라 박스도 정사각이어야 원래 비율대로 들어간다.
-   cx/cy/z는 자리와 앞뒤만 정한다. */
-const LOOK_SLOT = {
-  '아우터':   { cx: 42, cy: 38, size: 64, z: 1 },
-  '상의':     { cx: 50, cy: 26, size: 57, z: 3 },
-  '하의':     { cx: 50, cy: 59, size: 86, z: 2 },
-  '스커트':   { cx: 50, cy: 60, size: 55, z: 2 },
-  '원피스':   { cx: 50, cy: 51, size: 95, z: 2 },
-  // 소품은 가운데 옷을 둘러싸도록 네 귀퉁이에 흩어 놓는다. 한쪽에 몰리면 코디가 기울어 보인다.
-  '신발':     { cx: 76, cy: 86, size: 35, z: 4 },
-  '가방':     { cx: 19, cy: 60, size: 42, z: 4 },
-  '모자':     { cx: 80, cy: 20, size: 37, z: 5 },
-  '소품':     { cx: 20, cy: 20, size: 26, z: 5 },
-  '액세서리': { cx: 80, cy: 20, size: 37, z: 5 }, // 구버전 데이터 호환
+   값 = 아이템을 담는 정사각 박스의 한 변(코디 가로폭 대비 %).
+   캔버스가 정사각이라 박스도 정사각이어야 원래 비율대로 들어간다. */
+const LOOK_SIZE = {
+  '아우터': 64, '상의': 57, '하의': 86, '스커트': 55, '원피스': 95,
+  '신발': 35, '가방': 42, '모자': 37, '소품': 26,
+  '액세서리': 37, // 구버전 데이터 호환
 };
 const LOOK_SCALE = 1;
+
+/* 자리 — 사람 실루엣처럼 상의를 하의 위에 얹지 않는다. 그렇게 하면 상의가 하의
+   허리를 다 덮어 서로 뭉개져 보인다. 대신 하의를 왼쪽에 세우고 그 옆으로 겉옷·상의를
+   펼친 뒤, 신발·가방·모자는 남는 귀퉁이에 놓는 플랫레이 배치를 쓴다.
+   기준은 '겹치더라도 아이템마다 윤곽이 다 드러날 것'. */
+const LOOK_SPOT = {
+  bottom: { cx: 31, cy: 50, z: 2 },
+  hero:   { cx: 63, cy: 56, z: 4 }, // 가장 앞에 오는 겉옷 한 벌
+  layer:  { cx: 71, cy: 27, z: 3 }, // 히어로(아우터) 뒤로 물린 상의
+  shoes:  { cx: 27, cy: 90, z: 5 },
+  bag:    { cx: 85, cy: 77, z: 5 },
+  hat:    { cx: 85, cy: 18, z: 6 },
+  small:  { cx: 13, cy: 15, z: 6 },
+};
+const LOOK_ROLE = {
+  '하의': 'bottom', '스커트': 'bottom', '원피스': 'bottom',
+  '아우터': 'outer', '상의': 'top',
+  '신발': 'shoes', '가방': 'bag',
+  '모자': 'hat', '액세서리': 'hat', '소품': 'small',
+};
+
+/** 아이템별 자리를 정한다. 같은 자리에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
+function lookPlacement(items) {
+  const hasOuter = items.some((it) => LOOK_ROLE[it.category] === 'outer');
+  const taken = {};
+  const out = {};
+  items.forEach((it) => {
+    const role = LOOK_ROLE[it.category] || 'top';
+    // 겉에 걸치는 건 한 벌만 가운데 앞으로. 아우터가 있으면 상의는 그 뒤로 물린다.
+    const spot = role === 'outer' ? 'hero'
+      : role === 'top' ? (hasOuter ? 'layer' : 'hero')
+        : role;
+    const base = LOOK_SPOT[spot] || LOOK_SPOT.hero;
+    const n = taken[spot] || 0; taken[spot] = n + 1;
+    out[it.id] = { cx: base.cx + n * 7, cy: base.cy + n * 5, z: base.z + n };
+  });
+  return out;
+}
 
 function lookJitterRot(id) {
   // 아이템별 고정 ±5° 지터 (리렌더해도 동일)
@@ -55,8 +84,7 @@ function lookJitterRot(id) {
   return r === 0 ? ((h & 1) ? 3 : -3) : r;
 }
 
-// bg/scale/slotMap — 온보딩 랜딩은 카드 박스 없이 페이지 위에 크게, 겹침을 줄여 펼쳐 쓴다.
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, slotMap = LOOK_SLOT }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE }) {
   const cleanItems = (items || []).filter(Boolean);
   if (outfit && outfit.lookImg) {
     return (
@@ -65,24 +93,16 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       </div>
     );
   }
-  const used = {};
-  const hasSide = cleanItems.some((it) => ['신발', '가방', '모자', '소품', '액세서리'].includes(it.category));
+  const place = lookPlacement(cleanItems);
   return (
     <div style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
       {cleanItems.map((it) => {
-        const base = slotMap[it.category] || slotMap['상의'];
-        const n = used[it.category] || 0; used[it.category] = n + 1;
-        let cx = base.cx + n * 6;
-        const cy = base.cy + n * 4;
-        // 상의·하의만이면 가운데 정렬
-        if (!hasSide && ['상의', '하의', '스커트', '아우터', '원피스'].includes(it.category)) {
-          cx = 50 + n * 4;
-        }
-        const size = Math.min(100, base.size * scale);
+        const at = place[it.id] || LOOK_SPOT.hero;
+        const size = Math.min(100, (LOOK_SIZE[it.category] || LOOK_SIZE['상의']) * scale);
         const rot = lookJitterRot(it.id);
         const frame = {
-          position: 'absolute', left: cx + '%', top: cy + '%', width: size + '%', aspectRatio: '1',
-          transform: `translate(-50%,-50%) rotate(${rot}deg)`, zIndex: base.z,
+          position: 'absolute', left: at.cx + '%', top: at.cy + '%', width: size + '%', aspectRatio: '1',
+          transform: `translate(-50%,-50%) rotate(${rot}deg)`, zIndex: at.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
         return it.img
