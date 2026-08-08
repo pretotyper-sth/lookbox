@@ -182,7 +182,7 @@ function Landing({ onStart, onLogin }) {
             }}>
               내 옷들이랑 어울릴까?
             </h1>
-            <p style={{ margin: 0, fontSize: 'clamp(12px, 3.4vw, 14px)', color: 'var(--ink-2)', lineHeight: 1.45, ...KEEP }}>
+            <p style={{ margin: 0, fontSize: 'clamp(14px, 3.9vw, 16px)', color: 'var(--ink-2)', lineHeight: 1.45, ...KEEP }}>
               <span style={{ display: 'block' }}>고민 중인 옷을 올리면,</span>
               <span style={{ display: 'block' }}>이미 갖고 있는 옷들로 코디를 만들어 보여드려요.</span>
             </p>
@@ -195,7 +195,7 @@ function Landing({ onStart, onLogin }) {
                   {n > 0 && <Icon name="chevR" size={10} style={{ color: 'var(--ink-3)', flex: 'none' }} />}
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 'clamp(10px, 2.8vw, 12px)', fontWeight: 600, color: 'var(--ink-2)',
+                    fontSize: 'clamp(12px, 3.3vw, 14px)', fontWeight: 600, color: 'var(--ink-2)',
                   }}>
                     <span style={{
                       width: 14, height: 14, borderRadius: '50%', display: 'grid', placeItems: 'center',

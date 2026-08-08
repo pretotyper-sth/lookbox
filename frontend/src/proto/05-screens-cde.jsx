@@ -22,19 +22,29 @@ function MetaChips({ item }) {
    LookComposite — 조합 전체를 한 배경 위에 옷(컷아웃)만 배치.
    개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
+/* 아이템 이미지는 백엔드에서 정사각 캔버스로 정규화돼 온다. 이때 컷의 '긴 변'을
+   카테고리별 고정 비율로 채우는데(_CATEGORY_FILL: 상의·하의 0.90, 신발 0.62 …),
+   그래서 캔버스만 놓고 보면 티셔츠와 청바지가 같은 높이로 그려진다 — 실제로
+   재보면 셔츠 575px, 청바지 576px다. 여기서 그 비율을 되돌려, 화면에 그릴 때만
+   실제 옷 크기(청바지 105cm, 셔츠 70cm, 신발 29cm …)에 맞춘 크기로 되돌린다.
+
+   size = 아이템을 담는 정사각 박스의 한 변(코디 가로폭 대비 %).
+   캔버스가 정사각이라 박스도 정사각이어야 원래 비율대로 들어간다.
+   cx/cy/z는 자리와 앞뒤만 정한다. */
 const LOOK_SLOT = {
-  '아우터':   { cx: 44, cy: 39, w: 58, h: 58, z: 1 },
-  '상의':     { cx: 50, cy: 28, w: 48, h: 40, z: 3 },
-  '하의':     { cx: 50, cy: 66, w: 48, h: 50, z: 2 },
-  '스커트':   { cx: 50, cy: 66, w: 46, h: 42, z: 2 },
-  '원피스':   { cx: 50, cy: 50, w: 56, h: 68, z: 2 },
-  '신발':     { cx: 72, cy: 84, w: 34, h: 24, z: 4 },
-  '가방':     { cx: 78, cy: 48, w: 28, h: 34, z: 4 },
-  '모자':     { cx: 78, cy: 22, w: 24, h: 24, z: 5 },
-  '소품':     { cx: 22, cy: 22, w: 22, h: 22, z: 5 },
-  '액세서리': { cx: 78, cy: 22, w: 24, h: 24, z: 5 }, // 구버전 데이터 호환
+  '아우터':   { cx: 42, cy: 38, size: 64, z: 1 },
+  '상의':     { cx: 50, cy: 26, size: 57, z: 3 },
+  '하의':     { cx: 50, cy: 59, size: 86, z: 2 },
+  '스커트':   { cx: 50, cy: 60, size: 55, z: 2 },
+  '원피스':   { cx: 50, cy: 51, size: 95, z: 2 },
+  // 소품은 가운데 옷을 둘러싸도록 네 귀퉁이에 흩어 놓는다. 한쪽에 몰리면 코디가 기울어 보인다.
+  '신발':     { cx: 76, cy: 86, size: 35, z: 4 },
+  '가방':     { cx: 19, cy: 60, size: 42, z: 4 },
+  '모자':     { cx: 80, cy: 20, size: 37, z: 5 },
+  '소품':     { cx: 20, cy: 20, size: 26, z: 5 },
+  '액세서리': { cx: 80, cy: 20, size: 37, z: 5 }, // 구버전 데이터 호환
 };
-const LOOK_SCALE = 1.25;
+const LOOK_SCALE = 1;
 
 function lookJitterRot(id) {
   // 아이템별 고정 ±5° 지터 (리렌더해도 동일)
@@ -68,11 +78,10 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         if (!hasSide && ['상의', '하의', '스커트', '아우터', '원피스'].includes(it.category)) {
           cx = 50 + n * 4;
         }
-        const w = Math.min(92, base.w * scale);
-        const h = Math.min(92, base.h * scale);
+        const size = Math.min(100, base.size * scale);
         const rot = lookJitterRot(it.id);
         const frame = {
-          position: 'absolute', left: cx + '%', top: cy + '%', width: w + '%', height: h + '%',
+          position: 'absolute', left: cx + '%', top: cy + '%', width: size + '%', aspectRatio: '1',
           transform: `translate(-50%,-50%) rotate(${rot}deg)`, zIndex: base.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
@@ -286,33 +295,40 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
         </p>
       </div>
 
-      {/* 고른 것 미리보기 — 무엇을 담았는지 스크롤 없이 항상 보이게 */}
-      {picked.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '14px 20px 2px', WebkitOverflowScrolling: 'touch' }}>
-          {picked.map((it) => (
-            <button key={it.id} type="button" onClick={() => toggle(it.id)} aria-label={`${it.name} 빼기`}
-              style={{ flex: 'none', width: 52, position: 'relative', background: 'transparent', padding: 0 }}>
-              <Thumb item={it} radius="var(--r-sm)" />
-              <span style={{
-                position: 'absolute', right: -4, top: -4, width: 18, height: 18, borderRadius: '50%',
-                background: 'var(--ink)', color: 'var(--surface)', display: 'grid', placeItems: 'center',
-              }}>
-                <Icon name="x" size={11} stroke={3} />
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 고른 것 미리보기 — 비어 있을 때도 자리를 지켜서, 고르는 동안 시트가 들썩이지 않게 한다 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, height: 60,
+        margin: '10px 0 0', padding: '4px 20px',
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      }}>
+        {picked.length === 0 ? (
+          <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>고른 아이템이 여기에 담겨요</span>
+        ) : picked.map((it) => (
+          <button key={it.id} type="button" onClick={() => toggle(it.id)} aria-label={`${it.name} 빼기`}
+            style={{ flex: 'none', width: 52, position: 'relative', background: 'transparent', padding: 0 }}>
+            <Thumb item={it} radius="var(--r-sm)" />
+            <span style={{
+              position: 'absolute', right: -4, top: -4, width: 18, height: 18, borderRadius: '50%',
+              background: 'var(--ink)', color: 'var(--surface)', display: 'grid', placeItems: 'center',
+            }}>
+              <Icon name="x" size={11} stroke={3} />
+            </span>
+          </button>
+        ))}
+      </div>
 
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '14px 20px 10px', WebkitOverflowScrolling: 'touch' }}>
         {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
       </div>
 
-      <div style={{ maxHeight: '38vh', overflowY: 'auto', padding: '2px 20px 6px', WebkitOverflowScrolling: 'touch' }}>
+      {/* 높이 고정 — 분류마다 담긴 개수가 달라도 시트 크기는 '전체' 기준 그대로 둔다 */}
+      <div style={{ height: '38vh', overflowY: 'auto', padding: '2px 20px 12px', WebkitOverflowScrolling: 'touch' }}>
         {shown.length === 0 ? (
-          <p style={{ margin: '18px 0 22px', textAlign: 'center', fontSize: 13, color: 'var(--ink-3)' }}>이 분류에 담긴 아이템이 없어요.</p>
+          <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)' }}>이 분류에 담긴 아이템이 없어요.</p>
+          </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, alignContent: 'start' }}>
             {shown.map((it) => {
               const on = sel.includes(String(it.id));
               return (
@@ -339,7 +355,7 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
         )}
       </div>
 
-      <div style={{ padding: '12px 20px 6px', borderTop: '1px solid var(--line)' }}>
+      <div style={{ padding: 'var(--s4) 20px 6px', borderTop: '1px solid var(--line)' }}>
         <input className="lb-input" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="코디 이름 (비워두면 '내가 만든 코디')" aria-label="코디 이름"
           style={{
@@ -347,13 +363,15 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
             background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
             outline: 'none', boxSizing: 'border-box',
           }} />
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 'var(--s5)' }}>
           <Btn full size="lg" icon="bookmark" disabled={!valid}
             onClick={() => { onSave(sel, name); onClose(); }}>룩북에 저장</Btn>
         </div>
-        {need ? (
-          <p style={{ margin: '9px 0 2px', textAlign: 'center', fontSize: 12, color: 'var(--ink-3)' }}>{need}</p>
-        ) : null}
+        {/* 안내 문구 자리는 비워도 남겨둔다 — 조건을 채웠을 때 버튼이 아래로 튀지 않게 */}
+        <p style={{
+          margin: '9px 0 2px', height: 15, lineHeight: '15px',
+          textAlign: 'center', fontSize: 12, color: 'var(--ink-3)',
+        }}>{need}</p>
       </div>
     </BottomSheet>
   );
