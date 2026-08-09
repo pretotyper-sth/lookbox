@@ -151,6 +151,7 @@ const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
   avatar: '', // 마이페이지 프로필 사진 (data URL)
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
+  modelLook: false,    // 코디를 프로필 사진 얼굴의 모델이 입은 전신 컷으로 — 더 비싸서 기본 off
 };
 
 Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });

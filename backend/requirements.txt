@@ -6,3 +6,4 @@ pillow
 supabase
 python-dotenv
 requests
+truststore

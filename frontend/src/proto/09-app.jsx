@@ -487,6 +487,101 @@ function App() {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
+  // PC에서 모바일 폭을 미리 볼 때도 손가락처럼 마우스로 끌어 스크롤한다.
+  // 기본 브라우저는 이미지 드래그/텍스트 선택을 먼저 시작해 "걸렸다가 움직이는" 느낌이
+  // 나므로, 실제 스크롤 가능한 축을 찾은 뒤 6px 이상 움직였을 때만 드래그로 전환한다.
+  useEffect(() => {
+    const root = shellRef.current;
+    if (wide || !root) return undefined;
+    let drag = null;
+    let suppressClick = false;
+    let raf = 0;
+    let clickTimer = 0;
+
+    const findScroller = (start, axis) => {
+      let node = start instanceof Element ? start : start.parentElement;
+      while (node && root.contains(node)) {
+        const style = getComputedStyle(node);
+        const overflow = axis === 'x' ? style.overflowX : style.overflowY;
+        const hasRoom = axis === 'x'
+          ? node.scrollWidth > node.clientWidth + 1
+          : node.scrollHeight > node.clientHeight + 1;
+        if ((overflow === 'auto' || overflow === 'scroll') && hasRoom) return node;
+        if (node === root) break;
+        node = node.parentElement;
+      }
+      return null;
+    };
+    const paint = (state) => {
+      raf = 0;
+      if (state.axis === 'x') state.xEl.scrollLeft = state.left - (state.x - state.startX);
+      else if (state.axis === 'y') state.yEl.scrollTop = state.top - (state.y - state.startY);
+    };
+    const onDown = (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const xEl = findScroller(e.target, 'x');
+      const yEl = findScroller(e.target, 'y');
+      if (!xEl && !yEl) return;
+      drag = {
+        startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
+        left: xEl ? xEl.scrollLeft : 0, top: yEl ? yEl.scrollTop : 0,
+        xEl, yEl, axis: null,
+      };
+    };
+    const onMove = (e) => {
+      if (!drag || e.pointerType !== 'mouse') return;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (!drag.axis) {
+        if (Math.hypot(dx, dy) < 6) return;
+        drag.axis = drag.xEl && Math.abs(dx) > Math.abs(dy) ? 'x' : (drag.yEl ? 'y' : 'x');
+        suppressClick = true;
+        root.classList.add('lb-mouse-dragging');
+      }
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      e.preventDefault();
+      if (!raf) {
+        const state = drag;
+        raf = requestAnimationFrame(() => paint(state));
+      }
+    };
+    const finish = () => {
+      if (!drag) return;
+      drag = null;
+      root.classList.remove('lb-mouse-dragging');
+      if (suppressClick) {
+        clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => { suppressClick = false; }, 80);
+      }
+    };
+    const onClick = (e) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const stopNativeDrag = (e) => e.preventDefault();
+
+    root.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    root.addEventListener('click', onClick, true);
+    root.addEventListener('dragstart', stopNativeDrag);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      clearTimeout(clickTimer);
+      root.classList.remove('lb-mouse-dragging');
+      root.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      root.removeEventListener('click', onClick, true);
+      root.removeEventListener('dragstart', stopNativeDrag);
+    };
+  }, [wide, onboarded]);
 
   // ---- tweak: reseed wardrobe (skipped in URL-driven showcase) ----
   const firstWs = useRef(true);
@@ -620,6 +715,17 @@ function App() {
   const go = (id) => { setView(null); setTab(id); if (!isShowcase) persistTab(id); };
   const back = () => setView(null);
 
+  // 좌상단 로고 = 홈. 옷장으로 보내면서 새로 불러온다. 이미 옷장이어도 같은 주소로
+  // replace하면 그대로 새로고침된다(탭은 ?tab= 으로 복원되므로 자리를 잃지 않는다).
+  const goHome = () => {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('tab', 'wardrobe');
+      u.hash = '';
+      location.replace(u.pathname + u.search);
+    } catch (e) { location.reload(); }
+  };
+
   const openAdd = (mode, extra = {}) => setAddSheet({ open: true, mode, ...extra });
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false, replaceItem: null }));
   const startCombo = () => openAdd('anchor');
@@ -671,6 +777,19 @@ function App() {
     }
   };
 
+  const setModelLook = (on, avatarOverride) => {
+    const avatar = avatarOverride || prefs.avatar || '';
+    if (on && !avatar) return false;
+    // 토글 팝업에서 받은 사진도 같은 prefs.avatar에 저장한다. 마이페이지 프로필과
+    // AI 생성 요청이 별도 사본을 갖지 않아 어느 쪽에서 바꿔도 즉시 함께 바뀐다.
+    const np = { ...prefs, avatar, modelLook: !!on };
+    setPrefs(np);
+    persistPrefs(np);
+    // 이미 받아둔 코디는 그대로 둔다. 다음 '코디 추천받기'부터 바뀐 방식으로 만든다.
+    showToast(on ? '다음 추천부터 착장 이미지로 보여드려요' : '착장 이미지를 껐어요');
+    return true;
+  };
+
   const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
     const force = !!(opts && opts.force);
     const quiet = !!(opts && opts.quiet);
@@ -679,6 +798,11 @@ function App() {
     syncAllFromWardrobe(items, archived);
     pruneDailyAgainstOwned(items);
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
+    // AI 착장 이미지 — 토글이 켜져 있고 프로필 사진이 있을 때만. 얼굴을 서버에 두지
+    // 않아서(마이페이지 prefs에만 있음) 요청마다 같이 실어 보낸다.
+    const modelLook = (prefs.modelLook && prefs.avatar)
+      ? { model_look: true, face_data_url: prefs.avatar }
+      : {};
     if (!force) {
       // 오늘 이미 추천한 이력이 있으면 API 없이 기존 코디만 보여준다.
       if (LB_DATA.DAILY.length > 0) {
@@ -733,6 +857,7 @@ function App() {
             style,
             styles: preferredStyles,
             exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+            ...modelLook,
           }),
         });
         stampOutfitStyle(payload.outfits);
@@ -761,6 +886,7 @@ function App() {
           max_combos: baseCount,
           style,
           styles: preferredStyles,
+          ...modelLook,
         }),
       });
       stampOutfitStyle(payload.outfits);
@@ -872,16 +998,32 @@ function App() {
     const outfitId = 'manual-' + Date.now().toString(36);
     const name = (label || '').trim() || '내가 만든 코디';
     LB_DATA.OUTFIT_BY_ID[outfitId] = {
-      id: outfitId, label: name, mood: '직접 만든 코디', styles: [], itemIds: ids, lookImg: null,
+      // manual: 추천에서 저장한 코디와 달리 사본이 없다. 룩북에서 빼면 그걸로 끝이라
+      // 확인 문구를 다르게 보여준다.
+      id: outfitId, label: name, mood: '직접 만든 코디', styles: [], itemIds: ids, lookImg: null, manual: true,
     };
     setSavedLooks((arr) => [{ id: 'look-' + outfitId, outfitId, label: name, savedAt: '방금' }, ...arr]);
     showToast('룩북에 저장했어요', 'bookmark');
   };
 
-  // 룩북 저장된 코디를 해제할 때는 확인을 받는다 (룩북에서도 사라지므로)
+  // 룩북 저장된 코디를 해제할 때는 확인을 받는다 (룩북에서도 사라지므로).
+  // after: 뺀 뒤에 할 일. 상세 화면에서 지금 보던 코디를 빼면 다음 코디로 넘겨야 한다.
   const [unsaveTarget, setUnsaveTarget] = useState(null);
-  const requestUnsave = (outfitId) => setUnsaveTarget(outfitId);
-  const confirmUnsave = () => { if (unsaveTarget) saveOutfit(unsaveTarget); setUnsaveTarget(null); };
+  const requestUnsave = (outfitId, after) => setUnsaveTarget({ outfitId, after });
+  const confirmUnsave = () => {
+    if (unsaveTarget) {
+      saveOutfit(unsaveTarget.outfitId);
+      if (unsaveTarget.after) unsaveTarget.after();
+    }
+    setUnsaveTarget(null);
+  };
+  // 여러 개를 한 번에 — 확인은 부르는 화면에서 받는다(옷장 일괄 삭제와 같은 흐름)
+  const bulkUnsave = (lookIds) => {
+    const ids = lookIds || [];
+    if (!ids.length) return;
+    setSavedLooks((arr) => arr.filter((l) => !ids.includes(l.id)));
+    showToast(`${ids.length}개를 룩북에서 뺐어요`);
+  };
   // 저장/해제 토글 — 저장 안 됬으면 바로 저장, 저장된 건 확인 후 해제
   const toggleSaveOutfit = (outfitId) => {
     if (savedLooks.some((l) => l.outfitId === outfitId)) requestUnsave(outfitId);
@@ -1162,13 +1304,14 @@ function App() {
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
+    modelLook: !!prefs.modelLook, setModelLook,
     dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, createManualLook, openDetail, addToWardrobe, back,
-    openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go,
+    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
+    openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -1223,7 +1366,7 @@ function App() {
       {wide ? (
         <>
           <aside className="lb-sidebar">
-            <div style={{ padding: '4px 8px 22px' }}><Wordmark size={22} /></div>
+            <div style={{ padding: '4px 8px 22px' }}><Wordmark size={22} onClick={goHome} /></div>
             <button className={'lb-navitem' + (tab === 'wardrobe' && !focused ? ' on' : '')} onClick={() => go('wardrobe')}>
               <Icon name="hanger" size={20} fill={tab === 'wardrobe' && !focused ? 'currentColor' : 'none'} stroke={tab === 'wardrobe' && !focused ? 0 : 1.7} /> 옷장
             </button>
@@ -1334,23 +1477,33 @@ function App() {
       />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
 
-      {unsaveTarget && (
+      {unsaveTarget && (() => {
+        // 직접 만든 코디는 다른 화면에 사본이 없어서, 여기서 빼면 영영 사라진다.
+        const manual = !!(LB_DATA.OUTFIT_BY_ID[unsaveTarget.outfitId] || {}).manual;
+        return (
           <div onClick={() => setUnsaveTarget(null)} style={{ position: 'absolute', inset: 0, zIndex: 95, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(30,27,21,0.45)' }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 340, background: 'var(--surface)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--pop-shadow)', padding: '24px 22px', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: 'var(--accent)' }}>
-                <Icon name="heart" size={22} fill="currentColor" stroke={0} />
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: manual ? '#B0573C' : 'var(--accent)' }}>
+                <Icon name={manual ? 'trash' : 'heart'} size={22} fill={manual ? 'none' : 'currentColor'} stroke={manual ? 2 : 0} />
               </div>
-              <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.3 }}>룩북에서 해제할까요?</div>
-              <p style={{ margin: '9px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-                좋아요를 해제하면 룩북 목록에서도 사라져요.
+              <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.3 }}>
+                {manual ? '이 코디를 지울까요?' : '룩북에서 해제할까요?'}
+              </div>
+              <p style={{ margin: '9px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
+                {manual
+                  ? <>직접 만든 코디라 다른 곳에 남지 않아요. <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>
+                  : '좋아요를 해제하면 룩북 목록에서도 사라져요.'}
               </p>
               <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
                 <Btn variant="soft" onClick={() => setUnsaveTarget(null)} style={{ flex: 1 }}>유지</Btn>
-                <Btn icon="heart" onClick={confirmUnsave} style={{ flex: 1 }}>해제하기</Btn>
+                {manual
+                  ? <Btn icon="trash" onClick={confirmUnsave} style={{ flex: 1, background: '#B0573C', color: '#fff' }}>지우기</Btn>
+                  : <Btn icon="heart" onClick={confirmUnsave} style={{ flex: 1 }}>해제하기</Btn>}
               </div>
             </div>
           </div>
-      )}
+        );
+      })()}
 
       {editPrefs && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 80, background: 'var(--ivory)' }}>

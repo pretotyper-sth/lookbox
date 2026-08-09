@@ -133,8 +133,8 @@ function SmartImg({ src, alt, style, fallback }) {
       src={url}
       alt={alt}
       loading="eager"
-      decoding="sync"
-      fetchpriority="high"
+      decoding="async"
+      fetchPriority="auto"
       style={style}
       onError={() => {
         if (attempt >= 3) { setDead(true); return; }

@@ -61,6 +61,37 @@ function addPreconnect(url) {
   }
 }
 
+// 토큰이 만료됐거나 다른 탭이 먼저 갱신해 무효가 됐을 때 익명 세션을 새로 판다.
+// 여기 세션은 전부 익명이라 새로 파도 잃을 계정이 없다.
+//
+// 기존 세션을 먼저 지우지 않는다. 익명 로그인은 Supabase가 IP 단위로 횟수를 제한해서
+// (429) 실패할 수 있는데, 미리 지워 두면 그나마 있던 세션까지 잃고 화면이 통째로 빈다.
+// 같은 이유로 한 번 실패하면 그 페이지에서는 더 시도하지 않는다 — 계속 두드려 봐야
+// 제한만 더 깎는다. 부팅 직후엔 요청이 한꺼번에 나가므로 겹치는 갱신은 하나로 묶는다.
+let renewInFlight = null
+let renewBlocked = false
+async function renewAnonymousSession() {
+  if (!supabase || renewBlocked) return null
+  if (renewInFlight) return renewInFlight
+  renewInFlight = (async () => {
+    const { data, error } = await supabase.auth.signInAnonymously()
+    if (error) {
+      renewBlocked = true
+      const hint = error.status === 429
+        ? ' — 익명 로그인 횟수 제한입니다. 잠시 뒤 다시 시도하세요.'
+        : ''
+      console.error(`[LOOKBOX] Anonymous re-sign-in failed: ${error.status} ${error.message}${hint}`)
+      return null
+    }
+    return data.session?.access_token || null
+  })()
+  try {
+    return await renewInFlight
+  } finally {
+    renewInFlight = null
+  }
+}
+
 function installFetchBridge() {
   const original = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
@@ -68,10 +99,19 @@ function installFetchBridge() {
     if (!configured || !url.startsWith('/api/live')) {
       return original(input, init)
     }
-    const headers = new Headers(init.headers || undefined)
+    const send = (token) => {
+      const headers = new Headers(init.headers || undefined)
+      if (token) headers.set('Authorization', `Bearer ${token}`)
+      return original(`${API_BASE}${url}`, { ...init, headers })
+    }
     const token = await ensureToken()
-    if (token) headers.set('Authorization', `Bearer ${token}`)
-    return original(`${API_BASE}${url}`, { ...init, headers })
+    const res = await send(token)
+    // 401은 대부분 토큰이 죽은 것이다. 그냥 두면 탭을 열어둔 사이 세션이 만료됐을 때
+    // 모든 요청이 계속 401로 떨어지고 화면이 빈 채로 남는다. 한 번만 다시 인증해 본다.
+    if (res.status !== 401) return res
+    const current = await ensureToken()
+    const fresh = current && current !== token ? current : await renewAnonymousSession()
+    return fresh ? send(fresh) : res
   }
 }
 

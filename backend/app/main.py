@@ -16,8 +16,15 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+import truststore
 
 from dotenv import load_dotenv
+
+# HTTPS 검증에 OS 신뢰 저장소를 쓴다. 사내 프록시가 TLS를 가로채는 망에서는 인증서
+# 체인에 사설 루트가 끼는데, certifi 번들만 보는 httpx는 이걸 모른다. 그러면 Supabase·
+# OpenAI 호출이 전부 CERTIFICATE_VERIFY_FAILED로 끊기고, 토큰 검증 실패로 이어져
+# 화면에는 멀쩡한 세션이 invalid_session으로 보인다. 클라이언트를 만들기 전에 실행해야 한다.
+truststore.inject_into_ssl()
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -1361,6 +1368,105 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
         return None
 
 
+def _decode_data_url(data_url: str | None) -> bytes | None:
+    """마이페이지 프로필 사진은 data URL로 넘어온다(서버에 따로 저장하지 않음)."""
+    if not data_url or "," not in data_url:
+        return None
+    try:
+        return base64.b64decode(data_url.split(",", 1)[1])
+    except Exception:
+        return None
+
+
+def _model_look_board(face_bytes: bytes, items: list[dict[str, Any]]) -> bytes:
+    """참고 보드 — 왼쪽 위에 얼굴, 나머지 칸에 이 코디의 옷."""
+    board = Image.new("RGB", (1024, 1024), (242, 241, 238))
+    face = Image.open(io.BytesIO(face_bytes)).convert("RGB")
+    face.thumbnail((432, 432))
+    board.paste(face, (40, 40))
+    # 얼굴 자리(왼쪽 위)를 뺀 ㄱ자 영역에 옷을 채운다.
+    slots = [
+        (536, 40, 984, 488), (40, 536, 344, 840), (360, 536, 664, 840),
+        (680, 536, 984, 840), (40, 856, 344, 1000), (360, 856, 664, 1000),
+    ]
+    for slot, item in zip(slots, items):
+        try:
+            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(item["storage_path"])
+            image = Image.open(io.BytesIO(raw)).convert("RGBA")
+        except Exception:
+            continue
+        x1, y1, x2, y2 = slot
+        image.thumbnail((x2 - x1, y2 - y1))
+        board.paste(image, (x1 + ((x2 - x1) - image.width) // 2, y1 + ((y2 - y1) - image.height) // 2), image)
+    buf = io.BytesIO()
+    board.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+_MODEL_LOOK_PROMPT = """왼쪽 위 인물 사진의 얼굴을 그대로 유지한 채, 나머지 참고 이미지의 옷을 모두 입은 전신 패션 화보를 만드세요.
+- 인물 한 명, 정면 전신. 머리끝부터 신발까지 잘리지 않게
+- 참고한 옷만 착용하고, 색·형태·프린트·디테일을 바꾸지 마세요
+- 배경은 #F2F1EE 단색 스튜디오, 자연스러운 조명
+- 텍스트, 로고, 워터마크, 프레임, 다른 사람 추가 금지
+"""
+
+
+def generate_model_look_image(
+    user_id: str, item_ids: list[str], items: list[dict[str, Any]], face_bytes: bytes
+) -> str | None:
+    """프로필 사진 얼굴을 쓴 모델이 이 코디를 입은 전신 컷.
+
+    플랫레이보다 비싼 경로라 마이페이지 토글이 켜진 사용자가 '코디 추천받기'를
+    눌렀을 때만 탄다. 캐시 키에 얼굴 지문을 섞어, 프로필 사진을 바꾸면 같은
+    조합이어도 다시 만든다(예전 얼굴이 남아 있으면 더 이상하다).
+    """
+    face_sig = hashlib.sha256(face_bytes).hexdigest()[:8]
+    key = f"model-{look_cache_key(item_ids)}-{face_sig}"
+    cached = (
+        supabase_admin.table("generated_images")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("cache_key", key)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if cached:
+        return cached[0].get("image_url")
+    if not AI_TEST_MODE and (
+        not openai_client or not charge_credit(user_id, "model_look", {"cache_key": key})
+    ):
+        return None
+    try:
+        board = _model_look_board(face_bytes, items)
+        if AI_TEST_MODE:
+            print("[model-look] TEST MODE — 참고 보드만, AI 미호출 ($0)", flush=True)
+            out = board
+        else:
+            source = io.BytesIO(board)
+            source.name = "model-look-reference.png"
+            result = openai_client.images.edit(
+                model=OPENAI_IMAGE_MODEL,
+                image=source,
+                prompt=_MODEL_LOOK_PROMPT,
+                size="1024x1536",
+                quality=OPENAI_IMAGE_QUALITY,
+            )
+            out = base64.b64decode(result.data[0].b64_json)
+        storage_path = f"{user_id}/looks/{key}.png"
+        image_url = upload_bytes(storage_path, out, "image/png")
+        supabase_admin.table("generated_images").insert(
+            {"user_id": user_id, "cache_key": key, "kind": "model_look", "storage_path": storage_path, "image_url": image_url}
+        ).execute()
+        if not AI_TEST_MODE:
+            log_ai_usage(user_id, "model_look", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
+        return image_url
+    except Exception as exc:  # noqa: BLE001
+        print(f"[model-look] skip: {exc}", flush=True)
+        return None
+
+
 DEPLOY_REV = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "dev"
 
 
@@ -1622,6 +1728,9 @@ class LiveCoordinate(BaseModel):
     anchor_id: str | None = None
     # 이미 보여준 조합(item id 목록) — 더 추천 시 중복 방지
     exclude_item_ids: list[list[str]] = []
+    # 마이페이지 'AI 착장 이미지' 토글. 켜져 있으면 코디마다 전신 컷을 만든다(비용 큼).
+    model_look: bool = False
+    face_data_url: str | None = None
 
 
 class LiveStatus(BaseModel):
@@ -2893,6 +3002,19 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             }
         )
     _record_recommendation_timing(user.id, len(pool), len(outfits), (time.perf_counter() - t0) * 1000)
+
+    # AI 착장 이미지 — 한 장에 20~30초라 4개를 순서대로 만들면 2분이 넘는다. 같이 돌린다.
+    face_bytes = _decode_data_url(body.face_data_url) if body.model_look else None
+    if face_bytes and outfits:
+        def _one(outfit: dict[str, Any]) -> str | None:
+            members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
+            return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
+
+        with ThreadPoolExecutor(max_workers=4) as pool_ex:
+            for outfit, url in zip(outfits, pool_ex.map(_one, outfits)):
+                if url:
+                    outfit["lookImg"] = url
+
     return {"outfits": outfits, "items": [live_item_payload(row) for row in used.values()]}
 
 

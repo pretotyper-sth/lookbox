@@ -781,4 +781,5 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   );
 }
 
-Object.assign(window, { Onboarding, Landing, Login });
+// 프로필 사진 등록도 퍼스널 컬러와 같은 얼굴 판정을 쓰도록 공유한다.
+Object.assign(window, { Onboarding, Landing, Login, countFacesInImage });

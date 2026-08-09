@@ -10,16 +10,25 @@ const { useState: useS, useEffect: useE, useRef: useR } = React;
 /* ============================================================
    Layout chrome
    ============================================================ */
-function Wordmark({ size = 19 }) {
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, userSelect: 'none', height: 24 }}>
+// onClick — 앱 안에서는 홈(옷장) 버튼. 가입 전 화면(랜딩·로그인·온보딩)은 넘기지 않아 그냥 로고로 남는다.
+function Wordmark({ size = 19, onClick }) {
+  const box = { display: 'inline-flex', alignItems: 'center', gap: 5, userSelect: 'none', height: 24 };
+  const mark = (
+    <>
       <span style={{ fontWeight: 800, fontSize: size, letterSpacing: '-0.03em', color: 'var(--ink)', lineHeight: 1 }}>LOOK</span>
       <span style={{
         fontWeight: 800, fontSize: size - 2, letterSpacing: '-0.01em', lineHeight: 1,
         background: 'var(--accent)', color: 'var(--accent-ink)',
         padding: '3px 7px', borderRadius: 7,
       }}>BOX</span>
-    </div>
+    </>
+  );
+  if (!onClick) return <div style={box}>{mark}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-label="옷장으로 이동"
+      style={{ ...box, padding: 0, background: 'transparent', border: 'none', cursor: 'pointer' }}>
+      {mark}
+    </button>
   );
 }
 
@@ -95,7 +104,7 @@ function WardrobeScreen({ ctx }) {
   const {
     items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
-    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, goHome,
   } = ctx;
   const [cat, setCat] = useS('전체');
   const [seasonFilter, setSeasonFilter] = useS([]); // multi-select season ids, [] = 전체
@@ -129,7 +138,7 @@ function WardrobeScreen({ ctx }) {
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<Wordmark />} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
+        {!wide && <TopBar left={<Wordmark onClick={goHome} />} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
         <EmptyState
           icon="hanger"
           iconSize={40}
@@ -197,7 +206,7 @@ function WardrobeScreen({ ctx }) {
           <TopBar
             sticky={false}
             border={false}
-            left={<Wordmark />}
+            left={<Wordmark onClick={goHome} />}
             right={(
               <>
                 {(count > 0 || archived.length > 0) && (

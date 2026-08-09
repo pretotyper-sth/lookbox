@@ -87,23 +87,40 @@ function readAvatarFile(file) {
   });
 }
 
-function ProfileAvatar({ src, size = 60, onChange }) {
+function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
   const inputRef = React.useRef(null);
+  const [checking, setChecking] = useMp(false);
   const onPick = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file || !onChange) return;
+    setChecking(true);
     try {
       const dataUrl = await readAvatarFile(file);
+      const faces = window.countFacesInImage
+        ? await window.countFacesInImage(dataUrl)
+        : -1;
+      if (faces !== 1) {
+        const message = faces > 1
+          ? '한 명의 얼굴만 나온 사진을 선택해주세요.'
+          : faces === 0
+            ? '얼굴이 잘 보이는 정면 사진을 선택해주세요.'
+            : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.';
+        if (onInvalid) onInvalid(message);
+        return;
+      }
       onChange(dataUrl);
     } catch (err) {
-      /* noop — toast는 상위 setAvatar에서 */
+      if (onInvalid) onInvalid(err.message || '사진을 확인하지 못했어요.');
+    } finally {
+      setChecking(false);
     }
   };
   return (
     <button
       type="button"
       onClick={() => inputRef.current && inputRef.current.click()}
+      disabled={checking}
       aria-label="프로필 사진 변경"
       style={{
         position: 'relative', width: size, height: size, borderRadius: '50%', flex: 'none',
@@ -116,7 +133,7 @@ function ProfileAvatar({ src, size = 60, onChange }) {
       <input ref={inputRef} type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} />
       {src
         ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        : <Icon name="user" size={Math.round(size * 0.47)} stroke={1.6} />}
+        : <Icon name={checking ? 'sparkle' : 'user'} size={Math.round(size * 0.47)} stroke={1.6} />}
       <span style={{
         position: 'absolute', right: 2, bottom: 2, width: Math.max(22, Math.round(size * 0.34)), height: Math.max(22, Math.round(size * 0.34)),
         borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -129,18 +146,67 @@ function ProfileAvatar({ src, size = 60, onChange }) {
   );
 }
 
-/* ---- action row ---- */
-function ActionRow({ icon, label, onClick, danger, last, right }) {
+function ModelLookAvatarSheet({ open, onClose, onSelect }) {
+  const [error, setError] = useMp('');
+  useMe(() => { if (open) setError(''); }, [open]);
   return (
-    <button onClick={onClick} className="lb-navitem" style={{
+    <BottomSheet open={open} onClose={onClose}>
+      <div style={{ padding: '6px 24px 26px', textAlign: 'center' }}>
+        <div style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.3 }}>AI 착장에 사용할 사진</div>
+        <p style={{
+          margin: '9px auto 20px', maxWidth: 300, fontSize: 13.5,
+          color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all',
+        }}>
+          프로필 사진 얼굴로 코디를 입은 모습을 만들어요.<br />
+          단, 일반 추천보다 생성에 시간이 더 걸려요.
+        </p>
+        {error && (
+          <div style={{
+            margin: '-8px auto 16px', maxWidth: 300, padding: '9px 12px',
+            borderRadius: 'var(--r-sm)', background: 'color-mix(in srgb, #B0573C 10%, transparent)',
+            color: '#9D472F', fontSize: 12, lineHeight: 1.45, fontWeight: 600,
+          }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <ProfileAvatar
+            size={96}
+            onInvalid={setError}
+            onChange={(dataUrl) => { setError(''); onSelect(dataUrl); }}
+          />
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700 }}>사진을 눌러 등록</div>
+        <p style={{
+          margin: '7px auto 0', maxWidth: 300, fontSize: 11.5,
+          color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all',
+        }}>
+          등록한 사진은 마이페이지 프로필에도 동일하게 표시돼요.
+        </p>
+        <Btn variant="soft" onClick={onClose} style={{ width: '100%', marginTop: 22 }}>취소</Btn>
+      </div>
+    </BottomSheet>
+  );
+}
+
+/* ---- action row ---- */
+// hint — 켜기 전에 알아야 할 게 있는 항목(비용·조건)에만 한 줄 덧붙인다.
+function ActionRow({ icon, label, onClick, danger, last, right, hint }) {
+  // 스위치는 자체 버튼이므로 바깥을 또 button으로 감싸지 않는다.
+  const Row = right ? 'div' : 'button';
+  return (
+    <Row onClick={right ? undefined : onClick} className="lb-navitem" style={{
       display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
       padding: '13px 12px', borderRadius: 'var(--r-md)', background: 'transparent',
       color: danger ? '#B0573C' : 'var(--ink)', fontSize: 14, fontWeight: 600,
     }}>
-      <Icon name={icon} size={19} stroke={1.8} />
-      <span style={{ flex: 1 }}>{label}</span>
+      <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {label}
+        {hint && <span style={{ display: 'block', marginTop: 3, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)', lineHeight: 1.45 }}>{hint}</span>}
+      </span>
       {right || (!danger && <Icon name="chevR" size={18} stroke={1.8} style={{ color: 'var(--ink-3)' }} />)}
-    </button>
+    </Row>
   );
 }
 
@@ -166,10 +232,11 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled } = ctx;
+  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
+  const [modelPhoto, setModelPhoto] = useMp(false);
 
   const styleNames = (prefs.styles || []).map((id) => (LB_DATA.STYLES.find((s) => s.id === id) || {}).name).filter(Boolean);
   const pc = LB_DATA.PERSONAL_COLORS.find((p) => p.id === prefs.personalColor);
@@ -203,6 +270,21 @@ function MyPageScreen({ ctx }) {
     </>
   );
 
+  const toggleModelLook = () => {
+    if (modelLook) { setModelLook && setModelLook(false); return; }
+    if (prefs.avatar) { setModelLook && setModelLook(true); return; }
+    setModelPhoto(true);
+  };
+
+  // 얼굴이 없을 때는 막는 대신 사진 등록 흐름을 바로 연다.
+  const modelLookRow = (
+    <ActionRow
+      icon="user"
+      label="AI 캐릭터 착장 이미지로 보기"
+      right={<Switch on={!!modelLook} onToggle={toggleModelLook} />}
+    />
+  );
+
   const settingsCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
@@ -211,15 +293,16 @@ function MyPageScreen({ ctx }) {
         label="오늘의 추천 코디"
         right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
       />
+      {modelLookRow}
       <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
-      <ActionRow icon="help" label="고객센터" onClick={() => {}} />
-      <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
     </div>
   );
 
   const accountCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
-      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>계정</div>
+      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>계정 및 지원</div>
+      <ActionRow icon="help" label="고객센터" onClick={() => {}} />
+      <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
       <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
       <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
     </div>
@@ -229,6 +312,14 @@ function MyPageScreen({ ctx }) {
     <>
       <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
+      <ModelLookAvatarSheet
+        open={modelPhoto}
+        onClose={() => setModelPhoto(false)}
+        onSelect={(dataUrl) => {
+          if (setModelLook) setModelLook(true, dataUrl);
+          setModelPhoto(false);
+        }}
+      />
     </>
   );
 
@@ -247,7 +338,7 @@ function MyPageScreen({ ctx }) {
               padding: '20px 22px', marginBottom: 16,
               background: 'var(--surface)', borderRadius: 'var(--r-lg)',
             }}>
-              <ProfileAvatar src={prefs.avatar} size={64} onChange={setAvatar} />
+              <ProfileAvatar src={prefs.avatar} size={64} onChange={setAvatar} onInvalid={(msg) => showToast(msg, 'camera')} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {prefs.email || '게스트'}
@@ -283,7 +374,7 @@ function MyPageScreen({ ctx }) {
         padding: 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 24px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px var(--gap-header)' }}>
-          <ProfileAvatar src={prefs.avatar} size={60} onChange={setAvatar} />
+          <ProfileAvatar src={prefs.avatar} size={60} onChange={setAvatar} onInvalid={(msg) => showToast(msg, 'camera')} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
           </div>
@@ -296,11 +387,12 @@ function MyPageScreen({ ctx }) {
             label="오늘의 추천 코디"
             right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
           />
+          {modelLookRow}
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
-          <ActionRow icon="help" label="고객센터" onClick={() => {}} />
-          <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
+          <ActionRow icon="help" label="고객센터" onClick={() => {}} />
+          <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
           <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
           <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
         </div>

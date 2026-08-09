@@ -1,16 +1,19 @@
-// 로컬 개발 전용 — 옷장·룩북 시드 토글.
+// 로컬 개발 전용 — 로그인 건너뛰기 + 옷장·룩북 시드 토글.
 //
 // 로컬은 접속할 때마다 새 익명 Supabase 유저라 모든 탭이 비어 있다. 기준 계정의
 // owned 아이템을 현재 유저 밑으로 복제하고(백엔드 /api/live/dev/wardrobe/*),
 // 그 옷장으로 추천 API를 한 번 돌려 룩북 저장분을 만들어 둔다.
 // 오늘 코디는 일부러 비워 둔다 — 실제 추천이 어떻게 불려오는지 그대로 보기 위해서다.
-// 빈 화면 UX를 보고 싶을 때만 버튼으로 전부 비운다.
+//
+// 화면 왼쪽 아래 버튼 하나가 지금 필요한 것만 보여준다.
+//   가입 전 → 로그인 건너뛰기 / 로그인 후 → 데이터 채우기 ↔ 비우기
+// 알아서 채우지 않는다. 눌러야 채워지고, 그래야 버튼 문구와 실제 상태가 어긋나지 않는다.
 //
 // LB_DATA에 직접 쓰므로 03-data.jsx 뒤, 09-app.jsx 앞에서 import해야 한다.
 // 이 파일과 main.jsx의 import 한 줄, backend/app/main.py의 dev 블록만 지우면 제거된다.
 // 프로덕션 번들에는 import.meta.env.DEV 가드 때문에 포함되지 않는다.
 
-const FLAG = 'lb_dev_wardrobe';                 // 'seeded' | 'empty' — 없으면 첫 세션
+const FLAG = 'lb_dev_wardrobe';                 // 'seeded' | 그 외 = 비어 있음
 const CONTENT_KEY = 'lb_dev_content';           // 시드로 만든 코디 재사용(리로드마다 재추천 방지)
 // 09-app.jsx / 06-today.jsx와 같은 키
 const APP_CACHES = ['lb_wardrobe_cache_v1', 'lb_daily_outfits_v3', 'lb_daily_history_v1', CONTENT_KEY];
@@ -72,6 +75,7 @@ async function seed() {
   await api('/api/live/dev/wardrobe/seed', { method: 'POST' });
   dropAppCaches();
   write(FLAG, 'seeded');
+  await buildContent();   // 룩북에 쓸 코디를 지금 만들어 둔다. 화면에 꽂는 건 리로드 후 부팅에서.
 }
 
 async function clear() {
@@ -80,12 +84,26 @@ async function clear() {
   write(FLAG, 'empty');
 }
 
+/** 가입·로그인 화면을 건너뛰고 바로 앱으로. 09-app.jsx의 completeLogin과 같은 결과. */
+function bypassLogin() {
+  const prefs = read('lb_prefs') || { ...((window.LB_DATA || {}).DEFAULT_PREFS || {}) };
+  write('lb_prefs', { ...prefs, email: prefs.email || 'dev@lookbox.local' });
+  // 앱이 문자열 '1'로 읽으므로 JSON으로 감싸지 않는다.
+  try { localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
+}
+
+const isOnboarded = () => {
+  try { return localStorage.getItem('lb_onboarded') === '1'; } catch (e) { return false; }
+};
+const isSeeded = () => read(FLAG) === 'seeded';
+
 function mountButton() {
   const btn = document.createElement('button');
   btn.type = 'button';
   Object.assign(btn.style, {
     // 하단 탭바 + 플로팅 CTA 위로 띄운다.
-    position: 'fixed', left: '12px', bottom: '148px', zIndex: '2147483000',
+    // 팝업·시트(z-index 60+)를 가리지 않되 일반 화면 위에는 남는다.
+    position: 'fixed', left: '12px', bottom: '148px', zIndex: '40',
     padding: '8px 12px', borderRadius: '999px', border: '0', cursor: 'pointer',
     font: '600 12px/1 ui-sans-serif, system-ui, sans-serif', letterSpacing: '-0.01em',
     background: 'rgba(24,22,18,0.82)', color: '#fff', opacity: '0.55',
@@ -94,42 +112,46 @@ function mountButton() {
   btn.onmouseenter = () => { btn.style.opacity = '1'; };
   btn.onmouseleave = () => { btn.style.opacity = '0.55'; };
 
-  const isSeeded = () => read(FLAG) !== 'empty';
-  const paint = () => { btn.textContent = isSeeded() ? 'DEV · 데이터 비우기' : 'DEV · 데이터 복구'; };
+  // 지금 상태에서 할 일 하나만 보여준다: 가입 전이면 로그인, 그다음은 데이터.
+  const label = () => (!isOnboarded() ? 'DEV · 로그인 건너뛰기'
+    : isSeeded() ? 'DEV · 데이터 비우기' : 'DEV · 데이터 채우기');
+  const paint = () => { btn.textContent = label(); };
   paint();
 
   btn.onclick = async () => {
-    const seeded = isSeeded();
     btn.disabled = true;
     btn.textContent = 'DEV · 적용 중…';
     try {
-      if (seeded) await clear();
-      else { await seed(); await buildContent(); }
+      if (!isOnboarded()) bypassLogin();
+      else if (isSeeded()) await clear();
+      else await seed();
       location.reload();
     } catch (e) {
-      console.error('[dev-seed]', e);
-      btn.disabled = false;
-      paint();
+      // 401은 세션 만료(브리지가 다시 인증하므로 새로고침), 404는 dev 라우트 자체가 없는 것.
+      console.error('[dev-seed] 실패:', e.message, '— 404면 backend .env의 DEV_SEED_SOURCE_USER를 확인하세요.');
+      btn.textContent = 'DEV · 실패 · 콘솔 확인';
+      setTimeout(() => { btn.disabled = false; paint(); }, 2000);
     }
   };
 
   document.body.appendChild(btn);
 }
 
-// 앱이 옷장을 부르기 전에 미리 채운다(리로드 불필요).
-// 백엔드에 DEV_SEED_SOURCE_USER가 없으면 404 → 버튼도 띄우지 않는다.
-let enabled = true;
-if (read(FLAG) !== 'empty') {
+// 룩북 저장분은 App state라 서버·로컬 어디에도 남지 않는다. 채워둔 상태면 부팅마다 다시 꽂는다.
+//
+// 단, 꽂기 전에 옷장이 정말 남아 있는지 본다. 백엔드 시드는 지난 익명 세션의 복제본을
+// 함께 걷어내므로, 다른 로컬 탭·브라우저에서 한 번 채우면 이쪽 옷장은 비고 플래그만
+// 'seeded'로 남는다. 그대로 룩북을 꽂으면 옷 없는 빈 카드가 뜨니, 비었으면 안 채운
+// 상태로 되돌려 라이브와 같은 빈 화면을 보여준다.
+if (isSeeded()) {
   try {
-    if (read(FLAG) === null) await seed();
-    applyContent(await buildContent());
+    const { items } = await api('/api/live/wardrobe');
+    if (items && items.length) applyContent(await buildContent());
+    else { dropAppCaches(); write(FLAG, 'empty'); }
   } catch (e) {
-    enabled = false;
-    console.warn('[dev-seed] 비활성 — backend .env의 DEV_SEED_SOURCE_USER를 확인하세요.', e.message);
+    console.warn('[dev-seed] 옷장 확인 실패 — 데이터를 다시 채워주세요.', e.message);
   }
 }
 
-if (enabled) {
-  if (document.body) mountButton();
-  else document.addEventListener('DOMContentLoaded', mountButton, { once: true });
-}
+if (document.body) mountButton();
+else document.addEventListener('DOMContentLoaded', mountButton, { once: true });
