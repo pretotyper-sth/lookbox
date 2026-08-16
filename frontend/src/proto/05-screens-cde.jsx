@@ -30,7 +30,25 @@ const LOOK_SIZE = {
   '신발': 40, '가방': 30, '모자': 28, '소품': 26,
   '액세서리': 28, // 구버전 데이터 호환
 };
-const LOOK_SCALE = 1;
+/* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 상의·하의는 폭 46%에 중심이
+   27/73이라 딱 맞닿아 있었는데, 1.17배면 각 54%가 되어 약 15%(아이템 폭 기준)
+   겹친다 — 요청한 10~15% 범위이고 카드 좌우를 남기지 않고 다 쓴다. */
+const LOOK_SCALE = 1.17;
+
+/* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
+   이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
+   있고, 그 위에 LOOK_SIZE가 또 카테고리별로 줄인다. 신발·모자처럼 캔버스 비율이
+   낮은 항목이 특히 심하다. 캔버스 여백만큼 이미지를 확대해 상쇄하면 크기 조절은
+   LOOK_SIZE 하나로 정리된다. 오래된 데이터가 과확대되지 않게 상한을 둔다. */
+const LOOK_CANVAS_FILL = {
+  '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
+  '신발': 0.62, '가방': 0.74, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
+};
+const LOOK_ZOOM_MAX = 1.35;
+function lookImageZoom(category) {
+  const fill = LOOK_CANVAS_FILL[category] || 0.9;
+  return Math.min(LOOK_ZOOM_MAX, 1 / fill);
+}
 
 /* 4분면 기본 위치(원위치)에서 상·하 간격만 약 90%로 좁힘. */
 const LOOK_SPOT = {
@@ -112,6 +130,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             <div key={it.id} style={frame}>
               <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+                transform: `scale(${lookImageZoom(it.category)})`,
               }} />
             </div>
           )
