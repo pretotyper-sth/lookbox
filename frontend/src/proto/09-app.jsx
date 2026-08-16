@@ -845,6 +845,8 @@ function App() {
   const openAdd = (mode, extra = {}) => setAddSheet({ open: true, mode, ...extra });
   const closeAdd = () => setAddSheet((s) => ({ ...s, open: false, replaceItem: null }));
   const startCombo = () => openAdd('anchor');
+  // 마이페이지 '바로 보기 전신 이미지 설정' — 조합 추천과 같은 시트를 '바로 보기' 탭으로 연다
+  const openTryOnTab = () => openAdd('anchor', { initialSourceTab: 'tryon' });
   const comboTops = items.filter((it) => it.category === '상의' || it.category === '원피스').length;
   const comboBottoms = items.filter((it) => it.category === '하의' || it.category === '스커트' || it.category === '원피스').length;
   // 조합 추천은 최소 상의 2벌 + 하의 2벌(총 4벌) 필요.
@@ -1174,7 +1176,7 @@ function App() {
       : s));
     showToast('이미지를 바꿨어요', 'sparkle');
   };
-  const liveReplaceItemImage = async ({ itemId, sourceType, file, url, extractHint, commit = true }) => {
+  const liveReplaceItemImage = async ({ itemId, sourceType, file, url, extractHint, commit = true, onProgress }) => {
     const fd = new FormData();
     if (sourceType === 'url') fd.append('url', url);
     else fd.append('image', file);
@@ -1183,6 +1185,7 @@ function App() {
     const data = await liveJSON(`/api/live/items/${encodeURIComponent(itemId)}/replace-image`, {
       method: 'POST',
       body: fd,
+      onProgress,
     });
     if (!data || !data.item) return null;
     // commit=false면 아직 DB에 반영 안 된 미리보기라, 나중에 confirm할 때 필요한
@@ -1428,7 +1431,7 @@ function App() {
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, setTryOnFrame,
+    openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };

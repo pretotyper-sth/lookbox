@@ -2995,10 +2995,12 @@ async def live_replace_image(
     uid = user.id
     raw_bytes = raw
 
-    def work() -> dict[str, Any]:
+    def work(report: Callable[[str], None]) -> dict[str, Any]:
         try:
+            report("classify")
             classified = classify_item(tmp_path, hint)
             require_fashion_item(classified)
+            report("upload")
             original_path = f"{uid}/original/{uuid.uuid4().hex}{suffix}"
             original_url = upload_bytes(original_path, raw_bytes, content_type)
             # 새 이미지 기준이므로 로고 여부를 다시 감지 (generate 안에서 처리)
@@ -3011,7 +3013,9 @@ async def live_replace_image(
                 "has_text_logo": bool(classified.get("has_text_logo")),
                 "logo_text": str(classified.get("logo_text") or "").strip()[:80],
             }
-            product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
+            report("cutout")
+            product_bytes = resolve_product_image(uid, tmp_path, gen_meta, report=report)
+            report("save")
             image_path, image_url = original_path, original_url
             if product_bytes:
                 image_path, image_url = save_product_image(uid, product_bytes)
