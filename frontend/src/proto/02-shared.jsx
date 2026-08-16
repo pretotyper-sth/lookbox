@@ -560,7 +560,7 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   };
   return (
     <label style={{ display: 'block' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       {multiline
         ? <textarea className="lb-input" rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />
         : <input className="lb-input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />}
@@ -574,6 +574,10 @@ const STORE_RECENT_KEY = 'lb_recent_stores';
 // 최근 구매처는 '저장/담기'가 실제로 일어날 때만 기록한다. 입력 중 blur마다 넣으면
 // 쓰다 만 값이 칩으로 남는다.
 function rememberStore(value) { rememberRecent(STORE_RECENT_KEY, value); }
+function forgetRecent(key, value) {
+  const next = readRecents(key).filter((v) => v !== value);
+  try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) { /* noop */ }
+}
 function readRecents(key) {
   try {
     const raw = JSON.parse(localStorage.getItem(key) || '[]');
@@ -598,7 +602,9 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   // 시트 컴포넌트는 아이템마다 새로 마운트되지 않는다. mount 때 한 번만 읽으면 다른
   // 아이템을 열어도 그때의 목록이 그대로 남아, 방금 저장한 구매처가 칩에 안 뜬다.
   // value가 바뀔 때(= 다른 아이템의 draft가 들어올 때)마다 다시 읽는다.
-  const recents = useMemo(() => readRecents(storeKey), [storeKey, value]);
+  // purge: 칩을 지웠을 때 목록을 다시 읽게 하는 카운터 (value는 그대로일 수 있다)
+  const [purge, setPurge] = useState(0);
+  const recents = useMemo(() => readRecents(storeKey), [storeKey, value, purge]);
   // 입력칸 노출은 상태로 들고 있지 않고 값에서 파생시킨다. 상태로 두면 시트가 열릴 때
   // 값이 한 박자 늦게 도착해(draft를 effect에서 채운다) 칩과 어긋난 채 굳는다.
   // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
@@ -629,10 +635,29 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
       >
         <button type="button" onClick={openTyping} className="lb-chip"
           aria-pressed={typing} style={chipStyle(typing)}>직접 입력</button>
-        {recents.slice(0, RECENT_SHOW).map((v) => (
-          <button key={v} type="button" onClick={() => pickChip(v)} className="lb-chip"
-            aria-pressed={current === v} style={chipStyle(current === v)}>{v}</button>
-        ))}
+        {recents.slice(0, RECENT_SHOW).map((v) => {
+          const on = current === v;
+          return (
+            // 칩 자체가 버튼이라 삭제를 중첩 버튼으로 넣을 수 없다(중첩 금지) —
+            // 칩을 span으로 감싸고 선택/삭제를 형제 버튼으로 나눈다.
+            <span key={v} style={{ ...chipStyle(on), display: 'inline-flex', alignItems: 'center', gap: 2, padding: '0 4px 0 13px' }}>
+              <button type="button" onClick={() => pickChip(v)} className="lb-chip"
+                aria-pressed={on}
+                style={{
+                  padding: '7px 0', background: 'transparent', color: 'inherit',
+                  fontSize: 12.5, fontWeight: on ? 600 : 500, whiteSpace: 'nowrap',
+                }}>{v}</button>
+              <button type="button" onClick={() => { forgetRecent(storeKey, v); if (on) onChange(''); setPurge((n) => n + 1); }}
+                aria-label={`${v} 최근 목록에서 지우기`}
+                style={{
+                  display: 'grid', placeItems: 'center', width: 20, height: 20, borderRadius: '50%',
+                  background: 'transparent', color: 'inherit', opacity: 0.55, flex: 'none',
+                }}>
+                <Icon name="x" size={12} stroke={2.4} />
+              </button>
+            </span>
+          );
+        })}
       </div>
       {typing && (
         <input
@@ -658,7 +683,7 @@ function ChipMultiField({ label, options, value, onChange }) {
   const toggle = (id) => onChange(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id]);
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {options.map((o) => (
           <Chip key={o.id} active={picked.includes(o.id)} onClick={() => toggle(o.id)}>{o.name}</Chip>
