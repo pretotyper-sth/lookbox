@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, Skeleton, Thumb } = window;
+const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
@@ -1054,6 +1054,7 @@ function AddSheet({ ctx }) {
     setSteps(updated);
     if (stepIdx >= steps.length - 1) {
       const kept = updated.filter((s) => s.added).map(toItem);
+      kept.forEach((it) => rememberStore(it.store));
       const skipped = detected.filter((d) => !updated.some((s) => s.id === d.id && s.added)).map((d) => d.id);
       draftIdsRef.current = [];
       addItemsBatch(kept, skipped);
@@ -1656,7 +1657,7 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
-                <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사" storeKey={STORE_RECENT_KEY} />
+                <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>

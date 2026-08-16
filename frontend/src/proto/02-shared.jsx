@@ -5,7 +5,7 @@ const React = window.React;
 // LOOKBOX — shared UI components + inline icon set.
 // Exported to window at the bottom.
 
-const { useState, useRef, useEffect } = React;
+const { useState, useRef, useEffect, useMemo } = React;
 
 /* Escape closes the topmost overlay only (stacked sheets/viewers). */
 const _escapeStack = [];
@@ -571,6 +571,9 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
 /* 최근 입력값 기억 — 구매처처럼 같은 값을 반복 입력하는 항목용 */
 const RECENT_MAX = 6;
 const STORE_RECENT_KEY = 'lb_recent_stores';
+// 최근 구매처는 '저장/담기'가 실제로 일어날 때만 기록한다. 입력 중 blur마다 넣으면
+// 쓰다 만 값이 칩으로 남는다.
+function rememberStore(value) { rememberRecent(STORE_RECENT_KEY, value); }
 function readRecents(key) {
   try {
     const raw = JSON.parse(localStorage.getItem(key) || '[]');
@@ -590,23 +593,18 @@ function rememberRecent(key, text) {
    최근값은 최신순 10개까지, 넘치면 가로로 스와이프한다. */
 const RECENT_SHOW = 10;
 function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
-  const [recents, setRecents] = useState(() => readRecents(storeKey));
   const current = (value || '').trim();
   const inputRef = useRef(null);
+  // 시트 컴포넌트는 아이템마다 새로 마운트되지 않는다. mount 때 한 번만 읽으면 다른
+  // 아이템을 열어도 그때의 목록이 그대로 남아, 방금 저장한 구매처가 칩에 안 뜬다.
+  // value가 바뀔 때(= 다른 아이템의 draft가 들어올 때)마다 다시 읽는다.
+  const recents = useMemo(() => readRecents(storeKey), [storeKey, value]);
   // 입력칸 노출은 상태로 들고 있지 않고 값에서 파생시킨다. 상태로 두면 시트가 열릴 때
   // 값이 한 박자 늦게 도착해(draft를 effect에서 채운다) 칩과 어긋난 채 굳는다.
   // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
   const typing = !current || recents.indexOf(current) === -1;
 
-  const remember = (v) => {
-    if (!v.trim()) return;
-    rememberRecent(storeKey, v);
-    setRecents(readRecents(storeKey));
-  };
-  const pickChip = (v) => {
-    onChange(v);
-    remember(v);
-  };
+  const pickChip = (v) => onChange(v);
   // 칩으로 고른 값을 비우면 typing이 자동으로 true가 되어 입력칸이 열린다
   const openTyping = () => {
     if (current) onChange('');
@@ -614,7 +612,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   };
 
   const chipStyle = (on) => ({
-    flex: 'none', padding: '6px 12px', borderRadius: 'var(--r-pill)',
+    flex: 'none', padding: '7px 13px', borderRadius: 'var(--r-pill)',
     fontSize: 12.5, fontWeight: on ? 600 : 500, whiteSpace: 'nowrap',
     color: on ? 'var(--accent-ink)' : 'var(--ink-2)',
     background: on ? 'var(--accent)' : 'transparent',
@@ -624,10 +622,10 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       <div
         className="lb-chiprow"
-        style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}
+        style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '1px 0 4px' }}
       >
         <button type="button" onClick={openTyping} className="lb-chip"
           aria-pressed={typing} style={chipStyle(typing)}>직접 입력</button>
@@ -643,9 +641,8 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
           value={value || ''}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => remember(e.target.value)}
           style={{
-            width: '100%', marginTop: 8, padding: '12px 14px', borderRadius: 'var(--r-md)',
+            width: '100%', marginTop: 10, padding: '12px 14px', borderRadius: 'var(--r-md)',
             fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)',
             color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
           }}
@@ -762,7 +759,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
-          <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사" storeKey={STORE_RECENT_KEY} />
+          <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
           {formatDotDate(item.createdAt) && (
             <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
@@ -772,10 +769,10 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Btn full size="lg" icon="check" onClick={() => onSave(item.id, {
-            ...draft,
-            name: (draft.name || '').trim() || item.name || '옷',
-          })}>저장</Btn>
+          <Btn full size="lg" icon="check" onClick={() => {
+            rememberStore(draft.store);
+            onSave(item.id, { ...draft, name: (draft.name || '').trim() || item.name || '옷' });
+          }}>저장</Btn>
         </div>
       </div>
     </BottomSheet>
@@ -896,4 +893,4 @@ function EmptyState({
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, useEscapeClose, EmptyState });
+Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState });
