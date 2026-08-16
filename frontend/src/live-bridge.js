@@ -72,14 +72,28 @@ const auth = {
     if (!user) return null
     return { id: user.id, email: user.email || '', anonymous: !!user.is_anonymous }
   },
+  // 가입은 Supabase의 signUp을 쓰지 않는다. 확인 메일이 필요한 가입은 기본 메일
+  // 발송 한도(시간당 몇 통)에 걸려 'email rate limit'으로 막히고, 그 순간 계정이
+  // 아예 만들어지지 않는다. 백엔드가 서비스 롤로 확인된 계정을 만들어 주고,
+  // 우리는 바로 로그인해 세션을 얻는다.
   async signUp(email, password) {
     if (!supabase) return { error: '서버 설정이 없어요.' }
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
-    if (error) return { error: authError(error) }
-    // 이메일 확인이 켜져 있으면 session이 없다 — 그때는 확인 후 로그인해야 한다.
-    if (!data.session) return { pending: true }
-    allowAnonymous = false
-    return { user: { id: data.user.id, email: data.user.email || '' } }
+    let res
+    try {
+      res = await fetch(`${API_BASE}/api/live/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+    } catch {
+      return { error: '네트워크 연결이 불안정해요. 잠시 후 다시 시도해 주세요.' }
+    }
+    if (!res.ok) {
+      let detail = ''
+      try { detail = (await res.json()).error || '' } catch { /* 본문 없음 */ }
+      return { error: detail || '가입을 처리하지 못했어요.' }
+    }
+    return auth.signIn(email, password)
   },
   async signIn(email, password) {
     if (!supabase) return { error: '서버 설정이 없어요.' }

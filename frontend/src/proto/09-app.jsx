@@ -542,7 +542,6 @@ function App() {
     if (!window.LB_AUTH) return '서버 설정이 없어요.';
     const r = await window.LB_AUTH.signUp(email, pw);
     if (r.error) return r.error;
-    if (r.pending) return '가입 확인 메일을 보냈어요. 메일에서 확인한 뒤 로그인해 주세요.';
     const p = { ...prefs, email };
     setPrefs(p); persistPrefs(p);
     return '';

@@ -3344,6 +3344,49 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
     return {"updated": updated, "skipped": skipped}
 
 
+class AuthSignup(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/live/auth/signup")
+def live_auth_signup(body: AuthSignup) -> dict[str, Any]:
+    """확인 메일 없이 계정을 만든다.
+
+    Supabase 기본 메일 발송은 시간당 몇 통으로 제한된다. 확인 메일이 필요한 가입은
+    그 한도에 걸리면 'email rate limit'으로 거절되고 계정이 아예 만들어지지 않아서,
+    사용자는 왜 막혔는지 알 수 없다. 서비스 롤로 email_confirm=true로 만들면 메일
+    발송 경로를 타지 않아 한도와 무관해진다. 비밀번호는 여기서 저장하지 않고
+    Supabase가 해시한다.
+
+    대신 이메일 소유 확인이 없다 — 남의 주소로도 가입할 수 있다. 지금은 사용자가
+    소수인 프리토타입이라 받아들이지만, 공개 서비스로 갈 때는 SMTP를 붙이고
+    Confirm email을 다시 켜서 이 경로를 닫아야 한다.
+    """
+    require_supabase()
+    email = (body.email or "").strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="이메일 형식을 확인해 주세요.")
+    if len(body.password or "") < 6:
+        raise HTTPException(status_code=400, detail="비밀번호는 6자 이상이어야 해요.")
+    try:
+        supabase_admin.auth.admin.create_user(
+            {"email": email, "password": body.password, "email_confirm": True}
+        )
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc).lower()
+        if "already" in msg or "registered" in msg or "exists" in msg or "duplicate" in msg:
+            raise HTTPException(
+                status_code=409, detail="이미 가입된 이메일이에요. 로그인해 주세요."
+            ) from exc
+        print(f"[auth] signup failed: {exc}", flush=True)
+        raise HTTPException(
+            status_code=502, detail="가입을 처리하지 못했어요. 잠시 후 다시 시도해 주세요."
+        ) from exc
+    print(f"[auth] created {email}", flush=True)
+    return {"ok": True}
+
+
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
 
 
