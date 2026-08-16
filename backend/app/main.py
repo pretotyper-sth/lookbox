@@ -589,6 +589,7 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
 _RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최대 깊이(px)
 _ALPHA_RAMP = 110  # 알파 재임계 램프 폭 — 좁으면 계단이 남고, 넓으면 테두리가 번진다
+_BLEED_DEPTH = 8  # 리샘플 보간 커널이 닿는 범위를 덮을 만큼 원단 색을 투명 쪽으로 번지게
 _BG_NORM_VERSION = "cutout_v9"  # v9: 스튜디오 컷 경계를 연속 알파 + 배경색 제거로 처리
 _EXTRACTION_PROFILE = "extract_v10"
 
@@ -626,7 +627,14 @@ def normalize_product_canvas(png_bytes: bytes, category: str | None) -> bytes:
         # 같은 셔츠가 경로마다 작아지는 문제를 막기 위해 보이는 본체(알파≥64)만 쓴다.
         bbox = img.getchannel("A").point(lambda a: 255 if a >= 64 else 0).getbbox()
         if bbox:
-            img = img.crop(bbox)
+            pad = 8  # 아래 bleed가 살아남도록 여백을 두고 자른다
+            img = img.crop((
+                max(0, bbox[0] - pad), max(0, bbox[1] - pad),
+                min(img.width, bbox[2] + pad), min(img.height, bbox[3] + pad),
+            ))
+        # 리샘플 전에 투명 영역 RGB를 원단 색으로 채운다 — 안 하면 LANCZOS가
+        # 알파를 무시하고 RGB를 섞어 실루엣 주변에 테두리를 만든다.
+        _bleed_edge_colors(img, _BLEED_DEPTH)
         fill = _CATEGORY_FILL.get((category or "").strip(), 0.8)
         target = int(_CANVAS_SIZE * fill)
         w, h = img.size
@@ -634,7 +642,10 @@ def normalize_product_canvas(png_bytes: bytes, category: str | None) -> bytes:
         nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
         img = img.resize((nw, nh), Image.LANCZOS)
         canvas = Image.new("RGBA", (_CANVAS_SIZE, _CANVAS_SIZE), (0, 0, 0, 0))
-        canvas.paste(img, ((_CANVAS_SIZE - nw) // 2, (_CANVAS_SIZE - nh) // 2), img)
+        # 마스크를 주면 안 된다: PIL의 masked paste는 RGB와 알파를 캔버스(투명 검정)와
+        # 섞어서, 반투명 가장자리 RGB를 검정 쪽으로 끌어내리고 알파는 a²/255로 만든다.
+        # 빈 캔버스의 겹치지 않는 자리에 넣는 것이므로 RGBA를 그대로 복사하면 된다.
+        canvas.paste(img, ((_CANVAS_SIZE - nw) // 2, (_CANVAS_SIZE - nh) // 2))
         buf = io.BytesIO()
         canvas.save(buf, format="PNG")
         return buf.getvalue()
@@ -844,6 +855,39 @@ def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], floa
     spread = float(diffs[int(n * 0.9)])
     bright = min(med) >= 230 and (max(med) - min(med)) <= 14
     return (close >= 0.97 and bright), med, spread
+
+
+def _bleed_edge_colors(img: Image.Image, depth: int) -> None:
+    """불투명 픽셀의 RGB를 투명한 쪽으로 depth px 번지게 한다 (제자리 수정).
+
+    투명 픽셀의 RGB에는 아무 값이나 들어 있다 — OpenAI 투명 PNG는 검정에 가깝고
+    (실측 (0,0,0,0)·(43,42,42,0)), 색상 기반 누끼는 배경색을 그대로 남긴다.
+    그 상태로 RGBA를 리샘플하면 보간이 알파를 무시하고 RGB를 섞기 때문에,
+    normalize_product_canvas의 축소·확대만으로도 실루엣 주변에 어두운(또는 밝은)
+    테두리가 다시 생긴다. 미리 원단 색으로 채워두면 무엇과 섞여도 원단 색이라
+    테두리가 생기지 않는다. 알파는 건드리지 않으므로 실루엣은 그대로다.
+    """
+    w, h = img.size
+    px = img.load()
+    # 시드는 '불투명 경계'만 — 전체 스캔은 백만 픽셀짜리 파이썬 루프가 되므로
+    # 침식 차분으로 경계를 C 쪽에서 뽑고 그 좌표만 순회한다.
+    opaque = img.getchannel("A").point(lambda v: 255 if v >= 250 else 0)
+    edge = ImageChops.difference(opaque, opaque.filter(ImageFilter.MinFilter(3))).tobytes()
+    filled = bytearray(opaque.tobytes())  # 불투명 픽셀은 채울 대상이 아니다
+    frontier: deque[tuple[int, int, int]] = deque(
+        (i % w, i // w, 0) for i, v in enumerate(edge) if v
+    )
+    while frontier:
+        x, y, dep = frontier.popleft()
+        if dep >= depth:
+            continue
+        r, g, b, _a = px[x, y]
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < w and 0 <= ny < h) or filled[ny * w + nx]:
+                continue
+            filled[ny * w + nx] = 1
+            px[nx, ny] = (r, g, b, px[nx, ny][3])
+            frontier.append((nx, ny, dep + 1))
 
 
 def _repair_rim_colors(px: Any, rim: list[tuple[int, int]], w: int, h: int) -> None:
