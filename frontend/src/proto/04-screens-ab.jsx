@@ -151,8 +151,8 @@ function WardrobeScreen({ ctx }) {
   const seasons = LB_DATA.SEASONS;
   const viewingArchive = cat === '보관';
   const toggleSeason = (id) => setSeasonFilter((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
-  // 보관 탭을 보던 중 보관함이 비면 전체로 되돌린다
-  useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
+  // 보관함이 비어도 탭에 머문다 — 빈 상태 화면을 보여주는 편이, 마지막 옷을
+  // 꺼낸 순간 전체 탭으로 튕겨 나가는 것보다 덜 어색하다.
   useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat, seasonFilter]);
   const bySeason = (i) => seasonFilter.length === 0 || (i.seasons || []).some((s) => seasonFilter.includes(s));
   const filtered = sortWardrobe(
@@ -201,12 +201,11 @@ function WardrobeScreen({ ctx }) {
       padding: wide ? '0 0 8px' : '4px 18px 8px',
     }}>
       {cats.map((c) => <Chip key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
-      {archived.length > 0 && (
-        <>
-          <span style={{ flex: 'none', width: 1, alignSelf: 'stretch', margin: '4px 2px', background: 'var(--line)' }} />
-          <Chip key="보관" active={viewingArchive} onClick={() => setCat('보관')}>보관 {archived.length}</Chip>
-        </>
-      )}
+      {/* 보관함은 비어 있어도 노출한다 — 숨기면 보관한 옷을 다시 볼 방법이 없다 */}
+      <span style={{ flex: 'none', width: 1, alignSelf: 'stretch', margin: '4px 2px', background: 'var(--line)' }} />
+      <Chip key="보관" active={viewingArchive} onClick={() => setCat('보관')}>
+        {archived.length > 0 ? `보관 ${archived.length}` : '보관'}
+      </Chip>
     </div>
   );
 
@@ -375,7 +374,7 @@ function WardrobeScreen({ ctx }) {
           </div>
         )}
 
-        {viewingArchive && (
+        {viewingArchive && archived.length > 0 && (
           <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
             보관한 옷은 조합 추천에 쓰이지 않아요. 카드의 <b style={{ color: 'var(--ink-2)', fontWeight: 700 }}>···</b>에서 다시 꺼내거나 삭제할 수 있어요.
           </p>
@@ -387,6 +386,18 @@ function WardrobeScreen({ ctx }) {
           </p>
         )}
 
+        {viewingArchive && archived.length === 0 ? (
+          <EmptyState
+            icon="archive"
+            iconSize={40}
+            title="보관한 옷이 없어요"
+            wide={wide}
+            padTop={false}
+            hint={<><Icon name="lock" size={14} /> 보관한 옷은 조합 추천에 쓰이지 않아요</>}
+          >
+            지금 안 입는 옷을 보관하면,<br />옷장은 그대로 두고 추천에서만 빼둘 수 있어요.
+          </EmptyState>
+        ) : (
         <div className="lb-grid">
           {!viewingArchive && !mobileSelect && (
           <button onClick={() => openAdd('wardrobe')} className="lb-addtile" style={{
@@ -485,6 +496,7 @@ function WardrobeScreen({ ctx }) {
             );
           })}
         </div>
+        )}
        </div>
       </div>
 
