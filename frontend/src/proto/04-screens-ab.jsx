@@ -509,7 +509,8 @@ const IMPORT_PHASES = [
   { short: '사진 확인', keys: ['send', 'fetch', 'cache'] },
   { short: '옷 인식', keys: ['classify', 'upload'] },
   { short: '배경 정리', keys: ['cutout', 'polish'] },
-  { short: '옷장 저장', keys: ['save'] },
+  // 이 단계에서 옷장에 담기는 게 아니다 — 확인 화면에서 사용자가 결정한다
+  { short: '결과 정리', keys: ['save'] },
 ];
 
 // 첫 서버 단계는 사진 업로드가 끝난 뒤에야 온다 — 모바일에서 몇 초씩 걸리므로
@@ -523,10 +524,20 @@ function useImportProgress(active) {
   const [step, setStep] = useS(null);
   const [pct, setPct] = useS(0);
   const stepRef = useR(null);
+  // 표시 중인 %를 ref로도 들고 있는다. report는 렌더 사이에 불려서 state 값이
+  // 최신이 아닐 수 있고, 뒤로 가는지 판단하려면 '지금 보이는 숫자'가 필요하다.
+  const pctRef = useR(0);
+
+  const advance = (value) => {
+    if (value <= pctRef.current) return;
+    pctRef.current = value;
+    setPct(value);
+  };
 
   useE(() => {
     if (!active) {
       stepRef.current = null;
+      pctRef.current = 0;
       setStep(null);
       setPct(0);
       return undefined;
@@ -536,18 +547,19 @@ function useImportProgress(active) {
       if (!s) return;
       const elapsed = (Date.now() - s.at) / 1000;
       const eased = 1 - Math.exp(-elapsed / Math.max(1, s.eta));
-      setPct(Math.round(s.pct + (s.until - s.pct) * eased));
+      advance(Math.round(s.pct + (s.until - s.pct) * eased));
     }, 200);
     return () => clearInterval(id);
   }, [active]);
 
   const report = (next) => {
     if (!next || !next.label) return;
-    // 서버 단계가 늦게 도착해도 진행률이 뒤로 가지 않게 한다.
-    if (stepRef.current && next.pct < stepRef.current.pct) return;
+    // 이미 지나온 구간의 단계는 버린다. 비교 기준은 표시된 %다 — 단계의 시작 %와
+    // 비교하면, 앞 단계가 구간 끝까지 차오른 뒤 다음 이벤트가 오는 순간 뒤로 간다.
+    if (stepRef.current && next.until <= pctRef.current) return;
     stepRef.current = { ...next, at: Date.now() };
     setStep(next);
-    setPct(next.pct);
+    advance(next.pct);
   };
   return { step, pct, report };
 }
@@ -556,7 +568,7 @@ function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     autoAddDetails, detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
-    openTryOn, openTryOnSetup, prefs, wide, comboReady,
+    openTryOn, openTryOnSetup, prefs, wide, comboReady, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -1304,10 +1316,11 @@ function AddSheet({ ctx }) {
                 }} />
               </div>
               <div style={{
-                marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--ink-3)',
+                marginTop: 8, fontSize: 11.5, fontWeight: 600, color: 'var(--ink-3)',
                 letterSpacing: '-0.01em', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
               }}>
-                {(() => {
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{(() => {
                   const key = (progress.step && progress.step.key) || '';
                   const at = IMPORT_PHASES.findIndex((p) => p.keys.indexOf(key) !== -1);
                   return IMPORT_PHASES.map((p, i) => (
@@ -1315,8 +1328,8 @@ function AddSheet({ ctx }) {
                       {i > 0 ? ' · ' : ''}{at > i ? '✓ ' : ''}{p.short}
                     </span>
                   ));
-                })()}
-                <span style={{ opacity: 0.5 }}> · 최대 2분</span>
+                })()}</span>
+                <span style={{ opacity: 0.5, flex: 'none' }}>최대 2분</span>
               </div>
             </div>
           </div>
@@ -1402,7 +1415,20 @@ function AddSheet({ ctx }) {
         {stage === 'register' && cur && (
           <div className="lb-anim-in" key={stepIdx}>
             <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', marginTop: 'var(--s5)' }}>
-              <div style={{ width: 72, flex: 'none' }}><Thumb item={{ ...cur, category: cur.cat }} /></div>
+              {/* 추출 결과를 여기서 바로 확대해 볼 수 있게 — 담기 전에 누끼가
+                  제대로 됐는지 확인하려면 72px 썸네일로는 부족하다 */}
+              <button
+                type="button"
+                onClick={() => cur.img && openImageViewer && openImageViewer({ ...cur, category: cur.cat })}
+                disabled={!cur.img}
+                aria-label={cur.img ? '이미지 크게 보기' : undefined}
+                style={{
+                  width: 72, flex: 'none', padding: 0, border: 'none', background: 'transparent',
+                  cursor: cur.img ? 'zoom-in' : 'default',
+                }}
+              >
+                <Thumb item={{ ...cur, category: cur.cat }} />
+              </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 6 }}>이름</div>
                 <input value={cur.name} onChange={(e) => patchStep({ name: e.target.value.slice(0, 48) })} maxLength={48} className="lb-input" placeholder="예) 코튼 셔츠" style={{
