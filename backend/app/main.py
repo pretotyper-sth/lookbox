@@ -495,6 +495,9 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
         # AI 없을 때만 통과. 테스트 모드라도 키가 있으면 아래에서 Vision으로 패션 여부를 본다.
         "is_fashion_item": True,
         "reject_code": "",
+        "shot": "product",
+        "angle": "front",
+        "front_ok": True,
     }
     # 컷아웃·이미지 생성은 AI_TEST_MODE에서 막지만, 패션 거절은 값싼 분류만으로도
     # 가능해야 한다. (바로 보기는 클라 FaceDetector로 거르고, 옷장은 여기가 게이트)
@@ -521,7 +524,10 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
   "has_text_logo": false,
   "logo_text": "",
   "seasons": ["spring|summer|autumn|winter 중 해당하는 것만, 1~2개"],
-  "other_items": ["주 아이템 외에 함께 보이는 착용 아이템의 짧은 한국어 이름"]
+  "other_items": ["주 아이템 외에 함께 보이는 착용 아이템의 짧은 한국어 이름"],
+  "shot": "product|worn|detail",
+  "angle": "front|side|back|unclear",
+  "front_ok": true
 }
 패션 여부(최우선):
 - is_fashion_item true: 상의·하의·원피스·아우터·신발·가방·모자·잡화 등 착용/소지 가능한 패션 아이템이 주 피사체.
@@ -548,6 +554,14 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 - seasons: 원단 두께·소재·기장·보온성으로 판단. 반팔/린넨/메시 → summer. 니트/코듀로이/기모 → winter.
   얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
 - is_fashion_item이 false여도 JSON 형식은 유지하되 name은 짧은 설명(예: "고양이 사진"), category는 misc.
+촬영 형태(옷장 카드를 정면 상품컷으로 통일하는 데 쓰인다):
+- shot: product = 사람 없이 옷만 있는 상품컷·플랫레이. worn = 사람이 입거나 들고 있음(마네킹 포함).
+  detail = 원단·디테일 부분 확대라 아이템 전체 형태가 안 보임.
+- angle: 주 아이템을 보는 방향. front = 정면(앞판 전체가 보임). side = 측면·3/4 각도.
+  back = 뒷면. unclear = 접혀 있거나 가려져 방향 판단 불가.
+- front_ok: 이 사진만 보고 '정면에서 본 이 아이템의 상품컷'을 그려낼 수 있는지.
+  true: 아이템 전체 실루엣과 색·패턴·주요 디테일이 충분히 보인다 (측면·착장이어도 형태가 파악되면 true).
+  false: 심하게 가려짐·잘림, 너무 어둡거나 흐림, 부분 확대뿐, 겹쳐 접혀 형태 불명 — 정면 모습을 지어내야 하는 수준.
 """
     try:
         response = _vision_client().chat.completions.create(
@@ -578,6 +592,15 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
         if not data["has_text_logo"]:
             data["logo_text"] = ""
         data["seasons"] = _clean_seasons(data.get("seasons"))
+        shot = str(data.get("shot") or "").strip().lower()
+        data["shot"] = shot if shot in ("product", "worn", "detail") else "product"
+        angle = str(data.get("angle") or "").strip().lower()
+        data["angle"] = angle if angle in ("front", "side", "back", "unclear") else "front"
+        raw_front = data.get("front_ok", True)
+        data["front_ok"] = (
+            raw_front.strip().lower() in ("1", "true", "yes", "y")
+            if isinstance(raw_front, str) else bool(raw_front)
+        )
         raw_others = data.get("other_items") if isinstance(data.get("other_items"), list) else []
         data["other_items"] = [str(o).strip()[:40] for o in raw_others if str(o).strip()][:6]
         raw_fashion = data.get("is_fashion_item", True)
@@ -600,16 +623,26 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 _FASHION_REJECT_MSG = {
     "not_fashion": "옷이나 패션 아이템이 잘 보이는 사진으로 올려주세요.",
     "unclear": "어떤 옷인지 알기 어려워요. 아이템이 크게 나온 사진으로 다시 올려주세요.",
+    # 정면 상품컷을 만들 수 없는 원본 — 이미지 생성에 돈을 쓰기 전에 되돌린다.
+    "no_front": "아이템 정면이 잘 보이는 사진으로 올려주세요. 지금 사진은 가려지거나 일부만 보여서 앞모습을 만들 수 없어요.",
 }
 
 
 def require_fashion_item(meta: dict[str, Any]) -> None:
-    """비패션 이미지면 컷아웃 전에 422로 거절. 사용자 문구는 서버 고정."""
-    if meta.get("is_fashion_item", True):
-        return
-    code = str(meta.get("reject_code") or "not_fashion")
-    detail = _FASHION_REJECT_MSG.get(code) or _FASHION_REJECT_MSG["not_fashion"]
-    raise HTTPException(status_code=422, detail=detail)
+    """컷아웃 전에 거절할 이미지를 걸러낸다. 사용자 문구는 서버 고정.
+
+    비패션 외에, '정면 상품컷을 만들 수 없는 원본'도 여기서 막는다. 이미지 생성은
+    한 장에 수십 초와 실제 비용이 들기 때문에, 앞모습을 지어내야 하는 수준의
+    사진이면 값싼 분류 단계에서 되돌리는 편이 낫다.
+    """
+    if not meta.get("is_fashion_item", True):
+        code = str(meta.get("reject_code") or "not_fashion")
+        raise HTTPException(
+            status_code=422,
+            detail=_FASHION_REJECT_MSG.get(code) or _FASHION_REJECT_MSG["not_fashion"],
+        )
+    if not meta.get("front_ok", True):
+        raise HTTPException(status_code=422, detail=_FASHION_REJECT_MSG["no_front"])
 
 
 def _significant_garment_logo(has_text_logo: bool, logo_text: str) -> bool:
@@ -1243,10 +1276,17 @@ def _resolve_extract_policy(meta: dict[str, Any], triage: dict[str, Any], hint: 
     has_text = bool(meta.get("has_text_logo"))
     override = str(meta.get("_quality_override") or "").strip()
     messy_background = bool(triage.get("messy_background"))
+    # 정면으로 다시 세워 그리는 건 배경만 지우는 것보다 훨씬 어렵다 → 고품질로
+    needs_front = (
+        str(meta.get("shot") or "product") != "product"
+        or str(meta.get("angle") or "front") != "front"
+    )
     if override:
         tier, quality, timeout = "retry", override, OPENAI_IMAGE_TIMEOUT
     elif has_text:
         tier, quality, timeout = "text", OPENAI_IMAGE_QUALITY_TEXT, OPENAI_IMAGE_TIMEOUT
+    elif needs_front:
+        tier, quality, timeout = "reframe_front", OPENAI_IMAGE_QUALITY_HARD, OPENAI_IMAGE_TIMEOUT
     elif hint:
         tier, quality, timeout = "hint", OPENAI_IMAGE_QUALITY_HARD, OPENAI_IMAGE_TIMEOUT
     elif messy_background:
@@ -1263,6 +1303,7 @@ def _resolve_extract_policy(meta: dict[str, Any], triage: dict[str, Any], hint: 
             ("hint", bool(hint)),
             ("messy_background", messy_background),
             ("light", bool(triage.get("whiteish"))),
+            ("reframe_front", needs_front),
         ) if enabled],
     }
 
@@ -1294,8 +1335,11 @@ def generate_product_image(
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
 
+    # 정면 상품컷일 때만 로컬 누끼를 쓴다. 측면·착장 사진을 그대로 오려내면 옷장에
+    # 측면 컷이 들어가 카드가 제각각이 된다(정면으로 다시 그려야 한다).
+    needs_front = str(meta.get("shot") or "product") != "product" or str(meta.get("angle") or "front") != "front"
     triage = triage or _fast_extract_triage(path, hint)
-    studio = triage.get("studio")
+    studio = None if needs_front else triage.get("studio")
     if studio:
         print("[extract] studio cutout — skip AI", flush=True)
         meta["_extract_mode"] = "studio_cutout"
@@ -1316,6 +1360,27 @@ def generate_product_image(
 쇼핑몰 상품 컷처럼 요청한 아이템만 단독으로 뽑아줘. 배경은 완전히 투명하게(투명 PNG, 흰색·회색 배경 판 남기지 말 것). 사람·팔·다른 옷은 넣지 마.
 원본 이미지를 최대한 해치지 않는 선에서: 색상·포켓·라벨/택·단추·스티치 같은 디테일을 하나도 빠뜨리거나 바꾸지 마. 니트 조직·멜란지·데님 워싱 같은 원단 질감도 뭉개지 말고 그대로. 원본에 신발이 두 짝이면 두 짝 모두, 한 짝이면 한 짝 그대로.
 """
+    elif needs_front:
+        # 측면·뒷면·착장 사진. 여기서 '원본을 해치지 말라'고 하면 모델이 각도를 그대로
+        # 유지해서 측면 컷이 나온다. 그래서 이 경로만은 '정면으로 다시 세워 그려라'를
+        # 지시의 본체로 두고, 보존해야 할 것(색·패턴·핏·디테일)을 따로 못박는다.
+        category = str(meta.get("category") or "")
+        others = [str(o).strip() for o in (meta.get("other_items") or []) if str(o).strip()][:6]
+        prompt = f"""이 사진에 있는 {name}을 **정면에서 본 쇼핑몰 상품컷**으로 다시 그려줘.
+
+- 사진이 측면·사선·뒷면이거나 사람이 입고 있어도, 결과는 옷을 정면에서 평평하게 펼쳐 놓은 상품컷이어야 함
+- 사람·마네킹·손·다리·배경은 모두 제거. 옷만 단독으로
+- 원단 색상·워싱·패턴, 실루엣과 핏(오버사이즈/와이드 등), 기장 비율은 사진과 같게 유지
+- 보이는 디테일은 정면 상품컷에 맞게 옮겨 그릴 것: 포켓 위치·개수, 단추·지퍼, 스티치 색, 밑단·커프스 처리, 허리 밴드
+- 사진에서 가려져 보이지 않는 부분은 같은 종류의 옷에서 자연스러운 형태로 채우되, 없는 장식을 새로 만들지 말 것
+- 원단 질감(데님 워싱, 니트 조직, 코듀로이 골)은 매끈하게 뭉개지 말고 살릴 것
+- 배경은 완전히 투명하게 (흰색·회색 배경 판 금지), 아이템 전체가 잘리지 않게 중앙 배치
+- 결과에는 {name}만: 함께 착용된 다른 아이템과 사람은 포함하지 말 것
+"""
+        if others:
+            prompt += f"- 사진에 함께 보이는 {', '.join(others)}은(는) 추출 대상이 아님. 일부라도 넣지 말 것\n"
+        if category == "shoes":
+            prompt += "- 신발은 정면에서 본 한 쌍으로. 좌우가 나란히 보이게\n"
     else:
         # ChatGPT에 사용자가 직접 넣는 문장과 같은 구조: '상품컷처럼 만들어줘 +
         # 원본을 해치지 않는 선에서'. 금지 조항을 길게 쌓으면 모델이 소극적으로
@@ -3121,6 +3186,10 @@ async def live_replace_image(
                 "extract_hint": hint,
                 "has_text_logo": bool(classified.get("has_text_logo")),
                 "logo_text": str(classified.get("logo_text") or "").strip()[:80],
+                # 새 사진의 촬영 형태를 넘겨야 측면·착장 사진이 정면으로 다시 그려진다
+                "shot": classified.get("shot") or "product",
+                "angle": classified.get("angle") or "front",
+                "other_items": classified.get("other_items") or [],
             }
             report("cutout")
             product_bytes = resolve_product_image(uid, tmp_path, gen_meta, report=report)
