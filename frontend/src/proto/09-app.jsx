@@ -314,6 +314,43 @@ function liveAppendDaily(payload, ownedItems) {
   return added;
 }
 
+// 진행 알림 줄({"_step":…})을 걸러내고 결과가 담긴 마지막 줄만 남긴다.
+function lastResultLine(text) {
+  const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (lines[i].indexOf('"_step"') === -1) return lines[i];
+  }
+  return '';
+}
+
+// 스트림을 읽으면서 _step 줄이 도착할 때마다 onProgress로 넘긴다. 전체 본문은
+// 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
+async function readProgressStream(res, onProgress) {
+  if (!res.body || !res.body.getReader) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    text += chunk;
+    buf += chunk;
+    let nl;
+    while ((nl = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line || line.indexOf('"_step"') === -1) continue;
+      try {
+        const step = JSON.parse(line)._step;
+        if (step) onProgress(step);
+      } catch (e) { /* 부분 수신 줄은 무시 */ }
+    }
+  }
+  return text;
+}
+
 async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
@@ -337,13 +374,16 @@ async function liveJSON(url, options = {}) {
   clearTimeout(timer);
   // keep-alive 스트리밍은 헤더가 먼저 오고 본문이 늦게 끝난다 — 본문이 중간에
   // 끊기거나 공백만 오면(서버 재시작 등) 성공으로 오인하지 말고 명확히 실패 처리.
+  // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = await res.text();
+    text = options.onProgress
+      ? await readProgressStream(res, options.onProgress)
+      : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
   }
-  const trimmed = text.trim();
+  const trimmed = lastResultLine(text);
   let data = {};
   let parsed = false;
   if (trimmed) {
@@ -356,13 +396,14 @@ async function liveJSON(url, options = {}) {
   return data;
 }
 
-async function liveImportSource({ sourceType, file, url, status, extractHint }) {
+async function liveImportSource({ sourceType, file, url, status, extractHint, onProgress }) {
   const hint = (extractHint || '').trim();
   if (sourceType === 'url') {
     if (!url || !url.trim()) throw new Error('상품 URL을 입력해주세요');
     return liveJSON('/api/live/import/url', {
       method: 'POST',
       body: JSON.stringify({ url, status, extract_hint: hint }),
+      onProgress,
     });
   }
   if (!file) throw new Error('사진 파일을 선택해주세요');
@@ -370,7 +411,7 @@ async function liveImportSource({ sourceType, file, url, status, extractHint }) 
   fd.append('image', file);
   fd.append('status', status || 'owned');
   fd.append('extract_hint', hint);
-  return liveJSON('/api/live/import/photo', { method: 'POST', body: fd });
+  return liveJSON('/api/live/import/photo', { method: 'POST', body: fd, onProgress });
 }
 
 let _newId = 100;

@@ -503,6 +503,49 @@ function urlImportBlockedHint(raw) {
   return null;
 }
 
+// 서버가 보내는 세부 단계(_IMPORT_STEPS)를 체크리스트용 4단계로 묶는다. 상세
+// 문구는 서버 라벨을 그대로 쓰고, 체크리스트는 지금 어디쯤인지만 보여준다.
+const IMPORT_PHASES = [
+  { short: '사진 확인', keys: ['fetch', 'cache'] },
+  { short: '옷 인식', keys: ['classify', 'upload'] },
+  { short: '배경 정리', keys: ['cutout', 'polish'] },
+  { short: '옷장 저장', keys: ['save'] },
+];
+
+// 업로드 진행률. 단계 경계(%)는 서버가 알려주고, 한 단계 안에서의 움직임은
+// 그 단계의 평소 소요 시간(eta)으로 보간한다. 지수 감쇠라 끝 %를 넘지 않으면서
+// 오래 걸릴수록 느려져, 멈춘 것처럼 보이지 않는다.
+function useImportProgress(active) {
+  const [step, setStep] = useS(null);
+  const [pct, setPct] = useS(0);
+  const stepRef = useR(null);
+
+  useE(() => {
+    if (!active) {
+      stepRef.current = null;
+      setStep(null);
+      setPct(0);
+      return undefined;
+    }
+    const id = setInterval(() => {
+      const s = stepRef.current;
+      if (!s) return;
+      const elapsed = (Date.now() - s.at) / 1000;
+      const eased = 1 - Math.exp(-elapsed / Math.max(1, s.eta));
+      setPct(Math.round(s.pct + (s.until - s.pct) * eased));
+    }, 200);
+    return () => clearInterval(id);
+  }, [active]);
+
+  const report = (next) => {
+    if (!next || !next.label) return;
+    stepRef.current = { ...next, at: Date.now() };
+    setStep(next);
+    setPct(next.pct);
+  };
+  return { step, pct, report };
+}
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
@@ -556,6 +599,7 @@ function AddSheet({ ctx }) {
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
   const [stepIdx, setStepIdx] = useS(0);
   const [pendingReplace, setPendingReplace] = useS(null); // { item, pending } — 이미지 변경 미리보기 (아직 DB 미반영)
+  const progress = useImportProgress(stage === 'analyzing');
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
@@ -631,6 +675,7 @@ function AddSheet({ ctx }) {
         url: source.url != null ? source.url : url,
         status: anchor ? 'considering' : 'pending',
         extractHint: source.extractHint != null ? source.extractHint : hint,
+        onProgress: progress.report,
       });
       const list = (data.items || []).slice(0, detectCount).map((d, i) => ({ ...d, id: d.id || 'det' + i, cat: d.category, conf: d.conf || 0.95 }));
       const ids = list.map((d) => d.id).filter(Boolean);
@@ -1232,12 +1277,40 @@ function AddSheet({ ctx }) {
                 <div className="lb-skel" style={{ width: 24, height: 24, flex: 'none', borderRadius: '50%' }} />
               </div>
             </div>
-            <div style={{ marginTop: 'var(--s5)', fontSize: 15, fontWeight: 700 }}>아이템을 인식하고 있어요</div>
-            <div style={{
-              marginTop: 6, fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
-              textAlign: 'center', letterSpacing: '-0.01em',
-            }}>
-              최대 2분 소요
+            <div style={{ width: '100%', marginTop: 'var(--s5)' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--s3)' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                  {(progress.step && progress.step.label) || '사진을 올리고 있어요'}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                  {progress.pct}%
+                </div>
+              </div>
+              <div style={{
+                marginTop: 10, height: 6, borderRadius: 999,
+                background: 'var(--line)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${Math.max(2, Math.min(100, progress.pct))}%`, height: '100%', borderRadius: 999,
+                  background: 'var(--ink)', transition: 'width 240ms linear',
+                }} />
+              </div>
+              <div style={{
+                marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '-0.01em',
+              }}>
+                {(() => {
+                  const key = (progress.step && progress.step.key) || '';
+                  const at = IMPORT_PHASES.findIndex((p) => p.keys.indexOf(key) !== -1);
+                  return IMPORT_PHASES.map((p, i) => (
+                    <span key={p.short} style={{ color: at >= i ? 'var(--ink)' : 'var(--ink-3)', opacity: at >= i ? 1 : 0.5 }}>
+                      {i > 0 ? ' · ' : ''}{at > i ? '✓ ' : ''}{p.short}
+                    </span>
+                  ));
+                })()}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>
+                최대 2분 소요 — 창을 닫지 않아도 계속 진행돼요
+              </div>
             </div>
           </div>
         )}

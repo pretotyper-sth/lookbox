@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import html as html_lib
+import inspect
 import io
 import json
 import os
@@ -12,7 +13,7 @@ import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, Iterator
 from urllib.parse import urlparse
 
 import requests
@@ -111,40 +112,76 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
 
 
+# 업로드 진행 단계. (라벨, 시작 %, 끝 %, 이 단계의 평소 소요 초).
+# 시작/끝 %는 서버가 확정하고, 그 사이 % 움직임은 프론트가 eta로 보간한다 —
+# AI 추출은 내부 진행률을 알 수 없어서, 단계 경계만 사실로 두는 편이 정직하다.
+_IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
+    "fetch": ("상품 페이지를 읽고 있어요", 2, 12, 6),
+    "cache": ("전에 본 사진인지 확인하고 있어요", 12, 16, 1),
+    "classify": ("어떤 옷인지 알아보고 있어요", 16, 38, 8),
+    "upload": ("원본 사진을 보관하고 있어요", 38, 46, 3),
+    "cutout": ("배경에서 옷만 오려내고 있어요", 46, 86, 55),
+    "polish": ("테두리를 깔끔하게 다듬고 있어요", 86, 94, 2),
+    "save": ("옷장에 넣고 있어요", 94, 99, 3),
+}
+
+
 def stream_with_keepalive(work) -> StreamingResponse:
     """오래 걸리는 작업(AI 추출 등)을 keep-alive 스트리밍 응답으로 감싼다.
 
     Render 프록시는 응답이 시작되지 않은 요청을 ~100초에 끊지만, 스트리밍은
-    100분까지 허용한다. 작업이 도는 동안 10초마다 공백을 흘려 연결을 유지하고
-    (공백은 JSON 선행 문자로 유효해 프론트의 res.json()이 그대로 동작),
-    끝나면 결과 JSON을 보낸다. 스트림 시작 후엔 상태코드를 바꿀 수 없으므로
-    에러는 {"error": ...} 본문으로 전달한다 (프론트 liveJSON이 던져줌).
+    100분까지 허용한다. 작업이 도는 동안 진행 단계를 한 줄씩 흘려 연결을 유지하고
+    (`{"_step": ...}\\n`), 끝나면 마지막 줄에 결과 JSON을 보낸다. 프론트 liveJSON은
+    줄 단위로 읽어 _step은 진행률 콜백으로 넘기고 마지막 줄만 결과로 쓴다.
+    스트림 시작 후엔 상태코드를 바꿀 수 없으므로 에러는 {"error": ...} 본문으로
+    전달한다 (프론트 liveJSON이 던져줌).
+
+    work가 인자를 하나 받으면 `report(step_key)`를 넘겨준다.
     """
     def gen():
         result: dict[str, Any] = {}
         error: list[str] = []
+        steps: deque[str] = deque()
+        wants_report = bool(inspect.signature(work).parameters)
 
         def run() -> None:
             try:
-                result["data"] = work()
+                result["data"] = work(steps.append) if wants_report else work()
             except HTTPException as exc:
                 error.append(str(exc.detail))
             except Exception as exc:  # noqa: BLE001
                 print(f"[stream] work failed: {exc}", flush=True)
                 error.append("요청 처리 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
 
+        def drain() -> Iterator[str]:
+            while steps:
+                key = steps.popleft()
+                spec = _IMPORT_STEPS.get(key)
+                if not spec:
+                    continue
+                label, pct, until, eta = spec
+                yield json.dumps(
+                    {"_step": {"key": key, "label": label, "pct": pct, "until": until, "eta": eta}},
+                    ensure_ascii=False,
+                ) + "\n"
+
         t = threading.Thread(target=run, daemon=True)
         t.start()
+        idle = 0.0
         while t.is_alive():
-            t.join(timeout=10)
-            if t.is_alive():
-                yield " "
+            t.join(timeout=0.4)
+            yield from drain()
+            idle += 0.4
+            if t.is_alive() and idle >= 10:
+                idle = 0.0
+                yield "\n"  # 단계 변화가 없어도 연결 유지
+        yield from drain()
         if error:
             yield json.dumps({"error": error[0]}, ensure_ascii=False)
         else:
             yield json.dumps(result.get("data") or {}, ensure_ascii=False, default=str)
 
-    return StreamingResponse(gen(), media_type="application/json")
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
 CATEGORY_KO = {
@@ -1153,12 +1190,18 @@ _EXTRACT_FAIL_MSG = {
 
 
 def resolve_product_image(
-    user_id: str, path: str, meta: dict[str, Any], triage: dict[str, Any] | None = None
+    user_id: str,
+    path: str,
+    meta: dict[str, Any],
+    triage: dict[str, Any] | None = None,
+    report: Callable[[str], None] | None = None,
 ) -> bytes | None:
     """AI 추출. 실패한 결과를 색상 기반 로컬 컷아웃으로 덮어쓰지 않는다."""
     hint = str(meta.get("extract_hint") or "").strip()
     product = generate_product_image(user_id, path, meta, triage)
     if product:
+        if report:
+            report("polish")
         return normalize_product_canvas(product, meta.get("category"))
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
@@ -1941,7 +1984,9 @@ def _store_uploaded_item(
     store: str | None = None,
     color_override: str | None = None,
     extract_hint: str | None = None,
+    report: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
+    step = report or (lambda _key: None)
     hint = (extract_hint or "").strip()[:500]
     source_hash = hashlib.sha256(raw).hexdigest()
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -1949,6 +1994,7 @@ def _store_uploaded_item(
         tmp_path = tmp.name
     try:
         original_path = f"{user_id}/original/{uuid.uuid4().hex}{suffix}"
+        step("cache")
         cached = _find_cached_extraction(user_id, source_hash, hint)
         if cached:
             # 같은 원본은 메타와 제품 컷을 재사용한다. Vision/이미지 생성을 다시
@@ -1973,10 +2019,12 @@ def _store_uploaded_item(
             product_bytes = None
         else:
             # 분류로 패션 여부를 먼저 본 뒤, 통과할 때만 업로드·트리아지·컷아웃.
+            step("classify")
             classify_started = time.perf_counter()
             meta = classify_item(tmp_path, hint)
             classify_ms = int((time.perf_counter() - classify_started) * 1000)
             require_fashion_item(meta)
+            step("upload")
             with ThreadPoolExecutor(max_workers=2) as pool:
                 triage_future = pool.submit(_fast_extract_triage, tmp_path, hint)
                 upload_future = pool.submit(upload_bytes, original_path, raw, content_type)
@@ -1988,14 +2036,16 @@ def _store_uploaded_item(
                 (color_override or "").strip() or meta.get("color") or "neutral",
             )
             meta = {**meta, "name": item_name, "color": item_color, "extract_hint": hint}
+            step("cutout")
             extract_started = time.perf_counter()
-            product_bytes = resolve_product_image(user_id, tmp_path, meta, triage)
+            product_bytes = resolve_product_image(user_id, tmp_path, meta, triage, report=report)
             extract_ms = int((time.perf_counter() - extract_started) * 1000)
         item_name, item_color = _normalize_item_name_color(
             (name_override or "").strip() or meta.get("name") or "새 옷",
             (color_override or "").strip() or meta.get("color") or "neutral",
         )
         meta["name"], meta["color"] = item_name, item_color
+        step("save")
         image_path, image_url = original_path, original_url
         if cached:
             image_path, image_url = cached["storage_path"], cached["image_url"]
@@ -3018,9 +3068,11 @@ async def live_import_photo(
     raw = await image.read()
     uid = user.id
 
-    def work() -> dict[str, Any]:
+    def work(report: Callable[[str], None]) -> dict[str, Any]:
         t0 = time.perf_counter()
-        row = _store_uploaded_item(uid, raw, suffix, content_type, status, extract_hint=extract_hint)
+        row = _store_uploaded_item(
+            uid, raw, suffix, content_type, status, extract_hint=extract_hint, report=report
+        )
         items = [live_item_payload(row)]
         meta = row.get("metadata") or {}
         timing = dict(meta.get("extraction_timing") or {})
@@ -3040,8 +3092,9 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     url = _normalize_product_url(body.url)
     uid = user.id
 
-    def work() -> dict[str, Any]:
+    def work(report: Callable[[str], None]) -> dict[str, Any]:
         t0 = time.perf_counter()
+        report("fetch")
         raw, content_type, meta = _fetch_product_meta(url)
         suffix = ".png" if "png" in content_type else ".jpg"
         row = _store_uploaded_item(
@@ -3057,6 +3110,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
             store=meta.get("store") or None,
             color_override=meta.get("color") or None,
             extract_hint=body.extract_hint,
+            report=report,
         )
         items = [live_item_payload(row)]
         item_meta = row.get("metadata") or {}
