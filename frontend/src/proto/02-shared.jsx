@@ -584,56 +584,72 @@ function rememberRecent(key, text) {
   try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) { /* noop */ }
 }
 
-/* 최근값 칩 + 자유 입력 필드 — 구매처는 대부분 늘 같은 곳이라 매번 타이핑할 이유가
-   없다. 최근에 넣은 값을 칩으로 얹어 한 번에 고르고, 없는 곳은 그대로 입력한다.
-   고른 칩을 다시 누르면 비워진다. */
+/* 최근값 칩 + 자유 입력 — 구매처는 대부분 늘 같은 곳이라 매번 타이핑할 이유가 없다.
+   카테고리·계절과 같은 칩 UI로 맞추고, 맨 앞에 '직접 입력'을 둔다. 최근 칩을 고르면
+   입력칸은 접히고(칩만 남아 지금 값이 명확) '직접 입력'을 누르면 다시 열린다.
+   최근값은 최신순 10개까지, 넘치면 가로로 스와이프한다. */
+const RECENT_SHOW = 10;
 function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   const [recents, setRecents] = useState(() => readRecents(storeKey));
   const current = (value || '').trim();
-  const commit = (v) => {
-    onChange(v);
-    if (v.trim()) {
-      rememberRecent(storeKey, v);
-      setRecents(readRecents(storeKey));
-    }
+  const inputRef = useRef(null);
+  // 입력칸 노출은 상태로 들고 있지 않고 값에서 파생시킨다. 상태로 두면 시트가 열릴 때
+  // 값이 한 박자 늦게 도착해(draft를 effect에서 채운다) 칩과 어긋난 채 굳는다.
+  // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
+  const typing = !current || recents.indexOf(current) === -1;
+
+  const remember = (v) => {
+    if (!v.trim()) return;
+    rememberRecent(storeKey, v);
+    setRecents(readRecents(storeKey));
   };
-  // 최근값에 없는 현재 값도 칩으로 같이 보여준다 (선택된 게 뭔지 한눈에)
-  const chips = current && recents.indexOf(current) === -1 ? [current, ...recents] : recents;
+  const pickChip = (v) => {
+    onChange(v);
+    remember(v);
+  };
+  // 칩으로 고른 값을 비우면 typing이 자동으로 true가 되어 입력칸이 열린다
+  const openTyping = () => {
+    if (current) onChange('');
+    setTimeout(() => inputRef.current && inputRef.current.focus(), 0);
+  };
+
+  const chipStyle = (on) => ({
+    flex: 'none', padding: '6px 12px', borderRadius: 'var(--r-pill)',
+    fontSize: 12.5, fontWeight: on ? 600 : 500, whiteSpace: 'nowrap',
+    color: on ? 'var(--accent-ink)' : 'var(--ink-2)',
+    background: on ? 'var(--accent)' : 'transparent',
+    boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--line)',
+    transition: 'all var(--dur) var(--ease)',
+  });
+
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
-      <input
-        className="lb-input"
-        value={value || ''}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={(e) => commit(e.target.value)}
-        style={{
-          width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)',
-          fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)',
-          color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
-        }}
-      />
-      {chips.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          {chips.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => commit(current === v ? '' : v)}
-              className="lb-chip"
-              aria-pressed={current === v}
-              style={{
-                flex: 'none', padding: '5px 11px', borderRadius: 'var(--r-pill)',
-                fontSize: 12.5, fontWeight: current === v ? 600 : 500,
-                color: current === v ? 'var(--accent-ink)' : 'var(--ink-2)',
-                background: current === v ? 'var(--accent)' : 'transparent',
-                boxShadow: current === v ? 'none' : 'inset 0 0 0 1px var(--line)',
-                transition: 'all var(--dur) var(--ease)',
-              }}
-            >{v}</button>
-          ))}
-        </div>
+      <div
+        className="lb-chiprow"
+        style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}
+      >
+        <button type="button" onClick={openTyping} className="lb-chip"
+          aria-pressed={typing} style={chipStyle(typing)}>직접 입력</button>
+        {recents.slice(0, RECENT_SHOW).map((v) => (
+          <button key={v} type="button" onClick={() => pickChip(v)} className="lb-chip"
+            aria-pressed={current === v} style={chipStyle(current === v)}>{v}</button>
+        ))}
+      </div>
+      {typing && (
+        <input
+          ref={inputRef}
+          className="lb-input"
+          value={value || ''}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => remember(e.target.value)}
+          style={{
+            width: '100%', marginTop: 8, padding: '12px 14px', borderRadius: 'var(--r-md)',
+            fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)',
+            color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+          }}
+        />
       )}
     </div>
   );
