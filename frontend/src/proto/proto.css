@@ -253,14 +253,14 @@ img { display: block; max-width: 100%; }
 .lb-toast {
   position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%) translateY(8px);
   z-index: 70; opacity: 0; pointer-events: none;
-  /* 토스트는 기본 CTA(담고 완료·조합 추천받기·저장) 위에 겹쳐 뜬다. 어두운 배경으로
-     두면 버튼과 같은 검정 계열이라 아무리 톤을 조절해도 묻히고, 밝게 갈수록 흰 글자
-     대비가 무너진다. 그래서 반전시켜 카드와 같은 밝은 서피스 + 잉크 글자로 둔다 —
-     앱의 카드 언어 그대로라 톤은 유지되고, 검은 버튼 위에서는 확실히 분리된다. */
-  background: var(--surface); color: var(--ink);
+  /* 토스트는 기본 CTA(담고 완료·조합 추천받기·저장) 위에 겹쳐 뜬다. 검정이면 버튼과
+     같은 계열이라 묻히고, 흰/아이보리면 페이지 배경과 같은 계열이라 또 묻힌다.
+     그래서 팔레트에 이미 있는 테라코타(#B0573C — 선택 플로팅 메뉴의 삭제 버튼과
+     같은 색)를 쓴다. 배경도 버튼도 아닌 유일한 색이라 확실히 눈에 든다. */
+  background: #B0573C; color: #fff;
   font-size: 13.5px; font-weight: 700;
   padding: 11px 18px; border-radius: var(--r-pill);
-  box-shadow: var(--pop-shadow), inset 0 0 0 1px var(--line);
+  box-shadow: var(--pop-shadow);
   display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
   transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
