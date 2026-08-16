@@ -127,14 +127,19 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
 
 
 def stream_with_keepalive(work) -> StreamingResponse:
-    """오래 걸리는 작업(AI 추출 등)을 keep-alive 스트리밍 응답으로 감싼다.
+    """오래 걸리는 작업(AI 추출 등)을 SSE 스트리밍 응답으로 감싼다.
 
     Render 프록시는 응답이 시작되지 않은 요청을 ~100초에 끊지만, 스트리밍은
-    100분까지 허용한다. 작업이 도는 동안 진행 단계를 한 줄씩 흘려 연결을 유지하고
-    (`{"_step": ...}\\n`), 끝나면 마지막 줄에 결과 JSON을 보낸다. 프론트 liveJSON은
-    줄 단위로 읽어 _step은 진행률 콜백으로 넘기고 마지막 줄만 결과로 쓴다.
+    100분까지 허용한다. 작업이 도는 동안 진행 단계를 흘려 연결을 유지하고
+    (`data: {"_step": ...}`), 끝나면 마지막 이벤트로 결과 JSON을 보낸다.
     스트림 시작 후엔 상태코드를 바꿀 수 없으므로 에러는 {"error": ...} 본문으로
     전달한다 (프론트 liveJSON이 던져줌).
+
+    text/event-stream을 쓰는 이유: 이 서비스는 Cloudflare 뒤에 있고, 일반
+    content-type + 압축이 걸린 응답은 프록시가 버퍼링해서 단계 이벤트가 작업이
+    끝난 뒤 한꺼번에 도착한다(진행률이 0%에서 100%로 점프). SSE는 버퍼링 대상이
+    아니고, no-transform으로 압축까지 끄고, 앞에 패딩 코멘트를 흘려 남은 고정
+    버퍼도 밀어낸다.
 
     work가 인자를 하나 받으면 `report(step_key)`를 넘겨준다.
     """
@@ -153,6 +158,9 @@ def stream_with_keepalive(work) -> StreamingResponse:
                 print(f"[stream] work failed: {exc}", flush=True)
                 error.append("요청 처리 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
 
+        def event(payload: dict[str, Any]) -> str:
+            return "data: " + json.dumps(payload, ensure_ascii=False, default=str) + "\n\n"
+
         def drain() -> Iterator[str]:
             while steps:
                 key = steps.popleft()
@@ -160,11 +168,11 @@ def stream_with_keepalive(work) -> StreamingResponse:
                 if not spec:
                     continue
                 label, pct, until, eta = spec
-                yield json.dumps(
-                    {"_step": {"key": key, "label": label, "pct": pct, "until": until, "eta": eta}},
-                    ensure_ascii=False,
-                ) + "\n"
+                yield event(
+                    {"_step": {"key": key, "label": label, "pct": pct, "until": until, "eta": eta}}
+                )
 
+        yield ": " + " " * 2048 + "\n\n"  # 프록시 고정 버퍼 밀어내기
         t = threading.Thread(target=run, daemon=True)
         t.start()
         idle = 0.0
@@ -174,14 +182,18 @@ def stream_with_keepalive(work) -> StreamingResponse:
             idle += 0.4
             if t.is_alive() and idle >= 10:
                 idle = 0.0
-                yield "\n"  # 단계 변화가 없어도 연결 유지
+                yield ": ping\n\n"  # 단계 변화가 없어도 연결 유지
         yield from drain()
-        if error:
-            yield json.dumps({"error": error[0]}, ensure_ascii=False)
-        else:
-            yield json.dumps(result.get("data") or {}, ensure_ascii=False, default=str)
+        yield event({"error": error[0]} if error else (result.get("data") or {}))
 
-    return StreamingResponse(gen(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 CATEGORY_KO = {
@@ -576,6 +588,7 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
 _RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최대 깊이(px)
+_ALPHA_RAMP = 110  # 알파 재임계 램프 폭 — 좁으면 계단이 남고, 넓으면 테두리가 번진다
 _BG_NORM_VERSION = "cutout_v9"  # v9: 스튜디오 컷 경계를 연속 알파 + 배경색 제거로 처리
 _EXTRACTION_PROFILE = "extract_v10"
 
@@ -732,8 +745,56 @@ def _edge_plate_ratio(png_bytes: bytes) -> float:
     return hits / len(samples)
 
 
+# 알파 스무딩 반경(px, 1024~1536 기준). 의류는 2~4px 구조가 없어 넉넉히 뭉갤 수
+# 있지만, 시계 브레이슬릿 링크 틈·안경 다리·샌들 스트랩처럼 얇은 구조는 그 반경에
+# 지워진다. 그래서 얇은 디테일이 몰려 있는 카테고리는 약하게만 건다.
+_ALPHA_SMOOTH_STRONG = frozenset({"top", "outer", "dress", "bottom", "skirt"})
+
+
+def _polish_cutout_alpha(png_bytes: bytes, category: str | None = None) -> bytes:
+    """컷아웃 알파의 계단을 다듬고 반투명 테두리의 배경색 오염을 없앤다.
+
+    OpenAI가 background="transparent"로 준 알파는 사실상 이진이다(실측: 반투명
+    픽셀 0.5%, a=11에서 a=241로 한 픽셀에 점프). 안티에일리어싱이 없는데다 윤곽
+    자체가 여러 픽셀짜리 계단으로 그려져서, 옷장 카드나 확대 보기에서 실루엣이
+    블록처럼 깨져 보인다. 게다가 그 경계 픽셀은 배경 회색을 그대로 물고 있다.
+
+    계단은 1픽셀짜리가 아니라 서브픽셀 블러나 미디언으로는 안 없어진다. 알파를
+    한 번 뭉갠 뒤(GaussianBlur) 128 근처에서 완만한 램프로 다시 세우면
+    (soft re-threshold) 블러 반경보다 작은 계단은 사라지고 실루엣과 bbox는 그대로
+    남으면서 1~2px 안티에일리어싱이 생긴다. 새로 반투명이 된 픽셀의 색은 안쪽
+    불투명 색을 퍼뜨려 덮는다 — 원단 픽셀 자체는 건드리지 않는다.
+    """
+    try:
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    except Exception:
+        return png_bytes
+    alpha = img.getchannel("A")
+    if not alpha.getbbox():
+        return png_bytes
+    w, h = img.size
+    strong = (category or "").strip() in _ALPHA_SMOOTH_STRONG
+    radius = max(1.0, min(2.4 if strong else 1.0, min(w, h) / 450.0))
+    lo, hi = 128 - _ALPHA_RAMP // 2, 128 + _ALPHA_RAMP // 2
+    alpha = alpha.filter(ImageFilter.GaussianBlur(radius)).point(
+        lambda v: 0 if v <= lo else (255 if v >= hi else int((v - lo) * 255 / (hi - lo)))
+    )
+    img.putalpha(alpha)
+    rim_mask = alpha.point(lambda v: 255 if 0 < v < 250 else 0).tobytes()
+    rim = [(i % w, i // w) for i, v in enumerate(rim_mask) if v]
+    if rim:
+        _repair_rim_colors(img.load(), rim, w, h)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def finalize_cutout(
-    png_bytes: bytes, *, already_transparent: bool = False, protect_light_garment: bool = False
+    png_bytes: bytes,
+    *,
+    already_transparent: bool = False,
+    protect_light_garment: bool = False,
+    category: str | None = None,
 ) -> bytes:
     """1차 컷아웃 후 가장자리에 흰 판이 남으면 더 강하게 한 번 더.
 
@@ -746,17 +807,19 @@ def finalize_cutout(
     """
     if already_transparent and (protect_light_garment or _edge_plate_ratio(png_bytes) < 0.12):
         print("[cutout] already clean (AI transparent bg) — skip flood-fill repair", flush=True)
-        return png_bytes
+        # 플러드필은 건너뛰더라도 알파 경계는 다듬는다 — AI 알파는 이진이라
+        # 그대로 두면 확대 단계에서 계단이 그대로 커진다.
+        return _polish_cutout_alpha(png_bytes, category)
     out = make_transparent_cutout(png_bytes, aggressive=False)
     if _edge_plate_ratio(out) >= 0.12:
         out = make_transparent_cutout(out, aggressive=True)
-    return out
+    return _polish_cutout_alpha(out, category)
 
 
-def local_product_cutout(path: str) -> bytes | None:
+def local_product_cutout(path: str, category: str | None = None) -> bytes | None:
     """AI 추출 실패 시에도 원본 스튜디오 배경을 걷어 카드 톤을 맞춤."""
     try:
-        return finalize_cutout(read_image_as_png_bytes(path))
+        return finalize_cutout(read_image_as_png_bytes(path), category=category)
     except Exception:
         return None
 
@@ -1067,7 +1130,7 @@ def generate_product_image(
         print("[extract] TEST MODE — 로컬 컷아웃만, AI 미호출 ($0)", flush=True)
         meta["_extract_mode"] = "test_local_cutout"
         meta["_extract_policy"] = {"tier": "test", "quality": "local", "timeout_s": 0}
-        return local_product_cutout(path)
+        return local_product_cutout(path, meta.get("category"))
     # 크레딧 게이트 비활성(테스트). charge는 no-op이지만 호출해 ledger 경로를 유지하지 않음.
     charge_credit(user_id, "product_image", {"name": meta.get("name")})
     if "has_text_logo" not in meta:
@@ -1170,7 +1233,12 @@ def generate_product_image(
         raw = _edit(model, transparent=True)
         print(f"[extract] ok model={model} transparent=True", flush=True)
         meta["_extract_mode"] = "ai"
-        return finalize_cutout(raw, already_transparent=True, protect_light_garment=whiteish)
+        return finalize_cutout(
+            raw,
+            already_transparent=True,
+            protect_light_garment=whiteish,
+            category=meta.get("category"),
+        )
     except (APITimeoutError, APIConnectionError) as exc:
         meta["_extract_fail"] = "timeout"
         print(f"[extract] timeout/conn model={model}: {exc}", flush=True)

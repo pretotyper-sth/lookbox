@@ -314,16 +314,24 @@ function liveAppendDaily(payload, ownedItems) {
   return added;
 }
 
-// 진행 알림 줄({"_step":…})을 걸러내고 결과가 담긴 마지막 줄만 남긴다.
+// SSE 한 줄에서 payload만 꺼낸다. `data: {…}` 와 옛 프로토콜의 맨 JSON 둘 다 받는다.
+// `:` 로 시작하는 줄은 SSE 코멘트(패딩·keep-alive)이므로 버린다.
+function streamPayload(line) {
+  const s = String(line || '').trim();
+  if (!s || s.charAt(0) === ':') return '';
+  return s.indexOf('data:') === 0 ? s.slice(5).trim() : s;
+}
+
+// 진행 이벤트(_step)를 걸러내고 결과가 담긴 마지막 이벤트만 남긴다.
 function lastResultLine(text) {
-  const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = String(text || '').split('\n').map(streamPayload).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     if (lines[i].indexOf('"_step"') === -1) return lines[i];
   }
   return '';
 }
 
-// 스트림을 읽으면서 _step 줄이 도착할 때마다 onProgress로 넘긴다. 전체 본문은
+// 스트림을 읽으면서 _step 이벤트가 도착할 때마다 onProgress로 넘긴다. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
 async function readProgressStream(res, onProgress) {
   if (!res.body || !res.body.getReader) return res.text();
@@ -339,11 +347,11 @@ async function readProgressStream(res, onProgress) {
     buf += chunk;
     let nl;
     while ((nl = buf.indexOf('\n')) !== -1) {
-      const line = buf.slice(0, nl).trim();
+      const payload = streamPayload(buf.slice(0, nl));
       buf = buf.slice(nl + 1);
-      if (!line || line.indexOf('"_step"') === -1) continue;
+      if (!payload || payload.indexOf('"_step"') === -1) continue;
       try {
-        const step = JSON.parse(line)._step;
+        const step = JSON.parse(payload)._step;
         if (step) onProgress(step);
       } catch (e) { /* 부분 수신 줄은 무시 */ }
     }

@@ -506,11 +506,15 @@ function urlImportBlockedHint(raw) {
 // 서버가 보내는 세부 단계(_IMPORT_STEPS)를 체크리스트용 4단계로 묶는다. 상세
 // 문구는 서버 라벨을 그대로 쓰고, 체크리스트는 지금 어디쯤인지만 보여준다.
 const IMPORT_PHASES = [
-  { short: '사진 확인', keys: ['fetch', 'cache'] },
+  { short: '사진 확인', keys: ['send', 'fetch', 'cache'] },
   { short: '옷 인식', keys: ['classify', 'upload'] },
   { short: '배경 정리', keys: ['cutout', 'polish'] },
   { short: '옷장 저장', keys: ['save'] },
 ];
+
+// 첫 서버 단계는 사진 업로드가 끝난 뒤에야 온다 — 모바일에서 몇 초씩 걸리므로
+// 그동안 0%에 멈춰 있지 않게 클라이언트가 이 단계부터 시작한다.
+const IMPORT_STEP_SEND = { key: 'send', label: '사진을 보내고 있어요', pct: 0, until: 10, eta: 6 };
 
 // 업로드 진행률. 단계 경계(%)는 서버가 알려주고, 한 단계 안에서의 움직임은
 // 그 단계의 평소 소요 시간(eta)으로 보간한다. 지수 감쇠라 끝 %를 넘지 않으면서
@@ -539,6 +543,8 @@ function useImportProgress(active) {
 
   const report = (next) => {
     if (!next || !next.label) return;
+    // 서버 단계가 늦게 도착해도 진행률이 뒤로 가지 않게 한다.
+    if (stepRef.current && next.pct < stepRef.current.pct) return;
     stepRef.current = { ...next, at: Date.now() };
     setStep(next);
     setPct(next.pct);
@@ -650,6 +656,7 @@ function AddSheet({ ctx }) {
     setErr('');
     setBusy(true);
     setStage('analyzing');
+    progress.report(IMPORT_STEP_SEND);
     try {
       // 이미지만 변경: 새 소스로 추출만 먼저 해보고, DB에는 바로 반영하지 않는다.
       // (결과가 마음에 안 들 수 있어 확인 단계를 거친 뒤에만 실제로 반영)
@@ -1280,7 +1287,7 @@ function AddSheet({ ctx }) {
             <div style={{ width: '100%', marginTop: 'var(--s5)' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--s3)' }}>
                 <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>
-                  {(progress.step && progress.step.label) || '사진을 올리고 있어요'}
+                  {(progress.step && progress.step.label) || IMPORT_STEP_SEND.label}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
                   {progress.pct}%
@@ -1309,7 +1316,7 @@ function AddSheet({ ctx }) {
                 })()}
               </div>
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>
-                최대 2분 소요 — 창을 닫지 않아도 계속 진행돼요
+                최대 2분 소요
               </div>
             </div>
           </div>
