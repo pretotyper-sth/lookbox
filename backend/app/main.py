@@ -841,7 +841,14 @@ def local_product_cutout(path: str, category: str | None = None) -> bytes | None
 
 
 def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], float]:
-    """테두리 픽셀 분석: (균일한 밝은 스튜디오 판인지, 대표 배경색, 편차 p90)."""
+    """테두리 픽셀 분석: (스튜디오 판으로 볼 수 있는지, 대표 배경색, 국소 편차 p90).
+
+    예전 판정은 테두리 샘플의 97%가 중앙값 ±10 안에 들 것을 요구했다. 실제
+    상품 촬영본은 거의 항상 옅은 비네팅이나 위아래 그라데이션이 있어서 이 조건에
+    걸려 탈락했고, 그러면 AI 재생성 경로로 넘어가 원단 잔주름·질감이 뭉개진
+    그림이 나왔다. 스튜디오 판에서 중요한 건 '완전히 균일한가'가 아니라
+    '매끄러운가' — 옆 샘플과의 차이가 작으면 그라데이션이 있어도 판이다.
+    """
     rgb = img.convert("RGB")
     w, h = rgb.size
     px = rgb.load()
@@ -855,11 +862,43 @@ def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], floa
         samples.append(px[w - 1, y])
     n = len(samples)
     med = tuple(sorted(s[i] for s in samples)[n // 2] for i in range(3))
-    diffs = sorted(max(abs(s[i] - med[i]) for i in range(3)) for s in samples)
-    close = sum(1 for d in diffs if d <= 10) / n
-    spread = float(diffs[int(n * 0.9)])
-    bright = min(med) >= 230 and (max(med) - min(med)) <= 14
-    return (close >= 0.97 and bright), med, spread
+    # 국소 편차: 인접 샘플 간 변화량. 그라데이션은 통과, 옷·소품이 테두리에
+    # 걸쳐 있으면 큰 점프가 생겨 탈락한다.
+    steps = sorted(
+        max(abs(samples[i][c] - samples[i - 1][c]) for c in range(3)) for i in range(1, n)
+    )
+    local = float(steps[int((n - 1) * 0.9)])
+    smooth = local <= 8 and steps[-1] <= 42
+    # 밝은 판만 대상 (어두운 배경은 옷과 구분이 어려워 AI 경로 유지)
+    bright = min(med) >= 216 and (max(med) - min(med)) <= 20
+    return (smooth and bright), med, local
+
+
+def _estimate_plate(rgb: Image.Image) -> Image.Image:
+    """테두리 픽셀만으로 스튜디오 판의 밝기 분포를 추정한다.
+
+    상품 촬영본의 배경은 완전한 단색이 아니라 옅은 비네팅이나 위아래 그라데이션이
+    있다. 전역 임계 하나로 재면 한쪽 끝은 배경이 남고 반대쪽은 옷을 파먹는다.
+    테두리 네 변의 값을 가로·세로로 이어 붙여(양선형) 판을 추정하면, 판이 실제로
+    어떻게 변하는지 따라가면서 옷이 있는 가운데는 테두리 값으로 외삽된다.
+    """
+    w, h = rgb.size
+    # 4변을 얇게 떠서 각각 한 줄/한 칸으로 줄인 뒤 다시 늘려 겹친다
+    top = rgb.crop((0, 0, w, max(1, h // 64))).resize((w, 1), Image.BOX)
+    bottom = rgb.crop((0, h - max(1, h // 64), w, h)).resize((w, 1), Image.BOX)
+    left = rgb.crop((0, 0, max(1, w // 64), h)).resize((1, h), Image.BOX)
+    right = rgb.crop((w - max(1, w // 64), 0, w, h)).resize((1, h), Image.BOX)
+    vertical = Image.new("RGB", (w, 2))
+    vertical.paste(top, (0, 0))
+    vertical.paste(bottom, (0, 1))
+    horizontal = Image.new("RGB", (2, h))
+    horizontal.paste(left, (0, 0))
+    horizontal.paste(right, (1, 0))
+    return Image.blend(
+        vertical.resize((w, h), Image.BILINEAR),
+        horizontal.resize((w, h), Image.BILINEAR),
+        0.5,
+    )
 
 
 def _bleed_edge_colors(img: Image.Image, depth: int) -> None:
@@ -954,18 +993,21 @@ def studio_product_cutout(path: str) -> bytes | None:
         img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
     except Exception:
         return None
-    clean, bg, spread = _border_bg_stats(img)
+    clean, _bg, local = _border_bg_stats(img)
     if not clean:
         return None
     w, h = img.size
     if w < 16 or h < 16:
         return None
     # tol: 확신 배경(연결성 판정용). hi는 본체 거리(sep)를 재고 나서 정한다.
-    tol = max(3, min(9, int(spread) + 3))
+    tol = max(3, min(9, int(local) + 3))
 
-    # 배경색과 거의 같은 픽셀 마스크(255=배경 후보) → 침식으로 누수 통로 차단
+    # 배경색과 거의 같은 픽셀 마스크(255=배경 후보) → 침식으로 누수 통로 차단.
+    # 비네팅·그라데이션이 있는 판은 전역 임계 하나로는 한쪽 끝이 잘려나가므로,
+    # 판정 기준을 테두리에서 추정한 국소 배경(bgmap)으로 둔다.
     rgb = img.convert("RGB")
-    diff_bands = ImageChops.difference(rgb, Image.new("RGB", (w, h), bg)).split()
+    bgmap = _estimate_plate(rgb)
+    diff_bands = ImageChops.difference(rgb, bgmap).split()
     maxdiff = ImageChops.lighter(ImageChops.lighter(diff_bands[0], diff_bands[1]), diff_bands[2])
     cand = maxdiff.point(lambda v: 255 if v <= tol else 0)
     core = cand.filter(ImageFilter.MinFilter(5))
@@ -1069,20 +1111,6 @@ def studio_product_cutout(path: str) -> bytes | None:
             if px[x, y][3] < 128:
                 hole += 1
     if total_c and hole / total_c > 0.1:
-        return None
-    # 흰/밝은 옷일 때만 이 경로 사용 — 유색 옷은 기존 AI 추출을 유지(변경 최소화)
-    light = 0
-    total_o = 0
-    step_o = max(1, min(w, h) // 80)
-    for y in range(by0, by1, step_o):
-        for x in range(bx0, bx1, step_o):
-            r, g, b, a = px[x, y]
-            if a < 128:
-                continue
-            total_o += 1
-            if (r + g + b) >= 3 * 165 and (max(r, g, b) - min(r, g, b)) <= 48:
-                light += 1
-    if not total_o or light / total_o < 0.55:
         return None
 
     # 알파만 정리: 미디언으로 1px 톱니·튀는 점을 없애고(실루엣은 유지) 살짝 흐려
