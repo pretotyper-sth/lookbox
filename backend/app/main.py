@@ -538,8 +538,9 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
 
 # 스튜디오/순백 판으로 보이는 밝은 배경 → 투명 처리 (코디 합성 시 카드처럼 안 보이게)
 _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거 대상
-_BG_NORM_VERSION = "cutout_v8"  # v8: 흰 의류 보호 + 보이는 본체 기준 정규화
-_EXTRACTION_PROFILE = "extract_v9"
+_RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최대 깊이(px)
+_BG_NORM_VERSION = "cutout_v9"  # v9: 스튜디오 컷 경계를 연속 알파 + 배경색 제거로 처리
+_EXTRACTION_PROFILE = "extract_v10"
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -745,6 +746,34 @@ def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], floa
     return (close >= 0.97 and bright), med, spread
 
 
+def _repair_rim_colors(px: Any, rim: list[tuple[int, int]], w: int, h: int) -> None:
+    """반투명 경계 픽셀의 RGB를 안쪽 불투명 픽셀 색으로 채운다.
+
+    경계 픽셀의 원래 색은 원단과 배경이 섞인 값이다. 그대로 두면 밝은 배경색이
+    테두리로 번지고, 배경색을 역산하면 알파가 작을수록 노이즈가 증폭돼 어두운
+    실선이 생긴다. 둘 다 피하려면 색을 추정하지 말고 이웃한 원단 색을 그대로
+    가져오면 된다 — 알파가 실루엣을 만들고 색은 원단과 이어진다.
+    """
+    pending = set(rim)
+    frontier: deque[tuple[int, int]] = deque()
+    for x, y in rim:
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] >= 250:
+                r, g, b, _a = px[nx, ny]
+                px[x, y] = (r, g, b, px[x, y][3])
+                pending.discard((x, y))
+                frontier.append((x, y))
+                break
+    while frontier and pending:
+        x, y = frontier.popleft()
+        r, g, b, _a = px[x, y]
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (nx, ny) in pending:
+                pending.discard((nx, ny))
+                px[nx, ny] = (r, g, b, px[nx, ny][3])
+                frontier.append((nx, ny))
+
+
 def studio_product_cutout(path: str) -> bytes | None:
     """밝고 균일한 스튜디오 배경의 '흰/밝은 옷 상품컷'은 AI 재생성 없이
     원본 픽셀 그대로 배경만 제거한다.
@@ -756,19 +785,34 @@ def studio_product_cutout(path: str) -> bytes | None:
     흰 원단은 배경과 픽셀 값이 부분적으로 겹쳐 단순 플러드필은 옷 안으로
     샌다(스트릭 형태 구멍). 그래서 배경 후보 마스크를 침식(MinFilter)해
     좁은 누수 통로를 끊은 뒤 테두리에서 플러드필하고, 침식으로 깎인 경계
-    띠만 제한 팽창(≤4px)으로 복원한다. 판정이 애매하면 None → 기존 AI 경로.
+    띠는 제한 팽창(≤RIM_DEPTH)으로 복원한다. 판정이 애매하면 None → 기존 AI 경로.
+
+    경계 처리가 품질을 좌우한다. 고정 임계(tol=3) + 이진 알파는 실제 촬영본에서
+    두 가지 잔상을 남겼다: (1) 센서 노이즈·JPEG 링잉·비네팅 때문에 배경인데도
+    임계를 넘는 픽셀이 옷 주변에 얼룩덜룩 불투명하게 남고, (2) 드롭섀도가
+    임계에서 막혀 옷 실루엣이 회색 유령처럼 한 겹 더 보인다. 그래서
+    임계를 테두리에서 측정한 실제 노이즈(spread)에 맞춰 적응시키고, 경계 띠는
+    0/255가 아니라 배경 거리에 비례한 연속 알파로 되찾는다.
+
+    다만 그 알파 램프의 상한(hi)이 원단이 배경에서 떨어진 거리(sep)보다 넓으면
+    원단 픽셀이 램프 중간에 걸려 반투명해지고, 원단 노이즈 때문에 알파가
+    위아래로 튀면서 실루엣이 지글거린다(글리치). 그래서 hi를 sep에서 역산해
+    램프가 항상 원단보다 안쪽에서 끝나게 한다. 반투명 픽셀의 색은 배경색을
+    역산하지 않는다 — 알파가 작을수록 노이즈가 증폭돼 실루엣에 어두운 실선이
+    생기기 때문. 대신 안쪽 불투명 원단 색을 밖으로 퍼뜨려(color repair) 채운다.
     """
     try:
         img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
     except Exception:
         return None
-    clean, bg, _spread = _border_bg_stats(img)
+    clean, bg, spread = _border_bg_stats(img)
     if not clean:
         return None
     w, h = img.size
     if w < 16 or h < 16:
         return None
-    tol = 3
+    # tol: 확신 배경(연결성 판정용). hi는 본체 거리(sep)를 재고 나서 정한다.
+    tol = max(3, min(9, int(spread) + 3))
 
     # 배경색과 거의 같은 픽셀 마스크(255=배경 후보) → 침식으로 누수 통로 차단
     rgb = img.convert("RGB")
@@ -778,7 +822,7 @@ def studio_product_cutout(path: str) -> bytes | None:
     core = cand.filter(ImageFilter.MinFilter(5))
 
     core_px = core.load()
-    cand_px = cand.load()
+    diff_px = maxdiff.load()
     visited = bytearray(w * h)
     q: deque[tuple[int, int]] = deque()
 
@@ -805,15 +849,6 @@ def studio_product_cutout(path: str) -> bytes | None:
                 q.append((nx, ny))
     if not boundary:
         return None
-    # 제한 팽창: 침식으로 깎인 경계 띠 복원 (옷 쪽으로는 최대 4px)
-    while boundary:
-        x, y, dep = boundary.popleft()
-        if dep >= 4:
-            continue
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if 0 <= nx < w and 0 <= ny < h and not bg_set[ny * w + nx] and cand_px[nx, ny]:
-                bg_set[ny * w + nx] = 1
-                boundary.append((nx, ny, dep + 1))
 
     px = img.load()
     removed = 0
@@ -824,6 +859,46 @@ def studio_product_cutout(path: str) -> bytes | None:
                 r, g, b, _a = px[x, y]
                 px[x, y] = (r, g, b, 0)
                 removed += 1
+
+    # sep: 본체 원단이 배경색에서 떨어진 대표 거리. 램프 상한을 이 안쪽에 두어야
+    # 원단이 반투명해지지 않는다. 경계 띠는 본체에서 아주 작은 비중이라 중앙값이면 충분.
+    body = [
+        diff_px[x, y]
+        for y in range(0, h, max(1, min(w, h) // 90))
+        for x in range(0, w, max(1, min(w, h) // 90))
+        if not bg_set[y * w + x]
+    ]
+    if not body:
+        return None
+    sep = sorted(body)[len(body) // 2]
+    hi = max(tol + 2, min(tol + 16, int(sep * 0.6)))
+    span = float(hi - tol)
+    soft_px = maxdiff.point(lambda v: 255 if v <= hi else 0).load()
+
+    # 제한 팽창: 침식으로 깎인 경계 띠 복원 (옷 쪽으로는 최대 RIM_DEPTH px).
+    # 이진 0이 아니라 배경 거리 비례 알파를 준다. 색은 여기서 건드리지 않고,
+    # 아래 color repair에서 안쪽 원단 색으로 채운다.
+    rim: list[tuple[int, int]] = []
+    while boundary:
+        x, y, dep = boundary.popleft()
+        if dep >= _RIM_DEPTH:
+            continue
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < w and 0 <= ny < h) or bg_set[ny * w + nx] or not soft_px[nx, ny]:
+                continue
+            bg_set[ny * w + nx] = 1
+            boundary.append((nx, ny, dep + 1))
+            a = int(max(0.0, min(1.0, (diff_px[nx, ny] - tol) / span)) * 255)
+            r, g, b, _a = px[nx, ny]
+            px[nx, ny] = (r, g, b, a)
+            if a < 128:
+                removed += 1
+            if a > 0:
+                rim.append((nx, ny))
+
+    # color repair: 반투명 픽셀의 색을 안쪽 불투명 원단 색으로 덮는다. 배경색을
+    # 역산(unpremultiply)하면 알파가 작을 때 노이즈가 증폭돼 어두운 실선이 생긴다.
+    _repair_rim_colors(px, rim, w, h)
 
     # ---- 검증: 실패로 보이면 None을 돌려 기존 AI 경로로 넘긴다 ----
     fg_frac = 1.0 - removed / (w * h)
@@ -861,10 +936,11 @@ def studio_product_cutout(path: str) -> bytes | None:
     if not total_o or light / total_o < 0.55:
         return None
 
-    # 이 경로는 흰 옷과 흰 배경을 다루므로 알파를 흐리면 배경의 밝은 RGB가
-    # 반투명 가장자리로 번져 검은 카드 위에서 물결/테두리처럼 보인다. 마스크는
-    # 이미 원본 해상도에서 계산했으므로 이진 알파를 그대로 유지한다.
-    img.putalpha(alpha)
+    # 알파만 정리: 미디언으로 1px 톱니·튀는 점을 없애고(실루엣은 유지) 살짝 흐려
+    # 안티에일리어싱을 준다. 색은 이미 원단 색이므로 번짐이 생기지 않는다.
+    img.putalpha(
+        img.getchannel("A").filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    )
     bbox = img.getchannel("A").getbbox() or bbox
     pad = round(0.04 * max(w, h))
     img = img.crop((
