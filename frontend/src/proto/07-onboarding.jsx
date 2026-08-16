@@ -525,7 +525,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
         </div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>연령대</div>
-          <ChipRow options={['10대', '20대', '30대', '40대 이상']} value={d.age} onPick={set('age')} />
+          <ChipRow options={LB_DATA.AGES} value={d.age} onPick={set('age')} />
         </div>
       </div>
     ),

@@ -146,9 +146,10 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
   );
 }
 
-function ModelLookAvatarSheet({ open, onClose, onSelect }) {
+function ModelLookAvatarSheet({ open, onClose, onSelect, src }) {
   const [error, setError] = useMp('');
   useMe(() => { if (open) setError(''); }, [open]);
+  const hasPhoto = !!src;
   return (
     <BottomSheet open={open} onClose={onClose}>
       <div style={{ padding: '6px 24px 26px', textAlign: 'center' }}>
@@ -158,7 +159,7 @@ function ModelLookAvatarSheet({ open, onClose, onSelect }) {
           color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all',
         }}>
           프로필 사진 얼굴로 코디를 입은 모습을 만들어요.<br />
-          단, 일반 추천보다 생성에 시간이 더 걸려요.
+          단, 일반 추천보다 생성에 시간·비용이 더 들어요.
         </p>
         {error && (
           <div style={{
@@ -171,19 +172,23 @@ function ModelLookAvatarSheet({ open, onClose, onSelect }) {
         )}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <ProfileAvatar
+            src={src}
             size={96}
             onInvalid={setError}
             onChange={(dataUrl) => { setError(''); onSelect(dataUrl); }}
           />
         </div>
-        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700 }}>사진을 눌러 등록</div>
+        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700 }}>{hasPhoto ? '사진을 눌러 변경' : '사진을 눌러 등록'}</div>
         <p style={{
           margin: '7px auto 0', maxWidth: 300, fontSize: 11.5,
           color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all',
         }}>
           등록한 사진은 마이페이지 프로필에도 동일하게 표시돼요.
         </p>
-        <Btn variant="soft" onClick={onClose} style={{ width: '100%', marginTop: 22 }}>취소</Btn>
+        {hasPhoto && (
+          <Btn full size="lg" onClick={() => onSelect(src)} style={{ width: '100%', marginTop: 22 }}>이 사진으로 보기</Btn>
+        )}
+        <Btn variant="soft" onClick={onClose} style={{ width: '100%', marginTop: hasPhoto ? 10 : 22 }}>취소</Btn>
       </div>
     </BottomSheet>
   );
@@ -272,11 +277,10 @@ function MyPageScreen({ ctx }) {
 
   const toggleModelLook = () => {
     if (modelLook) { setModelLook && setModelLook(false); return; }
-    if (prefs.avatar) { setModelLook && setModelLook(true); return; }
     setModelPhoto(true);
   };
 
-  // 얼굴이 없을 때는 막는 대신 사진 등록 흐름을 바로 연다.
+  // 켤 때는 항상 사진 확인 시트를 연다. 프로필에 얼굴이 있으면 그대로 보여주고, 없으면 빈 상태로 등록을 받는다.
   const modelLookRow = (
     <ActionRow
       icon="user"
@@ -314,6 +318,7 @@ function MyPageScreen({ ctx }) {
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
       <ModelLookAvatarSheet
         open={modelPhoto}
+        src={prefs.avatar}
         onClose={() => setModelPhoto(false)}
         onSelect={(dataUrl) => {
           if (setModelLook) setModelLook(true, dataUrl);
@@ -524,7 +529,7 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
           </div>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>연령대</div>
-            <AccountChips options={['10대', '20대', '30대', '40대 이상']} value={d.age} onPick={set('age')} />
+            <AccountChips options={LB_DATA.AGES} value={d.age} onPick={set('age')} />
           </div>
         </div>
 

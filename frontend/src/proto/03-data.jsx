@@ -130,6 +130,8 @@ const STYLES = [
 
 // 선호 핏 · 선호 컬러 (옷 추천에 사용)
 const FITS = ['슬림', '레귤러', '오버핏', '상관없음'];
+// 10대·40대·50대는 10년 단위. 20·30대만 초/중/후반을 나눈다 — 스타일 편차가 커서.
+const AGES = ['10대', '20대 초반', '20대 중반', '20대 후반', '30대 초반', '30대 중반', '30대 후반', '40대', '50대 이상'];
 const PALETTE = [
   { id: 'mono',    name: '모노톤',     swatch: ['#1A1A1A', '#8A857C', '#FFFFFF'] },
   { id: 'earth',   name: '어스톤',     swatch: ['#7C6748', '#A98C5A', '#D8C7A6'] },
@@ -154,7 +156,7 @@ const DEFAULT_PREFS = {
   modelLook: false,    // 코디를 프로필 사진 얼굴의 모델이 입은 전신 컷으로 — 더 비싸서 기본 off
 };
 
-Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
 
 
 /* @prototype-ported: real-service start = empty user content */
