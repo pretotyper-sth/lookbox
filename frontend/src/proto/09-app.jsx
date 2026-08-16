@@ -827,6 +827,53 @@ function App() {
       .catch(() => {});
   }, [isShowcase]);
 
+  // 스크롤 위치 표시 — 스크롤 중에만 보인다. 리스너는 반드시 passive + capture로 단다.
+  // 스크롤 경로에 비패시브 리스너를 다시 달면 컴포지터 스크롤이 또 꺼진다.
+  // 측정·스타일 적용은 rAF 한 번으로 묶어 스크롤 프레임마다 레이아웃을 되읽지 않는다.
+  useEffect(() => {
+    const bar = document.createElement('div');
+    bar.className = 'lb-sbar';
+    document.body.appendChild(bar);
+    let hideTimer = null;
+    let frame = null;
+    let pending = null;
+
+    const draw = () => {
+      frame = null;
+      const el = pending;
+      if (!el || !el.isConnected) return;
+      const track = el.clientHeight;
+      const total = el.scrollHeight;
+      if (total <= track + 4) { bar.classList.remove('on'); return; }
+      const r = el.getBoundingClientRect();
+      const inset = 3;
+      const usable = track - inset * 2;
+      const h = Math.max(28, Math.round((track / total) * usable));
+      const top = Math.round((el.scrollTop / (total - track)) * (usable - h));
+      bar.style.height = h + 'px';
+      bar.style.top = (r.top + inset + top) + 'px';
+      bar.style.left = (r.right - 4 - inset) + 'px';
+      bar.classList.add('on');
+    };
+
+    const onScroll = (e) => {
+      const el = e.target;
+      if (!el || el.nodeType !== 1 || !el.classList || !el.classList.contains('lb-scrollable')) return;
+      pending = el;
+      if (!frame) frame = requestAnimationFrame(draw);
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => bar.classList.remove('on'), 700);
+    };
+
+    document.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      clearTimeout(hideTimer);
+      if (frame) cancelAnimationFrame(frame);
+      bar.remove();
+    };
+  }, []);
+
   // Persist the wardrobe locally so the next load paints instantly.
   useEffect(() => {
     if (isShowcase) return;

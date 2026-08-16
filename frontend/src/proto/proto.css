@@ -302,6 +302,22 @@ img { display: block; max-width: 100%; }
 .lb-chiprow { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
 .lb-chiprow::-webkit-scrollbar { display: none; }
 
+/* 스크롤 위치 표시 — 스크롤하는 동안만 보인다.
+   ::-webkit-scrollbar 커스터마이즈는 오버레이 스크롤바 환경(모바일 에뮬레이션,
+   실제 모바일)에서 무시된다 — 실측으로 폭이 0이었다. 그래서 네이티브는 숨기고
+   직접 그린 인디케이터를 body에 fixed로 얹는다. 플랫폼과 무관하게 같은 모양이고,
+   콘텐츠 폭을 건드리지 않아 나타날 때 레이아웃이 밀리지 않는다. */
+.lb-scrollable { scrollbar-width: none; }
+.lb-scrollable::-webkit-scrollbar { width: 0; height: 0; }
+
+.lb-sbar {
+  position: fixed; width: 4px; border-radius: 999px; z-index: 60;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  pointer-events: none; opacity: 0;
+  transition: opacity 260ms var(--ease);
+}
+.lb-sbar.on { opacity: 1; }
+
 .lb-scrollable {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
