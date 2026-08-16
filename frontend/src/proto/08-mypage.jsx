@@ -100,12 +100,10 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
       const faces = window.countFacesInImage
         ? await window.countFacesInImage(dataUrl)
         : -1;
-      if (faces !== 1) {
-        const message = faces > 1
-          ? '한 명의 얼굴만 나온 사진을 선택해주세요.'
-          : faces === 0
-            ? '얼굴이 잘 보이는 정면 사진을 선택해주세요.'
-            : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.';
+      const message = window.faceCountError
+        ? window.faceCountError(faces)
+        : (faces === 1 ? '' : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
+      if (message) {
         if (onInvalid) onInvalid(message);
         return;
       }
@@ -237,7 +235,7 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast } = ctx;
+  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast, openTryOn, openTryOnSetup } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
@@ -289,6 +287,18 @@ function MyPageScreen({ ctx }) {
     />
   );
 
+  const tryOnReady = !!(prefs.tryOnFrame);
+  const tryOnRow = (
+    <ActionRow
+      icon="cutout"
+      label="바로 보기"
+      hint={wide
+        ? '휴대폰 카메라 전용 · 전신 사진은 여기서 준비할 수 있어요'
+        : (tryOnReady ? '전신 사진으로 매장 옷을 바로 비춰 봐요' : '전신 사진만 올리면 매장에서 바로 볼 수 있어요')}
+      onClick={() => (wide ? openTryOnSetup && openTryOnSetup() : openTryOn && openTryOn())}
+    />
+  );
+
   const settingsCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
@@ -298,6 +308,7 @@ function MyPageScreen({ ctx }) {
         right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
       />
       {modelLookRow}
+      {tryOnRow}
       <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
     </div>
   );
@@ -393,6 +404,7 @@ function MyPageScreen({ ctx }) {
             right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
           />
           {modelLookRow}
+          {tryOnRow}
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>

@@ -2,7 +2,7 @@
 const React = window.React;
 const { Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState, LookExpandBadge */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
 
 const { useState: useSc, useEffect: useEc } = React;
@@ -22,46 +22,66 @@ function MetaChips({ item }) {
    LookComposite — 조합 전체를 한 배경 위에 옷(컷아웃)만 배치.
    개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
-/* 정사각으로 정규화된 제품 컷을 Codimap식 플랫레이로 펼친다.
-   사람 실루엣처럼 포개지지 않도록 주 의류는 좌우로 나누고, 신발·소품은 남은
-   가장자리에 충분히 크게 둔다. 값은 코디 가로폭 대비 정사각 프레임의 비율이다. */
+/* 4사분면 플랫레이: 상의 | 하의 / 신발 | 악세서리.
+   악세서리는 우하단을 다시 2×2로 나눠 안 겹치게 둔다.
+   값은 코디 가로폭 대비 정사각 프레임 비율(%). */
 const LOOK_SIZE = {
-  '아우터': 60, '상의': 56, '하의': 56, '스커트': 50, '원피스': 72,
-  '신발': 47, '가방': 43, '모자': 37, '소품': 33,
-  '액세서리': 37, // 구버전 데이터 호환
+  '아우터': 48, '상의': 46, '하의': 46, '스커트': 44, '원피스': 54,
+  '신발': 40, '가방': 30, '모자': 28, '소품': 26,
+  '액세서리': 28, // 구버전 데이터 호환
 };
 const LOOK_SCALE = 1;
 
-/* 주 의류는 서로의 중심선을 침범하지 않고, 액세서리는 빈 모서리를 쓴다. */
+/* 4분면 기본 위치(원위치)에서 상·하 간격만 약 90%로 좁힘. */
 const LOOK_SPOT = {
-  bottom: { cx: 28, cy: 45, z: 2 },
-  dress:  { cx: 48, cy: 46, z: 2 },
-  outer:  { cx: 72, cy: 38, z: 2 },
-  top:    { cx: 70, cy: 46, z: 3 },
-  layer:  { cx: 56, cy: 57, z: 4 }, // 아우터가 있을 때만 중앙 앞쪽
-  shoes:  { cx: 64, cy: 86, z: 5 },
-  bag:    { cx: 83, cy: 75, z: 5 },
-  hat:    { cx: 84, cy: 60, z: 6 },
-  small:  { cx: 23, cy: 13, z: 6 },
+  // 좌상 · 상의(아우터/상의/원피스)
+  outer:  { cx: 27, cy: 38, z: 2 },
+  top:    { cx: 27, cy: 40, z: 3 },
+  layer:  { cx: 33, cy: 44, z: 4 }, // 아우터+상의일 때 상의를 살짝 앞·안쪽
+  dress:  { cx: 28, cy: 42, z: 2 },
+  // 우상 · 하의
+  bottom: { cx: 73, cy: 40, z: 2 },
+  // 좌하 · 신발
+  shoes:  { cx: 27, cy: 74, z: 5 },
 };
+/* 우하 · 악세서리 2×2 (가방·모자·소품 등) */
+const LOOK_ACC_SPOTS = [
+  { cx: 62, cy: 64, z: 6 },
+  { cx: 86, cy: 64, z: 6 },
+  { cx: 62, cy: 86, z: 6 },
+  { cx: 86, cy: 86, z: 6 },
+];
 const LOOK_ROLE = {
   '하의': 'bottom', '스커트': 'bottom', '원피스': 'dress',
   '아우터': 'outer', '상의': 'top',
-  '신발': 'shoes', '가방': 'bag',
-  '모자': 'hat', '액세서리': 'hat', '소품': 'small',
+  '신발': 'shoes',
+  '가방': 'acc', '모자': 'acc', '액세서리': 'acc', '소품': 'acc',
 };
 
-/** 아이템별 자리를 정한다. 같은 자리에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
+/** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
 function lookPlacement(items) {
   const hasOuter = items.some((it) => LOOK_ROLE[it.category] === 'outer');
   const taken = {};
   const out = {};
+  let accIdx = 0;
   items.forEach((it) => {
     const role = LOOK_ROLE[it.category] || 'top';
+    if (role === 'acc') {
+      const base = LOOK_ACC_SPOTS[accIdx % LOOK_ACC_SPOTS.length];
+      const lap = Math.floor(accIdx / LOOK_ACC_SPOTS.length);
+      out[it.id] = {
+        cx: base.cx + lap * 3,
+        cy: base.cy + lap * 3,
+        z: base.z + accIdx,
+      };
+      accIdx += 1;
+      return;
+    }
     const spot = role === 'top' && hasOuter ? 'layer' : role;
     const base = LOOK_SPOT[spot] || LOOK_SPOT.top;
-    const n = taken[spot] || 0; taken[spot] = n + 1;
-    out[it.id] = { cx: base.cx + n * 5, cy: base.cy + n * 4, z: base.z + n };
+    const n = taken[spot] || 0;
+    taken[spot] = n + 1;
+    out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4, z: base.z + n };
   });
   return out;
 }
@@ -101,6 +121,24 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   );
 }
 
+/* 아이템 상세 Thumb 확대 뱃지와 같은 자리·톤 — 코디도 크게 볼 수 있음을 드러낸다. */
+function LookExpandBadge({ size = 28, inset = 8 }) {
+  const icon = Math.max(11, Math.round(size * 0.46));
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute', right: inset, bottom: inset, width: size, height: size, borderRadius: '50%',
+        background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff',
+        display: 'grid', placeItems: 'center', zIndex: 2, pointerEvents: 'none',
+        boxShadow: '0 0 0 1px rgba(255,255,255,0.12)',
+      }}
+    >
+      <Icon name="search" size={icon} stroke={2.4} />
+    </span>
+  );
+}
+
 
 /* ============================================================
    Outfit card — 오늘의 추천과 같은 컴팩트 카드 (2열 그리드용)
@@ -117,10 +155,11 @@ function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
           aria-label="코디 크게 보기"
           style={{
             display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
-            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left',
+            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
           <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          {onView ? <LookExpandBadge /> : null}
         </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -632,7 +671,7 @@ function RailCard({ look, active, onClick }) {
 }
 
 function DetailScreen({ ctx }) {
-  const { back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide, savedLooks, openDetail, requestUnsave } = ctx;
+  const { back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide, savedLooks, openDetail, requestUnsave, openOutfitViewer } = ctx;
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const multi = detailTotal > 1;
@@ -704,7 +743,18 @@ function DetailScreen({ ctx }) {
   const card = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)' }}>
       <div style={{ position: 'relative' }}>
-        <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        <button
+          type="button"
+          onClick={() => openOutfitViewer && openOutfitViewer(outfit, items)}
+          aria-label="코디 크게 보기"
+          style={{
+            display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
+            cursor: openOutfitViewer ? 'zoom-in' : 'default', textAlign: 'left', position: 'relative',
+          }}
+        >
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          {openOutfitViewer ? <LookExpandBadge /> : null}
+        </button>
         {/* 오늘 코디·룩북 카드와 같은 자리의 같은 하트. 상단바에 두면 코디가 아니라
             화면에 달린 버튼처럼 보여서, 코디 이미지에 붙여 둔다. */}
         <button onClick={removeThis} className="lb-save" aria-label="룩북에서 빼기" style={{
@@ -821,4 +871,4 @@ function DetailScreen({ ctx }) {
   );
 }
 
-Object.assign(window, { LookComposite, OutfitCard, OutfitSkeleton, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });
+Object.assign(window, { LookComposite, LookExpandBadge, OutfitCard, OutfitSkeleton, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });

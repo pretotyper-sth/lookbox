@@ -60,7 +60,11 @@ const ICONS = {
   help:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   shield:   'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
   expand:   'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
+  search:   'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+  minus:    'M5 12h14',
   more:     'M5 12h.01M12 12h.01M19 12h.01',
+  // 매장 맞춰보기 — 종이 구멍처럼 옷을 비워 카메라에 겹친다
+  cutout:   'M4 4h16v16H4zM9 9h6v6H9zM12 2v4M12 18v4M2 12h4M18 12h4',
 };
 
 function Icon({ name, size = 22, stroke = 1.7, fill = 'none', style }) {
@@ -169,21 +173,101 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
 }
 
 /* ----------------------------------------------------------------
-   ImageViewer — fullscreen garment preview (tap image to zoom)
+   ImageViewer — 아이템·코디 공통. 오버레이 + 돋보기 확대/축소/팬.
 ---------------------------------------------------------------- */
+const VIEWER_ZOOM_MIN = 1;
+const VIEWER_ZOOM_MAX = 3;
+const VIEWER_ZOOM_STEP = 0.5;
+
 function ImageViewer({ open, item, outfit, items, onClose }) {
   const outfitItems = (items || []).filter(Boolean);
   const isOutfit = !!(outfit && (outfit.lookImg || outfitItems.length));
   const Composite = window.LookComposite;
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef(null);
+
   useEscapeClose(open && (!!(item && item.img) || isOutfit), onClose);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+    setDragging(false);
+    drag.current = null;
+    return undefined;
+  }, [open, item && item.id, outfit && outfit.id]);
+
   if (!open) return null;
   if (!isOutfit && !(item && item.img)) return null;
+
   const title = isOutfit
     ? (outfit.label || '코디')
     : (item.name || '옷');
   const subtitle = isOutfit
     ? [outfit.styleLabel || outfit.mood, outfitItems.length ? `${outfitItems.length}개 조합` : ''].filter(Boolean).join(' · ')
     : [item.category, item.color].filter(Boolean).join(' · ');
+
+  const clampZoom = (z) => Math.min(VIEWER_ZOOM_MAX, Math.max(VIEWER_ZOOM_MIN, Math.round(z * 10) / 10));
+  const applyZoom = (next) => {
+    const z = clampZoom(next);
+    setZoom(z);
+    if (z <= 1) setOffset({ x: 0, y: 0 });
+  };
+  const zoomIn = () => applyZoom(zoom + VIEWER_ZOOM_STEP);
+  const zoomOut = () => applyZoom(zoom - VIEWER_ZOOM_STEP);
+  const resetZoom = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.deltaY < 0) applyZoom(zoom + VIEWER_ZOOM_STEP);
+    else applyZoom(zoom - VIEWER_ZOOM_STEP);
+  };
+
+  const onPointerDown = (e) => {
+    if (zoom <= 1) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    setDragging(true);
+  };
+  const onPointerMove = (e) => {
+    if (!drag.current) return;
+    setOffset({
+      x: drag.current.ox + (e.clientX - drag.current.x),
+      y: drag.current.oy + (e.clientY - drag.current.y),
+    });
+  };
+  const onPointerUp = () => {
+    drag.current = null;
+    setDragging(false);
+  };
+
+  const media = isOutfit ? (
+    outfit.lookImg ? (
+      <img
+        src={outfit.lookImg}
+        alt={title}
+        draggable={false}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)', userSelect: 'none' }}
+      />
+    ) : (Composite ? (
+      <div style={{ width: '100%' }}>
+        <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" />
+      </div>
+    ) : null)
+  ) : (
+    <img
+      src={item.img}
+      alt={item.name || ''}
+      draggable={false}
+      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', padding: '4%', userSelect: 'none' }}
+    />
+  );
+
+  const pct = Math.round(zoom * 100);
+
   return (
     <div
       onClick={onClose}
@@ -200,56 +284,113 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       }}
     >
       <button
+        type="button"
         onClick={onClose}
         aria-label="닫기"
         className="lb-iconbtn"
         style={{
           position: 'absolute', top: 14, right: 14, width: 40, height: 40,
           borderRadius: '50%', display: 'grid', placeItems: 'center',
-          color: '#fff', background: 'rgba(255,255,255,0.12)',
+          color: '#fff', background: 'rgba(255,255,255,0.12)', zIndex: 2,
         }}
       >
         <Icon name="x" size={22} />
       </button>
+
       <div
         onClick={(e) => e.stopPropagation()}
+        onWheel={onWheel}
         style={{
-          width: '100%', maxWidth: 420, maxHeight: '78%',
-          background: isOutfit ? 'transparent' : 'var(--thumb-bg)',
-          borderRadius: 'var(--r-lg)',
+          position: 'relative', width: '100%', maxWidth: 440, flex: '1 1 auto',
+          minHeight: 0, maxHeight: 'min(72vh, 640px)',
+          background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
           boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
           overflow: 'hidden',
+          touchAction: zoom > 1 ? 'none' : 'pan-y',
+          cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default',
         }}
       >
-        {isOutfit ? (
-          outfit.lookImg ? (
-            <img
-              src={outfit.lookImg}
-              alt={title}
-              style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)' }}
-            />
-          ) : (Composite ? (
-            <div style={{ width: '100%', maxHeight: '78vh' }}>
-              <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" />
-            </div>
-          ) : null)
-        ) : (
-          <img
-            src={item.img}
-            alt={item.name || ''}
-            style={{ width: '100%', height: '100%', maxHeight: '78vh', objectFit: 'contain', display: 'block', padding: '6%' }}
-          />
-        )}
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (zoom > 1) resetZoom();
+            else applyZoom(2);
+          }}
+          style={{
+            width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+            transformOrigin: 'center center',
+            transition: dragging ? 'none' : 'transform 120ms var(--ease)',
+          }}
+        >
+          {media}
+        </div>
       </div>
+
       {(title || subtitle) && (
-        <div style={{ marginTop: 16, textAlign: 'center', color: 'rgba(255,255,255,0.88)', maxWidth: 360 }}>
+        <div style={{ marginTop: 12, textAlign: 'center', color: 'rgba(255,255,255,0.88)', maxWidth: 360, flex: 'none' }}>
           <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{title}</div>
           {subtitle ? (
             <div style={{ fontSize: 12.5, marginTop: 4, opacity: 0.7 }}>{subtitle}</div>
           ) : null}
         </div>
       )}
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          marginTop: 14, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '6px 8px', borderRadius: 'var(--r-pill)',
+          background: 'rgba(255,255,255,0.12)', color: '#fff',
+        }}
+      >
+        <button
+          type="button"
+          onClick={zoomOut}
+          disabled={zoom <= VIEWER_ZOOM_MIN}
+          aria-label="축소"
+          className="lb-iconbtn"
+          style={{
+            width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center',
+            color: '#fff', opacity: zoom <= VIEWER_ZOOM_MIN ? 0.35 : 1,
+          }}
+        >
+          <Icon name="minus" size={18} stroke={2.2} />
+        </button>
+        <button
+          type="button"
+          onClick={resetZoom}
+          aria-label={`배율 ${pct}퍼센트, 누르면 원래 크기`}
+          style={{
+            minWidth: 64, padding: '0 6px', border: 'none', background: 'transparent',
+            color: '#fff', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer',
+          }}
+        >
+          <Icon name="search" size={14} stroke={2.2} />
+          {pct}%
+        </button>
+        <button
+          type="button"
+          onClick={zoomIn}
+          disabled={zoom >= VIEWER_ZOOM_MAX}
+          aria-label="확대"
+          className="lb-iconbtn"
+          style={{
+            width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center',
+            color: '#fff', opacity: zoom >= VIEWER_ZOOM_MAX ? 0.35 : 1,
+          }}
+        >
+          <Icon name="plus" size={18} stroke={2.2} />
+        </button>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11.5, color: 'rgba(255,255,255,0.55)', textAlign: 'center' }}>
+        휠·더블탭으로도 확대할 수 있어요
+      </div>
     </div>
   );
 }
@@ -475,7 +616,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
                   background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff',
                   display: 'grid', placeItems: 'center',
                 }}>
-                  <Icon name="expand" size={11} stroke={2.4} />
+                  <Icon name="search" size={11} stroke={2.4} />
                 </span>
               )}
             </button>
@@ -553,7 +694,7 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
           {item.img && onExpand && (
-            <Btn full size="lg" variant="soft" icon="expand" onClick={onExpand}>이미지 크게 보기</Btn>
+            <Btn full size="lg" variant="soft" icon="search" onClick={onExpand}>이미지 크게 보기</Btn>
           )}
           {onReextract && (
             <Btn full size="lg" variant="soft" icon="sparkle" onClick={() => onReextract(item)}>이미지만 변경</Btn>

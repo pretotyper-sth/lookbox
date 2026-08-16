@@ -53,8 +53,8 @@ OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 # 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
 OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
-# UX/UI 테스트용 무비용 모드: 켜면 OpenAI(vision/image) 호출을 전부 건너뛰고
-# 로컬 폴백(분류 기본값·추천 폴백·PIL 컷아웃/콜라주)만 써서 과금이 0원.
+# UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
+# 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
 # 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
 AI_TEST_MODE = os.environ.get("AI_TEST_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
@@ -85,7 +85,8 @@ openai_client = (
 )
 if AI_TEST_MODE:
     print("=" * 60, flush=True)
-    print("[AI_TEST_MODE] ON — OpenAI 호출 전부 차단, 과금 $0 (로컬 폴백만)", flush=True)
+    print("[AI_TEST_MODE] ON — 이미지 생성·추천 등 고비용 호출 폴백 (과금 최소)", flush=True)
+    print("  패션 여부 분류(classify)는 API 키가 있으면 그대로 실행됩니다.", flush=True)
     print("  끄려면 .env에서 AI_TEST_MODE 삭제/0 후 서버 재시작", flush=True)
     print("=" * 60, flush=True)
 
@@ -373,8 +374,13 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         "logo_text": "",
         "seasons": [],
         "other_items": [],
+        # AI 없을 때만 통과. 테스트 모드라도 키가 있으면 아래에서 Vision으로 패션 여부를 본다.
+        "is_fashion_item": True,
+        "reject_code": "",
     }
-    if not openai_client or AI_TEST_MODE:
+    # 컷아웃·이미지 생성은 AI_TEST_MODE에서 막지만, 패션 거절은 값싼 분류만으로도
+    # 가능해야 한다. (바로 보기는 클라 FaceDetector로 거르고, 옷장은 여기가 게이트)
+    if not openai_client:
         return fallback
     hint = (extract_hint or "").strip()[:500]
     prompt = ""
@@ -388,6 +394,8 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
     prompt += """이미지의 패션 아이템을 분석하세요. JSON만 응답하세요.
 형식:
 {
+  "is_fashion_item": true,
+  "reject_code": "",
   "name": "한국어 이름",
   "category": "top|bottom|skirt|outer|dress|shoes|bag|hat|misc",
   "color": "대표 색상",
@@ -397,6 +405,14 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
   "seasons": ["spring|summer|autumn|winter 중 해당하는 것만, 1~2개"],
   "other_items": ["주 아이템 외에 함께 보이는 착용 아이템의 짧은 한국어 이름"]
 }
+패션 여부(최우선):
+- is_fashion_item true: 상의·하의·원피스·아우터·신발·가방·모자·잡화 등 착용/소지 가능한 패션 아이템이 주 피사체.
+  동물·캐릭터 프린트/자수가 옷·가방 등에 있어도 true (예: 고양이 그림 티셔츠).
+- is_fashion_item false: 살아 있는 동물, 동물 콜라주/스티커/무드보드, 풍경, 음식, 밈/스크린샷,
+  옷 상품컷이 아닌 셀카, 가구·전자기기, 텍스트·낙서가 많은 그래픽 등.
+  애매하면 false. 옷이 분명히 주 피사체일 때만 true.
+- reject_code: is_fashion_item이 false일 때만 "not_fashion" 또는 "unclear". true면 "".
+  not_fashion = 패션이 아님. unclear = 아이템이 너무 작거나 가려져 무엇인지 알기 어려움.
 규칙:
 - 여러 아이템이 함께 보이면(착용컷 등) '주 아이템' 하나를 기준으로 name/category/color를 정한다.
   주 아이템 = 사진에서 차지하는 면적이 가장 크고 프레이밍의 중심인 것.
@@ -413,6 +429,7 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 - seasons: 원단 두께·소재·기장·보온성으로 판단. 반팔/린넨/메시 → summer. 니트/코듀로이/기모 → winter.
   얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
+- is_fashion_item이 false여도 JSON 형식은 유지하되 name은 짧은 설명(예: "고양이 사진"), category는 misc.
 """
     try:
         response = _vision_client().chat.completions.create(
@@ -441,9 +458,36 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
         data["seasons"] = _clean_seasons(data.get("seasons"))
         raw_others = data.get("other_items") if isinstance(data.get("other_items"), list) else []
         data["other_items"] = [str(o).strip()[:40] for o in raw_others if str(o).strip()][:6]
+        raw_fashion = data.get("is_fashion_item", True)
+        if isinstance(raw_fashion, str):
+            data["is_fashion_item"] = raw_fashion.strip().lower() in ("1", "true", "yes", "y")
+        else:
+            data["is_fashion_item"] = bool(raw_fashion)
+        code = str(data.get("reject_code") or "").strip()
+        if data["is_fashion_item"]:
+            data["reject_code"] = ""
+        elif code not in ("not_fashion", "unclear"):
+            data["reject_code"] = "not_fashion"
+        else:
+            data["reject_code"] = code
         return {**fallback, **data}
     except Exception:
         return fallback
+
+
+_FASHION_REJECT_MSG = {
+    "not_fashion": "옷이나 패션 아이템이 잘 보이는 사진으로 올려주세요.",
+    "unclear": "어떤 옷인지 알기 어려워요. 아이템이 크게 나온 사진으로 다시 올려주세요.",
+}
+
+
+def require_fashion_item(meta: dict[str, Any]) -> None:
+    """비패션 이미지면 컷아웃 전에 422로 거절. 사용자 문구는 서버 고정."""
+    if meta.get("is_fashion_item", True):
+        return
+    code = str(meta.get("reject_code") or "not_fashion")
+    detail = _FASHION_REJECT_MSG.get(code) or _FASHION_REJECT_MSG["not_fashion"]
+    raise HTTPException(status_code=422, detail=detail)
 
 
 def _significant_garment_logo(has_text_logo: bool, logo_text: str) -> bool:
@@ -1521,6 +1565,7 @@ async def upload_item(
         tmp_path = tmp.name
     try:
         meta = classify_item(tmp_path)
+        require_fashion_item(meta)
         item_name, item_color = _normalize_item_name_color(
             meta.get("name") or "새 옷",
             meta.get("color") or "neutral",
@@ -1851,17 +1896,16 @@ def _store_uploaded_item(
             triage: dict[str, Any] = {}
             product_bytes = None
         else:
-            # I/O·Vision·로컬 트리아지는 서로 의존하지 않는다. 병렬화해 AI 편집
-            # 이전의 고정 대기 시간을 한 단계로 줄인다.
+            # 분류로 패션 여부를 먼저 본 뒤, 통과할 때만 업로드·트리아지·컷아웃.
             classify_started = time.perf_counter()
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                classify_future = pool.submit(classify_item, tmp_path, hint)
+            meta = classify_item(tmp_path, hint)
+            classify_ms = int((time.perf_counter() - classify_started) * 1000)
+            require_fashion_item(meta)
+            with ThreadPoolExecutor(max_workers=2) as pool:
                 triage_future = pool.submit(_fast_extract_triage, tmp_path, hint)
                 upload_future = pool.submit(upload_bytes, original_path, raw, content_type)
-                meta = classify_future.result()
                 triage = triage_future.result()
                 original_url = upload_future.result()
-            classify_ms = int((time.perf_counter() - classify_started) * 1000)
             # URL 타이틀·비전 분류 모두 `_색상`이 이름에 붙을 수 있어 저장 직전 한 번 더 분리.
             item_name, item_color = _normalize_item_name_color(
                 (name_override or "").strip() or meta.get("name") or "새 옷",
@@ -2715,6 +2759,8 @@ async def live_replace_image(
 
     def work() -> dict[str, Any]:
         try:
+            classified = classify_item(tmp_path, hint)
+            require_fashion_item(classified)
             original_path = f"{uid}/original/{uuid.uuid4().hex}{suffix}"
             original_url = upload_bytes(original_path, raw_bytes, content_type)
             # 새 이미지 기준이므로 로고 여부를 다시 감지 (generate 안에서 처리)
@@ -2724,6 +2770,8 @@ async def live_replace_image(
                 "color": row.get("color") or "",
                 "tags": meta.get("tags") or [],
                 "extract_hint": hint,
+                "has_text_logo": bool(classified.get("has_text_logo")),
+                "logo_text": str(classified.get("logo_text") or "").strip()[:80],
             }
             product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
             image_path, image_url = original_path, original_url

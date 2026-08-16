@@ -28,7 +28,7 @@ function getFaceDetector() {
   return _faceDetectorPromise;
 }
 
-// dataURL 이미지에서 감지된 얼굴 수. 디코드/모델 로드 실패 시 -1(판정 불가 → 차단 안 함).
+// dataURL 이미지에서 감지된 얼굴 수. 디코드/모델 로드 실패 시 -1.
 async function countFacesInImage(dataURL) {
   try {
     const img = new Image();
@@ -40,6 +40,14 @@ async function countFacesInImage(dataURL) {
   } catch (e) {
     return -1;
   }
+}
+
+// 프로필·퍼스널 진단·AI 착장이 같은 문구를 쓴다. 빈 문자열이면 통과(얼굴 정확히 1명).
+function faceCountError(faces) {
+  if (faces === 1) return '';
+  if (faces > 1) return '한 명의 얼굴만 나온 사진을 선택해주세요.';
+  if (faces === 0) return '얼굴이 잘 보이는 정면 사진을 선택해주세요.';
+  return '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.';
 }
 
 // 퍼스널 컬러별 진단 결과 상세 — 추천 컬러 팔레트 + 한 줄 설명 + 키워드.
@@ -457,28 +465,45 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   const [pw, setPw] = useState('');
   const [pcModal, setPcModal] = useState(false);
   const [pcPhase, setPcPhase] = useState('intro');   // intro → upload → analyzing
-  const [pcPhoto, setPcPhoto] = useState(null);      // 업로드한 얼굴 사진 (dataURL)
+  const [pcPhoto, setPcPhoto] = useState(null);      // 업로드한 얼굴 사진 (dataURL) — 얼굴 1명 통과분만
   const [pcResult, setPcResult] = useState(null);    // 진단된 퍼스널 컴러 id
   const [pcError, setPcError] = useState('');        // 얼굴 미감지 등 안내
-  const openPc = () => { setPcPhoto(null); setPcResult(null); setPcError(''); setPcPhase('intro'); setPcModal(true); };
+  const [pcChecking, setPcChecking] = useState(false);
+  const openPc = () => { setPcPhoto(null); setPcResult(null); setPcError(''); setPcChecking(false); setPcPhase('intro'); setPcModal(true); };
   const closePc = () => { if (pcPhase !== 'analyzing') setPcModal(false); };
   useEscapeClose(pcModal && pcPhase !== 'analyzing', closePc);
-  const onPickPhoto = (e) => {
+  // 프로필 사진과 동일: 올리자마자 얼굴 1명만 통과. 잘못된 사진은 미리보기에 넣지 않는다.
+  const onPickPhoto = async (e) => {
     const f = e.target.files && e.target.files[0];
-    if (!f) return;
+    e.target.value = '';
+    if (!f || pcChecking) return;
     setPcError('');
-    const r = new FileReader();
-    r.onload = () => setPcPhoto(r.result);
-    r.readAsDataURL(f);
+    setPcChecking(true);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onerror = () => reject(new Error('사진을 읽지 못했어요'));
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(f);
+      });
+      const err = faceCountError(await countFacesInImage(dataUrl));
+      if (err) { setPcError(err); return; }
+      setPcPhoto(dataUrl);
+    } catch (err) {
+      setPcError(err.message || '사진을 확인하지 못했어요.');
+    } finally {
+      setPcChecking(false);
+    }
   };
   const runDiagnosis = async () => {
+    if (!pcPhoto || pcChecking) return;
     setPcError('');
     setPcPhase('analyzing');
     const started = Date.now();
-    const faces = await countFacesInImage(pcPhoto);
-    // 얼굴이 정확히 하나로 잘 잡힐 때만 진행. 0개면 얼굴 사진이 아니거나 불명확.
-    if (faces === 0) {
-      setPcError('얼굴이 잘 보이는 정면 사진으로 다시 올려주세요.');
+    // 업로드 검증을 한 번 더 — 감지 실패·다인 사진도 같은 문구로 막는다.
+    const err = faceCountError(await countFacesInImage(pcPhoto));
+    if (err) {
+      setPcError(err);
       setPcPhase('upload');
       return;
     }
@@ -676,27 +701,28 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
                 )}
                 <label style={{
                   display: 'block', position: 'relative', width: 168, height: 168, margin: '0 auto', borderRadius: '50%',
-                  overflow: 'hidden', cursor: 'pointer', background: 'var(--ivory)',
+                  overflow: 'hidden', cursor: pcChecking ? 'wait' : 'pointer', background: 'var(--ivory)',
                   boxShadow: pcPhoto ? 'inset 0 0 0 3px var(--accent)' : 'inset 0 0 0 2px var(--line-2)',
+                  pointerEvents: pcChecking ? 'none' : 'auto',
                 }}>
-                  <input type="file" accept="image/*" onChange={onPickPhoto} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+                  <input type="file" accept="image/*" onChange={onPickPhoto} disabled={pcChecking} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
                   {pcPhoto
                     ? <img src={pcPhoto} alt="얼굴 사진" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : (
                       <span style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--ink-3)' }}>
-                        <Icon name="camera" size={30} stroke={1.5} />
-                        <span style={{ fontSize: 12, fontWeight: 600 }}>사진 선택</span>
+                        <Icon name={pcChecking ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{pcChecking ? '얼굴 확인 중…' : '사진 선택'}</span>
                       </span>
                     )}
                 </label>
-                {pcPhoto && (
+                {pcPhoto && !pcChecking && (
                   <label style={{ display: 'inline-block', marginTop: 14, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>
                     <input type="file" accept="image/*" onChange={onPickPhoto} style={{ display: 'none' }} />
                     다른 사진 선택
                   </label>
                 )}
                 <div style={{ marginTop: 22 }}>
-                  <Btn full size="lg" icon="sparkle" disabled={!pcPhoto} onClick={runDiagnosis}>이 사진으로 진단하기</Btn>
+                  <Btn full size="lg" icon="sparkle" disabled={!pcPhoto || pcChecking} onClick={runDiagnosis}>이 사진으로 진단하기</Btn>
                   <button onClick={() => setPcPhase('intro')} className="lb-btn" style={{ width: '100%', marginTop: 10, background: 'transparent', color: 'var(--ink-2)', fontSize: 13.5, fontWeight: 600, padding: '8px' }}>이전</button>
                 </div>
               </div>
@@ -781,5 +807,5 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
   );
 }
 
-// 프로필 사진 등록도 퍼스널 컬러와 같은 얼굴 판정을 쓰도록 공유한다.
-Object.assign(window, { Onboarding, Landing, Login, countFacesInImage });
+// 프로필·AI 착장도 같은 얼굴 판정·문구를 쓰도록 공유한다.
+Object.assign(window, { Onboarding, Landing, Login, countFacesInImage, faceCountError });

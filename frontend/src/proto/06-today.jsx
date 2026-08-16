@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, Silhouette, Skeleton, Thumb } = window;
+const { BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, Silhouette, Skeleton, Thumb } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, BottomSheet, EmptyState */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -104,10 +104,11 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView, it
           aria-label="코디 크게 보기"
           style={{
             display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
-            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left',
+            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
           <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          {onView && LookExpandBadge ? <LookExpandBadge /> : null}
         </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -221,19 +222,30 @@ function dayKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function HistoryLook({ outfit, worn, saved, onSave }) {
-  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
+function HistoryLook({ outfit, worn, saved, onSave, onView }) {
+  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
     <div>
       <div style={{ position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
-        <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+        <button
+          type="button"
+          onClick={() => onView && onView(outfit, items)}
+          aria-label="코디 크게 보기"
+          style={{
+            display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
+            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left', position: 'relative',
+          }}
+        >
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          {onView && LookExpandBadge ? <LookExpandBadge size={24} inset={7} /> : null}
+        </button>
         {worn && (
-          <span style={{ position: 'absolute', left: 7, top: 7, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#fff', background: 'color-mix(in srgb, var(--ink) 78%, transparent)', padding: '3px 8px', borderRadius: 'var(--r-pill)', backdropFilter: 'blur(4px)' }}>
+          <span style={{ position: 'absolute', left: 7, top: 7, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#fff', background: 'color-mix(in srgb, var(--ink) 78%, transparent)', padding: '3px 8px', borderRadius: 'var(--r-pill)', backdropFilter: 'blur(4px)', zIndex: 2, pointerEvents: 'none' }}>
             <Icon name="check" size={11} stroke={3} /> 입음
           </span>
         )}
         <button onClick={onSave} aria-label="룩북에 저장" style={{
-          position: 'absolute', right: 7, top: 7, width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center',
+          position: 'absolute', right: 7, top: 7, width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 2,
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
           background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 86%, transparent)',
           boxShadow: saved ? 'none' : 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(4px)',

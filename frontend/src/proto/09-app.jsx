@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -475,6 +475,25 @@ function App() {
     persistPrefs(np);
     showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');
   };
+  const setTryOnFrame = ({ body, frame, cut }) => {
+    const np = {
+      ...prefs,
+      tryOnBody: body || '',
+      tryOnFrame: frame || '',
+      tryOnCut: cut || '',
+    };
+    setPrefs(np);
+    persistPrefs(np);
+    showToast(frame ? '바로 보기 사진을 저장했어요' : '사진을 지웠어요', 'check');
+  };
+  const [tryOnSetup, setTryOnSetup] = useState(false);
+  const [tryOnSeedBody, setTryOnSeedBody] = useState('');
+  const [tryOnCamera, setTryOnCamera] = useState(false);
+  const [tryOnDesktopHint, setTryOnDesktopHint] = useState(false);
+  const openTryOnSetup = (seed) => {
+    setTryOnSeedBody(typeof seed === 'string' ? seed : '');
+    setTryOnSetup(true);
+  };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => { try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ } setOnboarded(false); setPhase('landing'); setTab('wardrobe'); };
 
@@ -487,9 +506,17 @@ function App() {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
+  // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
+  const openTryOn = () => {
+    if (!prefs.tryOnFrame) { openTryOnSetup(); return; }
+    if (wide) { setTryOnDesktopHint(true); return; }
+    setTryOnCamera(true);
+  };
   // PC에서 모바일 폭을 미리 볼 때도 손가락처럼 마우스로 끌어 스크롤한다.
   // 기본 브라우저는 이미지 드래그/텍스트 선택을 먼저 시작해 "걸렸다가 움직이는" 느낌이
   // 나므로, 실제 스크롤 가능한 축을 찾은 뒤 6px 이상 움직였을 때만 드래그로 전환한다.
+  // html/body·#root 가 overflow:hidden 이라 트랙패드/휠이 내부 overflow:auto 로
+  // 안 전달되는 환경이 있어, wheel 도 같은 스크롤러에 직접 넘긴다.
   useEffect(() => {
     const root = shellRef.current;
     if (wide || !root) return undefined;
@@ -498,17 +525,35 @@ function App() {
     let raf = 0;
     let clickTimer = 0;
 
+    const canScroll = (node, axis) => {
+      const style = getComputedStyle(node);
+      const overflow = axis === 'x' ? style.overflowX : style.overflowY;
+      if (overflow !== 'auto' && overflow !== 'scroll' && overflow !== 'overlay') return false;
+      return axis === 'x'
+        ? node.scrollWidth > node.clientWidth + 1
+        : node.scrollHeight > node.clientHeight + 1;
+    };
     const findScroller = (start, axis) => {
       let node = start instanceof Element ? start : start.parentElement;
       while (node && root.contains(node)) {
-        const style = getComputedStyle(node);
-        const overflow = axis === 'x' ? style.overflowX : style.overflowY;
-        const hasRoom = axis === 'x'
-          ? node.scrollWidth > node.clientWidth + 1
-          : node.scrollHeight > node.clientHeight + 1;
-        if ((overflow === 'auto' || overflow === 'scroll') && hasRoom) return node;
+        if (canScroll(node, axis)) return node;
         if (node === root) break;
         node = node.parentElement;
+      }
+      return null;
+    };
+    // 칩·탑바 위에서 휠해도 본문이 움직이도록, 타겟 경로에 없으면 보이는 탭의 세로 스크롤러를 찾는다.
+    const findYScroller = (start) => {
+      const hit = findScroller(start, 'y');
+      if (hit) return hit;
+      const pane = root.querySelector('.lb-scroll [aria-hidden="false"]') || root.querySelector('.lb-scroll');
+      if (!pane) return null;
+      const stack = [pane];
+      while (stack.length) {
+        const node = stack.shift();
+        if (!(node instanceof Element)) continue;
+        if (canScroll(node, 'y')) return node;
+        for (let i = 0; i < node.children.length; i++) stack.push(node.children[i]);
       }
       return null;
     };
@@ -521,7 +566,7 @@ function App() {
       if (e.pointerType !== 'mouse' || e.button !== 0) return;
       if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
       const xEl = findScroller(e.target, 'x');
-      const yEl = findScroller(e.target, 'y');
+      const yEl = findYScroller(e.target);
       if (!xEl && !yEl) return;
       drag = {
         startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
@@ -563,6 +608,26 @@ function App() {
       e.stopPropagation();
     };
     const stopNativeDrag = (e) => e.preventDefault();
+    const onWheel = (e) => {
+      if (e.ctrlKey) return; // 핀치 줌
+      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // 시트 본문은 자체 overflow 로 네이티브 휠이 되는 편 — 가로채지 않음
+      if (e.target.closest('.lb-sheet-body, .lb-sheet')) return;
+      const dominantY = Math.abs(e.deltaY) >= Math.abs(e.deltaX);
+      if (dominantY) {
+        const yEl = findYScroller(e.target);
+        if (!yEl) return;
+        const prev = yEl.scrollTop;
+        yEl.scrollTop = prev + e.deltaY;
+        if (yEl.scrollTop !== prev) e.preventDefault();
+        return;
+      }
+      const xEl = findScroller(e.target, 'x');
+      if (!xEl) return;
+      const prev = xEl.scrollLeft;
+      xEl.scrollLeft = prev + e.deltaX;
+      if (xEl.scrollLeft !== prev) e.preventDefault();
+    };
 
     root.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove, { passive: false });
@@ -570,6 +635,7 @@ function App() {
     window.addEventListener('pointercancel', finish);
     root.addEventListener('click', onClick, true);
     root.addEventListener('dragstart', stopNativeDrag);
+    root.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(clickTimer);
@@ -580,6 +646,7 @@ function App() {
       window.removeEventListener('pointercancel', finish);
       root.removeEventListener('click', onClick, true);
       root.removeEventListener('dragstart', stopNativeDrag);
+      root.removeEventListener('wheel', onWheel);
     };
   }, [wide, onboarded]);
 
@@ -737,7 +804,7 @@ function App() {
   const comboReady = comboTopsNeed === 0 && comboBottomsNeed === 0;
   const comboProgress = Math.min(comboTops, 2) + Math.min(comboBottoms, 2);
   const comboNeed = [comboTopsNeed ? `상의 ${comboTopsNeed}개` : '', comboBottomsNeed ? `하의 ${comboBottomsNeed}개` : ''].filter(Boolean).join(', ');
-  const comboGate = () => { if (comboReady) return startCombo(); setComboPrompt(true); };
+  const comboGate = () => startCombo(); // 옷 부족해도 시트 오픈 — '바로 보기'는 옷장 없이도 가능
   const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
   const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
@@ -1312,6 +1379,7 @@ function App() {
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
+    openTryOn, openTryOnSetup, setTryOnFrame,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -1381,7 +1449,7 @@ function App() {
             </button>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.55 }} onClick={comboGate}>조합 추천받기</Btn>
+              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>조합 추천받기</Btn>
               <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
             </div>
           </aside>
@@ -1443,6 +1511,7 @@ function App() {
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>{comboNeed}를 추가로 담으면<br />어울리는 조합을 추천해드려요.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setComboPrompt(false); go('wardrobe'); openAdd('wardrobe'); }}>아이템 추가</Btn>
+            <Btn full variant="soft" icon="cutout" onClick={() => { setComboPrompt(false); openTryOn(); }}>바로 보기</Btn>
             <Btn full variant="ghost" onClick={() => setComboPrompt(false)}>취소</Btn>
           </div>
         </div>
@@ -1476,6 +1545,31 @@ function App() {
         }}
       />
       <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
+
+      <TryOnSetupOverlay
+        open={tryOnSetup}
+        wide={wide}
+        seedBody={tryOnSeedBody}
+        initialBody={prefs.tryOnBody}
+        initialFrame={prefs.tryOnFrame}
+        initialCut={prefs.tryOnCut}
+        onClose={() => { setTryOnSetup(false); setTryOnSeedBody(''); }}
+        onSave={(payload) => {
+          setTryOnFrame(payload);
+          setTryOnSetup(false);
+          setTryOnSeedBody('');
+          if (!wide) setTryOnCamera(true);
+          else showToast('휴대폰에서 카메라로 바로 볼 수 있어요', 'camera');
+        }}
+      />
+      <TryOnCameraOverlay
+        open={tryOnCamera}
+        wide={wide}
+        frameSrc={prefs.tryOnFrame}
+        onClose={() => setTryOnCamera(false)}
+        onEdit={() => { setTryOnCamera(false); openTryOnSetup(); }}
+      />
+      <TryOnDesktopSheet open={tryOnDesktopHint} onClose={() => setTryOnDesktopHint(false)} />
 
       {unsaveTarget && (() => {
         // 직접 만든 코디는 다른 화면에 사본이 없어서, 여기서 빼면 영영 사라진다.

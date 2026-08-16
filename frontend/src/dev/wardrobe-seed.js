@@ -29,7 +29,15 @@ function dropAppCaches() {
 }
 
 async function api(path, init) {
-  const res = await fetch(path, init);
+  let res;
+  try {
+    res = await fetch(path, init);
+  } catch (e) {
+    throw new Error(
+      '로컬 API(8123)에 연결하지 못했어요. backend에서 '
+      + '`uvicorn app.main:app --host 127.0.0.1 --port 8123` 를 켠 뒤 다시 눌러주세요.',
+    );
+  }
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res.json();
 }
@@ -127,10 +135,11 @@ function mountButton() {
       else await seed();
       location.reload();
     } catch (e) {
-      // 401은 세션 만료(브리지가 다시 인증하므로 새로고침), 404는 dev 라우트 자체가 없는 것.
-      console.error('[dev-seed] 실패:', e.message, '— 404면 backend .env의 DEV_SEED_SOURCE_USER를 확인하세요.');
-      btn.textContent = 'DEV · 실패 · 콘솔 확인';
-      setTimeout(() => { btn.disabled = false; paint(); }, 2000);
+      console.error('[dev-seed] 실패:', e.message);
+      btn.textContent = e.message && e.message.indexOf('8123') >= 0
+        ? 'DEV · API 꺼짐'
+        : 'DEV · 실패 · 콘솔 확인';
+      setTimeout(() => { btn.disabled = false; paint(); }, 2800);
     }
   };
 

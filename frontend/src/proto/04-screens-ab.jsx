@@ -417,7 +417,7 @@ function WardrobeScreen({ ctx }) {
 
       {!wide && !selectMode && !selecting && (
         <div className="lb-cta-dock">
-          <Btn full size="lg" icon="sparkle" variant={comboReady ? 'primary' : 'soft'} style={comboReady ? undefined : { opacity: 0.6 }} onClick={comboGate}>구매 전 조합 추천받기</Btn>
+          <Btn full size="lg" icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>조합 추천받기</Btn>
         </div>
       )}
     </div>
@@ -478,6 +478,22 @@ function DetectRow({ item, on, onToggle }) {
 const URL_IMPORT_BLOCKED_MSG = '이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요.';
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
 
+// 추출 힌트 — 배달의민족 '사장님께'처럼 최근 문구를 골라 넣는다.
+const EXTRACT_HINT_KEY = 'lb_extract_hints_v1';
+const EXTRACT_HINT_MAX = 8;
+function readExtractHints() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EXTRACT_HINT_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && s.trim()).slice(0, EXTRACT_HINT_MAX) : [];
+  } catch (e) { return []; }
+}
+function rememberExtractHint(text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  const next = [t, ...readExtractHints().filter((h) => h !== t)].slice(0, EXTRACT_HINT_MAX);
+  try { localStorage.setItem(EXTRACT_HINT_KEY, JSON.stringify(next)); } catch (e) { /* noop */ }
+}
+
 function urlImportBlockedHint(raw) {
   try {
     const href = /^https?:\/\//i.test(raw) ? raw : ('https://' + String(raw || '').replace(/^\/+/, ''));
@@ -491,6 +507,7 @@ function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     autoAddDetails, detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
+    openTryOn, openTryOnSetup, prefs, wide, comboReady,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -507,10 +524,16 @@ function AddSheet({ ctx }) {
   const [previewUrl, setPreviewUrl] = useS('');
   const [hint, setHint] = useS('');
   const [showHint, setShowHint] = useS(false);
+  const [hintHistory, setHintHistory] = useS(() => readExtractHints());
   const [busy, setBusy] = useS(false);
   const [err, setErr] = useS('');
   const fileInput = useR(null);
   const previewUrlRef = useR('');
+  const tryOnFileRef = useR(null);
+  const [tryOnLocal, setTryOnLocal] = useS('');
+  const [tryOnErr, setTryOnErr] = useS('');
+  const [tryOnChecking, setTryOnChecking] = useS(false);
+  const [tryOnCleared, setTryOnCleared] = useS(false);
 
   const setPreviewFromFile = (f) => {
     if (previewUrlRef.current) {
@@ -545,7 +568,9 @@ function AddSheet({ ctx }) {
   const resetLocalDraft = () => {
     setPreviewFromFile(null);
     setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
+    setHintHistory(readExtractHints());
     setBusy(false); setErr('');
+    setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -639,7 +664,6 @@ function AddSheet({ ctx }) {
     } catch (e) {
       if (cancelledRef.current) return;
       setErr(e.message || 'AI 분석에 실패했어요');
-      setPicked(false);
       setStage('input');
     } finally {
       if (!cancelledRef.current) setBusy(false);
@@ -662,11 +686,66 @@ function AddSheet({ ctx }) {
     setPreviewFromFile(null);
     setErr('');
   };
-  const canSubmit = tab === 'photo' ? !!file : !!url.trim();
+  const onTryOnPick = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setTryOnErr('');
+    setTryOnChecking(true);
+    try {
+      const read = window.readBodyFile;
+      if (typeof read !== 'function') throw new Error('사진을 준비하지 못했어요.');
+      const dataUrl = await read(f);
+      const faces = window.countFacesInImage
+        ? await window.countFacesInImage(dataUrl)
+        : -1;
+      if (faces === 0) {
+        setTryOnErr('전신이 잘 나오는 사진으로 올려주세요. 얼굴이 보여야 해요.');
+        return;
+      }
+      if (faces > 1) {
+        setTryOnErr('한 명만 나온 전신 사진을 선택해주세요.');
+        return;
+      }
+      if (faces !== 1) {
+        setTryOnErr(window.faceCountError
+          ? window.faceCountError(faces)
+          : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+      setTryOnLocal(dataUrl);
+      setTryOnCleared(false);
+    } catch (err) {
+      setTryOnErr((err && err.message) || '사진을 확인하지 못했어요.');
+    } finally {
+      setTryOnChecking(false);
+    }
+  };
+  const clearTryOn = () => {
+    setTryOnLocal('');
+    setTryOnErr('');
+    setTryOnCleared(true);
+  };
+  const tryOnPreview = tryOnLocal || (!tryOnCleared && prefs && prefs.tryOnFrame) || '';
+  const canTryOn = !!tryOnPreview;
+  const onTryOnSubmit = () => {
+    if (wide || tryOnChecking || !canTryOn) return;
+    if (tryOnLocal) {
+      closeAdd();
+      openTryOnSetup && openTryOnSetup(tryOnLocal);
+      return;
+    }
+    closeAdd();
+    openTryOn && openTryOn();
+  };
+  const canSubmit = tab === 'photo' ? !!file : tab === 'url' ? !!url.trim() : false;
   const onSubmitAdd = async () => {
     setErr('');
+    if (tab === 'tryon') return;
     if (tab === 'photo') {
       if (!file) { setErr('사진을 먼저 넣어 주세요'); return; }
+      rememberExtractHint(hint);
+      setHintHistory(readExtractHints());
       await runDetect({ sourceType: 'photo', file, extractHint: hint });
       return;
     }
@@ -679,6 +758,8 @@ function AddSheet({ ctx }) {
     }
     const normalized = /^https?:\/\//i.test(raw) ? raw : ('https://' + raw.replace(/^\/+/, ''));
     if (normalized !== raw) setUrl(normalized);
+    rememberExtractHint(hint);
+    setHintHistory(readExtractHints());
     await runDetect({ sourceType: 'url', url: normalized, extractHint: hint });
   };
 
@@ -847,152 +928,288 @@ function AddSheet({ ctx }) {
         {stage === 'input' && (
           <>
             <div style={{ display: 'flex', gap: 4, background: 'var(--ivory)', borderRadius: 'var(--r-pill)', padding: 4, marginTop: 'var(--s5)' }}>
-              {[['photo', '사진', 'camera'], ['url', 'URL', 'link']].map(([id, label, ic]) => (
-                <button key={id} onClick={() => setTab(id)} style={{
-                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                  padding: '11px 0', borderRadius: 'var(--r-pill)', fontSize: 14, fontWeight: 600,
+              {(anchor
+                ? [['photo', '사진', 'camera'], ['url', 'URL', 'link'], ['tryon', '바로 보기', 'cutout']]
+                : [['photo', '사진', 'camera'], ['url', 'URL', 'link']]
+              ).map(([id, label, ic]) => (
+                <button key={id} onClick={() => {
+                  setTab(id); setErr(''); setTryOnErr('');
+                  if (id === 'tryon') setShowHint(false);
+                }} style={{
+                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 14, fontWeight: 600,
                   background: tab === id ? 'var(--surface-2)' : 'transparent',
                   color: tab === id ? 'var(--ink)' : 'var(--ink-3)',
                   boxShadow: tab === id ? '0 1px 3px rgba(40,36,28,0.10)' : 'none',
                   transition: 'all var(--dur) var(--ease)',
+                  whiteSpace: 'nowrap',
                 }}>
-                  <Icon name={ic} size={17} />{label}
+                  <Icon name={ic} size={16} />{label}
                 </button>
               ))}
             </div>
 
             <div style={{ marginTop: 'var(--s5)' }}>
-              {tab === 'photo' ? (
-                <>
-                  <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
-                  {picked && previewUrl ? (
+              {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
+              {(() => {
+                const panelH = 168;
+                const stagePanel = {
+                  width: '100%', height: panelH, borderRadius: 'var(--r-md)',
+                  boxSizing: 'border-box', overflow: 'hidden',
+                };
+                const dropBase = {
+                  ...stagePanel,
+                  background: 'var(--ivory)', border: '1.5px dashed var(--line-2)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 10, color: 'var(--ink-2)', outline: 'none',
+                };
+                const errBanner = (msg) => (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: 'var(--s3)', padding: '10px 12px', borderRadius: 'var(--r-sm)',
+                      background: 'color-mix(in srgb, #B0573C 10%, transparent)',
+                      color: '#9D472F', fontSize: 12.5, lineHeight: 1.45, fontWeight: 600,
+                      wordBreak: 'keep-all',
+                    }}
+                  >
+                    {msg}
+                  </div>
+                );
+                const previewBox = (src, onClear, clearLabel) => (
+                  <div style={{
+                    ...stagePanel, position: 'relative',
+                    background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                  }}>
+                    <img src={src} alt="" aria-hidden style={{
+                      position: 'absolute', inset: 0, width: '100%', height: '100%',
+                      objectFit: 'cover', filter: 'blur(26px)', transform: 'scale(1.2)',
+                    }} />
+                    <img src={src} alt="" style={{
+                      position: 'relative', width: '100%', height: '100%',
+                      objectFit: 'contain', display: 'block',
+                    }} />
+                    <button
+                      type="button"
+                      onClick={onClear}
+                      aria-label={clearLabel}
+                      className="lb-iconbtn"
+                      style={{
+                        position: 'absolute', top: 10, right: 10, width: 34, height: 34, borderRadius: '50%',
+                        background: 'color-mix(in srgb, var(--surface) 88%, transparent)', color: 'var(--ink-2)',
+                        display: 'grid', placeItems: 'center', boxShadow: 'inset 0 0 0 1px var(--line)',
+                      }}
+                    >
+                      <Icon name="x" size={18} />
+                    </button>
+                  </div>
+                );
+                const tabErr = tab === 'tryon' ? tryOnErr : err;
+                return (
+                  <>
+                    {tab === 'tryon' ? (
+                      <>
+                        <input ref={tryOnFileRef} type="file" accept="image/*" onChange={onTryOnPick} style={{ display: 'none' }} />
+                        {tryOnPreview ? previewBox(tryOnPreview, clearTryOn, '사진 지우기') : (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => { if (!tryOnChecking && tryOnFileRef.current) tryOnFileRef.current.click(); }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (!tryOnChecking && tryOnFileRef.current) tryOnFileRef.current.click();
+                              }
+                            }}
+                            className="lb-drop"
+                            style={{ ...dropBase, cursor: tryOnChecking ? 'wait' : 'pointer' }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none', padding: '0 16px' }}>
+                              <Icon name={tryOnChecking ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
+                              <span style={{ fontSize: 14, fontWeight: 600 }}>
+                                {tryOnChecking ? '사진 확인 중…' : '전신 사진 업로드'}
+                              </span>
+                              <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
+                                본인 얼굴에 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : tab === 'photo' ? (
+                      <>
+                        <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
+                        {picked && previewUrl ? previewBox(previewUrl, clearPhoto, '사진 지우기') : (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            contentEditable
+                            suppressContentEditableWarning
+                            inputMode="none"
+                            onClick={onPickPhoto}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPickPhoto(); } }}
+                            onInput={(e) => { e.currentTarget.textContent = ''; }}
+                            onCut={(e) => e.preventDefault()}
+                            className="lb-drop"
+                            style={{ ...dropBase, cursor: 'pointer', caretColor: 'transparent' }}
+                          >
+                            <div contentEditable={false} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none', padding: '0 16px' }}>
+                              <Icon name="camera" size={30} stroke={1.5} />
+                              <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
+                              <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
+                                {isTouch ? '탭하여 선택 · 꾹 눌러 붙여넣기' : '탭하여 선택 · Ctrl/⌘+V로 붙여넣기'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{
+                        ...dropBase, cursor: 'default', padding: '0 18px',
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%' }}>
+                          <input
+                            value={url}
+                            onChange={(e) => { setUrl(e.target.value); setErr(''); }}
+                            placeholder="https://…"
+                            className="lb-input"
+                            style={{
+                              width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                              background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)',
+                              outline: 'none', boxSizing: 'border-box',
+                            }}
+                          />
+                          <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
+                            무신사·29CM 등 상품 페이지 주소를 붙여넣어요
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ minHeight: tabErr ? undefined : 0 }}>
+                      {tabErr ? errBanner(tabErr) : null}
+                    </div>
+
+                    {anchor && !comboReady && (
+                      <div style={{
+                        marginTop: 'var(--s4)', padding: '10px 12px', borderRadius: 'var(--r-md)',
+                        background: 'var(--ivory)', fontSize: 12.5, color: 'var(--ink-2)',
+                        lineHeight: 1.45, wordBreak: 'keep-all', minHeight: 44, boxSizing: 'border-box',
+                      }}>
+                        {tab === 'tryon'
+                          ? '옷장이 적어도 바로 보기로 매장 옷을 카메라에 비춰 볼 수 있어요.'
+                          : <>AI 조합 추천은 상의·하의가 더 필요해요. 급하면 위 탭의 <b style={{ fontWeight: 700, color: 'var(--ink)' }}>바로 보기</b>를 써 보세요.</>}
+                      </div>
+                    )}
+
                     <div style={{
-                      position: 'relative', width: '100%', borderRadius: 'var(--r-md)', overflow: 'hidden',
-                      background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                    }}>
-                      {/* 레터박스 여백을 이미지 자체의 블러 확대본으로 채움 — 어떤 사진이든 경계 없이 한 박스처럼 보임 */}
-                      <img src={previewUrl} alt="" aria-hidden style={{
-                        position: 'absolute', inset: 0, width: '100%', height: '100%',
-                        objectFit: 'cover', filter: 'blur(26px)', transform: 'scale(1.2)',
-                      }} />
-                      {/* 표시만 축소(원본 그대로 업로드): 시트 안에서 '추가하기' 버튼이 스크롤 없이 보이도록 높이 제한 */}
-                      <img src={previewUrl} alt="" style={{
-                        position: 'relative', width: '100%', height: 'auto', maxHeight: 'min(300px, 34dvh)',
-                        objectFit: 'contain', display: 'block',
-                      }} />
+                      marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
+                      visibility: tab === 'tryon' ? 'hidden' : 'visible',
+                      pointerEvents: tab === 'tryon' ? 'none' : 'auto',
+                    }} aria-hidden={tab === 'tryon'}>
                       <button
                         type="button"
-                        onClick={clearPhoto}
-                        aria-label="사진 지우기"
-                        className="lb-iconbtn"
+                        onClick={() => setShowHint((v) => !v)}
+                        tabIndex={tab === 'tryon' ? -1 : undefined}
                         style={{
-                          position: 'absolute', top: 10, right: 10, width: 34, height: 34, borderRadius: '50%',
-                          background: 'color-mix(in srgb, var(--surface) 88%, transparent)', color: 'var(--ink-2)',
-                          display: 'grid', placeItems: 'center', boxShadow: 'inset 0 0 0 1px var(--line)',
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
                         }}
                       >
-                        <Icon name="x" size={18} />
+                        <Icon name="plus" size={15} /> 추출 힌트 추가
+                        <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
+                        {hintHistory.length > 0 && !showHint && (
+                          <span style={{
+                            marginLeft: 2, fontSize: 11, fontWeight: 700, color: 'var(--ink-3)',
+                            padding: '2px 7px', borderRadius: 'var(--r-pill)',
+                            background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                          }}>{hintHistory.length}</span>
+                        )}
+                        <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+                          <Icon name="chevL" size={14} />
+                        </span>
                       </button>
                     </div>
-                  ) : (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      contentEditable
-                      suppressContentEditableWarning
-                      inputMode="none"
-                      onClick={onPickPhoto}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPickPhoto(); } }}
-                      onInput={(e) => { e.currentTarget.textContent = ''; }}
-                      onCut={(e) => e.preventDefault()}
-                      className="lb-drop" style={{
-                        width: '100%', padding: '34px 0', borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-                        border: '1.5px dashed var(--line-2)', display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', gap: 10, color: 'var(--ink-2)', cursor: 'pointer',
-                        caretColor: 'transparent', outline: 'none',
-                      }}>
-                      <div contentEditable={false} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none' }}>
-                        <Icon name="camera" size={30} stroke={1.5} />
-                        <span style={{ fontSize: 14, fontWeight: 600 }}>사진 업로드</span>
-                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                          {isTouch ? '탭하여 선택 · 꾹 눌러 붙여넣기' : '탭하여 선택 · Ctrl/⌘+V로 붙여넣기'}
-                        </span>
+                    {showHint && tab !== 'tryon' && (
+                      <div style={{ marginTop: 8 }}>
+                        {hintHistory.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 7 }}>최근에 쓴 힌트</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                              {hintHistory.map((h) => {
+                                const on = hint === h;
+                                return (
+                                  <button
+                                    key={h}
+                                    type="button"
+                                    onClick={() => setHint(h)}
+                                    style={{
+                                      maxWidth: '100%', padding: '7px 11px', borderRadius: 'var(--r-pill)',
+                                      fontSize: 12.5, fontWeight: on ? 700 : 550, textAlign: 'left',
+                                      color: on ? 'var(--accent-ink)' : 'var(--ink-2)',
+                                      background: on ? 'var(--accent)' : 'var(--surface)',
+                                      boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--line)',
+                                      lineHeight: 1.35, wordBreak: 'keep-all',
+                                    }}
+                                  >
+                                    {h.length > 28 ? h.slice(0, 28) + '…' : h}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <textarea
+                          className="lb-input"
+                          rows={2}
+                          value={hint}
+                          onChange={(e) => setHint(e.target.value)}
+                          placeholder={'예) 이 이미지에서 가방만 추출해줘'}
+                          style={{
+                            width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                            background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                            outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
+                          }}
+                        />
+                        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
+                          {hintHistory.length
+                            ? '칩을 누르면 그대로 들어가고, 고친 뒤 추가하면 다음에 또 쓸 수 있어요.'
+                            : '여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.'}
+                        </div>
                       </div>
+                    )}
+
+                    <div style={{ marginTop: 'var(--s5)' }}>
+                      {tab === 'tryon' ? (
+                        <Btn
+                          full
+                          size="lg"
+                          icon="cutout"
+                          onClick={onTryOnSubmit}
+                          disabled={wide || tryOnChecking || !canTryOn}
+                        >
+                          옷 대보기
+                        </Btn>
+                      ) : (
+                        <Btn full size="lg" icon="sparkle" onClick={onSubmitAdd} disabled={!canSubmit || busy}>
+                          {busy ? '인식 중…' : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
+                        </Btn>
+                      )}
                     </div>
-                  )}
-                </>
-              ) : (
-                <input
-                  value={url}
-                  onChange={(e) => { setUrl(e.target.value); setErr(''); }}
-                  placeholder="상품 URL 붙여넣기"
-                  className="lb-input"
-                  style={{
-                    width: '100%', padding: '13px 16px', borderRadius: 'var(--r-md)', fontSize: 14,
-                    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              )}
-
-              <button
-                type="button"
-                onClick={() => setShowHint((v) => !v)}
-                style={{
-                  marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 6,
-                  fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
-                }}
-              >
-                <Icon name="plus" size={15} /> 추출 힌트 추가
-                <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
-                <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
-                  <Icon name="chevL" size={14} />
-                </span>
-              </button>
-              {showHint && (
-                <div style={{ marginTop: 8 }}>
-                  <textarea
-                    className="lb-input"
-                    rows={2}
-                    value={hint}
-                    onChange={(e) => setHint(e.target.value)}
-                    placeholder={'예) 이 이미지에서 가방만 추출해줘'}
-                    style={{
-                      width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
-                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
-                      outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
-                    }}
-                  />
-                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                    여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.
-                  </div>
-                </div>
-              )}
-
-              <div style={{ marginTop: 'var(--s5)' }}>
-                <Btn full size="lg" icon="sparkle" onClick={onSubmitAdd} disabled={!canSubmit || busy}>
-                  {busy ? '인식 중…' : (reextract ? '이미지 변경' : '추가하기')}
-                </Btn>
-              </div>
+                  </>
+                );
+              })()}
             </div>
 
-            {!anchor && !reextract && (
-              <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
-                <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
-              </div>
-            )}
-            {reextract && (
-              <div style={{ marginTop: 'var(--s4)', display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
+            {reextract ? (
+              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            )}
-
-            {err && (
-              <div style={{
-                marginTop: 'var(--s3)', color: '#B91C1C', fontSize: 13, fontWeight: 600,
-                lineHeight: 1.45, textWrap: 'pretty',
-              }}>{err}</div>
-            )}
+            ) : (!anchor && tab !== 'tryon') ? (
+              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
+                <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
+              </div>
+            ) : null}
           </>
         )}
 
