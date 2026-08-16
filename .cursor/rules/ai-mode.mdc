@@ -1,0 +1,19 @@
+---
+description: Local AI cost mode for Lookbox agents — UX vs extraction quality
+alwaysApply: true
+---
+
+# AI 모드 (로컬)
+
+`backend/.env`의 `AI_TEST_MODE`로 에이전트·로컬 서버 동작을 나눈다.
+
+| 목적 | 값 | 의미 |
+|------|-----|------|
+| UX/UI 반복 | `1` | 이미지 생성·추천 폴백, 과금 최소 |
+| **이미지 추출 품질 테스트** | `0` | 실제 classify + `images.edit` (과금) |
+
+**지금:** 추출 품질 테스트 → `AI_TEST_MODE=0`.
+
+- `.env`를 바꾸면 uvicorn를 재시작한다 (`--reload`만으로는 dotenv가 안 바뀌는 경우가 많다).
+- UX만 손볼 때는 다시 `1`로 되돌린 뒤 재시작.
+- `/health`의 `"openai": true`는 키 존재만 뜻한다. 테스트 모드 여부는 백엔드 기동 배너(`[AI_TEST_MODE] ON`)로 확인.
