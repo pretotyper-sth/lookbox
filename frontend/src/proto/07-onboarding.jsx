@@ -322,7 +322,7 @@ function Login({ onDone, onCancel, onSignup }) {
           </div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingTop: 27 }}>
+        <div className="lb-scrollable" style={{ flex: 1, minHeight: 0,  paddingTop: 27 }}>
           <Eyebrow>로그인</Eyebrow>
           <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>다시 만나서 반가워요</h1>
           <p style={{ margin: '0 0 24px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
@@ -672,9 +672,9 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
         </div>
 
         {/* 본문 (스크롤) */}
-        <div style={{
-          flex: 1, overflowY: 'auto', padding: '26px 20px 16px',
-          WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
+        <div className="lb-scrollable" style={{
+          flex: 1,  padding: '26px 20px 16px',
+           
         }}>
           <div className="lb-anim-in" key={step.key}>
             <Eyebrow>{`${i + 1} / ${steps.length} · ${step.eyebrow}`}</Eyebrow>

@@ -243,7 +243,7 @@ function ResultsScreen({ ctx }) {
         left={<IconBtn name="chevL" label="뒤로" onClick={back} style={{ marginLeft: -8 }} />}
         title="조합 추천"
       />
-      <div style={{ flex: 1, overflowY: 'auto', padding: wide ? 'var(--gap-header) 0 36px' : 'var(--gap-header) 18px 32px' }}>
+      <div className="lb-scrollable" style={{ flex: 1,  padding: wide ? 'var(--gap-header) 0 36px' : 'var(--gap-header) 18px 32px' }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
           {/* anchor block */}
           <div style={{ display: 'flex', gap: 'var(--s4)', alignItems: 'center', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', marginBottom: 'var(--s5)' }}>
@@ -438,7 +438,7 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
       </div>
 
       {/* 높이 고정 — 분류마다 담긴 개수가 달라도 시트 크기는 '전체' 기준 그대로 둔다 */}
-      <div style={{ height: '38vh', overflowY: 'auto', padding: '2px 20px 12px', WebkitOverflowScrolling: 'touch' }}>
+      <div className="lb-scrollable" style={{ height: '38vh',  padding: '2px 20px 12px',  }}>
         {shown.length === 0 ? (
           <div style={{ height: '100%', display: 'grid', placeItems: 'center' }}>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)' }}>이 분류에 담긴 아이템이 없어요.</p>
@@ -563,8 +563,8 @@ function LookbookScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
-      <div style={{
-        flex: 1, overflowY: 'auto',
+      <div className="lb-scrollable" style={{
+        flex: 1, 
         padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 96px',
         paddingBottom: selecting ? (wide ? 88 : 96) : undefined,
       }}>
@@ -827,7 +827,7 @@ function DetailScreen({ ctx }) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {topBar}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--gap-header) 0 40px' }}>
+        <div className="lb-scrollable" style={{ flex: 1,  padding: 'var(--gap-header) 0 40px' }}>
           <div style={{
             display: 'grid', gap: 28, alignItems: 'start', padding: '0 22px',
             gridTemplateColumns: multi ? 'minmax(300px, 400px) minmax(0, 1fr)' : 'minmax(300px, 440px)',
@@ -857,9 +857,9 @@ function DetailScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {topBar}
-      <div style={{
-        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain', padding: 'var(--gap-header) 18px 16px',
+      <div className="lb-scrollable" style={{
+        flex: 1,  
+         padding: 'var(--gap-header) 18px 16px',
       }}>
         <div
           key={detailLook.id}

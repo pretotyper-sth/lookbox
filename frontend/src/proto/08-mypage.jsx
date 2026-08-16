@@ -340,7 +340,7 @@ function MyPageScreen({ ctx }) {
   if (wide) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 0 36px' }}>
+        <div className="lb-scrollable" style={{ flex: 1,  padding: '28px 0 36px' }}>
           <div className="lb-wide-inner">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--gap-header)' }}>
               <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>마이페이지</h1>
@@ -382,8 +382,8 @@ function MyPageScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div style={{
-        flex: 1, overflowY: 'auto',
+      <div className="lb-scrollable" style={{
+        flex: 1, 
         padding: 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 24px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '4px 4px var(--gap-header)' }}>

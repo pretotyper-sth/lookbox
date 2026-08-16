@@ -294,5 +294,20 @@ img { display: block; max-width: 100%; }
 .lb-wide-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lb-wide-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
 
-html, body { height: 100%; overflow: hidden; }
+/* 스크롤 컨테이너 공통.
+   측정해 보면 페인트는 문제가 없다(평균 8ms, 롱프레임 0). 끊기는 건 경계 동작이다:
+   컨테이너가 overscroll-behavior: auto면 끝에 닿을 때마다 부모로 스크롤이 넘겨지고
+   (scroll chaining) 그 판정에서 멈칫한다 — 스크롤을 시작할 때와 끝에 도착할 때
+   걸리는 이유가 이것. contain으로 그 전파를 끊고, iOS 관성도 함께 켠다. */
+.lb-chiprow { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
+.lb-chiprow::-webkit-scrollbar { display: none; }
+
+.lb-scrollable {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 문서 자체는 스크롤되지 않지만, 위에서 넘겨진 스크롤이 러버밴드로 튀는 걸 막는다. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
   #root { position: fixed; inset: 0; }

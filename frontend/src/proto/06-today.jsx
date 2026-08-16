@@ -580,8 +580,8 @@ function TodayScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div style={{
-        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+      <div className="lb-scrollable" style={{
+        flex: 1,  
         padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 28px',
       }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
