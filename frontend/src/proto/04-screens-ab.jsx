@@ -374,8 +374,8 @@ function WardrobeScreen({ ctx }) {
         </div>
       )}
 
-      <div style={{
-        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+      <div className="lb-scrollable" style={{
+        flex: 1,  
         padding: wide ? '28px 0 36px' : '16px 18px',
         paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : 72),
       }}>
@@ -725,7 +725,7 @@ function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
-    openTryOn, openTryOnSetup, prefs, wide, comboReady, openImageViewer,
+    openTryOn, openTryOnSetup, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -1154,22 +1154,30 @@ function AddSheet({ ctx }) {
               {(anchor
                 ? [['photo', '사진', 'camera'], ['url', 'URL', 'link'], ['tryon', '바로 보기', 'cutout']]
                 : [['photo', '사진', 'camera'], ['url', 'URL', 'link']]
-              ).map(([id, label, ic]) => (
-                <button key={id} onClick={() => {
-                  setTab(id); setErr(''); setTryOnErr('');
-                  if (id === 'tryon') setShowHint(false);
-                }} style={{
-                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 14, fontWeight: 600,
-                  background: tab === id ? 'var(--surface-2)' : 'transparent',
-                  color: tab === id ? 'var(--ink)' : 'var(--ink-3)',
-                  boxShadow: tab === id ? '0 1px 3px rgba(40,36,28,0.10)' : 'none',
-                  transition: 'all var(--dur) var(--ease)',
-                  whiteSpace: 'nowrap',
-                }}>
-                  <Icon name={ic} size={16} />{label}
-                </button>
-              ))}
+              ).map(([id, label, ic]) => {
+                // 옷장에 맞춰 볼 옷이 없으면 사진·URL로 고민 중인 옷을 올려도 할 게 없다.
+                // 눌렀을 때 아무 일도 안 일어나는 것보다, 아직 못 쓴다는 걸 보여주고 잠근다.
+                const locked = anchor && !comboReady && id !== 'tryon';
+                return (
+                  <button key={id} disabled={locked} aria-disabled={locked} onClick={() => {
+                    if (locked) return;
+                    setTab(id); setErr(''); setTryOnErr('');
+                    if (id === 'tryon') setShowHint(false);
+                  }} style={{
+                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 14, fontWeight: 600,
+                    background: tab === id ? 'var(--surface-2)' : 'transparent',
+                    color: tab === id ? 'var(--ink)' : 'var(--ink-3)',
+                    boxShadow: tab === id ? '0 1px 3px rgba(40,36,28,0.10)' : 'none',
+                    transition: 'all var(--dur) var(--ease)',
+                    whiteSpace: 'nowrap',
+                    opacity: locked ? 0.4 : 1,
+                    cursor: locked ? 'default' : 'pointer',
+                  }}>
+                    {locked ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ marginTop: 'var(--s5)' }}>
@@ -1228,9 +1236,12 @@ function AddSheet({ ctx }) {
                   </div>
                 );
                 const tabErr = tab === 'tryon' ? tryOnErr : err;
+                // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
+                // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
+                const tabLocked = anchor && !comboReady && tab !== 'tryon';
                 return (
                   <>
-                    {tab === 'tryon' ? (
+                    {tabLocked ? null : tab === 'tryon' ? (
                       <>
                         <input ref={tryOnFileRef} type="file" accept="image/*" onChange={onTryOnPick} style={{ display: 'none' }} />
                         {tryOnPreview ? previewBox(tryOnPreview, clearTryOn, '사진 지우기') : (
@@ -1313,23 +1324,42 @@ function AddSheet({ ctx }) {
                       {tabErr ? errBanner(tabErr) : null}
                     </div>
 
-                    {anchor && !comboReady && (
+                    {/* 조합 추천은 옷장이 있어야 되고 바로 보기는 없어도 된다. 두 전제가 한
+                        시트에 섞여 있어서 문장으로 설명해야 했는데, 설명보다 상태로 드러내는 게
+                        낫다: 아직 안 되는 탭은 잠그고, 여기서 바로 옷을 담게 한다. */}
+                    {anchor && !comboReady && tab !== 'tryon' && (
                       <div style={{
-                        marginTop: 'var(--s4)', padding: '10px 12px', borderRadius: 'var(--r-md)',
-                        background: 'var(--ivory)', fontSize: 12.5, color: 'var(--ink-2)',
-                        lineHeight: 1.45, wordBreak: 'keep-all', minHeight: 44, boxSizing: 'border-box',
+                        marginTop: 'var(--s4)', padding: '14px', borderRadius: 'var(--r-md)',
+                        background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
                       }}>
-                        {tab === 'tryon'
-                          ? '옷장이 적어도 바로 보기로 매장 옷을 카메라에 비춰 볼 수 있어요.'
-                          : <>AI 조합 추천은 상의·하의가 더 필요해요. 급하면 위 탭의 <b style={{ fontWeight: 700, color: 'var(--ink)' }}>바로 보기</b>를 써 보세요.</>}
+                        <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
+                          옷장에 옷을 먼저 담아주세요
+                        </div>
+                        <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
+                          고민 중인 옷과 맞춰 볼 옷이 있어야 조합을 만들 수 있어요.
+                          {comboNeed ? ` ${comboNeed}가 더 필요해요.` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>
+                          {[0, 1, 2, 3].map((n) => (
+                            <div key={n} style={{
+                              flex: 1, height: 4, borderRadius: 999,
+                              background: n < (comboProgress || 0) ? 'var(--accent)' : 'var(--line-2)',
+                            }} />
+                          ))}
+                        </div>
+                        <Btn full size="lg" icon="plus" style={{ marginTop: 'var(--s4)' }}
+                          onClick={() => { closeAdd(); openAdd && openAdd('wardrobe'); }}>
+                          옷장에 아이템 추가
+                        </Btn>
                       </div>
                     )}
 
                     <div style={{
-                      marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
-                      visibility: tab === 'tryon' ? 'hidden' : 'visible',
-                      pointerEvents: tab === 'tryon' ? 'none' : 'auto',
-                    }} aria-hidden={tab === 'tryon'}>
+                      marginTop: 'var(--s4)', minHeight: tabLocked ? 0 : 28, display: 'flex', alignItems: 'center',
+                      visibility: (tab === 'tryon' || tabLocked) ? 'hidden' : 'visible',
+                      pointerEvents: (tab === 'tryon' || tabLocked) ? 'none' : 'auto',
+                      height: tabLocked ? 0 : undefined, overflow: tabLocked ? 'hidden' : undefined,
+                    }} aria-hidden={tab === 'tryon' || tabLocked}>
                       <button
                         type="button"
                         onClick={() => setShowHint((v) => !v)}
@@ -1518,7 +1548,7 @@ function AddSheet({ ctx }) {
               background: 'var(--thumb-bg)', boxShadow: 'inset 0 0 0 1px var(--line)', marginTop: 'var(--s5)',
             }}>
               {/* 축소해서 보여주면 잘렸는지 판단이 안 되니, 원본 비율 그대로 + 스크롤로 전체 확인 */}
-              <div style={{ maxHeight: 420, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="lb-scrollable" style={{ maxHeight: 420,   }}>
                 <img src={pendingReplace.item.img} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
               </div>
             </div>
