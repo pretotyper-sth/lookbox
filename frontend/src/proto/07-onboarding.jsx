@@ -379,7 +379,7 @@ function StyleCard({ style, selected, onToggle }) {
         background: 'var(--ivory)', display: 'grid', placeItems: 'center',
       }}>
         {style.img
-          ? <img src={style.img} alt={style.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={style.img} alt={style.name} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--ink-3)' }}>
               <Icon name="image" size={26} stroke={1.5} />
@@ -601,9 +601,12 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
                 onSelect={() => setD((s) => ({ ...s, personalColor: pc.id, pcDiagnosed: false }))} />
             ))}
           </div>
+          {/* Icon이 display:block이라 flex가 아니면 아이콘이 한 줄을 차지하고 텍스트가
+              그 아래로 내려간다. gap도 무시된다. 한 줄에 묶어 가운데 정렬한다. */}
           <button onClick={openPc} className="lb-btn" style={{
             width: '100%', marginTop: 10, background: 'var(--surface)', color: 'var(--ink-2)',
-            boxShadow: 'inset 0 0 0 1px var(--line)', fontSize: 13, fontWeight: 600, padding: '12px', gap: 7,
+            boxShadow: 'inset 0 0 0 1px var(--line)', fontSize: 13, fontWeight: 600, padding: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}>
             <Icon name="sparkle" size={16} /> 잘 모르겠어요 · 퍼스널 컬러 진단받기
           </button>
@@ -669,7 +672,10 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
         </div>
 
         {/* 본문 (스크롤) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '26px 20px 16px' }}>
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '26px 20px 16px',
+          WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
+        }}>
           <div className="lb-anim-in" key={step.key}>
             <Eyebrow>{`${i + 1} / ${steps.length} · ${step.eyebrow}`}</Eyebrow>
             <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>{step.title}</h1>

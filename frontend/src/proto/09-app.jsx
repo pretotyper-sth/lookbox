@@ -1586,7 +1586,8 @@ function App() {
             <Eyebrow>처음 시작하기</Eyebrow>
             <h2 style={{ margin: '9px 0 0', fontSize: 22, lineHeight: 1.25, fontWeight: 800, letterSpacing: '-0.04em' }}>옷을 먼저 추가해 주세요</h2>
             <p style={{ margin: '9px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)' }}>
-              LOOKBOX는 내 옷장에 있는 아이템을 기준으로 조합을 보여줘요. 아이템이 몇 개 모여야 추천이 정확해집니다.
+옷장에 있는 아이템으로만 조합을 만들어요.
+              몇 개 모이면 추천이 정확해져요.
             </p>
             <div style={{ display: 'grid', gap: 0, marginTop: 18 }}>
               {[
