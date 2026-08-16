@@ -1396,6 +1396,7 @@ function App() {
         size: it.size || '',
         store: it.store || '',
         note: it.note || '',
+        seasons: it.seasons || [],
       };
       try {
         const res = await liveJSON('/api/live/items/' + id, {

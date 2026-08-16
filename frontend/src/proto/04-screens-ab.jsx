@@ -106,8 +106,35 @@ const WARDROBE_SORTS = [
   { id: 'oldest', label: '오래된순', hint: '먼저 담은 옷부터' },
   { id: 'category', label: '카테고리순', hint: '아우터 → 상의 → 하의 순' },
   { id: 'season', label: '계절순', hint: '봄 → 여름 → 가을 → 겨울' },
+  { id: 'color', label: '컬러순', hint: '화이트 → 컬러 → 블랙 순' },
   { id: 'name', label: '이름순', hint: '가나다 순' },
 ];
+
+// 컬러값은 '블루 스트라이프', '미드 블루', '오프화이트'처럼 자유 문구라 문자열
+// 정렬은 의미가 없다. 색 계열로 묶어 밝은 무채색 → 웜 → 쿨 → 어두운 무채색 순으로
+// 늘어놓는다(옷장을 눈으로 훑는 순서). 키워드 포함으로 판정한다.
+const COLOR_FAMILIES = [
+  ['화이트', '아이보리', '크림', '에크루', '오트밀', 'white', 'ivory', 'cream', 'ecru'],
+  ['베이지', '샌드', '카멜', '탄', '모카', '브라운', '카키', 'beige', 'sand', 'camel', 'brown', 'khaki'],
+  ['옐로우', '머스타드', '골드', 'yellow', 'mustard', 'gold'],
+  ['오렌지', '코랄', 'orange', 'coral'],
+  ['레드', '와인', '버건디', '마룬', '로즈', 'red', 'wine', 'burgundy', 'maroon', 'rose'],
+  ['핑크', '라벤더', '라일락', '퍼플', 'pink', 'lavender', 'lilac', 'purple'],
+  ['그린', '올리브', '세이지', '민트', '틸', '터콰이즈', 'green', 'olive', 'sage', 'mint', 'teal'],
+  ['네이비', '블루', '소라', '삭스', '색스', '코발트', '청', '데님', '인디고',
+    'navy', 'blue', 'saxe', 'denim', 'indigo'],
+  ['그레이', '그레이지', '차콜', '실버', '멜란지', 'gray', 'grey', 'charcoal', 'silver'],
+  ['블랙', 'black'],
+];
+
+function colorRank(value) {
+  const v = String(value || '').toLowerCase();
+  if (!v) return COLOR_FAMILIES.length + 1;
+  for (let i = 0; i < COLOR_FAMILIES.length; i += 1) {
+    if (COLOR_FAMILIES[i].some((k) => v.indexOf(k) !== -1)) return i;
+  }
+  return COLOR_FAMILIES.length;
+}
 
 function sortWardrobe(list, sortId) {
   const cats = LB_DATA.CATEGORIES;
@@ -130,6 +157,9 @@ function sortWardrobe(list, sortId) {
   if (sortId === 'oldest') return arr.sort((a, b) => time(a) - time(b) || byName(a, b));
   if (sortId === 'category') return arr.sort((a, b) => catRank(a) - catRank(b) || byName(a, b));
   if (sortId === 'season') return arr.sort((a, b) => seasonRank(a) - seasonRank(b) || catRank(a) - catRank(b));
+  if (sortId === 'color') {
+    return arr.sort((a, b) => colorRank(a.color) - colorRank(b.color) || catRank(a) - catRank(b) || byName(a, b));
+  }
   if (sortId === 'name') return arr.sort(byName);
   return arr.sort((a, b) => time(b) - time(a) || byName(a, b));
 }
@@ -1007,6 +1037,7 @@ function AddSheet({ ctx }) {
     const cat = s.cat || s.category || '상의';
     return {
       ...s,
+      seasons: s.seasons || [],
       name: (s.name || '').trim() || (cat + ' 아이템'),
       category: cat,
       cat,
@@ -1551,10 +1582,20 @@ function AddSheet({ ctx }) {
                 aria-label={cur.img ? '이미지 크게 보기' : undefined}
                 style={{
                   width: 72, flex: 'none', padding: 0, border: 'none', background: 'transparent',
-                  cursor: cur.img ? 'zoom-in' : 'default',
+                  cursor: cur.img ? 'zoom-in' : 'default', position: 'relative',
+                  outline: 'none', boxShadow: 'none', WebkitTapHighlightColor: 'transparent',
                 }}
               >
                 <Thumb item={{ ...cur, category: cur.cat }} />
+                {cur.img && (
+                  <span style={{
+                    position: 'absolute', right: 4, bottom: 4, width: 22, height: 22, borderRadius: '50%',
+                    background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff',
+                    display: 'grid', placeItems: 'center',
+                  }}>
+                    <Icon name="search" size={11} stroke={2.4} />
+                  </span>
+                )}
               </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 6 }}>이름</div>
@@ -1569,6 +1610,31 @@ function AddSheet({ ctx }) {
               <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)', marginBottom: 9 }}>분류</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                 {CATS.map((c) => <Chip key={c} active={cur.cat === c} onClick={() => patchStep({ cat: c })}>{c}</Chip>)}
+              </div>
+            </div>
+
+            {/* 계절은 AI가 채워두지만 추천에 바로 쓰이는 값이라, 상세 정보 안에
+                접어두지 않고 분류처럼 바로 고칠 수 있게 노출한다 */}
+            <div style={{ marginTop: 'var(--s5)' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 9 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)' }}>계절</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-3)', opacity: 0.7 }}>여러 개 선택 가능</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {LB_DATA.SEASONS.map((sn) => {
+                  const picked = (cur.seasons || []).includes(sn.id);
+                  return (
+                    <Chip
+                      key={sn.id}
+                      active={picked}
+                      onClick={() => patchStep({
+                        seasons: picked
+                          ? (cur.seasons || []).filter((x) => x !== sn.id)
+                          : [...(cur.seasons || []), sn.id],
+                      })}
+                    >{sn.name}</Chip>
+                  );
+                })}
               </div>
             </div>
 
