@@ -447,23 +447,37 @@ def log_ai_usage(
         print(f"[ai-usage] log failed ({feature}): {exc}", flush=True)
 
 
+_TIMING_EXTRA_OK = True
+
+
 def _record_extraction_timing(
     user_id: str | None, source: str, item_count: int, duration_ms: float, details: dict[str, Any] | None = None
 ) -> None:
     """추출(사진·URL) 소요시간 기록 — 개수별 평균 산출용. 실패해도 요청은 계속."""
     ms = int(duration_ms)
-    try:
-        payload = {"user_id": user_id, "source": source, "item_count": int(item_count), "duration_ms": ms}
-        if details:
-            payload.update({
-                "classify_ms": int(details.get("classify_ms") or 0),
-                "extract_ms": int(details.get("extract_ms") or 0),
-                "cache_hit": bool(details.get("cache_hit")),
-                "policy": details.get("policy") or {},
-            })
-        supabase_admin.table("extraction_timings").insert(payload).execute()
-    except Exception as exc:  # noqa: BLE001
-        print(f"[timing] record failed: {exc}", flush=True)
+    base = {"user_id": user_id, "source": source, "item_count": int(item_count), "duration_ms": ms}
+    extra: dict[str, Any] = {}
+    if details:
+        extra = {
+            "classify_ms": int(details.get("classify_ms") or 0),
+            "extract_ms": int(details.get("extract_ms") or 0),
+            "cache_hit": bool(details.get("cache_hit")),
+            "policy": details.get("policy") or {},
+        }
+    # 확장 컬럼은 schema.sql에는 있지만 라이브 DB에 적용되지 않은 환경이 있다. 그 경우
+    # insert가 통째로 실패해 소요시간이 아예 안 남았다. 한 번 실패하면 기본 컬럼만으로
+    # 다시 넣고, 이후 호출은 시도하지 않는다 (마이그레이션 후엔 자동으로 다시 붙는다).
+    global _TIMING_EXTRA_OK
+    for payload in ([{**base, **extra}] if (extra and _TIMING_EXTRA_OK) else []) + [base]:
+        try:
+            supabase_admin.table("extraction_timings").insert(payload).execute()
+            return
+        except Exception as exc:  # noqa: BLE001
+            if payload is base:
+                print(f"[timing] record failed: {exc}", flush=True)
+            else:
+                _TIMING_EXTRA_OK = False
+                print(f"[timing] 확장 컬럼 없음 → 기본 컬럼만 기록 ({exc})", flush=True)
     print(f"[timing] source={source} items={item_count} duration_ms={ms} ({ms / 1000:.1f}s)", flush=True)
 
 
@@ -1663,6 +1677,19 @@ def recommend_text(
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
             return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
+        # 모델이 max_combos개를 돌려줘도 중복·상하의 미충족으로 걸러지면 그만큼 비어 버린다.
+        # 옷장에 남은 조합이 있는데 개수가 모자라면 결정적 페어링으로 채운다.
+        if len(combos) < max_combos:
+            short = max_combos - len(combos)
+            for extra in fallback_combos(items, anchor, short, tone, seen, uniq_styles):
+                key = tuple(sorted(extra["item_ids"]))
+                if key in seen:
+                    continue
+                seen.add(key)
+                combos.append(extra)
+                if len(combos) >= max_combos:
+                    break
+            print(f"[recommend] topped up {len(combos) - (max_combos - short)} combo(s) from wardrobe pairs", flush=True)
         print(f"[recommend] ok via=ai combos={len(combos)}", flush=True)
         return combos
     except Exception as exc:  # noqa: BLE001
