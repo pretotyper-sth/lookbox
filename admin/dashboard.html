@@ -166,6 +166,19 @@ canvas{max-height:130px}
     <div class="card"><div class="ct">전환율 (오늘)</div><div class="cv" id="m-rate">—</div></div>
   </div>
 
+  <!-- OpenAI 비용 (서비스 백엔드 ai_usage_logs 집계) -->
+  <div class="g4">
+    <div class="card"><div class="ct">오늘 AI 비용</div><div class="cv brand" id="ai-today">—</div><div class="cs" id="ai-today-calls">—</div></div>
+    <div class="card"><div class="ct">7일 AI 비용</div><div class="cv" id="ai-7">—</div></div>
+    <div class="card"><div class="ct">30일 AI 비용</div><div class="cv" id="ai-30">—</div><div class="cs" id="ai-30-calls">—</div></div>
+    <div class="card"><div class="ct">토큰 미기록 호출</div><div class="cv" id="ai-unpriced">—</div><div class="cs">비용 0으로 잡힘</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="st">AI 호출 비용 <span style="font-size:11px;font-weight:400;color:var(--muted)">최근 30일 · 기능별 · 실제 토큰 × 공개 단가</span></div>
+    <div id="ai-features"><div class="empty">데이터 로딩 중…</div></div>
+  </div>
+
   <!-- Funnel -->
   <div class="card" style="margin-bottom:16px">
     <div class="st">핵심 전환 퍼널 <span style="font-size:11px;font-weight:400;color:var(--muted)">전체 기간 · 순방문자 기준</span></div>
@@ -434,6 +447,44 @@ async function load() {
 
 load();
 setInterval(load, 5000);
+
+// ── OpenAI 사용 비용 ─────────────────────────────────────────
+const usd = (n) => { const v = Number(n) || 0; return '$' + v.toFixed(v < 1 ? 3 : 2); };
+
+async function loadAiCost() {
+  const box = document.getElementById('ai-features');
+  try {
+    const r = await fetch('/api/dashboard/ai-cost?days=30');
+    const d = await r.json();
+    if (!r.ok || d.error) {
+      box.innerHTML = '<div class="empty">' + (d.error || '불러오지 못했어요') + '</div>';
+      return;
+    }
+    const days = d.by_day || [];
+    const last7 = days.slice(-7).reduce((a, x) => a + (x.cost_usd || 0), 0);
+    document.getElementById('ai-today').textContent = usd(d.today && d.today.cost_usd);
+    document.getElementById('ai-today-calls').textContent = ((d.today && d.today.calls) || 0) + '회 호출';
+    document.getElementById('ai-7').textContent = usd(last7);
+    document.getElementById('ai-30').textContent = usd(d.total && d.total.cost_usd);
+    document.getElementById('ai-30-calls').textContent = ((d.total && d.total.calls) || 0) + '회 호출';
+    document.getElementById('ai-unpriced').textContent = (d.unpriced_calls || 0) + '건';
+    const rows = d.by_feature || [];
+    box.innerHTML = rows.length
+      ? rows.map((f) => {
+          const share = (d.total && d.total.cost_usd) ? (f.cost_usd / d.total.cost_usd * 100) : 0;
+          return '<div class="er"><div>' + f.key + '</div>'
+            + '<div style="color:var(--muted)">' + f.calls + '회</div>'
+            + '<div style="text-align:right">' + usd(f.cost_usd)
+            + ' <span style="color:var(--muted);font-size:11px">' + share.toFixed(0) + '%</span></div></div>';
+        }).join('')
+      : '<div class="empty">기록된 호출이 없어요</div>';
+  } catch (e) {
+    box.innerHTML = '<div class="empty">불러오지 못했어요</div>';
+  }
+}
+
+loadAiCost();
+setInterval(loadAiCost, 60000);
 
 // ── IP Modal ──────────────────────────────────────────────────
 async function openIpModal() {

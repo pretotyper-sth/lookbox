@@ -12,7 +12,7 @@ import time
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator
 from urllib.parse import urlparse
 
@@ -377,10 +377,74 @@ def charge_credit(user_id: str, reason: str, metadata: dict[str, Any] | None = N
     return True
 
 
-def log_ai_usage(user_id: str, feature: str, model: str, metadata: dict[str, Any]) -> None:
-    supabase_admin.table("ai_usage_logs").insert(
-        {"user_id": user_id, "feature": feature, "model": model, "metadata": metadata}
-    ).execute()
+# 1M 토큰당 USD. gpt-image-1은 입력 텍스트·입력 이미지·출력 이미지 단가가 다르다.
+_AI_PRICES: dict[str, dict[str, float]] = {
+    "gpt-image-1": {"text_in": 5.0, "image_in": 10.0, "out": 40.0},
+    "gpt-image-2": {"text_in": 5.0, "image_in": 10.0, "out": 40.0},
+    "gpt-4o": {"text_in": 2.5, "image_in": 2.5, "out": 10.0},
+    "gpt-4o-mini": {"text_in": 0.15, "image_in": 0.15, "out": 0.6},
+}
+
+
+def _usage_dict(usage: Any) -> dict[str, int]:
+    """SDK usage 객체에서 토큰 수만 뽑는다. 필드 이름이 API마다 달라 둘 다 본다."""
+    if usage is None:
+        return {}
+    get = (lambda k: getattr(usage, k, None)) if not isinstance(usage, dict) else usage.get
+    total_in = get("input_tokens")
+    if total_in is None:
+        total_in = get("prompt_tokens")
+    out = get("output_tokens")
+    if out is None:
+        out = get("completion_tokens")
+    detail = get("input_tokens_details")
+    image_in = None
+    text_in = None
+    if detail is not None:
+        dget = (lambda k: getattr(detail, k, None)) if not isinstance(detail, dict) else detail.get
+        image_in = dget("image_tokens")
+        text_in = dget("text_tokens")
+    if image_in is None and text_in is None and total_in is not None:
+        text_in = total_in
+    return {
+        "text_in": int(text_in or 0),
+        "image_in": int(image_in or 0),
+        "out": int(out or 0),
+    }
+
+
+def _ai_cost_usd(model: str, tokens: dict[str, int]) -> float:
+    """토큰 수 × 공개 단가. 모르는 모델은 0 — 추측한 값을 기록하지 않는다."""
+    price = _AI_PRICES.get(model)
+    if not price or not tokens:
+        return 0.0
+    return round(
+        sum(tokens.get(k, 0) * price[k] for k in ("text_in", "image_in", "out")) / 1_000_000,
+        6,
+    )
+
+
+def log_ai_usage(
+    user_id: str | None, feature: str, model: str, metadata: dict[str, Any], usage: Any = None
+) -> None:
+    """AI 호출 1건 기록. usage를 넘기면 실제 토큰 수와 비용까지 함께 남긴다.
+
+    비용을 추산하려면 대시보드에서 호출 수 × 가정 단가를 곱해야 했는데, 이미지
+    생성은 입력 이미지 토큰이 원본 크기와 input_fidelity에 따라 크게 달라져서
+    추산 오차가 그대로 총액 오차가 됐다. 응답의 usage를 그대로 저장해 둔다.
+    """
+    payload: dict[str, Any] = dict(metadata)
+    if usage is not None:
+        tokens = _usage_dict(usage)
+        payload["tokens"] = tokens
+        payload["cost_usd"] = _ai_cost_usd(model, tokens)
+    try:
+        supabase_admin.table("ai_usage_logs").insert(
+            {"user_id": user_id, "feature": feature, "model": model, "metadata": payload}
+        ).execute()
+    except Exception as exc:  # noqa: BLE001
+        # 기록 실패가 사용자 요청을 깨뜨리면 안 된다.
+        print(f"[ai-usage] log failed ({feature}): {exc}", flush=True)
 
 
 def _record_extraction_timing(
@@ -418,7 +482,7 @@ def _record_recommendation_timing(user_id: str | None, pool_size: int, combo_cou
     )
 
 
-def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
+def classify_item(path: str, extract_hint: str = "", user_id: str | None = None) -> dict[str, Any]:
     fallback = {
         "name": "새로 추가한 옷",
         "category": "top",
@@ -500,6 +564,10 @@ def classify_item(path: str, extract_hint: str = "") -> dict[str, Any]:
             response_format={"type": "json_object"},
             temperature=0.2,
         )
+        log_ai_usage(
+            user_id, "classify", OPENAI_CLASSIFY_MODEL, {"hint": bool(extract_hint)},
+            usage=getattr(response, "usage", None),
+        )
         data = json.loads(response.choices[0].message.content or "{}")
         if data.get("category") not in CATEGORY_KO:
             data["category"] = fallback["category"]
@@ -552,7 +620,7 @@ def _significant_garment_logo(has_text_logo: bool, logo_text: str) -> bool:
     return len(chars) >= 3
 
 
-def detect_garment_text(path: str) -> dict[str, Any]:
+def detect_garment_text(path: str, user_id: str | None = None) -> dict[str, Any]:
     """옷 표면 인쇄/자수 텍스트·로고만 감지 (분류 메타에 없을 때 재추출·교체용)."""
     empty = {"has_text_logo": False, "logo_text": ""}
     if not openai_client or AI_TEST_MODE:
@@ -578,6 +646,10 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
             ],
             response_format={"type": "json_object"},
             temperature=0,
+        )
+        log_ai_usage(
+            user_id, "detect_text", OPENAI_CLASSIFY_MODEL, {},
+            usage=getattr(response, "usage", None),
         )
         data = json.loads(response.choices[0].message.content or "{}")
         logo_text = str(data.get("logo_text") or "").strip()[:80]
@@ -1211,7 +1283,7 @@ def generate_product_image(
     # 크레딧 게이트 비활성(테스트). charge는 no-op이지만 호출해 ledger 경로를 유지하지 않음.
     charge_credit(user_id, "product_image", {"name": meta.get("name")})
     if "has_text_logo" not in meta:
-        meta.update(detect_garment_text(path))
+        meta.update(detect_garment_text(path, user_id=user_id))
     else:
         logo_text = str(meta.get("logo_text") or "").strip()
         meta["has_text_logo"] = _significant_garment_logo(bool(meta.get("has_text_logo")), logo_text)
@@ -1301,6 +1373,7 @@ def generate_product_image(
                 "extract_hint": hint[:80],
                 "transparent": transparent,
             },
+            usage=getattr(result, "usage", None),
         )
         return base64.b64decode(result.data[0].b64_json)
 
@@ -1511,7 +1584,10 @@ def recommend_text(
             )
             if len(combos) >= max_combos:
                 break
-        log_ai_usage(user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)})
+        log_ai_usage(
+            user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)},
+            usage=getattr(response, "usage", None),
+        )
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
             return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
@@ -2166,7 +2242,7 @@ def _store_uploaded_item(
             # 분류로 패션 여부를 먼저 본 뒤, 통과할 때만 업로드·트리아지·컷아웃.
             step("classify")
             classify_started = time.perf_counter()
-            meta = classify_item(tmp_path, hint)
+            meta = classify_item(tmp_path, hint, user_id=user_id)
             classify_ms = int((time.perf_counter() - classify_started) * 1000)
             require_fashion_item(meta)
             step("upload")
@@ -3031,7 +3107,7 @@ async def live_replace_image(
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         try:
             report("classify")
-            classified = classify_item(tmp_path, hint)
+            classified = classify_item(tmp_path, hint, user_id=uid)
             require_fashion_item(classified)
             report("upload")
             original_path = f"{uid}/original/{uuid.uuid4().hex}{suffix}"
@@ -3163,6 +3239,63 @@ def live_normalize_bg(user: UserContext = Depends(current_user)) -> dict[str, An
             print(f"[normalize-bg] skip {row.get('id')}: {exc}", flush=True)
             skipped += 1
     return {"updated": updated, "skipped": skipped}
+
+
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
+
+
+@app.get("/api/live/admin/ai-cost")
+def live_admin_ai_cost(
+    days: int = 30, x_admin_token: str = Header("", alias="X-Admin-Token")
+) -> dict[str, Any]:
+    """ai_usage_logs를 날짜·기능별 비용으로 집계. 관리자 대시보드용.
+
+    ADMIN_TOKEN이 설정되지 않으면 열지 않는다 (기본 닫힘).
+    """
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=404, detail="not_found")
+    require_supabase()
+    span = max(1, min(int(days or 30), 365))
+    since = (datetime.now(timezone.utc) - timedelta(days=span - 1)).date().isoformat()
+    rows = (
+        supabase_admin.table("ai_usage_logs")
+        .select("created_at,feature,model,metadata")
+        .gte("created_at", since)
+        .order("created_at", desc=False)
+        .limit(20000)
+        .execute()
+        .data
+        or []
+    )
+    by_day: dict[str, dict[str, float]] = {}
+    by_feature: dict[str, dict[str, float]] = {}
+    total = {"calls": 0, "cost_usd": 0.0, "priced_calls": 0}
+    for r in rows:
+        meta = r.get("metadata") or {}
+        cost = float(meta.get("cost_usd") or 0.0)
+        day = str(r.get("created_at") or "")[:10]
+        key = f"{r.get('feature') or 'unknown'} · {r.get('model') or '?'}"
+        for bucket, name in ((by_day, day), (by_feature, key)):
+            slot = bucket.setdefault(name, {"calls": 0, "cost_usd": 0.0})
+            slot["calls"] += 1
+            slot["cost_usd"] = round(slot["cost_usd"] + cost, 6)
+        total["calls"] += 1
+        total["cost_usd"] = round(total["cost_usd"] + cost, 6)
+        if meta.get("cost_usd") is not None:
+            total["priced_calls"] += 1
+    today = datetime.now(timezone.utc).date().isoformat()
+    return {
+        "days": span,
+        "total": total,
+        # 토큰을 기록하기 전 호출은 cost_usd가 없어 0으로 잡힌다 — 몇 건인지 같이 준다.
+        "unpriced_calls": total["calls"] - total["priced_calls"],
+        "today": by_day.get(today) or {"calls": 0, "cost_usd": 0.0},
+        "by_day": [{"date": k, **v} for k, v in sorted(by_day.items())],
+        "by_feature": sorted(
+            ({"key": k, **v} for k, v in by_feature.items()),
+            key=lambda x: -x["cost_usd"],
+        ),
+    }
 
 
 @app.post("/api/live/wardrobe/refresh-cache")

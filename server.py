@@ -988,6 +988,31 @@ def track():
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
 
+# AI 사용량·비용은 이 Flask 앱(tracker.db)이 아니라 서비스 백엔드(Supabase)에 쌓인다.
+# 대시보드가 직접 부르면 CORS와 토큰 노출이 걸리므로 여기서 프록시한다.
+LOOKBOX_API_BASE = os.environ.get('LOOKBOX_API_BASE', 'https://lookbox-w1st.onrender.com').rstrip('/')
+LOOKBOX_ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', '').strip()
+
+
+@app.route('/api/dashboard/ai-cost')
+@require_auth
+def dash_ai_cost():
+    if not LOOKBOX_ADMIN_TOKEN:
+        return jsonify({'error': 'ADMIN_TOKEN 미설정 — 서버 환경변수에 추가하세요'}), 501
+    days = request.args.get('days', '30')
+    try:
+        import requests  # 이 모듈은 상단에서 전역 import하지 않는다 (다른 곳도 지연 import)
+        r = requests.get(
+            f'{LOOKBOX_API_BASE}/api/live/admin/ai-cost',
+            params={'days': days},
+            headers={'X-Admin-Token': LOOKBOX_ADMIN_TOKEN},
+            timeout=20,
+        )
+        return Response(r.text, r.status_code, {'Content-Type': 'application/json'})
+    except Exception as e:
+        return jsonify({'error': f'백엔드 호출 실패: {e}'}), 502
+
+
 @app.route('/api/dashboard/data')
 @require_auth
 def dash_data():
