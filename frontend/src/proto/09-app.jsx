@@ -507,12 +507,55 @@ function App() {
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
+
+  // 부팅 시 Supabase 세션을 복원한다. lb_onboarded는 이 기기의 플래그일 뿐이어서,
+  // 로그인 계정이 살아 있으면 그 계정으로 바로 들어가고(다른 기기·캐시 삭제 후에도
+  // 같은 옷장), 반대로 세션이 없는데 플래그만 남아 있으면 랜딩으로 되돌린다 —
+  // 안 그러면 토큰 없이 빈 옷장을 자기 옷장인 줄 알고 보게 된다.
+  useEffect(() => {
+    if (isShowcase || forceOnb) return;
+    let alive = true;
+    (async () => {
+      if (!window.LB_AUTH) return;
+      const me = await window.LB_AUTH.current();
+      if (!alive) return;
+      if (me && !me.anonymous) {
+        setPrefs((prev) => {
+          if (prev.email === me.email) return prev;
+          const np = { ...prev, email: me.email };
+          persistPrefs(np);
+          return np;
+        });
+        setOnboarded(true);
+      } else if (!me) {
+        setOnboarded(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const persistPrefs = (p) => { try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ } };
   const completeOnboarding = (p) => { setPrefs(p); persistPrefs(p); setOnboarded(true); };
-  // 로그인 — 기기에 남아 있는 선호 정보를 이어서 쓰고, 없으면 기본값으로 시작.
-  const completeLogin = (email) => {
-    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, email };
+  // 가입 — 계정 단계를 넘어갈 때 실제 Supabase 계정을 만든다. 에러 문구를 돌려주면
+  // 온보딩이 그 단계에 머문다. 여기서 계정을 만들어야 다음 방문에 같은 옷장이 열린다.
+  const createAccount = async (email, pw) => {
+    if (!window.LB_AUTH) return '서버 설정이 없어요.';
+    const r = await window.LB_AUTH.signUp(email, pw);
+    if (r.error) return r.error;
+    if (r.pending) return '가입 확인 메일을 보냈어요. 메일에서 확인한 뒤 로그인해 주세요.';
+    const p = { ...prefs, email };
+    setPrefs(p); persistPrefs(p);
+    return '';
+  };
+  // 로그인 — 성공하면 그 계정의 옷장을 새로 읽어온다. 기기에 남아 있던 선호 정보는
+  // 이어 쓰되 이메일은 세션 값으로 맞춘다.
+  const completeLogin = async (email, pw) => {
+    if (!window.LB_AUTH) return '서버 설정이 없어요.';
+    const r = await window.LB_AUTH.signIn(email, pw);
+    if (r.error) return r.error;
+    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, email: r.user.email || email };
     setPrefs(p); persistPrefs(p); setOnboarded(true);
+    return '';
   };
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
   const openPrefs = () => setEditPrefs(true);
@@ -543,7 +586,12 @@ function App() {
     setTryOnSetup(true);
   };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
-  const logout = () => { try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ } setOnboarded(false); setPhase('landing'); setTab('wardrobe'); };
+  const logout = () => {
+    if (window.LB_AUTH) window.LB_AUTH.signOut();
+    try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ }
+    setItems([]); setArchived([]);
+    setOnboarded(false); setPhase('landing'); setTab('wardrobe');
+  };
 
   // ---- responsive (window-width based; reliable inside fixed iframes) ----
   const shellRef = useRef(null);
@@ -1438,7 +1486,14 @@ function App() {
   // ---- 온보딩 게이트: 가입 전이면 홈(랜딩) → 회원가입 단계 ----
   if (!onboarded) {
     if (phase === 'onboarding') {
-      return <Onboarding mode="signup" onDone={completeOnboarding} onCancel={() => setPhase('landing')} />;
+      return (
+        <Onboarding
+          mode="signup"
+          onAccount={createAccount}
+          onDone={completeOnboarding}
+          onCancel={() => setPhase('landing')}
+        />
+      );
     }
     if (phase === 'login') {
       return <Login onDone={completeLogin} onCancel={() => setPhase('landing')} onSignup={() => setPhase('onboarding')} />;

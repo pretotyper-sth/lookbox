@@ -93,7 +93,13 @@ async function clear() {
 }
 
 /** 가입·로그인 화면을 건너뛰고 바로 앱으로. 09-app.jsx의 completeLogin과 같은 결과. */
-function bypassLogin() {
+async function bypassLogin() {
+  // 익명 세션은 이제 자동으로 만들어지지 않는다(캐시를 지우면 되돌아갈 수 없어서).
+  // DEV 우회는 그걸 알고 쓰는 경로이므로 여기서 명시적으로 익명 로그인을 한다.
+  if (window.LB_AUTH) {
+    const r = await window.LB_AUTH.signInAnonymous();
+    if (r && r.error) throw new Error(r.error);
+  }
   const prefs = read('lb_prefs') || { ...((window.LB_DATA || {}).DEFAULT_PREFS || {}) };
   write('lb_prefs', { ...prefs, email: prefs.email || 'dev@lookbox.local' });
   // 앱이 문자열 '1'로 읽으므로 JSON으로 감싸지 않는다.
@@ -130,7 +136,7 @@ function mountButton() {
     btn.disabled = true;
     btn.textContent = 'DEV · 적용 중…';
     try {
-      if (!isOnboarded()) bypassLogin();
+      if (!isOnboarded()) await bypassLogin();
       else if (isSeeded()) await clear();
       else await seed();
       location.reload();

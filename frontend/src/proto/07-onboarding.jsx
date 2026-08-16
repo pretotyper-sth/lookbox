@@ -286,8 +286,15 @@ function Landing({ onStart, onLogin }) {
 function Login({ onDone, onCancel, onSignup }) {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6;
-  const submit = () => { if (valid) onDone(email.trim()); };
+  const submit = async () => {
+    if (!valid || busy) return;
+    setBusy(true); setErr('');
+    const msg = await onDone(email.trim(), pw);
+    if (msg) { setErr(msg); setBusy(false); }
+  };
 
   const field = {
     width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
@@ -335,10 +342,13 @@ function Login({ onDone, onCancel, onSignup }) {
             {/* 엔터로 제출되도록 하는 숨김 버튼 */}
             <button type="submit" aria-hidden style={{ display: 'none' }} />
           </form>
+          {err && (
+            <div style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: '#B0573C', lineHeight: 1.45 }}>{err}</div>
+          )}
         </div>
 
         <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-          <Btn full size="lg" disabled={!valid} onClick={submit}>로그인</Btn>
+          <Btn full size="lg" disabled={!valid || busy} onClick={submit}>{busy ? '로그인 중…' : '로그인'}</Btn>
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, fontSize: 13, color: 'var(--ink-2)' }}>
             아직 계정이 없으신가요?
             <button onClick={onSignup} className="lb-btn" style={{
@@ -459,7 +469,7 @@ function PCCard({ pc, selected, diagnosed, onSelect }) {
 /* ----------------------------------------------------------------
    Onboarding — mode: 'signup' (계정 포함) | 'edit' (선호 정보만 수정)
 ---------------------------------------------------------------- */
-function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
+function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
   const isEdit = mode === 'edit';
   const [d, setD] = useState(() => ({ ...LB_DATA.DEFAULT_PREFS, ...(initial || {}) }));
   const [pw, setPw] = useState('');
@@ -616,11 +626,24 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
 
   const steps = isEdit ? [STYLES, FITPREF] : [ACCOUNT, BASIC, STYLES, FITPREF];
   const [i, setI] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const step = steps[i];
   const last = i === steps.length - 1;
   const canNext = step.valid();
 
-  const next = () => { if (!canNext) return; last ? onDone(d) : setI(i + 1); };
+  // 계정은 이 단계를 넘어갈 때 바로 만든다. 마지막에 몰아서 만들면 '이미 가입된
+  // 이메일'을 네 단계 지나온 뒤에야 알게 되고, 입력한 걸 다 잃는다.
+  const next = async () => {
+    if (!canNext || busy) return;
+    if (!isEdit && step.key === 'account' && onAccount) {
+      setBusy(true); setErr('');
+      const msg = await onAccount(d.email.trim(), pw);
+      setBusy(false);
+      if (msg) { setErr(msg); return; }
+    }
+    if (last) onDone(d); else setI(i + 1);
+  };
   const prev = () => (i === 0 ? (onCancel && onCancel()) : setI(i - 1));
 
   return (
@@ -652,6 +675,9 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
             <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>{step.title}</h1>
             <p style={{ margin: '0 0 24px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{step.sub}</p>
             {step.render()}
+            {err && (
+              <div style={{ marginTop: 16, fontSize: 13, fontWeight: 600, color: '#B0573C', lineHeight: 1.45 }}>{err}</div>
+            )}
           </div>
         </div>
 
@@ -662,8 +688,8 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel }) {
               {i === 0 ? '취소' : '이전'}
             </Btn>
           )}
-          <Btn full size="lg" disabled={!canNext} onClick={next} icon={last ? (isEdit ? 'check' : 'sparkle') : undefined}>
-            {last ? (isEdit ? '저장' : '시작하기') : '다음'}
+          <Btn full size="lg" disabled={!canNext || busy} onClick={next} icon={last ? (isEdit ? 'check' : 'sparkle') : undefined}>
+            {busy ? '계정 만드는 중…' : (last ? (isEdit ? '저장' : '시작하기') : '다음')}
           </Btn>
         </div>
       </div>

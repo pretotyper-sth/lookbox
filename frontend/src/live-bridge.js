@@ -21,7 +21,13 @@ if (configured) {
 // De-dupe concurrent token fetches (background warm-up + first request) so we
 // don't kick off two anonymous sign-ins. Reset after settle so later calls can
 // still pick up a refreshed session token.
+//
+// 익명 세션은 이제 '자동 생성'이 아니다. 익명 토큰은 브라우저 저장소에만 있어서
+// 캐시를 지우면 되돌아갈 방법이 없고, 그 상태로 옷을 등록하면 다음 방문에 통째로
+// 사라진 것처럼 보인다. 그래서 로그인한 세션이 있으면 그걸 쓰고, 없을 때만
+// 명시적으로 요청받았을 때(둘러보기·DEV) 익명 세션을 만든다.
 let tokenInFlight = null
+let allowAnonymous = false
 async function ensureToken() {
   if (!supabase) return null
   if (tokenInFlight) return tokenInFlight
@@ -29,6 +35,7 @@ async function ensureToken() {
     const { data } = await supabase.auth.getSession()
     let session = data.session
     if (!session) {
+      if (!allowAnonymous) return null
       const { data: signed, error } = await supabase.auth.signInAnonymously()
       if (error) {
         console.error('[LOOKBOX] Anonymous sign-in failed:', error.status, error.message, error)
@@ -44,6 +51,60 @@ async function ensureToken() {
     tokenInFlight = null
   }
 }
+
+// 프로토타입 화면(window 전역만 씀)에서 부를 수 있게 인증 API를 노출한다.
+function authError(error) {
+  const msg = String(error?.message || '')
+  if (/already registered|already been registered/i.test(msg)) return '이미 가입된 이메일이에요. 로그인해 주세요.'
+  if (/Invalid login credentials/i.test(msg)) return '이메일 또는 비밀번호가 맞지 않아요.'
+  if (/Email not confirmed/i.test(msg)) return '이메일 인증이 필요해요. 메일함을 확인해 주세요.'
+  if (/Password should be at least/i.test(msg)) return '비밀번호는 6자 이상이어야 해요.'
+  if (/rate limit|too many/i.test(msg)) return '시도가 너무 많아요. 잠시 후 다시 시도해 주세요.'
+  return msg || '요청을 처리하지 못했어요.'
+}
+
+const auth = {
+  configured,
+  async current() {
+    if (!supabase) return null
+    const { data } = await supabase.auth.getSession()
+    const user = data.session?.user
+    if (!user) return null
+    return { id: user.id, email: user.email || '', anonymous: !!user.is_anonymous }
+  },
+  async signUp(email, password) {
+    if (!supabase) return { error: '서버 설정이 없어요.' }
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
+    if (error) return { error: authError(error) }
+    // 이메일 확인이 켜져 있으면 session이 없다 — 그때는 확인 후 로그인해야 한다.
+    if (!data.session) return { pending: true }
+    allowAnonymous = false
+    return { user: { id: data.user.id, email: data.user.email || '' } }
+  },
+  async signIn(email, password) {
+    if (!supabase) return { error: '서버 설정이 없어요.' }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    if (error) return { error: authError(error) }
+    allowAnonymous = false
+    return { user: { id: data.user.id, email: data.user.email || '' } }
+  },
+  async signOut() {
+    if (!supabase) return
+    allowAnonymous = false
+    try { await supabase.auth.signOut() } catch { /* 이미 끊긴 세션 */ }
+  },
+  // 둘러보기·DEV 전용. 데이터가 기기에 묶인다는 걸 알고 쓰는 경로.
+  async signInAnonymous() {
+    if (!supabase) return { error: '서버 설정이 없어요.' }
+    allowAnonymous = true
+    const { data } = await supabase.auth.getSession()
+    if (data.session) return { user: { id: data.session.user.id, email: '' } }
+    const { data: signed, error } = await supabase.auth.signInAnonymously()
+    if (error) return { error: authError(error) }
+    return { user: { id: signed.user.id, email: '' } }
+  },
+}
+if (typeof window !== 'undefined') window.LB_AUTH = auth
 
 // Warm up TCP/TLS to the API and Supabase origins early so the first request is
 // faster (DNS/handshake already done).
@@ -71,6 +132,9 @@ function addPreconnect(url) {
 let renewInFlight = null
 let renewBlocked = false
 async function renewAnonymousSession() {
+  // 로그인 계정 세션은 여기서 익명으로 갈아치우면 안 된다 — 그러면 남의 옷장(빈
+  // 옷장)으로 조용히 넘어간다. 익명으로 쓰던 경우에만 새로 판다.
+  if (!allowAnonymous) return null
   if (!supabase || renewBlocked) return null
   if (renewInFlight) return renewInFlight
   renewInFlight = (async () => {
