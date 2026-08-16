@@ -100,6 +100,39 @@ function Eyebrow({ children }) {
 /* ============================================================
    A · Wardrobe (home)
    ============================================================ */
+// 옷장 정렬. 기본은 최신순 — 방금 담은 옷을 바로 확인하는 흐름이 가장 잦다.
+const WARDROBE_SORTS = [
+  { id: 'recent', label: '최신순', hint: '최근에 담은 옷부터' },
+  { id: 'oldest', label: '오래된순', hint: '먼저 담은 옷부터' },
+  { id: 'category', label: '카테고리순', hint: '아우터 → 상의 → 하의 순' },
+  { id: 'season', label: '계절순', hint: '봄 → 여름 → 가을 → 겨울' },
+  { id: 'name', label: '이름순', hint: '가나다 순' },
+];
+
+function sortWardrobe(list, sortId) {
+  const cats = LB_DATA.CATEGORIES;
+  const seasonIds = LB_DATA.SEASONS.map((s) => s.id);
+  const time = (i) => {
+    const t = Date.parse(i.createdAt || '');
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const catRank = (i) => {
+    const idx = cats.indexOf(i.category);
+    return idx < 0 ? cats.length : idx;
+  };
+  // 다중 계절 태그는 가장 이른 계절을 기준으로 본다 (봄+가을 → 봄)
+  const seasonRank = (i) => {
+    const ranks = (i.seasons || []).map((s) => seasonIds.indexOf(s)).filter((n) => n >= 0);
+    return ranks.length ? Math.min(...ranks) : seasonIds.length;
+  };
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+  const arr = [...list];
+  if (sortId === 'oldest') return arr.sort((a, b) => time(a) - time(b) || byName(a, b));
+  if (sortId === 'category') return arr.sort((a, b) => catRank(a) - catRank(b) || byName(a, b));
+  if (sortId === 'season') return arr.sort((a, b) => seasonRank(a) - seasonRank(b) || catRank(a) - catRank(b));
+  if (sortId === 'name') return arr.sort(byName);
+  return arr.sort((a, b) => time(b) - time(a) || byName(a, b));
+}
 function WardrobeScreen({ ctx }) {
   const {
     items, archived = [], openAdd, wide, openItem, requestRemove,
@@ -112,6 +145,8 @@ function WardrobeScreen({ ctx }) {
   const [selectMode, setSelectMode] = useS(false); // mobile: explicit select mode (no hover)
   const [hoverId, setHoverId] = useS(null);
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
+  const [sortId, setSortId] = useS('recent');
+  const [sortOpen, setSortOpen] = useS(false);
   const cats = LB_DATA.CATEGORIES;
   const seasons = LB_DATA.SEASONS;
   const viewingArchive = cat === '보관';
@@ -120,7 +155,11 @@ function WardrobeScreen({ ctx }) {
   useE(() => { if (cat === '보관' && archived.length === 0) setCat('전체'); }, [archived.length, cat]);
   useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat, seasonFilter]);
   const bySeason = (i) => seasonFilter.length === 0 || (i.seasons || []).some((s) => seasonFilter.includes(s));
-  const filtered = (viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat))).filter(bySeason);
+  const filtered = sortWardrobe(
+    (viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat))).filter(bySeason),
+    sortId,
+  );
+  const activeSort = WARDROBE_SORTS.find((s) => s.id === sortId) || WARDROBE_SORTS[0];
   const count = items.length;
   const ready = comboReady;
   const selCount = sel.length;
@@ -171,6 +210,55 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
 
+  // 정렬 트리거 — 계절 칩과 같은 줄 오른쪽 끝. PC는 버튼 아래 드롭다운,
+  // 모바일은 손이 닿는 바텀시트로 갈라진다.
+  const sortTrigger = (
+    <button
+      type="button"
+      onClick={() => setSortOpen((v) => !v)}
+      aria-haspopup="listbox"
+      aria-expanded={sortOpen}
+      style={{
+        flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '5px 8px 5px 10px', borderRadius: 'var(--r-pill)',
+        fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {activeSort.label}
+      <Icon name="chevD" size={14} stroke={2.2} />
+    </button>
+  );
+
+  const sortOptions = (
+    <div role="listbox" aria-label="정렬 기준">
+      {WARDROBE_SORTS.map((o) => {
+        const on = o.id === sortId;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="option"
+            aria-selected={on}
+            onClick={() => { setSortId(o.id); setSortOpen(false); }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: wide ? '9px 12px' : '13px 4px', border: 'none', background: 'transparent',
+              textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--r-sm)',
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 14, fontWeight: on ? 700 : 600, color: 'var(--ink)' }}>{o.label}</span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{o.hint}</span>
+            </span>
+            {on && <Icon name="check" size={17} stroke={2.4} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   // 계절은 카테고리와 AND로 겹치는 부가 필터. 구분선 없이 '그리고' 라벨 + 살짝 옅은 글자색으로만 구분.
   const seasonChips = (
     <div style={{
@@ -180,7 +268,7 @@ function WardrobeScreen({ ctx }) {
       padding: wide ? '4px 0 var(--gap-header)' : '0 18px 12px',
     }}>
       <span style={{ flex: 'none', fontSize: 12.5, fontWeight: 500, color: 'var(--ink-3)' }}>그리고</span>
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', minWidth: 0, flex: 1 }}>
         {seasons.map((s) => (
           <button key={s.id} onClick={() => toggleSeason(s.id)} className="lb-chip" style={{
             flex: 'none', padding: '5px 12px', borderRadius: 'var(--r-pill)',
@@ -192,10 +280,37 @@ function WardrobeScreen({ ctx }) {
           }}>{s.name}</button>
         ))}
       </div>
+      <div style={{ flex: 'none', position: 'relative' }}>
+        {sortTrigger}
+        {wide && sortOpen && (
+          <>
+            {/* 바깥 클릭으로 닫기 */}
+            <div onClick={() => setSortOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41,
+              width: 226, padding: 6, background: 'var(--surface)',
+              borderRadius: 'var(--r-md)', boxShadow: '0 12px 32px rgba(0,0,0,0.16)',
+              border: '1px solid var(--line)',
+            }}>
+              {sortOptions}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
+  const sortSheet = !wide && (
+    <BottomSheet open={sortOpen} onClose={() => setSortOpen(false)}>
+      <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>정렬</h2>
+        <div style={{ marginTop: 'var(--s4)' }}>{sortOptions}</div>
+      </div>
+    </BottomSheet>
+  );
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+      {sortSheet}
       {!wide && (
         <div style={{
           flex: 'none',
