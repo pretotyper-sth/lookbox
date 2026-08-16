@@ -617,7 +617,7 @@ function AddSheet({ ctx }) {
 
   const resetLocalDraft = () => {
     setPreviewFromFile(null);
-    setTab('photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
+    setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
     setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
@@ -669,6 +669,7 @@ function AddSheet({ ctx }) {
           url: source.url != null ? source.url : url,
           extractHint: source.extractHint != null ? source.extractHint : hint,
           commit: false,
+          onProgress: progress.report,
         });
         if (cancelledRef.current) return;
         if (!result || !result.item) throw new Error('이미지를 바꾸지 못했어요');

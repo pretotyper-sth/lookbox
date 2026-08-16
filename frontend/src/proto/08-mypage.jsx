@@ -235,7 +235,7 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast, openTryOn, openTryOnSetup } = ctx;
+  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast, openTryOnTab } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
@@ -287,15 +287,12 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  const tryOnReady = !!(prefs.tryOnFrame);
+  // 다른 설정 행들처럼 타이틀만 둔다. 누르면 조합 추천과 같은 시트를 '바로 보기' 탭으로 연다.
   const tryOnRow = (
     <ActionRow
       icon="cutout"
-      label="바로 보기"
-      hint={wide
-        ? '휴대폰 카메라 전용 · 전신 사진은 여기서 준비할 수 있어요'
-        : (tryOnReady ? '전신 사진으로 매장 옷을 바로 비춰 봐요' : '전신 사진만 올리면 매장에서 바로 볼 수 있어요')}
-      onClick={() => (wide ? openTryOnSetup && openTryOnSetup() : openTryOn && openTryOn())}
+      label="바로 보기 전신 이미지 설정"
+      onClick={() => openTryOnTab && openTryOnTab()}
     />
   );
 

@@ -276,26 +276,52 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       aria-label={title + ' 크게 보기'}
       style={{
         position: 'absolute', inset: 0, zIndex: 100,
-        background: 'rgba(28, 26, 22, 0.88)',
+        // 0.88이면 아래 시트의 버튼·날짜 텍스트가 배어 나와 뷰어 텍스트와 겹쳐 보인다
+        background: 'rgba(28, 26, 22, 0.975)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '24px 18px max(env(safe-area-inset-bottom), 24px)',
+        alignItems: 'center', justifyContent: 'center', gap: 12,
+        padding: 'max(env(safe-area-inset-top), 14px) 18px max(env(safe-area-inset-bottom), 18px)',
         animation: 'lb-fade-in 180ms var(--ease)',
       }}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="닫기"
-        className="lb-iconbtn"
+      {/* 상단 바: 제목과 닫기를 같은 줄에 둔다 — 예전처럼 X를 이미지 위에 띄우면
+          카드 모서리와 겹쳐서 잘 안 보였다 */}
+      <div
+        onClick={(e) => e.stopPropagation()}
         style={{
-          position: 'absolute', top: 14, right: 14, width: 40, height: 40,
-          borderRadius: '50%', display: 'grid', placeItems: 'center',
-          color: '#fff', background: 'rgba(255,255,255,0.12)', zIndex: 2,
+          flex: 'none', width: '100%', maxWidth: 440,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
         }}
       >
-        <Icon name="x" size={22} />
-      </button>
+        <div style={{ flex: 1, minWidth: 0, color: 'rgba(255,255,255,0.92)' }}>
+          {title ? (
+            <div style={{
+              fontSize: 15, fontWeight: 700, lineHeight: 1.3,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{title}</div>
+          ) : null}
+          {subtitle ? (
+            <div style={{
+              fontSize: 12.5, marginTop: 3, opacity: 0.68,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{subtitle}</div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="lb-iconbtn"
+          style={{
+            flex: 'none', width: 40, height: 40, marginTop: -2, marginRight: -6,
+            borderRadius: '50%', display: 'grid', placeItems: 'center',
+            color: '#fff', background: 'rgba(255,255,255,0.12)',
+          }}
+        >
+          <Icon name="x" size={22} />
+        </button>
+      </div>
 
       <div
         onClick={(e) => e.stopPropagation()}
@@ -331,19 +357,10 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         </div>
       </div>
 
-      {(title || subtitle) && (
-        <div style={{ marginTop: 12, textAlign: 'center', color: 'rgba(255,255,255,0.88)', maxWidth: 360, flex: 'none' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{title}</div>
-          {subtitle ? (
-            <div style={{ fontSize: 12.5, marginTop: 4, opacity: 0.7 }}>{subtitle}</div>
-          ) : null}
-        </div>
-      )}
-
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          marginTop: 14, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
+          flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
           padding: '6px 8px', borderRadius: 'var(--r-pill)',
           background: 'rgba(255,255,255,0.12)', color: '#fff',
         }}
@@ -388,7 +405,10 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           <Icon name="plus" size={18} stroke={2.2} />
         </button>
       </div>
-      <div style={{ marginTop: 8, fontSize: 11.5, color: 'rgba(255,255,255,0.55)', textAlign: 'center' }}>
+      <div style={{
+        flex: 'none', marginTop: -4, fontSize: 11.5,
+        color: 'rgba(255,255,255,0.55)', textAlign: 'center',
+      }}>
         휠·더블탭으로도 확대할 수 있어요
       </div>
     </div>
