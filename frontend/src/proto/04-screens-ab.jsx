@@ -934,7 +934,7 @@ function AddSheet({ ctx }) {
     sub = null; // 본문 로딩 카피로만 안내 (헤더 중복 방지)
   }
   else if (stage === 'anchor-ready') { header = '고민 중인 옷 추가'; sub = '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'; }
-  else if (stage === 'reextract-confirm') { header = '추출 결과 확인'; sub = '이대로 반영할지, 다른 사진으로 다시 시도할지 골라주세요.'; }
+  else if (stage === 'reextract-confirm') { header = '추출 결과 확인'; sub = '반영할지 다시 시도할지 골라주세요'; }
   else if (reextract) {
     header = '이미지만 변경';
     sub = replaceItem
@@ -1303,7 +1303,8 @@ function AddSheet({ ctx }) {
                 }} />
               </div>
               <div style={{
-                marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '-0.01em',
+                marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--ink-3)',
+                letterSpacing: '-0.01em', whiteSpace: 'nowrap',
               }}>
                 {(() => {
                   const key = (progress.step && progress.step.key) || '';
@@ -1314,9 +1315,7 @@ function AddSheet({ ctx }) {
                     </span>
                   ));
                 })()}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>
-                최대 2분 소요
+                <span style={{ opacity: 0.5 }}> · 최대 2분</span>
               </div>
             </div>
           </div>
