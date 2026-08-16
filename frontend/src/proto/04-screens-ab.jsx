@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, Skeleton, Thumb } = window;
+const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
@@ -1341,24 +1341,17 @@ function AddSheet({ ctx }) {
                       >
                         <Icon name="plus" size={15} /> 추출 힌트 추가
                         <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
-                        {hintHistory.length > 0 && !showHint && (
-                          <span style={{
-                            marginLeft: 2, fontSize: 11, fontWeight: 700, color: 'var(--ink-3)',
-                            padding: '2px 7px', borderRadius: 'var(--r-pill)',
-                            background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                          }}>{hintHistory.length}</span>
-                        )}
                         <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
                           <Icon name="chevL" size={14} />
                         </span>
                       </button>
                     </div>
                     {showHint && tab !== 'tryon' && (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 'var(--s4)' }}>
                         {hintHistory.length > 0 && (
-                          <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 7 }}>최근에 쓴 힌트</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                          <div style={{ marginBottom: 'var(--s5)' }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>최근에 쓴 힌트</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                               {hintHistory.map((h) => {
                                 const on = hint === h;
                                 return (
@@ -1394,11 +1387,11 @@ function AddSheet({ ctx }) {
                             outline: 'none', resize: 'none', lineHeight: 1.45, boxSizing: 'border-box',
                           }}
                         />
-                        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                          {hintHistory.length
-                            ? '칩을 누르면 그대로 들어가고, 고친 뒤 추가하면 다음에 또 쓸 수 있어요.'
-                            : '여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.'}
-                        </div>
+                        {!hintHistory.length && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
+                            여러 아이템이 한 장에 있을 때 원하는 것만 지정할 수 있어요.
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1633,7 +1626,7 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
-                <LabeledField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사 · 오프라인" />
+                <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사" storeKey={STORE_RECENT_KEY} />
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>

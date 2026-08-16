@@ -568,6 +568,77 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
+/* 최근 입력값 기억 — 구매처처럼 같은 값을 반복 입력하는 항목용 */
+const RECENT_MAX = 6;
+const STORE_RECENT_KEY = 'lb_recent_stores';
+function readRecents(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && s.trim()).slice(0, RECENT_MAX) : [];
+  } catch (e) { return []; }
+}
+function rememberRecent(key, text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  const next = [t, ...readRecents(key).filter((v) => v !== t)].slice(0, RECENT_MAX);
+  try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) { /* noop */ }
+}
+
+/* 최근값 칩 + 자유 입력 필드 — 구매처는 대부분 늘 같은 곳이라 매번 타이핑할 이유가
+   없다. 최근에 넣은 값을 칩으로 얹어 한 번에 고르고, 없는 곳은 그대로 입력한다.
+   고른 칩을 다시 누르면 비워진다. */
+function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
+  const [recents, setRecents] = useState(() => readRecents(storeKey));
+  const current = (value || '').trim();
+  const commit = (v) => {
+    onChange(v);
+    if (v.trim()) {
+      rememberRecent(storeKey, v);
+      setRecents(readRecents(storeKey));
+    }
+  };
+  // 최근값에 없는 현재 값도 칩으로 같이 보여준다 (선택된 게 뭔지 한눈에)
+  const chips = current && recents.indexOf(current) === -1 ? [current, ...recents] : recents;
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>{label}</div>
+      <input
+        className="lb-input"
+        value={value || ''}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        style={{
+          width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)',
+          fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)',
+          color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+      {chips.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {chips.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => commit(current === v ? '' : v)}
+              className="lb-chip"
+              aria-pressed={current === v}
+              style={{
+                flex: 'none', padding: '5px 11px', borderRadius: 'var(--r-pill)',
+                fontSize: 12.5, fontWeight: current === v ? 600 : 500,
+                color: current === v ? 'var(--accent-ink)' : 'var(--ink-2)',
+                background: current === v ? 'var(--accent)' : 'transparent',
+                boxShadow: current === v ? 'none' : 'inset 0 0 0 1px var(--line)',
+                transition: 'all var(--dur) var(--ease)',
+              }}
+            >{v}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* 다중 선택 칩 필드 — 계절처럼 값 여러 개를 토글로 고르는 항목용 (LabeledField의 칩 버전) */
 function ChipMultiField({ label, options, value, onChange }) {
   const picked = value || [];
@@ -675,7 +746,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
-          <LabeledField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사 · 오프라인" />
+          <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="예) 무신사" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
           {formatDotDate(item.createdAt) && (
             <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
@@ -809,4 +880,4 @@ function EmptyState({
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, useEscapeClose, EmptyState });
+Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, useEscapeClose, EmptyState });
