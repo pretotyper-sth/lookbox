@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweakToggle, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -703,34 +703,12 @@ function App() {
       e.stopPropagation();
     };
     const stopNativeDrag = (e) => e.preventDefault();
-    const onWheel = (e) => {
-      if (e.ctrlKey) return; // 핀치 줌
-      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
-      // 시트 본문은 자체 overflow 로 네이티브 휠이 되는 편 — 가로채지 않음
-      if (e.target.closest('.lb-sheet-body, .lb-sheet')) return;
-      const dominantY = Math.abs(e.deltaY) >= Math.abs(e.deltaX);
-      if (dominantY) {
-        const yEl = findYScroller(e.target);
-        if (!yEl) return;
-        const prev = yEl.scrollTop;
-        yEl.scrollTop = prev + e.deltaY;
-        if (yEl.scrollTop !== prev) e.preventDefault();
-        return;
-      }
-      const xEl = findScroller(e.target, 'x');
-      if (!xEl) return;
-      const prev = xEl.scrollLeft;
-      xEl.scrollLeft = prev + e.deltaX;
-      if (xEl.scrollLeft !== prev) e.preventDefault();
-    };
-
     root.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
     root.addEventListener('click', onClick, true);
     root.addEventListener('dragstart', stopNativeDrag);
-    root.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(clickTimer);
@@ -741,7 +719,6 @@ function App() {
       window.removeEventListener('pointercancel', finish);
       root.removeEventListener('click', onClick, true);
       root.removeEventListener('dragstart', stopNativeDrag);
-      root.removeEventListener('wheel', onWheel);
     };
   }, [wide, onboarded]);
 
