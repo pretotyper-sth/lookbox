@@ -14,7 +14,6 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "accent": "#1A1A1A",
   "wardrobeState": "full",
   "tone": "ivory",
-  "autoAddDetails": false,
   "detectCount": "3",
   "dailyCount": "4"
 }/*EDITMODE-END*/;
@@ -1419,7 +1418,6 @@ function App() {
     detailTotal: savedLooks.length, gotoLook,
     hasWardrobe: comboReady,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
-    autoAddDetails: t.autoAddDetails,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
@@ -1678,8 +1676,6 @@ function App() {
         <TweakSection label="옷 추가" />
         <TweakRadio label="사진에서 감지되는 옷 수" value={t.detectCount} options={['1', '3', '4']}
           onChange={(v) => setTweak('detectCount', v)} />
-        <TweakToggle label="등록 단계에서 상세 정보 자동 펼침" value={t.autoAddDetails}
-          onChange={(v) => setTweak('autoAddDetails', v)} />
         <TweakSection label="오늘의 코디" />
         <TweakRadio label="데일리 추천 개수" value={t.dailyCount} options={['2', '3', '4']}
           onChange={(v) => setTweak('dailyCount', v)} />

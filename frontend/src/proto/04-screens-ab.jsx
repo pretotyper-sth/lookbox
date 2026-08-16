@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, CATEGORIES, Chip, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, Skeleton, Thumb } = window;
+const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
@@ -106,7 +106,7 @@ const WARDROBE_SORTS = [
   { id: 'oldest', label: '오래된순', hint: '먼저 담은 옷부터' },
   { id: 'category', label: '카테고리순', hint: '아우터 → 상의 → 하의 순' },
   { id: 'season', label: '계절순', hint: '봄 → 여름 → 가을 → 겨울' },
-  { id: 'color', label: '컬러순', hint: '화이트 → 컬러 → 블랙 순' },
+  { id: 'color', label: '색상순', hint: '화이트 → 컬러 → 블랙 순' },
   { id: 'name', label: '이름순', hint: '가나다 순' },
 ];
 
@@ -724,7 +724,7 @@ function useImportProgress(active) {
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
-    autoAddDetails, detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
+    detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     openTryOn, openTryOnSetup, prefs, wide, comboReady, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -877,7 +877,7 @@ function AddSheet({ ctx }) {
       }
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store || !!d.color })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' } })));
           setStepIdx(0);
           return 'register';
         }
@@ -1023,7 +1023,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' }, showDetails: !!autoAddDetails || !!d.brand || !!d.store || !!d.color })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' } })));
     setStepIdx(0);
     setStage('register');
   };
@@ -1613,59 +1613,29 @@ function AddSheet({ ctx }) {
               </div>
             </div>
 
-            {/* 계절은 AI가 채워두지만 추천에 바로 쓰이는 값이라, 상세 정보 안에
-                접어두지 않고 분류처럼 바로 고칠 수 있게 노출한다 */}
-            <div style={{ marginTop: 'var(--s5)' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 9 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-3)' }}>계절</span>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-3)', opacity: 0.7 }}>여러 개 선택 가능</span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {LB_DATA.SEASONS.map((sn) => {
-                  const picked = (cur.seasons || []).includes(sn.id);
-                  return (
-                    <Chip
-                      key={sn.id}
-                      active={picked}
-                      onClick={() => patchStep({
-                        seasons: picked
-                          ? (cur.seasons || []).filter((x) => x !== sn.id)
-                          : [...(cur.seasons || []), sn.id],
-                      })}
-                    >{sn.name}</Chip>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* optional details */}
+            {/* 상세 정보 — 아이템 상세 시트와 같은 구성·같은 순서로 둔다.
+                접지 않는 것도 상세 시트와 같다: 계절이 여기 들어가 있고, 접히면
+                AI가 넣은 값을 고칠 방법이 없어진다. */}
             <div style={{ marginTop: 'var(--s6)', borderTop: '1px solid var(--line)', paddingTop: 'var(--s5)' }}>
-              {!cur.showDetails ? (
-                <button onClick={() => patchStep({ showDetails: true })} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, padding: '4px 0',
-                  color: 'var(--ink-2)', fontSize: 13.5, fontWeight: 600,
-                }}>
-                  <Icon name="plus" size={16} /> 상세 정보 추가 <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
-                </button>
-              ) : (
-                <div className="lb-anim-in">
-                  <button onClick={() => patchStep({ showDetails: false })} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, width: '100%', textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>상세 정보</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>선택 입력</div>
-                    <div style={{ flex: 1 }}></div>
-                    <span style={{ color: 'var(--ink-3)', transform: 'rotate(90deg)', display: 'inline-flex' }}><Icon name="chevL" size={16} /></span>
-                  </button>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <div style={{ flex: 1 }}><LabeledField label="브랜드" value={cur.draft.brand} onChange={setStepDraft('brand')} placeholder="예) 코스" /></div>
-                      <div style={{ flex: 1 }}><LabeledField label="사이즈" value={cur.draft.size} onChange={setStepDraft('size')} placeholder="예) M" /></div>
-                    </div>
-                    <LabeledField label="컬러" value={cur.draft.color} onChange={setStepDraft('color')} placeholder="예) 블루" />
-                    <LabeledField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사 · 오프라인" />
-                    <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>상세 정보</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>선택 입력</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}><LabeledField label="브랜드" value={cur.draft.brand} onChange={setStepDraft('brand')} placeholder="예) 코스" /></div>
+                  <div style={{ flex: 1 }}><LabeledField label="사이즈" value={cur.draft.size} onChange={setStepDraft('size')} placeholder="예) M" /></div>
                 </div>
-              )}
+                <LabeledField label="컬러" value={cur.draft.color} onChange={setStepDraft('color')} placeholder="예) 그레이시 그린" />
+                <ChipMultiField
+                  label="계절"
+                  options={LB_DATA.SEASONS}
+                  value={cur.seasons || []}
+                  onChange={(next) => patchStep({ seasons: next })}
+                />
+                <LabeledField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="예) 무신사 · 오프라인" />
+                <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
+              </div>
             </div>
 
             <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>

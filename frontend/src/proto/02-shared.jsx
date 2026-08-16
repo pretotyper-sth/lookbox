@@ -809,4 +809,4 @@ function EmptyState({
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, useEscapeClose, EmptyState });
+Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, useEscapeClose, EmptyState });
