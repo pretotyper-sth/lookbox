@@ -1609,15 +1609,17 @@ function App() {
           <div style={{ width: '100%', maxWidth: 420, background: 'var(--surface)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--pop-shadow)', padding: '24px 22px 22px' }}>
             <Eyebrow>처음 시작하기</Eyebrow>
             <h2 style={{ margin: '9px 0 0', fontSize: 22, lineHeight: 1.25, fontWeight: 800, letterSpacing: '-0.04em' }}>옷을 먼저 추가해 주세요</h2>
+            {/* JSX는 소스의 줄바꿈을 공백으로 합쳐서 한 문단으로 흘린다 — 두 줄로
+                보이게 하려면 br로 고정해야 한다. */}
             <p style={{ margin: '9px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)' }}>
-옷장에 있는 아이템으로만 조합을 만들어요.
+              옷장에 있는 옷으로만 조합을 만들어요.<br />
               몇 개 모이면 추천이 정확해져요.
             </p>
             <div style={{ display: 'grid', gap: 0, marginTop: 18 }}>
               {[
-                ['1', '사진으로 아이템 추가', '사진을 올리면 상의·하의·신발을 자동으로 나눠 담아요.'],
-                ['2', '옷장 확인', '카테고리, 색상 등 필요한 정보만 간단히 고쳐요.'],
-                ['3', '추천 사용', '옷이 모이면 구매 전 조합과 오늘 코디를 볼 수 있어요.'],
+                ['1', '사진으로 아이템 추가', '사진을 올리면 상의·하의·신발로 나눠 담아요'],
+                ['2', '옷장 확인', '카테고리, 색상 등 필요한 정보만 고쳐요'],
+                ['3', '추천 사용', '옷이 모이면 구매 전 조합과 오늘 코디가 열려요'],
               ].map(([n, title, desc]) => (
                 <div key={n} style={{ display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 12, alignItems: 'start', padding: '10px 0', borderTop: n === '1' ? 'none' : '1px solid color-mix(in srgb, var(--line) 72%, transparent)' }}>
                   <span className="tnum" style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', fontSize: 11.5, fontWeight: 800, marginTop: 1 }}>{n}</span>
