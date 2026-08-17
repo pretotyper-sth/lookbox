@@ -136,6 +136,55 @@ function colorRank(value) {
   return COLOR_FAMILIES.length;
 }
 
+/* 옷장 검색 — 의류 커머스에서 쓰는 방식 그대로.
+   1) 여러 필드를 한 번에 본다: 이름·브랜드·카테고리·색상·구매처·메모·계절.
+      사용자는 "포터리"(브랜드)로도, "블랙"(색)으로도, "무신사"(구매처)로도 찾는다.
+   2) 토큰 AND: 공백으로 끊고 모든 토큰이 어딘가에 맞아야 한다. "포터리 셔츠"는
+      브랜드와 이름에 나눠 맞아도 통과 — 한 필드에 다 있어야 하는 게 아니다.
+   3) 초성 검색: "ㅋㅌ" → "코튼". 한국 앱에서 이게 없으면 검색이 안 되는 느낌이 든다.
+   4) 붙여쓰기 무시: "29 CM"과 "29cm", "와이드데님"과 "와이드 데님"이 같게 걸린다.
+   정렬은 사용자가 고른 기준을 그대로 둔다. 관련도로 재정렬하면 '최신순'을 골라둔
+   사용자가 순서가 왜 바뀌었는지 알 수 없다. 수십 벌 규모에서는 걸러내는 게 값이다. */
+const HANGUL_BASE = 0xac00;
+const HANGUL_LAST = 0xd7a3;
+const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ',
+  'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+
+function toChosung(text) {
+  let out = '';
+  for (const ch of String(text || '')) {
+    const code = ch.charCodeAt(0);
+    if (code >= HANGUL_BASE && code <= HANGUL_LAST) {
+      out += CHOSUNG[Math.floor((code - HANGUL_BASE) / 588)];
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+const isChosungOnly = (t) => /^[ㄱ-ㅎ]+$/.test(t);
+const compact = (t) => t.replace(/[\s·・\-_/]+/g, '');
+
+function searchHaystack(item) {
+  const seasons = (item.seasons || [])
+    .map((id) => ((LB_DATA.SEASONS || []).find((s) => s.id === id) || {}).name || '')
+    .join(' ');
+  return [item.name, item.brand, item.category, item.cat, item.color, item.store, item.note, seasons]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function matchesQuery(item, tokens) {
+  if (!tokens.length) return true;
+  const hay = searchHaystack(item);
+  const hayCompact = compact(hay);
+  const hayChosung = toChosung(hayCompact);
+  return tokens.every((t) => {
+    if (hayCompact.indexOf(compact(t)) !== -1) return true;
+    // 초성만 입력한 토큰은 초성 인덱스로만 비교한다
+    return isChosungOnly(t) && hayChosung.indexOf(t) !== -1;
+  });
+}
+
 function sortWardrobe(list, sortId) {
   const cats = LB_DATA.CATEGORIES;
   const seasonIds = LB_DATA.SEASONS.map((s) => s.id);
@@ -177,16 +226,20 @@ function WardrobeScreen({ ctx }) {
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const [sortId, setSortId] = useS('recent');
   const [sortOpen, setSortOpen] = useS(false);
+  const [query, setQuery] = useS('');
   const cats = LB_DATA.CATEGORIES;
   const seasons = LB_DATA.SEASONS;
   const viewingArchive = cat === '보관';
   const toggleSeason = (id) => setSeasonFilter((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   // 보관함이 비어도 탭에 머문다 — 빈 상태 화면을 보여주는 편이, 마지막 옷을
   // 꺼낸 순간 전체 탭으로 튕겨 나가는 것보다 덜 어색하다.
-  useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat, seasonFilter]);
+  useE(() => { setSel([]); setSelectMode(false); setBulkDelAsk(false); }, [cat, seasonFilter, query]);
+  const queryTokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const bySeason = (i) => seasonFilter.length === 0 || (i.seasons || []).some((s) => seasonFilter.includes(s));
   const filtered = sortWardrobe(
-    (viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat))).filter(bySeason),
+    (viewingArchive ? archived : (cat === '전체' ? items : items.filter((i) => i.category === cat)))
+      .filter(bySeason)
+      .filter((i) => matchesQuery(i, queryTokens)),
     sortId,
   );
   const activeSort = WARDROBE_SORTS.find((s) => s.id === sortId) || WARDROBE_SORTS[0];
@@ -236,6 +289,40 @@ function WardrobeScreen({ ctx }) {
       <Chip key="보관" active={viewingArchive} onClick={() => setCat('보관')}>
         {archived.length > 0 ? `보관 ${archived.length}` : '보관'}
       </Chip>
+    </div>
+  );
+
+  // 검색 — 이름만으로는 못 찾는다. 브랜드·색·구매처까지 훑고 초성도 받는다.
+  const searchField = (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '0 12px', height: 40, borderRadius: 'var(--r-pill)',
+      background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
+      minWidth: 0, flex: wide ? '0 1 300px' : 1,
+    }}>
+      <span style={{ color: 'var(--ink-3)', flex: 'none', display: 'inline-flex' }}>
+        <Icon name="search" size={15} stroke={2.2} />
+      </span>
+      <input
+        className="lb-input"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="이름·브랜드·색·구매처 검색"
+        aria-label="옷장 검색"
+        style={{
+          flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'transparent',
+          fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', outline: 'none',
+        }}
+      />
+      {query && (
+        <button type="button" onClick={() => setQuery('')} aria-label="검색어 지우기"
+          style={{
+            flex: 'none', display: 'grid', placeItems: 'center', width: 22, height: 22,
+            borderRadius: '50%', background: 'var(--surface)', color: 'var(--ink-2)',
+          }}>
+          <Icon name="x" size={12} stroke={2.4} />
+        </button>
+      )}
     </div>
   );
 
@@ -369,6 +456,7 @@ function WardrobeScreen({ ctx }) {
               </>
             )}
           />
+          <div style={{ padding: '2px 18px 10px' }}>{searchField}</div>
           {chips}
           {seasonChips}
         </div>
@@ -381,9 +469,10 @@ function WardrobeScreen({ ctx }) {
       }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
-            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>{viewingArchive ? '보관함' : '옷장'}</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}개</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s4)', marginBottom: 18 }}>
+            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, flex: 'none' }}>{viewingArchive ? '보관함' : '옷장'}</h1>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{searchField}</div>
+            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600, flex: 'none' }}>{(viewingArchive ? archived.length : count)}개</span>
           </div>
         )}
         {wide && chips}
@@ -416,7 +505,20 @@ function WardrobeScreen({ ctx }) {
           </p>
         )}
 
-        {viewingArchive && archived.length === 0 ? (
+        {/* 검색 결과 0건 — 빈 그리드만 남기면 앱이 고장난 것처럼 보인다.
+            찾던 말과 나갈 길(검색어 지우기)을 같이 준다. */}
+        {queryTokens.length > 0 && filtered.length === 0 ? (
+          <EmptyState
+            icon="search"
+            iconSize={38}
+            title={`'${query.trim()}' 검색 결과가 없어요`}
+            wide={wide}
+            padTop={false}
+            action={<Btn full size="lg" variant="soft" icon="x" onClick={() => setQuery('')}>검색어 지우기</Btn>}
+          >
+            이름·브랜드·색상·구매처를 찾아봤어요.<br />초성으로도 검색할 수 있어요.
+          </EmptyState>
+        ) : viewingArchive && archived.length === 0 ? (
           <EmptyState
             icon="archive"
             iconSize={40}
