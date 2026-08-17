@@ -294,12 +294,36 @@ img { display: block; max-width: 100%; }
 .lb-wide-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lb-wide-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
 
+/* ---- 큰 화면 대응 ----
+   로그인 전 화면(랜딩·로그인·온보딩)은 세로를 flex spacer로 나눠 쓴다. 폰에서는 그게
+   맞지만, 세로가 남는 큰 디스플레이(21인치 아이맥, 1280x1600에서 실측)에서는 spacer가
+   남는 높이를 다 먹어 로고-문구-이미지-CTA 사이가 300px씩 벌어진다.
+   높이에 상한을 두고 위아래 여백으로 가운데 정렬해서, 화면이 커져도 구성 비율은
+   폰과 같게 유지한다. 세로가 상한보다 짧으면 아무 것도 달라지지 않는다. */
+.lb-page-cap {
+  width: 100%; max-width: 480px; max-height: 920px;
+  margin-inline: auto; margin-block: auto;
+}
+/* 세로가 아주 넉넉한 디스플레이에서는 폰 비율을 지킨 채 한 단계만 키운다.
+   480/920 그대로면 1600px 세로 화면 가운데 작은 섬처럼 뜬다. */
+@media (min-width: 900px) and (min-height: 1040px) {
+  .lb-page-cap { max-width: 560px; max-height: 1040px; }
+}
+
 /* 스크롤 컨테이너 공통.
    측정해 보면 페인트는 문제가 없다(평균 8ms, 롱프레임 0). 끊기는 건 경계 동작이다:
    컨테이너가 overscroll-behavior: auto면 끝에 닿을 때마다 부모로 스크롤이 넘겨지고
    (scroll chaining) 그 판정에서 멈칫한다 — 스크롤을 시작할 때와 끝에 도착할 때
    걸리는 이유가 이것. contain으로 그 전파를 끊고, iOS 관성도 함께 켠다. */
-.lb-chiprow { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
+.lb-chiprow {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* pan-x가 없으면 터치 시작 시 브라우저가 '세로 페이지 스크롤인가 가로 행 스크롤인가'를
+     판정하느라 첫 프레임을 흘린다 — 스와이프가 늦게 붙는 느낌의 원인. 이 행은 가로
+     전용이라고 미리 못박아 판정 없이 바로 따라오게 한다. */
+  touch-action: pan-x;
+}
 .lb-chiprow::-webkit-scrollbar { display: none; }
 
 /* 스크롤 위치 표시 — 스크롤하는 동안만 보인다.

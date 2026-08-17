@@ -616,6 +616,12 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   // 값이 한 박자 늦게 도착해(draft를 effect에서 채운다) 칩과 어긋난 채 굳는다.
   // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
   const typing = !current || recents.indexOf(current) === -1;
+  // 표시 순서: 직접 입력 → 지금 선택된 값 → 나머지 최신순. 저장 순서는 건드리지 않는다.
+  // 선택된 값을 이력 순서 그대로 두면 새 구매처가 쌓일수록 계속 뒤로 밀려서,
+  // 수정 화면을 열 때마다 지금 값이 어디 있는지 찾아야 한다.
+  const shown = (current && recents.indexOf(current) !== -1)
+    ? [current, ...recents.filter((v) => v !== current)]
+    : recents;
 
   // 칩을 오갈 때마다 입력칸이 붙었다 떨어지며 시트 높이가 바뀐다. 그냥 두면 스크롤을
   // 끝까지 내려 CTA를 보고 있던 상태에서 칩을 누를 때마다 위치가 튀어 다시 내려야 한다.
@@ -655,7 +661,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
     color: on ? 'var(--accent-ink)' : 'var(--ink-2)',
     background: on ? 'var(--accent)' : 'transparent',
     boxShadow: on ? 'none' : 'inset 0 0 0 1px var(--line)',
-    transition: 'all var(--dur) var(--ease)',
+    transition: 'background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease)',
   });
 
   return (
@@ -667,7 +673,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
       >
         <button type="button" onClick={openTyping} className="lb-chip"
           aria-pressed={typing} style={chipStyle(typing)}>직접 입력</button>
-        {recents.map((v) => {
+        {shown.map((v) => {
           const on = current === v;
           return (
             // 칩 자체가 버튼이라 삭제를 중첩 버튼으로 넣을 수 없다(중첩 금지) —
