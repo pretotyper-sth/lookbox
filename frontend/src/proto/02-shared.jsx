@@ -5,7 +5,7 @@ const React = window.React;
 // LOOKBOX — shared UI components + inline icon set.
 // Exported to window at the bottom.
 
-const { useState, useRef, useEffect, useMemo } = React;
+const { useState, useRef, useEffect, useLayoutEffect, useMemo } = React;
 
 /* Escape closes the topmost overlay only (stacked sheets/viewers). */
 const _escapeStack = [];
@@ -568,8 +568,10 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
-/* 최근 입력값 기억 — 구매처처럼 같은 값을 반복 입력하는 항목용 */
-const RECENT_MAX = 6;
+/* 최근 입력값 기억 — 구매처처럼 같은 값을 반복 입력하는 항목용.
+   목록은 아이템에 딸린 값이 아니라 전역 이력이다: 어느 아이템에서 새 구매처를
+   넣어도 모든 아이템의 칩에 똑같이, 맨 앞에 나타난다. */
+const RECENT_MAX = 10;
 const STORE_RECENT_KEY = 'lb_recent_stores';
 // 최근 구매처는 '저장/담기'가 실제로 일어날 때만 기록한다. 입력 중 blur마다 넣으면
 // 쓰다 만 값이 칩으로 남는다.
@@ -587,18 +589,23 @@ function readRecents(key) {
 function rememberRecent(key, text) {
   const t = String(text || '').trim();
   if (!t) return;
-  const next = [t, ...readRecents(key).filter((v) => v !== t)].slice(0, RECENT_MAX);
-  try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) { /* noop */ }
+  const list = readRecents(key);
+  // 이미 있는 값이면 순서를 건드리지 않는다. 저장할 때마다 맨 앞으로 올리면, 값을
+  // 바꾸지 않고 아이템을 열어 저장만 해도 목록이 뒤집혀서 아이템마다 칩 구성이
+  // 달라 보인다. 맨 앞으로 오는 건 '새로 생긴' 이력뿐이다.
+  if (list.indexOf(t) !== -1) return;
+  try { localStorage.setItem(key, JSON.stringify([t, ...list].slice(0, RECENT_MAX))); } catch (e) { /* noop */ }
 }
 
 /* 최근값 칩 + 자유 입력 — 구매처는 대부분 늘 같은 곳이라 매번 타이핑할 이유가 없다.
    카테고리·계절과 같은 칩 UI로 맞추고, 맨 앞에 '직접 입력'을 둔다. 최근 칩을 고르면
    입력칸은 접히고(칩만 남아 지금 값이 명확) '직접 입력'을 누르면 다시 열린다.
-   최근값은 최신순 10개까지, 넘치면 가로로 스와이프한다. */
-const RECENT_SHOW = 10;
+   최근값은 최신순 RECENT_MAX개까지, 넘치면 가로로 스와이프한다. */
 function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   const current = (value || '').trim();
   const inputRef = useRef(null);
+  const rootRef = useRef(null);
+  const anchor = useRef(null);
   // 시트 컴포넌트는 아이템마다 새로 마운트되지 않는다. mount 때 한 번만 읽으면 다른
   // 아이템을 열어도 그때의 목록이 그대로 남아, 방금 저장한 구매처가 칩에 안 뜬다.
   // value가 바뀔 때(= 다른 아이템의 draft가 들어올 때)마다 다시 읽는다.
@@ -610,11 +617,36 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
   const typing = !current || recents.indexOf(current) === -1;
 
-  const pickChip = (v) => onChange(v);
-  // 칩으로 고른 값을 비우면 typing이 자동으로 true가 되어 입력칸이 열린다
+  // 칩을 오갈 때마다 입력칸이 붙었다 떨어지며 시트 높이가 바뀐다. 그냥 두면 스크롤을
+  // 끝까지 내려 CTA를 보고 있던 상태에서 칩을 누를 때마다 위치가 튀어 다시 내려야 한다.
+  // 그래서 누르기 직전 위치를 잡아 두고, 높이가 바뀐 뒤 되돌린다 — 끝에 붙어 있었으면
+  // 끝에 그대로, 아니면 같은 scrollTop으로.
+  const keepScroll = () => {
+    let el = rootRef.current && rootRef.current.parentElement;
+    while (el) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) break;
+      el = el.parentElement;
+    }
+    anchor.current = el ? { el, top: el.scrollTop, gap: el.scrollHeight - el.clientHeight - el.scrollTop } : null;
+  };
+  // 의존성 배열 없이 매 렌더 뒤에 돌린다. 칩을 눌러 anchor를 잡아 둔 렌더에서만 동작하고,
+  // typing이 안 바뀐 클릭(이미 직접 입력 중에 또 누름)에서도 앵커가 남지 않는다.
+  useLayoutEffect(() => {
+    const a = anchor.current;
+    if (!a) return;
+    anchor.current = null;
+    a.el.scrollTop = a.gap <= 2 ? a.el.scrollHeight - a.el.clientHeight : a.top;
+  });
+
+  const pickChip = (v) => { keepScroll(); onChange(v); };
+  // 칩으로 고른 값을 비우면 typing이 자동으로 true가 되어 입력칸이 열린다.
+  // focus는 preventScroll — 브라우저가 입력칸을 보이게 하려고 스크롤을 또 움직이면
+  // 방금 되돌린 위치가 다시 깨진다.
   const openTyping = () => {
+    keepScroll();
     if (current) onChange('');
-    setTimeout(() => inputRef.current && inputRef.current.focus(), 0);
+    setTimeout(() => inputRef.current && inputRef.current.focus({ preventScroll: true }), 0);
   };
 
   const chipStyle = (on) => ({
@@ -627,7 +659,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   });
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       <div
         className="lb-chiprow"
@@ -635,7 +667,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
       >
         <button type="button" onClick={openTyping} className="lb-chip"
           aria-pressed={typing} style={chipStyle(typing)}>직접 입력</button>
-        {recents.slice(0, RECENT_SHOW).map((v) => {
+        {recents.map((v) => {
           const on = current === v;
           return (
             // 칩 자체가 버튼이라 삭제를 중첩 버튼으로 넣을 수 없다(중첩 금지) —
@@ -647,7 +679,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
                   padding: '7px 0', background: 'transparent', color: 'inherit',
                   fontSize: 12.5, fontWeight: on ? 600 : 500, whiteSpace: 'nowrap',
                 }}>{v}</button>
-              <button type="button" onClick={() => { forgetRecent(storeKey, v); if (on) onChange(''); setPurge((n) => n + 1); }}
+              <button type="button" onClick={() => { keepScroll(); forgetRecent(storeKey, v); if (on) onChange(''); setPurge((n) => n + 1); }}
                 aria-label={`${v} 최근 목록에서 지우기`}
                 style={{
                   display: 'grid', placeItems: 'center', width: 20, height: 20, borderRadius: '50%',
