@@ -469,13 +469,19 @@ function WardrobeScreen({ ctx }) {
       }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s4)', marginBottom: 18 }}>
-            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, flex: 'none' }}>{viewingArchive ? '보관함' : '옷장'}</h1>
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{searchField}</div>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600, flex: 'none' }}>{(viewingArchive ? archived.length : count)}개</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
+            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>{viewingArchive ? '보관함' : '옷장'}</h1>
+            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}개</span>
           </div>
         )}
-        {wide && chips}
+        {/* 데스크탑은 카테고리 칩과 검색을 한 줄에 둔다 — 타이틀 행에 있을 때보다
+            필터끼리 모여 읽기 쉽고, 세로 한 줄을 아낀다. 모바일은 폭이 없어 그대로 둔다. */}
+        {wide && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s4)', minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{chips}</div>
+            <div style={{ flex: 'none', paddingBottom: 8 }}>{searchField}</div>
+          </div>
+        )}
         {wide && seasonChips}
         {!viewingArchive && !ready && !wardrobeLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>

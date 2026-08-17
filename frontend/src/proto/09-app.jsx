@@ -1584,11 +1584,12 @@ function App() {
           </aside>
           <main className="lb-wide-main">
             {mainTabs}
+            {/* 결과·상세도 폭 상한 + margin auto로 가운데 정렬돼 있었다 — 다른 화면과
+                같은 이유로 좌우가 비고, 토스트가 콘텐츠 중심에서 어긋나 보였다.
+                폭을 풀어 좌측에 붙인다. */}
             {focused && (
               <div style={{
                 width: '100%',
-                maxWidth: view === 'results' ? 820 : 1040,
-                margin: '0 auto',
                 flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
               }}>{focusedScreen}</div>
             )}

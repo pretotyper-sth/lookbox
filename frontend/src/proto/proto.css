@@ -89,6 +89,7 @@ http://scripts.sil.org/OFL
   --line-2:     #D3CEC2;
   --accent:     #1A1A1A;   /* point color — calm dark ink (tweakable) */
   --accent-ink: #FFFFFF;   /* text on accent */
+  --sidebar-w:  248px;     /* 데스크탑 사이드바 — 토스트 중앙 정렬 계산에도 쓴다 */
   --badge-bg:   #E6E2D9;   /* "옷장에 있음" calm gray badge */
   --good:       #2F6B4F;   /* added / success, muted green */
 
@@ -273,6 +274,9 @@ img { display: block; max-width: 100%; }
   transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .lb-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* 데스크탑에서는 사이드바 폭의 절반만큼 밀어 콘텐츠 영역의 가운데에 세운다.
+   뷰포트 중앙에 두면 사용자가 보고 있는 카드 열보다 왼쪽으로 치우쳐 보인다. */
+.lb-shell-wide .lb-toast { left: calc(50% + var(--sidebar-w) / 2); }
 
 /* ---- app shell ---- */
 .lb-app {
@@ -289,7 +293,7 @@ img { display: block; max-width: 100%; }
 /* ---- desktop sidebar ---- */
 .lb-shell-wide { flex-direction: row; }
 .lb-sidebar {
-  width: 248px; flex: none; border-right: 1px solid var(--line);
+  width: var(--sidebar-w); flex: none; border-right: 1px solid var(--line);
   padding: 26px 20px; display: flex; flex-direction: column; gap: 6px;
 }
 .lb-navitem {
