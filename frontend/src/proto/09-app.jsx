@@ -506,6 +506,9 @@ function App() {
   const [moreLoading, setMoreLoading] = useState(false);
   const [comboRev, setComboRev] = useState(0);
   const [detailLook, setDetailLook] = useState(pSaved === 'empty' ? null : LB_DATA.SAVED[0]);
+  // 상세는 룩북에서만 열렸는데, 오늘의 추천 코디에서도 같은 화면을 쓴다. 어느 목록에서
+  // 들어왔는지에 따라 좌우 이동·옆 레일이 그 목록을 따라야 한다.
+  const [detailList, setDetailList] = useState(null);
   const [addedItemIds, setAddedItemIds] = useState([]);
   const [itemSheet, setItemSheet] = useState({ open: false, item: null });
   const [imageViewer, setImageViewer] = useState({ open: false, item: null, outfit: null, items: null });
@@ -805,8 +808,10 @@ function App() {
     return normalized;
   }, []);
 
+  // 저장·해제를 누른 뒤에 뒤늦게 도착한 응답이 화면을 되돌리지 않게 하는 카운터.
+  const outfitMutRef = useRef(0);
   // 서버 코디 목록 → 룩북·날짜별 기록·오늘 코디 캐시. 로컬은 첫 페인트용 캐시일 뿐이다.
-  const hydrateOutfits = useCallback((data, ownedItems) => {
+  const hydrateOutfits = useCallback((data, ownedItems, mutAtStart) => {
     const list = data.outfits || [];
     list.forEach((o) => {
       LB_DATA.OUTFIT_BY_ID[o.id] = {
@@ -814,10 +819,13 @@ function App() {
         itemIds: o.itemIds, lookImg: o.lookImg, manual: !!o.manual,
       };
     });
-    setSavedLooks(list.filter((o) => o.saved).map((o) => ({
-      id: 'look-' + o.id, outfitId: o.id, label: o.label,
-      savedAt: relativeSavedAt(o.createdAt),
-    })));
+    // 요청을 보낸 뒤에 사용자가 저장·해제를 눌렀다면 그 결과가 최신이다. 덮지 않는다.
+    if (mutAtStart === outfitMutRef.current) {
+      setSavedLooks(list.filter((o) => o.saved).map((o) => ({
+        id: 'look-' + o.id, outfitId: o.id, label: o.label,
+        savedAt: relativeSavedAt(o.createdAt),
+      })));
+    }
     // 서버는 최신순으로 준다. 오늘 코디는 만든 순서대로 보여야 해서 되돌린다.
     const byDate = {};
     list.slice().reverse().forEach((o) => {
@@ -854,6 +862,7 @@ function App() {
     // 토스트만 띄운다. authUid가 정해지는 순간(부팅 복원 또는 로그인) 바로 돈다.
     if (!authUid) return;
     let dead = false;
+    const mutAtStart = outfitMutRef.current;
     setWardrobeLoading(true);
     // 코디·룩북도 같은 라운드에서 받는다. 서버가 정본이라 다른 기기에서 만든 코디와
     // 룩북이 로그인만 하면 그대로 보인다. 옷장 목록이 손에 있어야 코디를 정리할 수 있어
@@ -870,7 +879,7 @@ function App() {
         setItems(liveItems);
         setArchived(archItems);
         syncAllFromWardrobe(liveItems, archItems);
-        if (outfitData) hydrateOutfits(outfitData, liveItems);
+        if (outfitData) hydrateOutfits(outfitData, liveItems, mutAtStart);
         const removed = pruneDailyAgainstOwned(liveItems);
         if (LB_DATA.DAILY.length) setDailyAllowed(true);
         else if (removed) setDailyAllowed(false);
@@ -1284,6 +1293,7 @@ function App() {
   // 룩북 저장 상태는 서버에 남긴다. 화면은 먼저 바꾸고(누른 즉시 반응) 서버 호출은
   // 뒤따르게 한다 — 실패하면 알려주되 되돌리지는 않는다(다음 로드에서 서버값으로 맞춰진다).
   const persistOutfitState = (outfitId, patch) => {
+    outfitMutRef.current += 1;
     if (!outfitId || String(outfitId).startsWith('live-') || String(outfitId).startsWith('manual-')) return;
     liveJSON(`/api/live/outfits/${encodeURIComponent(outfitId)}/state`, {
       method: 'POST', body: JSON.stringify(patch),
@@ -1307,6 +1317,7 @@ function App() {
     const ids = (itemIds || []).map(String);
     if (ids.length < 2) return;
     const name = (label || '').trim() || '내가 만든 코디';
+    outfitMutRef.current += 1;
     // 서버에 먼저 만들어 진짜 id를 받는다. 로컬 id로 두면 다음 로드에 사라진다.
     let outfitId = null;
     try {
@@ -1549,10 +1560,14 @@ function App() {
     } catch (e) { /* optimistic local save kept */ }
   };
 
-  const openDetail = (look) => { setDetailLook(look); setView('detail'); };
+  const openDetail = (look, looks, label) => {
+    setDetailLook(look);
+    setDetailList(looks && looks.length ? { looks, label: label || '다른 코디' } : null);
+    setView('detail');
+  };
   const gotoLook = (dir) => {
     setDetailLook((cur) => {
-      const list = savedLooks;
+      const list = (detailList && detailList.looks) || savedLooks;
       if (!list.length) return cur;
       const i = Math.max(0, list.findIndex((l) => l.id === (cur ? cur.id : '')));
       const next = (i + dir + list.length) % list.length;
@@ -1619,8 +1634,11 @@ function App() {
     wide, items, archived, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
     moreLoading, loadMoreCombos, comboRev,
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
-    detailIndex: savedLooks.findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
-    detailTotal: savedLooks.length, gotoLook,
+    detailLooks: (detailList && detailList.looks) || savedLooks,
+    detailListLabel: (detailList && detailList.label) || '룩북의 다른 코디',
+    detailFromLookbook: !detailList,
+    detailIndex: ((detailList && detailList.looks) || savedLooks).findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
+    detailTotal: ((detailList && detailList.looks) || savedLooks).length, gotoLook,
     hasWardrobe: comboReady,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),

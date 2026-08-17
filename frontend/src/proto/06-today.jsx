@@ -91,7 +91,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView, itemsById }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
@@ -100,15 +100,14 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onView, it
       <div style={{ position: 'relative' }}>
         <button
           type="button"
-          onClick={() => onView && onView(outfit, items)}
-          aria-label="코디 크게 보기"
+          onClick={() => onOpen && onOpen(outfit)}
+          aria-label="코디 자세히 보기"
           style={{
             display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
-            cursor: onView ? 'zoom-in' : 'default', textAlign: 'left', position: 'relative',
+            cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
           <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
-          {onView && LookExpandBadge ? <LookExpandBadge /> : null}
         </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -337,7 +336,7 @@ function TodayScreen({ ctx }) {
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
-    openOutfitViewer, getDayRecord,
+    getDayRecord, openDetail,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -500,6 +499,18 @@ function TodayScreen({ ctx }) {
   );
 
   const shown = isToday ? picks : uniqueDailyOutfits((pastRecord && pastRecord.outfits) || []);
+  // 룩북과 같은 상세 화면을 쓴다. 상세는 LB_DATA에서 코디·아이템을 찾으므로 지난 날짜의
+  // 스냅샷은 열기 전에 조회용으로 등록해 둔다(그날 옷을 지웠어도 기록이 깨지지 않게).
+  const dailyLooks = shown.map((o) => ({ id: 'daily-' + o.id, outfitId: o.id, label: o.label }));
+  const openLook = (outfit) => {
+    if (!openDetail) return;
+    LB_DATA.OUTFIT_BY_ID[outfit.id] = LB_DATA.OUTFIT_BY_ID[outfit.id] || outfit;
+    if (!isToday) {
+      Object.values(pastItemsById).forEach((it) => { if (it && !LB_DATA.ALL[it.id]) LB_DATA.ALL[it.id] = it; });
+    }
+    const look = dailyLooks.find((l) => l.outfitId === outfit.id);
+    if (look) openDetail(look, dailyLooks, isToday ? '오늘의 다른 코디' : '이 날의 다른 코디');
+  };
   const pastWorn = (pastRecord && pastRecord.wornIds) || [];
   // 지난 날짜에는 빈 슬롯도, 추가 추천 CTA도 두지 않는다. 그날 기록이 전부다.
   const empty = isToday ? emptySlots : 0;
@@ -541,7 +552,7 @@ function TodayScreen({ ctx }) {
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
-                  onView={openOutfitViewer} />
+                  onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (
                 <EmptyTodaySlot

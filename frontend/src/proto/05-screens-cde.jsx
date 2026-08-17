@@ -30,10 +30,9 @@ const LOOK_SIZE = {
   '신발': 40, '가방': 30, '모자': 28, '소품': 26,
   '액세서리': 28, // 구버전 데이터 호환
 };
-/* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 상의·하의는 폭 46%에 중심이
-   27/73이라 딱 맞닿아 있었는데, 1.17배면 각 54%가 되어 약 15%(아이템 폭 기준)
-   겹친다 — 요청한 10~15% 범위이고 카드 좌우를 남기지 않고 다 쓴다. */
-const LOOK_SCALE = 1.17;
+/* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 1.29면 상의·하의 프레임이 각 59%가
+   되어 서로 겹치고, 카드 좌우를 남기지 않고 다 쓴다. */
+const LOOK_SCALE = 1.29;
 
 /* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
    이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
@@ -50,24 +49,27 @@ function lookImageZoom(category) {
   return Math.min(LOOK_ZOOM_MAX, 1 / fill);
 }
 
-/* 4분면 기본 위치(원위치)에서 상·하 간격만 약 90%로 좁힘. */
+/* 4분면 자리. 상의는 이미지가 프레임을 가로로 꽉 채우는데 하의(바지·스커트)는 좁고
+   길어서 프레임 안에 좌우 여백을 남긴다. 그래서 프레임을 좌우 벽에 붙이면 상의만
+   벽에 닿고 하의 쪽엔 빈 공간이 남는다. 두 벌을 한 덩어리로 보고 그 덩어리를 카드
+   가운데 놓는다 — 상의는 오른쪽으로, 하의는 왼쪽으로 당겨 살짝 겹친다. */
 const LOOK_SPOT = {
   // 좌상 · 상의(아우터/상의/원피스)
-  outer:  { cx: 27, cy: 38, z: 2 },
-  top:    { cx: 27, cy: 40, z: 3 },
-  layer:  { cx: 33, cy: 44, z: 4 }, // 아우터+상의일 때 상의를 살짝 앞·안쪽
-  dress:  { cx: 28, cy: 42, z: 2 },
+  outer:  { cx: 34, cy: 38, z: 2 },
+  top:    { cx: 34, cy: 40, z: 3 },
+  layer:  { cx: 39, cy: 44, z: 4 }, // 아우터+상의일 때 상의를 살짝 앞·안쪽
+  dress:  { cx: 35, cy: 42, z: 2 },
   // 우상 · 하의
-  bottom: { cx: 73, cy: 40, z: 2 },
+  bottom: { cx: 71, cy: 40, z: 2 },
   // 좌하 · 신발
-  shoes:  { cx: 27, cy: 74, z: 5 },
+  shoes:  { cx: 29, cy: 75, z: 5 },
 };
 /* 우하 · 악세서리 2×2 (가방·모자·소품 등) */
 const LOOK_ACC_SPOTS = [
-  { cx: 62, cy: 64, z: 6 },
-  { cx: 86, cy: 64, z: 6 },
-  { cx: 62, cy: 86, z: 6 },
-  { cx: 86, cy: 86, z: 6 },
+  { cx: 65, cy: 74, z: 6 },
+  { cx: 87, cy: 74, z: 6 },
+  { cx: 65, cy: 92, z: 6 },
+  { cx: 87, cy: 92, z: 6 },
 ];
 const LOOK_ROLE = {
   '하의': 'bottom', '스커트': 'bottom', '원피스': 'dress',
@@ -79,6 +81,12 @@ const LOOK_ROLE = {
 /** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
 function lookPlacement(items) {
   const hasOuter = items.some((it) => LOOK_ROLE[it.category] === 'outer');
+  // 상·하의만 있는 코디는 아래 절반이 통째로 비어 위로 쏠려 보인다. 그럴 때만 내려 앉힌다.
+  const hasLower = items.some((it) => {
+    const role = LOOK_ROLE[it.category];
+    return role === 'shoes' || role === 'acc';
+  });
+  const dy = hasLower ? 0 : 12;
   const taken = {};
   const out = {};
   let accIdx = 0;
@@ -99,7 +107,7 @@ function lookPlacement(items) {
     const base = LOOK_SPOT[spot] || LOOK_SPOT.top;
     const n = taken[spot] || 0;
     taken[spot] = n + 1;
-    out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4, z: base.z + n };
+    out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4 + dy, z: base.z + n };
   });
   return out;
 }
@@ -690,7 +698,13 @@ function RailCard({ look, active, onClick }) {
 }
 
 function DetailScreen({ ctx }) {
-  const { back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide, savedLooks, openDetail, requestUnsave, openOutfitViewer } = ctx;
+  const {
+    back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide,
+    savedLooks, openDetail, requestUnsave, saveOutfit, openOutfitViewer,
+    detailLooks, detailListLabel, detailFromLookbook,
+  } = ctx;
+  // 룩북에서 왔으면 룩북의 나머지를, 오늘 코디에서 왔으면 그날 코디를 옆에 깐다.
+  const looks = (detailLooks && detailLooks.length ? detailLooks : savedLooks) || [];
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const multi = detailTotal > 1;
@@ -724,11 +738,11 @@ function DetailScreen({ ctx }) {
       const next = detailIndex + step;
       if (next < 0 || next >= detailTotal) return;   // 레일 밖으로는 넘기지 않는다
       e.preventDefault();
-      openDetail(savedLooks[next]);
+      openDetail(looks[next], detailFromLookbook ? null : looks, detailListLabel);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [wide, multi, detailIndex, detailTotal, savedLooks, openDetail]);
+  }, [wide, multi, detailIndex, detailTotal, looks, openDetail, detailFromLookbook, detailListLabel]);
 
   // 레일이 길어져도 지금 보는 코디가 화면 밖에 있지 않게
   React.useEffect(() => {
@@ -749,7 +763,7 @@ function DetailScreen({ ctx }) {
     </button>
   );
 
-  // 보던 코디를 빼면 그 자리에 다음 코디를 앉힌다. 마지막 하나였다면 목록으로 돌아간다.
+  // 룩북에서 보던 코디를 빼면 그 자리에 다음 코디를 앉힌다. 마지막 하나였다면 목록으로.
   const removeThis = () => {
     const rest = (savedLooks || []).filter((l) => l.id !== detailLook.id);
     requestUnsave(detailLook.outfitId, () => {
@@ -757,6 +771,11 @@ function DetailScreen({ ctx }) {
       openDetail(rest[Math.min(Math.max(detailIndex, 0), rest.length - 1)]);
     });
   };
+  const isSaved = (savedLooks || []).some((l) => l.outfitId === detailLook.outfitId);
+  // 오늘 코디에서 열었으면 이 화면을 떠나지 않는다 — 저장 여부만 바뀐다.
+  const onHeart = detailFromLookbook
+    ? removeThis
+    : () => (isSaved ? requestUnsave(detailLook.outfitId) : saveOutfit(detailLook.outfitId));
 
   // 코디 카드 — 데스크탑·모바일이 같은 카드를 쓰고, 바깥 껍데기만 화면 폭에 따라 달라진다.
   const card = (
@@ -776,12 +795,15 @@ function DetailScreen({ ctx }) {
         </button>
         {/* 오늘 코디·룩북 카드와 같은 자리의 같은 하트. 상단바에 두면 코디가 아니라
             화면에 달린 버튼처럼 보여서, 코디 이미지에 붙여 둔다. */}
-        <button onClick={removeThis} className="lb-save" aria-label="룩북에서 빼기" style={{
+        <button onClick={onHeart} className="lb-save" aria-label={isSaved ? '룩북에서 빼기' : '룩북에 저장'} style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%',
           display: 'grid', placeItems: 'center', zIndex: 2,
-          color: 'var(--accent-ink)', background: 'var(--accent)',
+          color: isSaved ? 'var(--accent-ink)' : 'var(--ink)',
+          background: isSaved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
+          boxShadow: isSaved ? 'none' : 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(4px)',
+          transition: 'all var(--dur) var(--ease)',
         }}>
-          <Icon name="heart" size={15} fill="currentColor" stroke={0} />
+          <Icon name="heart" size={15} fill={isSaved ? 'currentColor' : 'none'} stroke={isSaved ? 0 : 2} />
         </button>
         {!wide && multi && (
           <>
@@ -837,12 +859,13 @@ function DetailScreen({ ctx }) {
             {multi && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>룩북의 다른 코디</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>{detailListLabel}</span>
                   <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>{detailIndex + 1} / {detailTotal}</span>
                 </div>
                 <div ref={railRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 12 }}>
-                  {(savedLooks || []).map((lk) => (
-                    <RailCard key={lk.id} look={lk} active={lk.id === detailLook.id} onClick={() => openDetail(lk)} />
+                  {looks.map((lk) => (
+                    <RailCard key={lk.id} look={lk} active={lk.id === detailLook.id}
+                      onClick={() => openDetail(lk, detailFromLookbook ? null : looks, detailListLabel)} />
                   ))}
                 </div>
               </div>
@@ -882,9 +905,11 @@ function DetailScreen({ ctx }) {
             ))}
           </div>
         )}
-        <p style={{ margin: multi ? '10px 0 0' : 0, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5, textAlign: 'center' }}>
-          {multi ? '좌우로 넘겨 다른 코디도 볼 수 있어요.' : '실제로 산 옷이라면 한 번에 옷장으로 옮겨둘 수 있어요.'}
-        </p>
+        {(multi || detailFromLookbook) && (
+          <p style={{ margin: multi ? '10px 0 0' : 0, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5, textAlign: 'center' }}>
+            {multi ? '좌우로 넘겨 다른 코디도 볼 수 있어요.' : '실제로 산 옷이라면 한 번에 옷장으로 옮겨둘 수 있어요.'}
+          </p>
+        )}
       </div>
     </div>
   );

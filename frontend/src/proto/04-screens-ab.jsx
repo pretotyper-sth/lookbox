@@ -298,7 +298,7 @@ function WardrobeScreen({ ctx }) {
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '0 12px', height: 40, borderRadius: 'var(--r-pill)',
       background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
-      minWidth: 0, flex: wide ? '0 1 300px' : 1,
+      minWidth: 0, flex: 1, width: '100%',
     }}>
       <span style={{ color: 'var(--ink-3)', flex: 'none', display: 'inline-flex' }}>
         <Icon name="search" size={15} stroke={2.2} />
@@ -479,7 +479,9 @@ function WardrobeScreen({ ctx }) {
         {wide && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s4)', minWidth: 0 }}>
             <div style={{ flex: 1, minWidth: 0 }}>{chips}</div>
-            <div style={{ flex: 'none', paddingBottom: 8 }}>{searchField}</div>
+            {/* 칩 줄로 옮기고 나서 폭이 195px까지 쪼그라들었다(감싼 div가 content 폭).
+                타이틀 행에 있던 300px보다 조금 넉넉하게 고정한다. */}
+            <div style={{ flex: 'none', width: 320, paddingBottom: 8 }}>{searchField}</div>
           </div>
         )}
         {wide && seasonChips}
@@ -520,6 +522,7 @@ function WardrobeScreen({ ctx }) {
             title={`'${query.trim()}' 검색 결과가 없어요`}
             wide={wide}
             padTop={false}
+            hint={false}
             action={<Btn full size="lg" variant="soft" icon="x" onClick={() => setQuery('')}>검색어 지우기</Btn>}
           >
             이름·브랜드·색상·구매처를 찾아봤어요.<br />초성으로도 검색할 수 있어요.

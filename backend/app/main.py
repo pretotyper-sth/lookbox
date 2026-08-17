@@ -721,8 +721,8 @@ _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거
 _RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최대 깊이(px)
 _ALPHA_RAMP = 110  # 알파 재임계 램프 폭 — 좁으면 계단이 남고, 넓으면 테두리가 번진다
 _BLEED_DEPTH = 8  # 리샘플 보간 커널이 닿는 범위를 덮을 만큼 원단 색을 투명 쪽으로 번지게
-_BG_NORM_VERSION = "cutout_v9"  # v9: 스튜디오 컷 경계를 연속 알파 + 배경색 제거로 처리
-_EXTRACTION_PROFILE = "extract_v11"  # v11: 측면·착장 → 정면 재구성
+_BG_NORM_VERSION = "cutout_v10"  # v10: 갇힌 배경(손잡이 안쪽) 제거 + 알파 계단 완화
+_EXTRACTION_PROFILE = "extract_v12"  # v12: 갇힌 배경 제거 + 액세서리 알파 다듬기
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -891,6 +891,9 @@ def _edge_plate_ratio(png_bytes: bytes) -> float:
 # 있지만, 시계 브레이슬릿 링크 틈·안경 다리·샌들 스트랩처럼 얇은 구조는 그 반경에
 # 지워진다. 그래서 얇은 디테일이 몰려 있는 카테고리는 약하게만 건다.
 _ALPHA_SMOOTH_STRONG = frozenset({"top", "outer", "dress", "bottom", "skirt"})
+# 가방·신발·모자는 옷보다 윤곽이 작고 곡선이 많아 계단이 더 눈에 띈다. 옷만큼 뭉개면
+# 버클·끈 같은 얇은 디테일이 뭉치므로 중간 세기로 둔다.
+_ALPHA_SMOOTH_MID = frozenset({"shoes", "bag", "hat", "misc", "accessory"})
 
 
 def _polish_cutout_alpha(png_bytes: bytes, category: str | None = None) -> bytes:
@@ -915,8 +918,9 @@ def _polish_cutout_alpha(png_bytes: bytes, category: str | None = None) -> bytes
     if not alpha.getbbox():
         return png_bytes
     w, h = img.size
-    strong = (category or "").strip() in _ALPHA_SMOOTH_STRONG
-    radius = max(1.0, min(2.4 if strong else 1.0, min(w, h) / 450.0))
+    cat = (category or "").strip()
+    ceiling = 2.4 if cat in _ALPHA_SMOOTH_STRONG else (1.6 if cat in _ALPHA_SMOOTH_MID else 1.0)
+    radius = max(1.0, min(ceiling, min(w, h) / 450.0))
     lo, hi = 128 - _ALPHA_RAMP // 2, 128 + _ALPHA_RAMP // 2
     alpha = alpha.filter(ImageFilter.GaussianBlur(radius)).point(
         lambda v: 0 if v <= lo else (255 if v >= hi else int((v - lo) * 255 / (hi - lo)))
@@ -1167,6 +1171,74 @@ def studio_product_cutout(path: str) -> bytes | None:
     if not boundary:
         return None
 
+    # 테두리와 이어지지 않은 배경 — 토트백 손잡이 안쪽, 링·팔찌 가운데처럼 제품이
+    # 둘러싼 흰 구멍은 위 플러드필로는 남는다(상품컷인데 가운데에 흰 판이 그대로).
+    # 흰 프린트·로고를 구멍으로 오인하면 옷에 구멍이 뚫리므로 조건을 좁게 잡는다:
+    #   ① 판 색과 거의 정확히 같고(tol-4), ② 사방이 막혀 있고(테두리에 닿지 않음),
+    #   ③ 본체보다 충분히 작고, ④ 진짜 배경에서 reach px 안에 있을 때만.
+    # ④는 손잡이 끈 두께만큼만 떨어진 구멍과, 옷 한복판에 박힌 프린트를 가른다.
+    hole_set = bytearray(w * h)
+    obj_area = (w * h) - sum(bg_set)
+    if obj_area > 0:
+        hole_tol = max(2, tol - 4)
+        tight_bytes = maxdiff.point(lambda v: 255 if v <= hole_tol else 0).tobytes()
+        hole_cap = int(obj_area * 0.15)
+        reach = max(5, int(min(w, h) * 0.03))
+        holes_total = 0
+        # 두 번 돈다: 첫 번째에 손잡이 안쪽이 열리면, 끈이 겹쳐 만든 더 안쪽 틈이
+        # 그때 비로소 '배경에 가까운' 구멍이 된다.
+        for _pass in (0, 1):
+            # '배경에서 reach px 안'은 1/4 축소판에서 팽창시켜 구한다. 원본 크기로
+            # MaxFilter를 수십 번 돌리면 1500px 이미지에서 1초 이상 걸린다.
+            shrink = 4
+            sw, sh = max(1, w // shrink), max(1, h // shrink)
+            near = (
+                Image.frombytes("L", (w, h), bytes(bg_set))
+                .point(lambda v: 255 if v else 0)
+                .resize((sw, sh), Image.BOX)
+                .point(lambda v: 255 if v else 0)
+            )
+            for _ in range(max(1, (reach // shrink + 1) // 2)):
+                near = near.filter(ImageFilter.MaxFilter(5))
+            near_bytes = near.resize((w, h), Image.NEAREST).tobytes()
+            seen = bytearray(w * h)
+            found = 0
+            for idx, v in enumerate(tight_bytes):
+                if not v or bg_set[idx] or seen[idx]:
+                    continue
+                comp = [idx]
+                seen[idx] = 1
+                touches_border = False
+                dq: deque[int] = deque(comp)
+                while dq:
+                    i = dq.popleft()
+                    ix, iy = i % w, i // w
+                    if ix == 0 or iy == 0 or ix == w - 1 or iy == h - 1:
+                        touches_border = True
+                    for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
+                        if not (0 <= nx < w and 0 <= ny < h):
+                            continue
+                        j = ny * w + nx
+                        if seen[j] or bg_set[j] or not tight_bytes[j]:
+                            continue
+                        seen[j] = 1
+                        comp.append(j)
+                        dq.append(j)
+                if touches_border or len(comp) < 12 or len(comp) > hole_cap:
+                    continue
+                if holes_total + len(comp) > obj_area * 0.2:
+                    continue
+                if not any(near_bytes[i] for i in comp):
+                    continue  # 옷 안쪽 프린트 — 배경이 아니다
+                holes_total += len(comp)
+                found += len(comp)
+                for i in comp:
+                    bg_set[i] = 1
+                    hole_set[i] = 1
+                    boundary.append((i % w, i // w, 0))
+            if not found:
+                break
+
     px = img.load()
     removed = 0
     for y in range(h):
@@ -1234,16 +1306,24 @@ def studio_product_cutout(path: str) -> bytes | None:
     for y in range(by0 + ch // 4, by1 - ch // 4, step_c):
         for x in range(bx0 + cw // 4, bx1 - cw // 4, step_c):
             total_c += 1
-            if px[x, y][3] < 128:
+            if px[x, y][3] < 128 and not hole_set[y * w + x]:
                 hole += 1
     if total_c and hole / total_c > 0.1:
         return None
 
     # 알파만 정리: 미디언으로 1px 톱니·튀는 점을 없애고(실루엣은 유지) 살짝 흐려
     # 안티에일리어싱을 준다. 색은 이미 원단 색이므로 번짐이 생기지 않는다.
-    img.putalpha(
-        img.getchannel("A").filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
-    )
+    # 미디언은 1px 톱니를 없애주지만, 손잡이 사이처럼 폭이 2~3px인 투명한 틈도 주변
+    # 불투명 픽셀이 다수라 다시 메워버린다(가운데 흰 선이 남던 원인). 그래서 미디언
+    # 뒤에 '지운 배경은 지운 채로' 다시 눌러주고, 블러는 그 다음에 걸어 경계만 부드럽게 한다.
+    # 블러 반경은 이미지 크기에 맞춘다 — 0.6 고정은 큰 원본(1024px+)에서 계단이 남았다.
+    alpha_out = img.getchannel("A").filter(ImageFilter.MedianFilter(3))
+    if any(hole_set):
+        alpha_out = ImageChops.darker(
+            alpha_out,
+            Image.frombytes("L", (w, h), bytes(hole_set)).point(lambda v: 0 if v else 255),
+        )
+    img.putalpha(alpha_out.filter(ImageFilter.GaussianBlur(max(0.6, min(1.3, min(w, h) / 900.0)))))
     bbox = img.getchannel("A").getbbox() or bbox
     pad = round(0.04 * max(w, h))
     img = img.crop((
