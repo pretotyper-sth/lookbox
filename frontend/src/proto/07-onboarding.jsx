@@ -169,9 +169,9 @@ function Landing({ onStart, onLogin }) {
     <div className="lb-app" style={{ alignItems: 'center' }}>
       {/* overflow:hidden — 짧은 모바일에서도 스크롤 없이 한 화면에 맞춤.
           남는 세로가 부족하면 코디 그리드만 비율 유지하며 줄어든다. */}
-      <div style={{
-        width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column',
-        minHeight: 0, margin: '0 auto', padding: '0 20px', overflow: 'hidden',
+      <div className="lb-page-cap" style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        minHeight: 0, padding: '0 20px', overflow: 'hidden',
       }}>
         <div style={{ flex: 'none', paddingTop: 14 }}><Wordmark size={18} /></div>
 
@@ -305,9 +305,9 @@ function Login({ onDone, onCancel, onSignup }) {
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
       {/* 랜딩과 같은 셸: 좌우 20px, 로고 상단 14px. 닫기 버튼은 absolute라 로고 위치를 밀지 않는다. */}
-      <div style={{
-        width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column',
-        minHeight: 0, margin: '0 auto', padding: '0 20px',
+      <div className="lb-page-cap" style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        minHeight: 0, padding: '0 20px',
       }}>
         <div style={{ flex: 'none', paddingTop: 14 }}>
           <div style={{ position: 'relative' }}>
@@ -651,7 +651,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
 
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 480, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, margin: '0 auto' }}>
+      <div className="lb-page-cap" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* 헤더: 워드마크 + 진행 바 */}
         <div style={{ padding: '14px 20px 4px' }}>
           <div style={{ position: 'relative' }}>
