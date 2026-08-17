@@ -165,6 +165,14 @@ img { display: block; max-width: 100%; }
 @media (min-width: 760px) {
   .lb-grid { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 22px 15px; }
 }
+/* 폭이 넓어지면 auto-fill이 열을 늘려 채운다. 최소 폭을 같이 올려야 카드가 우표처럼
+   작아지지 않고, 열 수가 무한정 늘지도 않는다. */
+@media (min-width: 1500px) {
+  .lb-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 24px 16px; }
+}
+@media (min-width: 2000px) {
+  .lb-grid { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 26px 18px; }
+}
 
 /* ---- CTA dock (mobile, floats above bottom nav) ---- */
 .lb-cta-dock {
@@ -292,7 +300,13 @@ img { display: block; max-width: 100%; }
 .lb-navitem:hover { background: var(--surface); }
 .lb-navitem.on { background: var(--surface); color: var(--ink); }
 .lb-wide-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.lb-wide-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+/* 데스크탑 콘텐츠 폭. max-width 1080 + margin auto였는데, 1920 화면에서는 사이드바를
+   뺀 1672 중 1080만 쓰고 좌우로 296px씩 버렸다 — 타이틀이 화면 가운데 어딘가에서
+   시작하고 오른쪽은 빈 채로 남는다. 폭을 풀어 좌측에 붙이고 남는 폭은 그리드가
+   auto-fill로 카드를 더 채워 쓴다. 여백은 화면이 커질수록 조금만 넓힌다. */
+.lb-wide-inner { width: 100%; margin: 0; padding: 0 32px; }
+@media (min-width: 1600px) { .lb-wide-inner { padding: 0 40px; } }
+@media (min-width: 2200px) { .lb-wide-inner { padding: 0 56px; } }
 
 /* ---- 큰 화면 대응 ----
    로그인 전 화면(랜딩·로그인·온보딩)은 세로를 flex spacer로 나눠 쓴다. 폰에서는 그게
