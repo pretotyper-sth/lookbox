@@ -70,7 +70,19 @@ const auth = {
     const { data } = await supabase.auth.getSession()
     const user = data.session?.user
     if (!user) return null
-    return { id: user.id, email: user.email || '', anonymous: !!user.is_anonymous }
+    return {
+      id: user.id,
+      email: user.email || '',
+      anonymous: !!user.is_anonymous,
+      // 설정은 user_metadata에 둔다. 계정에 붙어 다니므로 다른 기기에서도 그대로
+      // 오고, 세션 객체에 이미 실려 와서 별도 왕복이 없다.
+      prefs: (user.user_metadata && user.user_metadata.prefs) || null,
+    }
+  },
+  // 설정을 계정에 저장. 실패해도 로컬 저장은 이미 끝난 상태라 화면은 그대로 간다.
+  async savePrefs(prefs) {
+    if (!supabase) return
+    try { await supabase.auth.updateUser({ data: { prefs } }) } catch { /* 오프라인 등 */ }
   },
   // 가입은 Supabase의 signUp을 쓰지 않는다. 확인 메일이 필요한 가입은 기본 메일
   // 발송 한도(시간당 몇 통)에 걸려 'email rate limit'으로 막히고, 그 순간 계정이
@@ -100,7 +112,13 @@ const auth = {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     if (error) return { error: authError(error) }
     allowAnonymous = false
-    return { user: { id: data.user.id, email: data.user.email || '' } }
+    return {
+      user: {
+        id: data.user.id,
+        email: data.user.email || '',
+        prefs: (data.user.user_metadata && data.user.user_metadata.prefs) || null,
+      },
+    }
   },
   async signOut() {
     if (!supabase) return

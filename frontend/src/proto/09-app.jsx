@@ -59,16 +59,29 @@ function seedItems(ws) {
 
 // Cache the last-known wardrobe locally so a refresh paints the real list
 // instantly (no empty-state flash) while the network fetch reconciles.
-const WARDROBE_CACHE_KEY = 'lb_wardrobe_cache_v1';
-function readWardrobeCache() {
+// 캐시는 계정별로 나눈다. 전역 키 하나면 다른 계정으로 로그인했을 때 첫 페인트에
+// 남의 옷장이 보이고, 로그아웃 뒤에도 남는다. uid를 모르는 첫 순간에는 마지막으로
+// 쓴 계정의 캐시를 쓴다 — 대개 같은 사람이 다시 들어오는 경우라 즉시 그려진다.
+const WARDROBE_CACHE_KEY = 'lb_wardrobe_cache_v2';
+const LAST_UID_KEY = 'lb_last_uid';
+function cacheKeyFor(uid) {
+  return WARDROBE_CACHE_KEY + ':' + (uid || (() => {
+    try { return localStorage.getItem(LAST_UID_KEY) || 'anon'; } catch (e) { return 'anon'; }
+  })());
+}
+function readWardrobeCache(uid) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(WARDROBE_CACHE_KEY) || 'null');
+    const parsed = JSON.parse(localStorage.getItem(cacheKeyFor(uid)) || 'null');
     if (!parsed || !Array.isArray(parsed.owned)) return null;
     return { owned: parsed.owned, archived: Array.isArray(parsed.archived) ? parsed.archived : [] };
   } catch (e) { return null; }
 }
-function writeWardrobeCache(owned, archived) {
-  try { localStorage.setItem(WARDROBE_CACHE_KEY, JSON.stringify({ owned, archived })); } catch (e) { /* noop */ }
+function writeWardrobeCache(uid, owned, archived) {
+  if (!uid) return;
+  try {
+    localStorage.setItem(LAST_UID_KEY, uid);
+    localStorage.setItem(cacheKeyFor(uid), JSON.stringify({ owned, archived }));
+  } catch (e) { /* noop */ }
 }
 
 // 당일 추천 코디 캐시 — v3: owned-only 스냅샷(삭제·보관 아이템 재유입 방지)
@@ -504,6 +517,10 @@ function App() {
   const [prefs, setPrefs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lb_prefs') || 'null') || LB_DATA.DEFAULT_PREFS; } catch (e) { return LB_DATA.DEFAULT_PREFS; }
   });
+  // 로그인한 계정 id. 옷장·코디 fetch가 이 값을 따라 돈다 — 예전에는 마운트 때 한 번만
+  // 돌아서, 로그인 전 마운트에서 토큰 없이 401로 실패하고 로그인해도 재요청이 없었다.
+  // 그래서 새로고침을 해야 데이터가 나왔다.
+  const [authUid, setAuthUid] = useState(null);
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
@@ -519,10 +536,13 @@ function App() {
       if (!window.LB_AUTH) return;
       const me = await window.LB_AUTH.current();
       if (!alive) return;
+      if (me) setAuthUid(me.id);
       if (me && !me.anonymous) {
         setPrefs((prev) => {
-          if (prev.email === me.email) return prev;
-          const np = { ...prev, email: me.email };
+          // 계정에 저장된 설정이 있으면 그걸 정본으로 쓴다 — 다른 기기에서도 스타일·핏·
+          // 팔레트가 그대로 온다. 없으면 이 기기에 있던 값을 유지한다.
+          const np = { ...prev, ...(me.prefs || {}), email: me.email };
+          if (np.email === prev.email && !me.prefs) return prev;
           persistPrefs(np);
           return np;
         });
@@ -534,7 +554,15 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const persistPrefs = (p) => { try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ } };
+  const persistPrefs = (p) => {
+    try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
+    // 계정에도 저장해 다른 기기에서 그대로 오게 한다. email/avatar는 제외 —
+    // email은 세션에서 오고, avatar(data URL)는 user_metadata에 담기 너무 크다.
+    if (window.LB_AUTH && window.LB_AUTH.savePrefs) {
+      const { email, avatar, ...rest } = p;
+      window.LB_AUTH.savePrefs(rest);
+    }
+  };
   const completeOnboarding = (p) => { setPrefs(p); persistPrefs(p); setOnboarded(true); };
   // 가입 — 계정 단계를 넘어갈 때 실제 Supabase 계정을 만든다. 에러 문구를 돌려주면
   // 온보딩이 그 단계에 머문다. 여기서 계정을 만들어야 다음 방문에 같은 옷장이 열린다.
@@ -544,6 +572,7 @@ function App() {
     if (r.error) return r.error;
     const p = { ...prefs, email };
     setPrefs(p); persistPrefs(p);
+    if (r.user) setAuthUid(r.user.id);
     return '';
   };
   // 로그인 — 성공하면 그 계정의 옷장을 새로 읽어온다. 기기에 남아 있던 선호 정보는
@@ -552,8 +581,10 @@ function App() {
     if (!window.LB_AUTH) return '서버 설정이 없어요.';
     const r = await window.LB_AUTH.signIn(email, pw);
     if (r.error) return r.error;
-    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, email: r.user.email || email };
+    // 계정에 저장된 설정이 있으면 그걸 쓴다 (다른 기기에서 처음 로그인하는 경우)
+    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, ...(r.user.prefs || {}), email: r.user.email || email };
     setPrefs(p); persistPrefs(p); setOnboarded(true);
+    setAuthUid(r.user.id);
     return '';
   };
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
@@ -588,6 +619,7 @@ function App() {
   const logout = () => {
     if (window.LB_AUTH) window.LB_AUTH.signOut();
     try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ }
+    setAuthUid(null);
     setItems([]); setArchived([]);
     setOnboarded(false); setPhase('landing'); setTab('wardrobe');
   };
@@ -751,7 +783,11 @@ function App() {
 
   useEffect(() => {
     if (isShowcase) return;
+    // 세션이 없으면 부르지 않는다. 토큰 없이 부르면 401로 실패하고 '불러오지 못했어요'
+    // 토스트만 띄운다. authUid가 정해지는 순간(부팅 복원 또는 로그인) 바로 돈다.
+    if (!authUid) return;
     let dead = false;
+    setWardrobeLoading(true);
     Promise.all([
       liveJSON('/api/live/wardrobe'),
       liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
@@ -771,7 +807,7 @@ function App() {
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
       .finally(() => { if (!dead) setWardrobeLoading(false); });
     return () => { dead = true; };
-  }, [isShowcase, putLiveItems, showToast, bumpDaily]);
+  }, [isShowcase, authUid, putLiveItems, showToast, bumpDaily]);
 
   // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
@@ -877,8 +913,8 @@ function App() {
   // Persist the wardrobe locally so the next load paints instantly.
   useEffect(() => {
     if (isShowcase) return;
-    writeWardrobeCache(items, archived);
-  }, [items, archived, isShowcase]);
+    writeWardrobeCache(authUid, items, archived);
+  }, [authUid, items, archived, isShowcase]);
 
   // 이미지 프리로드: 목록이 생기는 즉시(상호작용 없이) 브라우저 캐시로 미리 받아 디코드해 둔다.
   // → 그리드가 그려질 때 캐시에서 바로 페인트되어 '클릭해야 뜨는' 지연을 없앰.
