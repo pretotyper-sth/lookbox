@@ -85,18 +85,40 @@ function writeWardrobeCache(uid, owned, archived) {
 }
 
 // 당일 추천 코디 캐시 — v3: owned-only 스냅샷(삭제·보관 아이템 재유입 방지)
-const DAILY_CACHE_KEY = 'lb_daily_outfits_v3';
-const DAILY_CACHE_LEGACY_KEYS = ['lb_daily_outfits_v2'];
+// 옷장 캐시와 같은 이유로 계정별로 나눈다. 호출부가 많아 uid를 인자로 돌리지 않고
+// 로그인 시점에 스코프를 한 번 세팅한다.
+const DAILY_CACHE_BASE = 'lb_daily_outfits_v3';
+const DAILY_CACHE_LEGACY_KEYS = ['lb_daily_outfits_v2', 'lb_daily_outfits_v3'];
+let dailyScopeUid = '';
+function setDailyScope(uid) {
+  dailyScopeUid = uid || '';
+}
+function dailyScope() {
+  return dailyScopeUid || (() => {
+    try { return localStorage.getItem(LAST_UID_KEY) || 'anon'; } catch (e) { return 'anon'; }
+  })();
+}
 function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function relativeSavedAt(iso) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (!then) return '';
+  const min = Math.floor((Date.now() - then) / 60000);
+  if (min < 1) return '방금';
+  if (min < 60) return `${min}분 전`;
+  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
+  const day = Math.floor(min / 1440);
+  return day < 30 ? `${day}일 전` : `${Math.floor(day / 30)}개월 전`;
 }
 function wardrobeSigOf(list) {
   return (list || []).map((it) => it && it.id).filter(Boolean).map(String).sort().join(',');
 }
 function readDailyCache() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(DAILY_CACHE_KEY) || 'null');
+    const parsed = JSON.parse(localStorage.getItem(DAILY_CACHE_BASE + ':' + dailyScope()) || 'null');
     if (!parsed || parsed.date !== localYmd() || !Array.isArray(parsed.outfits) || !parsed.outfits.length) return null;
     return parsed;
   } catch (e) { return null; }
@@ -104,7 +126,7 @@ function readDailyCache() {
 function writeDailyCache({ style, outfits, items, wardrobeSig, wardrobeCount }) {
   try {
     const sig = wardrobeSig != null ? wardrobeSig : wardrobeSigOf(items);
-    localStorage.setItem(DAILY_CACHE_KEY, JSON.stringify({
+    localStorage.setItem(DAILY_CACHE_BASE + ':' + dailyScope(), JSON.stringify({
       date: localYmd(),
       style: style || '',
       outfits: outfits || [],
@@ -121,17 +143,18 @@ function writeDailyCache({ style, outfits, items, wardrobeSig, wardrobeCount }) 
 }
 function clearDailyCache() {
   try {
-    localStorage.removeItem(DAILY_CACHE_KEY);
+    localStorage.removeItem(DAILY_CACHE_BASE + ':' + dailyScope());
     DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
   } catch (e) { /* noop */ }
 }
 
 // 날짜별 추천 기록 — 당일 캐시는 하루가 지나면 무효가 되므로, 그날 실제로 보여준
 // 코디를 따로 남겨 캘린더에서 되짚어볼 수 있게 한다. 기록이 없는 날은 없는 대로 둔다.
-const DAILY_HISTORY_KEY = 'lb_daily_history_v1';
+const DAILY_HISTORY_BASE = 'lb_daily_history_v1';
+function dailyHistoryKey() { return DAILY_HISTORY_BASE + ':' + dailyScope(); }
 const DAILY_HISTORY_MAX_DAYS = 120;
 function readDailyHistory() {
-  try { return JSON.parse(localStorage.getItem(DAILY_HISTORY_KEY) || 'null') || {}; } catch (e) { return {}; }
+  try { return JSON.parse(localStorage.getItem(dailyHistoryKey()) || 'null') || {}; } catch (e) { return {}; }
 }
 function readDailyRecord(dateKey) {
   const rec = readDailyHistory()[dateKey];
@@ -143,7 +166,7 @@ function writeDailyRecord(dateKey, patch) {
     all[dateKey] = { ...(all[dateKey] || {}), ...patch };
     const keys = Object.keys(all).sort();
     keys.slice(0, Math.max(0, keys.length - DAILY_HISTORY_MAX_DAYS)).forEach((k) => delete all[k]);
-    localStorage.setItem(DAILY_HISTORY_KEY, JSON.stringify(all));
+    localStorage.setItem(dailyHistoryKey(), JSON.stringify(all));
   } catch (e) { /* noop */ }
 }
 function dailyWardrobeGrewSinceCache(ownedItems) {
@@ -521,6 +544,7 @@ function App() {
   // 돌아서, 로그인 전 마운트에서 토큰 없이 401로 실패하고 로그인해도 재요청이 없었다.
   // 그래서 새로고침을 해야 데이터가 나왔다.
   const [authUid, setAuthUid] = useState(null);
+  setDailyScope(authUid); // 코디 캐시 키를 현재 계정으로 고정 — 렌더 중 읽는 곳이 있어 effect보다 먼저 세팅한다
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
@@ -781,6 +805,49 @@ function App() {
     return normalized;
   }, []);
 
+  // 서버 코디 목록 → 룩북·날짜별 기록·오늘 코디 캐시. 로컬은 첫 페인트용 캐시일 뿐이다.
+  const hydrateOutfits = useCallback((data, ownedItems) => {
+    const list = data.outfits || [];
+    list.forEach((o) => {
+      LB_DATA.OUTFIT_BY_ID[o.id] = {
+        id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
+        itemIds: o.itemIds, lookImg: o.lookImg, manual: !!o.manual,
+      };
+    });
+    setSavedLooks(list.filter((o) => o.saved).map((o) => ({
+      id: 'look-' + o.id, outfitId: o.id, label: o.label,
+      savedAt: relativeSavedAt(o.createdAt),
+    })));
+    // 서버는 최신순으로 준다. 오늘 코디는 만든 순서대로 보여야 해서 되돌린다.
+    const byDate = {};
+    list.slice().reverse().forEach((o) => {
+      if (!o.forDate) return;
+      (byDate[o.forDate] = byDate[o.forDate] || []).push({
+        id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
+        itemIds: o.itemIds, lookImg: o.lookImg,
+      });
+    });
+    Object.entries(byDate).forEach(([day, outfits]) => {
+      writeDailyRecord(day, { outfits, items: dailyCacheItemsFromOwned(ownedItems, outfits) });
+    });
+    const today = byDate[localYmd()];
+    if (today && today.length) {
+      const kept = filterDailyOutfitsByOwned(today, ownedItems);
+      if (kept.length) {
+        const cached = readDailyCache();
+        writeDailyCache({
+          style: (cached && cached.style) || '',
+          outfits: kept,
+          items: dailyCacheItemsFromOwned(ownedItems, kept),
+          // sig는 지금 옷장 기준. 서버에서 받아온 직후엔 '옷장이 늘었다' CTA가 뜰 이유가 없다.
+          wardrobeSig: (cached && cached.wardrobeSig) || wardrobeSigOf(ownedItems),
+          wardrobeCount: cached && cached.wardrobeCount != null ? cached.wardrobeCount : (ownedItems || []).length,
+        });
+        LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (isShowcase) return;
     // 세션이 없으면 부르지 않는다. 토큰 없이 부르면 401로 실패하고 '불러오지 못했어요'
@@ -788,17 +855,22 @@ function App() {
     if (!authUid) return;
     let dead = false;
     setWardrobeLoading(true);
+    // 코디·룩북도 같은 라운드에서 받는다. 서버가 정본이라 다른 기기에서 만든 코디와
+    // 룩북이 로그인만 하면 그대로 보인다. 옷장 목록이 손에 있어야 코디를 정리할 수 있어
+    // 세 요청을 한 번에 묶는다.
     Promise.all([
       liveJSON('/api/live/wardrobe'),
       liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
+      liveJSON('/api/live/outfits').catch(() => null),
     ])
-      .then(([ownedData, archData]) => {
+      .then(([ownedData, archData, outfitData]) => {
         if (dead) return;
         const liveItems = (ownedData.items || []).map(liveRememberItem);
         const archItems = (archData.items || []).map(liveRememberItem);
         setItems(liveItems);
         setArchived(archItems);
         syncAllFromWardrobe(liveItems, archItems);
+        if (outfitData) hydrateOutfits(outfitData, liveItems);
         const removed = pruneDailyAgainstOwned(liveItems);
         if (LB_DATA.DAILY.length) setDailyAllowed(true);
         else if (removed) setDailyAllowed(false);
@@ -807,7 +879,7 @@ function App() {
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
       .finally(() => { if (!dead) setWardrobeLoading(false); });
     return () => { dead = true; };
-  }, [isShowcase, authUid, putLiveItems, showToast, bumpDaily]);
+  }, [isShowcase, authUid, hydrateOutfits, showToast, bumpDaily]);
 
   // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
@@ -1080,6 +1152,7 @@ function App() {
             max_combos: maxCombos,
             style,
             styles: preferredStyles,
+            for_date: localYmd(),
             exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
             ...modelLook,
           }),
@@ -1110,6 +1183,7 @@ function App() {
           max_combos: baseCount,
           style,
           styles: preferredStyles,
+          for_date: localYmd(),
           ...modelLook,
         }),
       });
@@ -1207,20 +1281,43 @@ function App() {
     }
   };
 
+  // 룩북 저장 상태는 서버에 남긴다. 화면은 먼저 바꾸고(누른 즉시 반응) 서버 호출은
+  // 뒤따르게 한다 — 실패하면 알려주되 되돌리지는 않는다(다음 로드에서 서버값으로 맞춰진다).
+  const persistOutfitState = (outfitId, patch) => {
+    if (!outfitId || String(outfitId).startsWith('live-') || String(outfitId).startsWith('manual-')) return;
+    liveJSON(`/api/live/outfits/${encodeURIComponent(outfitId)}/state`, {
+      method: 'POST', body: JSON.stringify(patch),
+    }).catch(() => showToast('서버에 반영하지 못했어요. 잠시 후 다시 시도해 주세요'));
+  };
   const saveOutfit = (outfitId) => {
     setSavedLooks((arr) => {
-      if (arr.some((l) => l.outfitId === outfitId)) { showToast('룩북에서 해제했어요'); return arr.filter((l) => l.outfitId !== outfitId); }
+      if (arr.some((l) => l.outfitId === outfitId)) {
+        showToast('룩북에서 해제했어요');
+        persistOutfitState(outfitId, { saved: false });
+        return arr.filter((l) => l.outfitId !== outfitId);
+      }
       const o = LB_DATA.OUTFIT_BY_ID[outfitId];
       showToast('룩북에 저장했어요', 'bookmark');
-      return [{ id: 'live-' + outfitId, outfitId, label: o ? o.label : '저장한 코디', savedAt: '방금' }, ...arr];
+      persistOutfitState(outfitId, { saved: true });
+      return [{ id: 'look-' + outfitId, outfitId, label: o ? o.label : '저장한 코디', savedAt: '방금' }, ...arr];
     });
   };
   // 옷장에서 직접 고른 조합을 룩북에 저장 — 추천을 거치지 않는 수동 경로
-  const createManualLook = (itemIds, label) => {
+  const createManualLook = async (itemIds, label) => {
     const ids = (itemIds || []).map(String);
     if (ids.length < 2) return;
-    const outfitId = 'manual-' + Date.now().toString(36);
     const name = (label || '').trim() || '내가 만든 코디';
+    // 서버에 먼저 만들어 진짜 id를 받는다. 로컬 id로 두면 다음 로드에 사라진다.
+    let outfitId = null;
+    try {
+      const res = await liveJSON('/api/live/outfits/manual', {
+        method: 'POST', body: JSON.stringify({ label: name, item_ids: ids }),
+      });
+      outfitId = res && res.id;
+    } catch (e) {
+      showToast(e.message || '룩북에 저장하지 못했어요');
+      return;
+    }
     LB_DATA.OUTFIT_BY_ID[outfitId] = {
       // manual: 추천에서 저장한 코디와 달리 사본이 없다. 룩북에서 빼면 그걸로 끝이라
       // 확인 문구를 다르게 보여준다.
@@ -1245,6 +1342,7 @@ function App() {
   const bulkUnsave = (lookIds) => {
     const ids = lookIds || [];
     if (!ids.length) return;
+    savedLooks.filter((l) => ids.includes(l.id)).forEach((l) => persistOutfitState(l.outfitId, { saved: false }));
     setSavedLooks((arr) => arr.filter((l) => !ids.includes(l.id)));
     showToast(`${ids.length}개를 룩북에서 뺐어요`);
   };

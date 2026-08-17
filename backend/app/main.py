@@ -2215,6 +2215,8 @@ class LiveCoordinate(BaseModel):
     # 마이페이지 'AI 착장 이미지' 토글. 켜져 있으면 코디마다 전신 컷을 만든다(비용 큼).
     model_look: bool = False
     face_data_url: str | None = None
+    # 오늘 코디의 날짜 선택 — 어느 날짜용으로 만든 코디인지 남긴다 (YYYY-MM-DD)
+    for_date: str | None = None
 
 
 class LiveStatus(BaseModel):
@@ -3599,7 +3601,9 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             used[item_id] = by_id[item_id]
         outfits.append(
             {
-                "id": f"live-{uuid.uuid4().hex[:8]}",
+                # 저장은 아래에서 한 번에 — 임시 id로 돌려주면 기기를 옮기는 순간 사라지고
+                # 저장·착용 상태를 서버에 남길 방법도 없다.
+                "id": None,
                 "label": combo.get("label") or f"추천 코디 {idx + 1}",
                 "mood": combo.get("mood") or "",
                 "styles": combo.get("styles") or [],
@@ -3621,7 +3625,147 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 if url:
                     outfit["lookImg"] = url
 
+    # 생성 결과를 저장한다. 실패해도 화면은 그대로 가게 하되(추천을 버리진 않는다)
+    # id는 임시값으로 남아 저장·착용을 서버에 남길 수 없다는 걸 로그로 남긴다.
+    for outfit in outfits:
+        try:
+            row = (
+                supabase_admin.table("outfits")
+                .insert({
+                    "user_id": user.id,
+                    "label": outfit["label"],
+                    "mood": outfit["mood"],
+                    "type": "daily",
+                    "item_ids": outfit["itemIds"],
+                    "look_image_url": outfit["lookImg"],
+                    "metadata": {"styles": outfit["styles"], "for_date": body.for_date or None},
+                })
+                .execute()
+                .data[0]
+            )
+            outfit["id"] = row["id"]
+        except Exception as exc:  # noqa: BLE001
+            print(f"[coordinate] outfit persist failed: {exc}", flush=True)
+            outfit["id"] = f"live-{uuid.uuid4().hex[:8]}"
     return {"outfits": outfits, "items": [live_item_payload(row) for row in used.values()]}
+
+
+@app.get("/api/live/outfits")
+def live_list_outfits(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """저장한 코디(룩북)와 최근 생성된 코디를 아이템까지 함께 돌려준다.
+
+    기기를 옮기거나 다시 로그인해도 룩북과 날짜별 코디가 그대로 보이려면 이게 필요하다.
+    프론트는 localStorage 캐시로 먼저 그리고, 여기 응답으로 덮어쓴다.
+    """
+    require_supabase()
+    rows = (
+        supabase_admin.table("outfits")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(200)
+        .execute()
+        .data
+        or []
+    )
+    item_ids = sorted({i for r in rows for i in (r.get("item_ids") or [])})
+    items: list[dict[str, Any]] = []
+    if item_ids:
+        items = (
+            supabase_admin.table("wardrobe_items")
+            .select("*")
+            .eq("user_id", user.id)
+            .in_("id", item_ids)
+            .neq("status", "deleted")
+            .execute()
+            .data
+            or []
+        )
+    alive = {i["id"] for i in items}
+    out = []
+    for r in rows:
+        ids = [i for i in (r.get("item_ids") or []) if i in alive]
+        # 아이템이 지워져 반쪽이 된 코디는 보여줄 수 없다
+        if len(ids) < 2:
+            continue
+        meta = r.get("metadata") or {}
+        out.append({
+            "id": r["id"],
+            "label": r.get("label") or "코디",
+            "mood": r.get("mood") or "",
+            "styles": meta.get("styles") or [],
+            "itemIds": ids,
+            "lookImg": r.get("look_image_url"),
+            "saved": bool(r.get("saved")),
+            "wornAt": r.get("worn_at"),
+            "forDate": meta.get("for_date"),
+            "manual": r.get("type") == "manual",
+            "createdAt": r.get("created_at"),
+        })
+    return {"outfits": out, "items": [live_item_payload(i) for i in items]}
+
+
+class LiveOutfitState(BaseModel):
+    saved: bool | None = None
+    worn: bool | None = None
+
+
+@app.post("/api/live/outfits/{outfit_id}/state")
+def live_outfit_state(
+    outfit_id: str, body: LiveOutfitState, user: UserContext = Depends(current_user)
+) -> dict[str, Any]:
+    """룩북 저장 여부·착용 기록. 기기와 무관하게 남아야 하는 값이라 서버에 쓴다."""
+    require_supabase()
+    patch: dict[str, Any] = {}
+    if body.saved is not None:
+        patch["saved"] = body.saved
+    if body.worn is not None:
+        patch["worn_at"] = now_iso() if body.worn else None
+    if not patch:
+        return {"ok": True}
+    updated = (
+        supabase_admin.table("outfits")
+        .update(patch)
+        .eq("id", outfit_id)
+        .eq("user_id", user.id)
+        .execute()
+        .data
+        or []
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="코디를 찾지 못했어요")
+    return {"ok": True}
+
+
+class LiveManualOutfit(BaseModel):
+    label: str
+    item_ids: list[str]
+
+
+@app.post("/api/live/outfits/manual")
+def live_create_manual_outfit(
+    body: LiveManualOutfit, user: UserContext = Depends(current_user)
+) -> dict[str, Any]:
+    """직접 만든 코디도 서버에 남긴다 — 룩북에 담기는 값이라 기기를 넘어가야 한다."""
+    require_supabase()
+    ids = [i for i in (body.item_ids or []) if i][:6]
+    if len(ids) < 2:
+        raise HTTPException(status_code=400, detail="아이템을 2개 이상 골라주세요")
+    row = (
+        supabase_admin.table("outfits")
+        .insert({
+            "user_id": user.id,
+            "label": (body.label or "").strip() or "직접 만든 코디",
+            "mood": "직접 만든 코디",
+            "type": "manual",
+            "item_ids": ids,
+            "saved": True,
+            "metadata": {"styles": []},
+        })
+        .execute()
+        .data[0]
+    )
+    return {"id": row["id"]}
 
 
 @app.post("/api/live/items/status")
