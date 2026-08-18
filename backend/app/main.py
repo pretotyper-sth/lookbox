@@ -46,7 +46,16 @@ OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
 OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION_MODEL
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 상위 모델·품질 (비용↑, 글자 보존↑)
-OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
+# 로고·글자가 있는 옷 전용 모델. gpt-image-2는 background="transparent"를 아예 거부해서
+# (400 invalid_value·param=background) 로고가 있는 아이템이 전부 실패했다. 컷아웃 파이프라인은
+# 투명 PNG를 전제로 하므로 기본값을 gpt-image-1로 되돌린다 — input_fidelity=high로 글자도 보존된다.
+OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-1")
+# 투명 배경을 지원하지 않는 모델. 이 모델을 쓰면 불투명 결과를 받아 우리 컷아웃을 돌린다.
+_NO_TRANSPARENT_MODELS = ("gpt-image-2",)
+
+
+def _supports_transparent(model: str) -> bool:
+    return not any(m in (model or "") for m in _NO_TRANSPARENT_MODELS)
 # 비용 설계: 첫 추출은 medium($0.063/장) — 단색 상품컷은 어차피 로컬 컷아웃($0)으로 빠짐.
 # 마음에 안 들어 다시 시도하는 재추출/이미지 변경만 high($0.25/장)로 올린다.
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
@@ -74,6 +83,9 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # 일반 추출은 60초 안에 끝내고, 실제 고난도 케이스만 120초 예산을 준다.
+# 에러 코드(상태코드·OpenAI 에러코드·request_id)를 사용자 화면에 붙일지. 라이브(production)에서는
+# 감추고 로그·ai_usage_logs에만 남긴다. 로컬·스테이징에서는 그대로 보여 디버깅에 쓴다.
+SHOW_ERROR_CODES = os.environ.get("APP_ENV", "dev").strip().lower() not in ("production", "prod", "live")
 OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "120"))
 OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "60"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
@@ -163,9 +175,8 @@ def stream_with_keepalive(work) -> StreamingResponse:
                 # 예상 못한 예외도 어떤 종류였는지는 알려준다 — 문구만 보고는
                 # 사용자도, 우리도 원인을 좁힐 수 없다(호스팅 로그를 봐야 했다).
                 print(f"[stream] work failed: {type(exc).__name__}: {exc}", flush=True)
-                error.append(
-                    f"요청 처리 중 오류가 났어요 (코드: {type(exc).__name__}). 잠시 후 다시 시도해 주세요."
-                )
+                detail = f" (코드: {type(exc).__name__})" if SHOW_ERROR_CODES else ""
+                error.append(f"요청 처리 중 오류가 났어요{detail}. 잠시 후 다시 시도해 주세요.")
 
         def event(payload: dict[str, Any]) -> str:
             return "data: " + json.dumps(payload, ensure_ascii=False, default=str) + "\n\n"
@@ -1589,7 +1600,7 @@ def generate_product_image(
         flush=True,
     )
 
-    def _edit(use_model: str, *, transparent: bool) -> bytes:
+    def _edit(use_model: str, *, transparent: bool) -> tuple[bytes, bool]:
         img_bytes = read_image_as_png_bytes(path)
         buf = io.BytesIO(img_bytes)
         buf.name = "source.png"
@@ -1600,7 +1611,10 @@ def generate_product_image(
             "size": "1024x1536",
             "quality": quality,
         }
-        if transparent:
+        # 지원하지 않는 모델에 transparent를 넣으면 400으로 끝난다. 조용히 빼고,
+        # 대신 결과를 우리 컷아웃(플러드필)으로 처리한다.
+        want_transparent = transparent and _supports_transparent(use_model)
+        if want_transparent:
             kwargs["background"] = "transparent"
         # input_fidelity=high: 포켓·택·정확한 색상 같은 원본 디테일을 훨씬 잘 보존한다.
         # gpt-image-2는 이 파라미터를 안 받고 항상 고충실도로 처리하므로 gpt-image-1류에만 지정.
@@ -1616,11 +1630,11 @@ def generate_product_image(
                 "has_text_logo": has_text,
                 "logo_text": logo_text[:40],
                 "extract_hint": hint[:80],
-                "transparent": transparent,
+                "transparent": want_transparent,
             },
             usage=getattr(result, "usage", None),
         )
-        return base64.b64decode(result.data[0].b64_json)
+        return base64.b64decode(result.data[0].b64_json), want_transparent
 
     # 투명 배경 요청 한 번만 사용한다. 과거의 불투명 재시도는 다시 플러드필을 타
     # 흰 원단을 지우고 최대 대기 시간을 두 배로 만들었다.
@@ -1629,12 +1643,15 @@ def generate_product_image(
     started = time.monotonic()
     for attempt in (0, 1):
         try:
-            raw = _edit(model, transparent=True)
-            print(f"[extract] ok model={model} transparent=True attempt={attempt + 1}", flush=True)
+            raw, was_transparent = _edit(model, transparent=True)
+            print(
+                f"[extract] ok model={model} transparent={was_transparent} attempt={attempt + 1}",
+                flush=True,
+            )
             meta["_extract_mode"] = "ai"
             return finalize_cutout(
                 raw,
-                already_transparent=True,
+                already_transparent=was_transparent,
                 protect_light_garment=whiteish,
                 category=meta.get("category"),
             )
@@ -1648,6 +1665,21 @@ def generate_product_image(
         except Exception as exc:  # noqa: BLE001
             info = _openai_error_info(exc)
             key = _openai_fail_key(info)
+            # 모델이 투명 배경을 안 받는 경우(목록에 없던 새 모델 포함) 불투명으로 한 번 더.
+            if info.get("param") == "background" and attempt == 0:
+                print(f"[extract] transparent unsupported on {model} — retry opaque", flush=True)
+                try:
+                    raw, _ = _edit(model, transparent=False)
+                    meta["_extract_mode"] = "ai_opaque"
+                    return finalize_cutout(
+                        raw,
+                        already_transparent=False,
+                        protect_light_garment=whiteish,
+                        category=meta.get("category"),
+                    )
+                except Exception as exc2:  # noqa: BLE001
+                    info = _openai_error_info(exc2)
+                    key = _openai_fail_key(info)
             retryable = key in ("rate_limit", "upstream")
             if retryable and attempt == 0 and (time.monotonic() - started) < 45:
                 print(f"[extract] retry after {_fail_log(info)}", flush=True)
@@ -1683,17 +1715,18 @@ def _openai_error_info(exc: Exception) -> dict[str, Any]:
     봐야 했다). 상태코드·코드·request_id를 남겨 화면과 DB 양쪽에서 확인한다.
     """
     status = getattr(exc, "status_code", None)
-    code: str | None = None
     body = getattr(exc, "body", None)
+    # SDK는 {"error": {...}} 로 감싼 형태와 error 객체를 그대로 준 형태가 둘 다 나온다.
+    err: dict[str, Any] = {}
     if isinstance(body, dict):
-        err = body.get("error") if isinstance(body.get("error"), dict) else {}
-        code = str(err.get("code") or err.get("type") or "") or None
+        err = body.get("error") if isinstance(body.get("error"), dict) else body
     return {
         "type": type(exc).__name__,
         "status": int(status) if isinstance(status, int) else None,
-        "code": code,
+        "code": str(err.get("code") or err.get("type") or "") or None,
+        "param": str(err.get("param") or "") or None,
         "request_id": getattr(exc, "request_id", None),
-        "message": str(getattr(exc, "message", "") or exc)[:300],
+        "message": str(err.get("message") or getattr(exc, "message", "") or exc)[:300],
     }
 
 
@@ -1715,7 +1748,9 @@ def _openai_fail_key(info: dict[str, Any]) -> str:
     if isinstance(status, int) and status >= 500:
         return "upstream"
     if status == 400:
-        return "bad_request"
+        # param이 있으면 사진이 아니라 우리가 보낸 요청이 잘못된 것이다. 사용자에게
+        # '다른 사진으로'라고 안내하면 아무리 좋은 사진을 넣어도 계속 실패한다.
+        return "bad_setup" if info.get("param") else "bad_request"
     return "api_error"
 
 
@@ -1733,23 +1768,27 @@ def _fail_code(info: dict[str, Any]) -> str:
 def _fail_log(info: dict[str, Any]) -> str:
     return (
         f"type={info.get('type')} status={info.get('status')} code={info.get('code')} "
-        f"req={info.get('request_id')} msg={info.get('message')}"
+        f"param={info.get('param')} req={info.get('request_id')} msg={info.get('message')}"
     )
 
 
+# 사용자가 읽고 다음 행동을 정할 수 있는 문구만 둔다. 원인이 우리 쪽이면 사진을
+# 바꾸라고 하지 않고(바꿔도 안 되니까) 잠시 후 다시 시도하도록 안내한다.
 _EXTRACT_FAIL_MSG = {
-    "timeout": "AI 이미지 생성이 지연돼 중단했어요(제한 시간 초과). 잠시 후 다시 시도해 주세요.",
-    "network": "AI 이미지 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
-    "rate_limit": "지금 AI 이미지 생성 요청이 한도를 넘었어요. 1~2분 뒤에 다시 시도해 주세요.",
-    "moderation": "AI가 이 사진은 처리할 수 없다고 판단했어요. 다른 사진으로 시도해 주세요.",
-    "auth": "이미지 생성 계정 인증에 문제가 있어요. 관리자에게 알려 주세요.",
-    "quota": "이미지 생성 계정의 크레딧이 부족해요. 관리자에게 알려 주세요.",
+    "timeout": "이미지를 만드는 데 시간이 너무 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.",
+    "network": "이미지 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "rate_limit": "지금 이미지 요청이 몰려 있어요. 1~2분 뒤에 다시 시도해 주세요.",
+    "moderation": "이 사진은 처리할 수 없어요. 아이템이 또렷하게 보이는 다른 사진으로 다시 시도해 주세요.",
+    "auth": "이미지 만들기 설정에 문제가 있어요. 잠시 후 다시 시도해 주세요.",
+    "quota": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
     "too_large": "사진 용량이 너무 커요. 조금 작은 사진으로 다시 시도해 주세요.",
-    "upstream": "AI 이미지 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해 주세요.",
-    "bad_request": "AI가 이 요청을 거절했어요. 다른 사진으로 시도해 주세요.",
-    "api_error": "AI 이미지 생성 중 오류가 났어요. 잠시 후 다시 시도해 주세요.",
+    "upstream": "이미지 서버가 잠시 불안정해요. 조금 뒤에 다시 시도해 주세요.",
+    "bad_request": "이 사진에서는 아이템을 구별하기 어려웠어요. 아이템 하나가 크고 또렷하게 보이는 사진으로 다시 시도해 주세요.",
+    # 우리가 보낸 요청 자체가 잘못된 경우 — 사진을 바꿔도 해결되지 않는다.
+    "bad_setup": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "api_error": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
     "no_openai": "이미지 생성 기능이 비활성화돼 있어요.",
-    "edit_failed": "이미지를 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "edit_failed": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
 }
 
 
@@ -1770,8 +1809,8 @@ def resolve_product_image(
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
     info = meta.get("_extract_fail_info") or {}
-    # 문의가 오면 바로 원인을 알 수 있게 짧은 코드를 붙인다(상태코드·에러코드·요청 끝자리).
-    if info:
+    # 코드는 개발용이다. 라이브에서는 사용자에게 보여주지 않고 로그·DB에만 남긴다.
+    if info and SHOW_ERROR_CODES:
         msg = f"{msg} (코드: {_fail_code(info)})"
     # 흰 옷·저대비 원단은 로컬 색상 제거로 대체하면 결과가 빠르게 나와도 일부가
     # 사라질 수 있다. 원본은 이미 보관되어 있으므로 안전하게 실패를 돌려준다.
@@ -1943,6 +1982,45 @@ def _style_attr_prompt(rows: list[dict[str, Any]]) -> str:
   슬랙스·코트·로퍼 → office/classic/dandy, 데님·티셔츠 → casual/minimal,
   스니커·후디·카고 → street/casual/sporty, 니트·셔츠 → preppy/dandy 처럼 성격에 맞게.
   전부 minimal로 채우지 말 것."""
+
+
+def style_attrs_from_image(image_url: str, name: str, category: str, color: str,
+                           user_id: str | None = None) -> dict[str, Any]:
+    """이미 저장된 아이템의 사진을 보고 숨은 스타일 속성을 뽑는다(백필용).
+
+    새로 담는 아이템은 classify(비전)에서 같이 받지만, 예전에 담은 아이템은 이름
+    기반 추론뿐이라 '카고'처럼 이름에 없는 성격을 놓친다. 사진을 다시 한 번 보면
+    핏·소재·격식·톤이 정확해진다. 아이템당 비전 1회이므로 백필 스크립트에서만 쓴다.
+    """
+    if not openai_client:
+        return {}
+    prompt = f"""이 사진의 패션 아이템을 보고 코디에 필요한 속성만 채워라. 이름은 참고만 한다.
+이름: {name} / 카테고리: {_category_display(category)} / 색: {color}
+
+JSON만 응답:
+{{"subtype":"한국어 종류명(예: 카고 팬츠, 옥스퍼드 셔츠, 첼시 부츠)","fit":"slim|regular|relaxed|oversized|wide|crop|skinny","pattern":"solid|stripe|check|floral|graphic|logo|camo|dot|other","material":"cotton|denim|linen|wool|knit|leather|nylon|corduroy|fleece|blend","tone":"warm|cool|neutral","depth":"light|mid|deep","chroma":"vivid|muted","formality":3,"styles":["어울리는 무드 1~3개: dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy"],"details":["코디에 영향 주는 특징 0~3개"]}}
+- 이름에 없어도 사진에서 보이면 반영한다: 카고 포켓, 센터프레스, 워싱, 광택, 크롭 기장, 절개.
+- formality: 1 운동복 · 2 데일리 캐주얼 · 3 스마트 캐주얼 · 4 오피스 · 5 정장.
+- tone: 원단 색이 웜(아이보리·카멜·올리브)/쿨(애쉬·네이비·버건디)/뉴트럴(블랙·화이트·그레이) 중 어디인지.
+- 확신이 없는 필드는 비운다."""
+    try:
+        response = _vision_client().chat.completions.create(
+            model=OPENAI_CLASSIFY_MODEL,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ]}],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        log_ai_usage(
+            user_id, "style_attrs_image", OPENAI_CLASSIFY_MODEL, {"backfill": True},
+            usage=getattr(response, "usage", None),
+        )
+        return _clean_style_attrs(json.loads(response.choices[0].message.content or "{}"))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[style-attrs] image read failed: {exc}", flush=True)
+        return {}
 
 
 def _ensure_style_attrs(user_id: str, rows: list[dict[str, Any]], limit: int = 25) -> int:
