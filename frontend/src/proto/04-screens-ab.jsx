@@ -244,6 +244,11 @@ function WardrobeScreen({ ctx }) {
   );
   const activeSort = WARDROBE_SORTS.find((s) => s.id === sortId) || WARDROBE_SORTS[0];
   const count = items.length;
+  // 개수는 지금 보고 있는 목록을 따른다. 카테고리·계절·검색으로 좁혀 놓고도 늘 전체
+  // 개수만 떠 있으면 화면과 숫자가 어긋난다. 좁혀졌을 때만 전체를 뒤에 덧붙인다.
+  const totalCount = viewingArchive ? archived.length : count;
+  const narrowed = (!viewingArchive && cat !== '전체') || seasonFilter.length > 0 || queryTokens.length > 0;
+  const countLabel = narrowed ? `${filtered.length}개 · 전체 ${totalCount}개` : `${totalCount}개`;
   const ready = comboReady;
   const selCount = sel.length;
   const selecting = selCount > 0;
@@ -471,7 +476,7 @@ function WardrobeScreen({ ctx }) {
         {wide && (
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
             <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>{viewingArchive ? '보관함' : '옷장'}</h1>
-            <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{(viewingArchive ? archived.length : count)}개</span>
+            <span className="tnum" style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{countLabel}</span>
           </div>
         )}
         {/* 데스크탑은 카테고리 칩과 검색을 한 줄에 둔다 — 타이틀 행에 있을 때보다

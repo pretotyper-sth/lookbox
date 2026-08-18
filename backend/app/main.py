@@ -500,6 +500,60 @@ def _record_recommendation_timing(user_id: str | None, pool_size: int, combo_cou
     )
 
 
+# 코디를 짤 때만 쓰는 숨은 속성. 사용자 화면에는 안 나오고, 추천 프롬프트와
+# 규칙 기반 페어링(fallback)에서 쓴다. 이름에 '카고'가 없어도 카고면 카고로 다룬다.
+_STYLE_IDS = (
+    "dandy", "minimal", "casual", "office", "street", "chic", "sporty",
+    "classic", "amekaji", "gorpcore", "hiphop", "y2k", "preppy",
+)
+_FITS = ("slim", "regular", "relaxed", "oversized", "wide", "crop", "skinny")
+_PATTERNS = ("solid", "stripe", "check", "floral", "graphic", "logo", "camo", "dot", "other")
+_MATERIALS = (
+    "cotton", "denim", "linen", "wool", "knit", "leather", "nylon", "corduroy", "fleece", "blend",
+)
+
+
+def _pick(value: Any, allowed: tuple[str, ...]) -> str:
+    v = str(value or "").strip().lower()
+    return v if v in allowed else ""
+
+
+def _clean_style_attrs(raw: Any) -> dict[str, Any]:
+    """모델이 준 style 블록을 정해진 값으로만 남긴다. 없는 값은 비워 둔다."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    subtype = str(raw.get("subtype") or "").strip()[:30]
+    if subtype:
+        out["subtype"] = subtype
+    for key, allowed in (("fit", _FITS), ("pattern", _PATTERNS), ("material", _MATERIALS)):
+        picked = _pick(raw.get(key), allowed)
+        if picked:
+            out[key] = picked
+    for key, allowed in (
+        ("tone", ("warm", "cool", "neutral")),
+        ("depth", ("light", "mid", "deep")),
+        ("chroma", ("vivid", "muted")),
+    ):
+        picked = _pick(raw.get(key), allowed)
+        if picked:
+            out[key] = picked
+    try:
+        formality = int(raw.get("formality"))
+        if 1 <= formality <= 5:
+            out["formality"] = formality
+    except (TypeError, ValueError):
+        pass
+    styles = [_pick(s, _STYLE_IDS) for s in (raw.get("styles") or [])]
+    styles = [s for s in styles if s][:3]
+    if styles:
+        out["styles"] = styles
+    details = [str(d).strip()[:24] for d in (raw.get("details") or []) if str(d).strip()]
+    if details:
+        out["details"] = details[:3]
+    return out
+
+
 def classify_item(path: str, extract_hint: str = "", user_id: str | None = None) -> dict[str, Any]:
     fallback = {
         "name": "새로 추가한 옷",
@@ -516,6 +570,7 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
         "shot": "product",
         "angle": "front",
         "front_ok": True,
+        "style": {},
     }
     # 컷아웃·이미지 생성은 AI_TEST_MODE에서 막지만, 패션 거절은 값싼 분류만으로도
     # 가능해야 한다. (바로 보기는 클라 FaceDetector로 거르고, 옷장은 여기가 게이트)
@@ -545,7 +600,19 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
   "other_items": ["주 아이템 외에 함께 보이는 착용 아이템의 짧은 한국어 이름"],
   "shot": "product|worn|detail",
   "angle": "front|side|back|unclear",
-  "front_ok": true
+  "front_ok": true,
+  "style": {
+    "subtype": "카고 팬츠 · 옥스퍼드 셔츠처럼 옷의 성격을 드러내는 짧은 종류명",
+    "fit": "slim|regular|relaxed|oversized|wide|crop|skinny 중 하나",
+    "pattern": "solid|stripe|check|floral|graphic|logo|camo|dot|other 중 하나",
+    "material": "cotton|denim|linen|wool|knit|leather|nylon|corduroy|fleece|blend 중 하나",
+    "tone": "warm|cool|neutral (원단 색의 웜/쿨)",
+    "depth": "light|mid|deep (명도)",
+    "chroma": "vivid|muted (채도)",
+    "formality": 1,
+    "styles": ["dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy 중 이 옷이 실제로 잘 어울리는 무드만 1~3개"],
+    "details": ["카고 포켓·와이드 실루엣처럼 코디에 영향을 주는 특징 0~3개"]
+  }
 }
 패션 여부(최우선):
 - is_fashion_item true: 상의·하의·원피스·아우터·신발·가방·모자·잡화 등 착용/소지 가능한 패션 아이템이 주 피사체.
@@ -587,6 +654,13 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 - front_ok: 이 사진만 보고 '정면에서 본 이 아이템의 상품컷'을 그려낼 수 있는지.
   true: 아이템 전체 실루엣과 색·패턴·주요 디테일이 충분히 보인다 (측면·착장이어도 형태가 파악되면 true).
   false: 심하게 가려짐·잘림, 너무 어둡거나 흐림, 부분 확대뿐, 겹쳐 접혀 형태 불명 — 정면 모습을 지어내야 하는 수준.
+스타일 속성(style) — 사용자에게 보이지 않고 코디를 짤 때만 쓰는 값이다. 이름에 안 적혀 있어도 이미지로 판단해서 채운다:
+- subtype: 이름이 '팬츠'뿐이어도 카고 포켓이 보이면 "카고 팬츠", 주름·센터프레스면 "슬랙스"처럼 성격을 적는다.
+- fit: 실루엣 기준. 통이 넓으면 wide, 품이 크면 oversized, 기장이 짧으면 crop.
+- formality: 1~5 정수. 1 = 운동복·트레이닝, 2 = 데일리 캐주얼, 3 = 스마트 캐주얼, 4 = 오피스, 5 = 정장·예식.
+- tone/depth/chroma: 퍼스널 컬러 매칭에 쓴다. 아이보리·카멜·올리브는 warm, 애쉬·네이비·버건디는 cool, 블랙·화이트·그레이는 neutral.
+- styles: 그 옷이 실제로 어울리는 무드만. 애매하면 1개만.
+- details: 코디 판단에 영향을 주는 것만 (예: "카고 포켓", "크롭 기장", "광택 소재"). 없으면 [].
 """
     try:
         response = _vision_client().chat.completions.create(
@@ -626,6 +700,7 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
             raw_front.strip().lower() in ("1", "true", "yes", "y")
             if isinstance(raw_front, str) else bool(raw_front)
         )
+        data["style"] = _clean_style_attrs(data.get("style"))
         raw_others = data.get("other_items") if isinstance(data.get("other_items"), list) else []
         data["other_items"] = [str(o).strip()[:40] for o in raw_others if str(o).strip()][:6]
         raw_fashion = data.get("is_fashion_item", True)
@@ -1752,6 +1827,187 @@ def _style_tone(style: str) -> str:
     return style_map.get(style) or f"{style} 무드"
 
 
+# ---- 코디 감각: 숨은 속성 + 사용자 프로필을 추천에 실제로 먹인다 ----
+# 지금까지 모델에 준 건 "카테고리 | 색 | 이름" 뿐이었다. 핏·소재·패턴·격식·톤을
+# 모르면 정장 슬랙스에 러닝화를 붙이고, 퍼스널 컬러는 아예 반영되지 않았다.
+
+_PC_GUIDE = {
+    "spring": ("봄 웜", "warm", "light", "vivid"),
+    "summer": ("여름 쿨", "cool", "light", "muted"),
+    "autumn": ("가을 웜", "warm", "deep", "muted"),
+    "winter": ("겨울 쿨", "cool", "deep", "vivid"),
+}
+_FIT_KO = {
+    "slim": "슬림", "regular": "레귤러", "relaxed": "릴랙스", "oversized": "오버사이즈",
+    "wide": "와이드", "crop": "크롭", "skinny": "스키니",
+}
+_SEASON_KO = {"spring": "봄", "summer": "여름", "autumn": "가을", "winter": "겨울"}
+
+
+def _row_style(row: dict[str, Any]) -> dict[str, Any]:
+    meta = row.get("metadata") or {}
+    style = meta.get("style")
+    return style if isinstance(style, dict) else {}
+
+
+def _catalog_line(row: dict[str, Any]) -> str:
+    """추천 프롬프트에 넣는 한 줄. 숨은 속성까지 붙여 판단 근거를 준다."""
+    meta = row.get("metadata") or {}
+    st = _row_style(row)
+    bits = [
+        f"id={row['id']}",
+        _category_display(row.get("category")),
+        row.get("color") or "뉴트럴",
+        (row.get("name") or "옷")[:40],
+    ]
+    if st.get("subtype"):
+        bits.append(st["subtype"])
+    attrs = []
+    if st.get("fit"):
+        attrs.append(f"핏={_FIT_KO.get(st['fit'], st['fit'])}")
+    if st.get("material"):
+        attrs.append(f"소재={st['material']}")
+    if st.get("pattern") and st["pattern"] != "solid":
+        attrs.append(f"패턴={st['pattern']}")
+    tone_bits = [st.get("tone"), st.get("depth"), st.get("chroma")]
+    tone_bits = [t for t in tone_bits if t]
+    if tone_bits:
+        attrs.append("톤=" + "/".join(tone_bits))
+    if st.get("formality"):
+        attrs.append(f"격식={st['formality']}")
+    if st.get("styles"):
+        attrs.append("무드=" + ",".join(st["styles"]))
+    seasons = [_SEASON_KO.get(x, x) for x in (meta.get("seasons") or [])]
+    if seasons:
+        attrs.append("계절=" + ",".join(seasons))
+    if st.get("details"):
+        attrs.append("특징=" + ",".join(st["details"]))
+    if attrs:
+        bits.append(" ".join(attrs))
+    return " | ".join(bits)
+
+
+def _profile_block(profile: dict[str, Any] | None) -> str:
+    """마이페이지에서 설정한 값 중 코디 판단에 쓰이는 것만 문장으로."""
+    p = profile or {}
+    lines: list[str] = []
+    who = [x for x in (str(p.get("gender") or "").strip(), str(p.get("age") or "").strip()) if x]
+    if who:
+        lines.append("사용자: " + " · ".join(who))
+    pc = _PC_GUIDE.get(str(p.get("personal_color") or "").strip())
+    if pc:
+        name, tone, depth, chroma = pc
+        lines.append(
+            f"퍼스널 컬러: {name} — {tone}·{depth}·{chroma} 계열이 잘 맞는다. "
+            "얼굴에 닿는 상의·아우터를 여기에 맞추고, 안 맞는 색은 하의·신발로 내린다."
+        )
+    fit = str(p.get("fit") or "").strip()
+    if fit:
+        lines.append(f"선호 실루엣: {fit}")
+    palettes = [str(x).strip() for x in (p.get("palettes") or []) if str(x).strip()][:5]
+    if palettes:
+        lines.append("선호 색 계열: " + ", ".join(palettes))
+    return ("\n".join(lines) + "\n") if lines else ""
+
+
+_COORD_RULES = """감각 규칙(이걸 지켜야 '그냥 되는 조합'이 아니라 입을 만한 코디가 된다):
+- 색: 한 코디에 3색 이내. 무채색(블랙·화이트·그레이·네이비) 위에 포인트 색 하나가 기본.
+  웜톤과 쿨톤을 같이 쓸 땐 뉴트럴 아이템을 사이에 두고, 비슷한 채도끼리 묶는다.
+- 격식(formality): 한 코디 안에서 차이가 2를 넘으면 안 된다. 격식 4~5 하의에 격식 1 운동화·트레이닝 금지.
+- 패턴: 패턴 아이템은 코디당 1개. 나머지는 solid로 받친다. 로고/그래픽도 패턴으로 센다.
+- 실루엣: 위아래를 모두 오버사이즈/와이드로 두지 않는다. 한쪽이 크면 다른 쪽은 슬림·레귤러.
+- 계절: 여름 전용(린넨·메시·반팔)과 겨울 전용(니트·기모·코트)을 섞지 않는다.
+- 소재: 광택·가죽은 코디당 1개까지. 캐주얼 데님 위에 정장 소재를 얹지 않는다.
+- 퍼스널 컬러: 맞는 색은 얼굴 근처(상의·아우터)에, 애매한 색은 하의·신발·가방으로.
+- label: 옷 이름을 나열하지 말고 그 코디를 한마디로 (예: "네이비로 정리한 출근룩").
+- mood: 왜 어울리는지 한 문장(색·실루엣·격식 중 실제 근거 하나를 짚어서)."""
+
+
+def _style_attr_prompt(rows: list[dict[str, Any]]) -> str:
+    lines = "\n".join(
+        f"{row['id']} | {_category_display(row.get('category'))} | {row.get('color') or ''} | {(row.get('name') or '')[:60]}"
+        for row in rows
+    )
+    return f"""아래는 한 사용자의 옷장 목록이다. 각 아이템의 이름·카테고리·색만 보고 코디에 필요한 속성을 채워라.
+이름에 단서가 있으면 반영한다 ("와이드"→fit=wide, "울"→material=wool, "카고"→subtype 카고 팬츠).
+단서가 없으면 그 카테고리에서 가장 흔한 값을 쓰되, 확신이 없는 필드는 비운다.
+
+목록(id | 카테고리 | 색 | 이름):
+{lines}
+
+각 id에 대해 아래 형식으로 JSON만 응답:
+{{"items":[{{"id":"...","subtype":"","fit":"slim|regular|relaxed|oversized|wide|crop|skinny","pattern":"solid|stripe|check|floral|graphic|logo|camo|dot|other","material":"cotton|denim|linen|wool|knit|leather|nylon|corduroy|fleece|blend","tone":"warm|cool|neutral","depth":"light|mid|deep","chroma":"vivid|muted","formality":3,"styles":["minimal"],"details":[]}}]}}
+- subtype: 한국어 종류명 ("카고 팬츠", "옥스퍼드 셔츠", "첼시 부츠"). 영어로 쓰지 말 것.
+- formality: 1 운동복 · 2 데일리 캐주얼 · 3 스마트 캐주얼 · 4 오피스 · 5 정장.
+- styles: 그 아이템이 실제로 어울리는 무드만 1~3개, 아이템마다 다르게 판단할 것.
+  슬랙스·코트·로퍼 → office/classic/dandy, 데님·티셔츠 → casual/minimal,
+  스니커·후디·카고 → street/casual/sporty, 니트·셔츠 → preppy/dandy 처럼 성격에 맞게.
+  전부 minimal로 채우지 말 것."""
+
+
+def _ensure_style_attrs(user_id: str, rows: list[dict[str, Any]], limit: int = 25) -> int:
+    """style 속성이 없는 기존 아이템을 이름 기반으로 한 번에 채워 저장한다.
+
+    새로 담는 아이템은 classify(비전)에서 채우지만, 이전에 담아둔 옷에는 없다.
+    이미지를 다시 보려면 아이템마다 비전 호출이 필요해 비싸므로, 이름·색·카테고리로
+    묶어서 한 번 추론한다("원워시드 와이드 데님"만으로도 fit·material이 나온다).
+    한 번 저장하면 다음 추천부터는 호출이 없다. 한 번에 25개까지만 채운다 —
+    옷장이 클 때 첫 추천이 통째로 느려지는 것보다, 두세 번에 걸쳐 채우는 게 낫다.
+    """
+    missing = [r for r in rows if not _row_style(r)][:limit]
+    if not missing or not openai_client or AI_TEST_MODE:
+        return 0
+    try:
+        response = openai_client.with_options(timeout=45).chat.completions.create(
+            model=OPENAI_VISION_MODEL,
+            messages=[{"role": "user", "content": _style_attr_prompt(missing)}],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        data = json.loads(response.choices[0].message.content or "{}")
+        log_ai_usage(
+            user_id, "style_attrs", OPENAI_VISION_MODEL, {"count": len(missing)},
+            usage=getattr(response, "usage", None),
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[style-attrs] failed: {exc}", flush=True)
+        return 0
+    by_id = {r["id"]: r for r in missing}
+    updates: list[tuple[str, dict[str, Any]]] = []
+    for entry in data.get("items") or []:
+        row = by_id.get(str(entry.get("id") or ""))
+        if not row:
+            continue
+        attrs = _clean_style_attrs(entry)
+        if not attrs:
+            continue
+        meta = dict(row.get("metadata") or {})
+        meta["style"] = attrs
+        meta["style_source"] = "name"
+        row["metadata"] = meta          # 이번 추천에 바로 반영
+        updates.append((row["id"], meta))
+    if not updates:
+        return 0
+
+    def _save(pair: tuple[str, dict[str, Any]]) -> None:
+        item_id, meta = pair
+        try:
+            (
+                supabase_admin.table("wardrobe_items")
+                .update({"metadata": meta})
+                .eq("id", item_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[style-attrs] save failed {item_id}: {exc}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(_save, updates))
+    print(f"[style-attrs] filled {len(updates)}/{len(missing)} items", flush=True)
+    return len(updates)
+
+
 def recommend_text(
     user_id: str,
     anchor: dict[str, Any] | None,
@@ -1760,13 +2016,11 @@ def recommend_text(
     max_combos: int,
     exclude_item_ids: list[list[str]] | None = None,
     styles: list[str] | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if not items:
         return []
-    catalog = "\n".join(
-        f"id={item['id']} | {item.get('category')} | {item.get('color')} | {item.get('name')}"
-        for item in items
-    )
+    catalog = "\n".join(_catalog_line(item) for item in items)
     style_ids = [s for s in (styles or []) if s] or ([style] if style else ["dandy"])
     # 순서 유지하며 중복 제거
     seen_s: set[str] = set()
@@ -1794,15 +2048,17 @@ def recommend_text(
     )
     if not openai_client or AI_TEST_MODE:
         print("[recommend] no openai client / TEST MODE — fallback ($0)", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
-    prompt = f"""사용자의 옷장 목록만 사용해 실제로 어울리는 코디를 최대 {max_combos}개 추천하세요.
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
+    prompt = f"""당신은 퍼스널 스타일리스트다. 사용자의 옷장 목록만 사용해 실제로 입고 나갈 만한 코디를 최대 {max_combos}개 만들어라.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
-{('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
+{_profile_block(profile)}{('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
 
-옷장:
+옷장(id | 카테고리 | 색 | 이름 | 종류 | 속성):
 {catalog}
 {exclude_note}
+{_COORD_RULES}
+
 규칙:
 - item_ids에는 위 목록에 있는 id만 넣기
 - 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 스커트/원피스)를 포함. 상의+신발만, 하의 없는 조합 금지
@@ -1827,7 +2083,7 @@ def recommend_text(
             model=OPENAI_VISION_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.45,
+            temperature=0.35,
         )
         data = json.loads(response.choices[0].message.content or "{}")
         valid = {item["id"]: item for item in items}
@@ -1866,12 +2122,12 @@ def recommend_text(
         )
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
-            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
+            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
         # 모델이 max_combos개를 돌려줘도 중복·상하의 미충족으로 걸러지면 그만큼 비어 버린다.
         # 옷장에 남은 조합이 있는데 개수가 모자라면 결정적 페어링으로 채운다.
         if len(combos) < max_combos:
             short = max_combos - len(combos)
-            for extra in fallback_combos(items, anchor, short, tone, seen, uniq_styles):
+            for extra in fallback_combos(items, anchor, short, tone, seen, uniq_styles, profile):
                 key = tuple(sorted(extra["item_ids"]))
                 if key in seen:
                     continue
@@ -1884,7 +2140,7 @@ def recommend_text(
         return combos
     except Exception as exc:  # noqa: BLE001
         print(f"[recommend] ai call failed: {exc} — fallback", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -1908,6 +2164,51 @@ def _combo_has_top_and_bottom(ids: list[str], by_id: dict[str, Any]) -> bool:
     return ("top" in buckets) and ("bottom" in buckets)
 
 
+_NEUTRAL_COLORS = ("블랙", "화이트", "그레이", "네이비", "아이보리", "베이지", "차콜")
+
+
+def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | None) -> float:
+    """두 아이템이 같은 코디에 들어갈 만한지 점수로 본다(규칙 기반 경로용).
+
+    AI가 실패하거나 개수가 모자랄 때 쓰는 페어링이 '상의 목록 × 하의 목록 첫 조합'
+    이어서, 정장 슬랙스에 트레이닝 후디가 붙는 식이었다. 숨은 속성으로 걸러낸다.
+    """
+    sa, sb = _row_style(a), _row_style(b)
+    score = 0.0
+    fa, fb = sa.get("formality"), sb.get("formality")
+    if isinstance(fa, int) and isinstance(fb, int):
+        gap = abs(fa - fb)
+        score += 2.0 if gap <= 1 else (-1.0 if gap == 2 else -4.0)
+    ta, tb = sa.get("tone"), sb.get("tone")
+    if ta and tb:
+        score += 1.0 if (ta == tb or "neutral" in (ta, tb)) else -1.5
+    pa, pb = sa.get("pattern", "solid"), sb.get("pattern", "solid")
+    if pa != "solid" and pb != "solid":
+        score -= 2.0
+    big = {"oversized", "wide", "relaxed"}
+    if sa.get("fit") in big and sb.get("fit") in big:
+        score -= 1.0
+    seasons_a = set((a.get("metadata") or {}).get("seasons") or [])
+    seasons_b = set((b.get("metadata") or {}).get("seasons") or [])
+    if seasons_a and seasons_b and not (seasons_a & seasons_b):
+        score -= 1.5
+    # 퍼스널 컬러는 얼굴에 닿는 쪽(a=상의)만 본다
+    pc = _PC_GUIDE.get(str((profile or {}).get("personal_color") or "").strip())
+    if pc:
+        _name, tone, depth, chroma = pc
+        if sa.get("tone") == tone:
+            score += 1.0
+        if sa.get("depth") == depth:
+            score += 0.5
+        if sa.get("chroma") == chroma:
+            score += 0.5
+    # 색이 둘 다 튀면 감점, 한쪽이 무채색이면 가점
+    ca, cb = str(a.get("color") or ""), str(b.get("color") or "")
+    if any(n in ca for n in _NEUTRAL_COLORS) or any(n in cb for n in _NEUTRAL_COLORS):
+        score += 0.5
+    return score
+
+
 def fallback_combos(
     items: list[dict[str, Any]],
     anchor: dict[str, Any] | None,
@@ -1915,6 +2216,7 @@ def fallback_combos(
     mood: str = "내 옷장 기반 추천",
     exclude_keys: set[tuple[str, ...]] | None = None,
     styles: list[str] | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
     tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
@@ -1944,18 +2246,29 @@ def fallback_combos(
             "item_ids": ids[:4],
         })
 
-    n = 0
-    for t in tops:
-        for b in bottoms:
-            if t["id"] == b["id"]:
-                continue
-            ids = [t["id"], b["id"]]
-            if shoes:
-                ids.append(shoes[n % len(shoes)]["id"])
-                n += 1
-            _push(ids, f"추천 코디 {len(combos) + 1}")
-            if len(combos) >= max_combos:
-                return combos
+    # 점수가 높은 페어부터. 같은 상의가 연달아 나오지 않게 살짝 흩는다.
+    pairs = [
+        (t, b, _pair_score(t, b, profile))
+        for t in tops
+        for b in bottoms
+        if t["id"] != b["id"]
+    ]
+    pairs.sort(key=lambda x: -x[2])
+    used_tops: dict[str, int] = {}
+    for t, b, _score in pairs:
+        seen_count = used_tops.get(t["id"], 0)
+        if seen_count and len(combos) < max_combos - 1:
+            continue  # 다른 상의를 먼저 보여준다
+        ids = [t["id"], b["id"]]
+        if shoes:
+            best_shoe = max(shoes, key=lambda sh: _pair_score(b, sh, profile))
+            ids.append(best_shoe["id"])
+        before = len(combos)
+        _push(ids, f"추천 코디 {len(combos) + 1}")
+        if len(combos) > before:
+            used_tops[t["id"]] = seen_count + 1
+        if len(combos) >= max_combos:
+            return combos
 
     # 원피스만으로 최소 조합
     dresses = [i for i in items if _item_bucket(i) == "dress"]
@@ -2407,6 +2720,12 @@ class LiveCoordinate(BaseModel):
     face_data_url: str | None = None
     # 오늘 코디의 날짜 선택 — 어느 날짜용으로 만든 코디인지 남긴다 (YYYY-MM-DD)
     for_date: str | None = None
+    # 마이페이지 프로필 — 퍼스널 컬러·선호 실루엣·색 계열까지 코디에 반영한다
+    personal_color: str | None = None
+    fit: str | None = None
+    palettes: list[str] = []
+    gender: str | None = None
+    age: str | None = None
 
 
 class LiveStatus(BaseModel):
@@ -2520,6 +2839,7 @@ def _store_uploaded_item(
                 "seasons": cached_meta.get("seasons") or [],
                 "has_text_logo": bool(cached_meta.get("has_text_logo")),
                 "logo_text": str(cached_meta.get("logo_text") or ""),
+                "style": cached_meta.get("style") or {},
                 "extract_hint": hint,
                 "_extract_mode": "cache",
                 "_extract_policy": {"tier": "cache", "quality": "cached", "timeout_s": 0},
@@ -2569,6 +2889,8 @@ def _store_uploaded_item(
         item_metadata: dict[str, Any] = {
             "tags": meta.get("tags") or [],
             "seasons": _clean_seasons(meta.get("seasons")),
+            # 코디 추천용 숨은 속성 (화면에는 안 쓴다)
+            "style": _clean_style_attrs(meta.get("style")),
             "original_path": original_path,
             "original_url": original_url,
             "has_text_logo": bool(meta.get("has_text_logo")),
@@ -3772,6 +4094,16 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     pool = [row for row in pool if row]
     if len(pool) < 2:
         raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요")
+    # 이전에 담아둔 아이템에는 숨은 스타일 속성이 없다. 추천 전에 한 번 채운다
+    # (이름 기반 일괄 추론 1회, 이후에는 저장돼 있어 호출이 없다).
+    _ensure_style_attrs(user.id, pool)
+    profile = {
+        "personal_color": body.personal_color,
+        "fit": body.fit,
+        "palettes": body.palettes,
+        "gender": body.gender,
+        "age": body.age,
+    }
     combos = recommend_text(
         user.id,
         anchor,
@@ -3780,6 +4112,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         min(max(body.max_combos, 1), 10),
         body.exclude_item_ids or [],
         body.styles or None,
+        profile,
     )
     by_id = {row["id"]: row for row in pool}
     outfits, used = [], {}

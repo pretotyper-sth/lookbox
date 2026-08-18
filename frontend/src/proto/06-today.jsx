@@ -401,12 +401,25 @@ function TodayScreen({ ctx }) {
   const emptySlots = isToday && picks.length < COLS ? COLS - picks.length : 0;
   const wardrobeGrew = !!dailyWardrobeGrew;
 
+  // '추가로 코디 추천받기'는 화면 밖에 카드를 붙인다. 누른 자리에 그대로 있으면
+  // 뭐가 늘었는지 안 보이므로, 만드는 동안 붙는 스켈레톤까지 따라 내려간다.
+  const scrollRef = React.useRef(null);
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const run = () => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    requestAnimationFrame(run);
+    // 카드가 붙으면서 높이가 한 번 더 늘어난다. 같은 방향으로 목표만 갱신하므로
+    // 스크롤이 끊기지 않는다.
+    setTimeout(run, 320);
+  };
   const reshuffle = async () => {
     setLoading(true);
+    scrollToBottom();
     const result = await requestDailyOutfits(preferredDailyStyle, { force: true, quiet: true });
     setLoading(false);
     if (!result || result.error) return;
-    if (result.added > 0) return;
+    if (result.added > 0) { scrollToBottom(); return; }
     setNeedMoreKind(result.wardrobeGrew || wardrobeGrew ? 'grewButNone' : 'exhausted');
     setNeedMoreOpen(true);
   };
@@ -591,7 +604,7 @@ function TodayScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div className="lb-scrollable" style={{
+      <div ref={scrollRef} className="lb-scrollable" style={{
         flex: 1,  
         padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 28px',
       }}>

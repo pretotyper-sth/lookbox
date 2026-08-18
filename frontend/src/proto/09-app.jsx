@@ -113,6 +113,17 @@ function relativeSavedAt(iso) {
   const day = Math.floor(min / 1440);
   return day < 30 ? `${day}일 전` : `${Math.floor(day / 30)}개월 전`;
 }
+// 코디 요청에 실어 보낼 취향값만 골라낸다 (이메일·아바타 같은 건 보내지 않는다).
+function coordProfile(prefs) {
+  const p = prefs || {};
+  return {
+    personal_color: p.personalColor || '',
+    fit: p.fit || '',
+    palettes: Array.isArray(p.palettes) ? p.palettes : [],
+    gender: p.gender || '',
+    age: p.age || '',
+  };
+}
 function wardrobeSigOf(list) {
   return (list || []).map((it) => it && it.id).filter(Boolean).map(String).sort().join(',');
 }
@@ -1108,6 +1119,9 @@ function App() {
     const modelLook = (prefs.modelLook && prefs.avatar)
       ? { model_look: true, face_data_url: prefs.avatar }
       : {};
+    // 마이페이지에 저장한 취향은 계정(user_metadata)에만 있어서 서버가 모른다.
+    // 코디는 퍼스널 컬러·선호 실루엣까지 봐야 감이 맞으므로 요청마다 같이 싣는다.
+    const styleProfile = coordProfile(prefs);
     if (!force) {
       // 오늘 이미 추천한 이력이 있으면 API 없이 기존 코디만 보여준다.
       if (LB_DATA.DAILY.length > 0) {
@@ -1163,6 +1177,7 @@ function App() {
             styles: preferredStyles,
             for_date: localYmd(),
             exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+            ...styleProfile,
             ...modelLook,
           }),
         });
@@ -1193,6 +1208,7 @@ function App() {
           style,
           styles: preferredStyles,
           for_date: localYmd(),
+          ...styleProfile,
           ...modelLook,
         }),
       });
@@ -1239,6 +1255,7 @@ function App() {
             max_combos: 4,
             style: preferredDailyStyle,
             styles: preferredStyles,
+            ...coordProfile(prefs),
           }),
         });
         stampOutfitStyle(payload.outfits);
@@ -1275,6 +1292,7 @@ function App() {
           max_combos: 2,
           style: preferredDailyStyle,
           styles: preferredStyles,
+          ...coordProfile(prefs),
           exclude_item_ids: LB_DATA.OUTFITS.map((o) => o.itemIds || []),
         }),
       });
