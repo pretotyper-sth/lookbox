@@ -160,8 +160,12 @@ def stream_with_keepalive(work) -> StreamingResponse:
             except HTTPException as exc:
                 error.append(str(exc.detail))
             except Exception as exc:  # noqa: BLE001
-                print(f"[stream] work failed: {exc}", flush=True)
-                error.append("요청 처리 중 오류가 났어요. 잠시 후 다시 시도해 주세요.")
+                # 예상 못한 예외도 어떤 종류였는지는 알려준다 — 문구만 보고는
+                # 사용자도, 우리도 원인을 좁힐 수 없다(호스팅 로그를 봐야 했다).
+                print(f"[stream] work failed: {type(exc).__name__}: {exc}", flush=True)
+                error.append(
+                    f"요청 처리 중 오류가 났어요 (코드: {type(exc).__name__}). 잠시 후 다시 시도해 주세요."
+                )
 
         def event(payload: dict[str, Any]) -> str:
             return "data: " + json.dumps(payload, ensure_ascii=False, default=str) + "\n\n"
@@ -1545,28 +1549,129 @@ def generate_product_image(
 
     # 투명 배경 요청 한 번만 사용한다. 과거의 불투명 재시도는 다시 플러드필을 타
     # 흰 원단을 지우고 최대 대기 시간을 두 배로 만들었다.
-    try:
-        raw = _edit(model, transparent=True)
-        print(f"[extract] ok model={model} transparent=True", flush=True)
-        meta["_extract_mode"] = "ai"
-        return finalize_cutout(
-            raw,
-            already_transparent=True,
-            protect_light_garment=whiteish,
-            category=meta.get("category"),
-        )
-    except (APITimeoutError, APIConnectionError) as exc:
-        meta["_extract_fail"] = "timeout"
-        print(f"[extract] timeout/conn model={model}: {exc}", flush=True)
-    except Exception as exc:  # noqa: BLE001
-        meta["_extract_fail"] = "api_error"
-        print(f"[extract] edit failed model={model}: {exc}", flush=True)
+    # 일시적 실패(429·5xx)는 한 번 더 시도한다. OpenAI 클라이언트를 max_retries=0으로
+    # 두었기 때문에 gpt-image-1이 자주 뱉는 일회성 500이 그대로 사용자 에러가 됐다.
+    started = time.monotonic()
+    for attempt in (0, 1):
+        try:
+            raw = _edit(model, transparent=True)
+            print(f"[extract] ok model={model} transparent=True attempt={attempt + 1}", flush=True)
+            meta["_extract_mode"] = "ai"
+            return finalize_cutout(
+                raw,
+                already_transparent=True,
+                protect_light_garment=whiteish,
+                category=meta.get("category"),
+            )
+        except (APITimeoutError, APIConnectionError) as exc:
+            # 이미 제한 시간(120초)을 다 쓴 상태라 재시도하지 않는다.
+            info = _openai_error_info(exc)
+            meta["_extract_fail"] = "timeout" if isinstance(exc, APITimeoutError) else "network"
+            meta["_extract_fail_info"] = info
+            print(f"[extract] timeout/conn model={model}: {_fail_log(info)}", flush=True)
+            break
+        except Exception as exc:  # noqa: BLE001
+            info = _openai_error_info(exc)
+            key = _openai_fail_key(info)
+            retryable = key in ("rate_limit", "upstream")
+            if retryable and attempt == 0 and (time.monotonic() - started) < 45:
+                print(f"[extract] retry after {_fail_log(info)}", flush=True)
+                time.sleep(3)
+                continue
+            meta["_extract_fail"] = key
+            meta["_extract_fail_info"] = info
+            print(f"[extract] edit failed model={model}: {_fail_log(info)}", flush=True)
+            break
+    # 실패도 남긴다 — 라이브에서 어떤 에러였는지 로그 없이 확인할 수 있어야 한다.
+    log_ai_usage(
+        user_id,
+        "product_image_error",
+        model,
+        {
+            "quality": quality,
+            "tier": policy.get("tier"),
+            "fail": meta.get("_extract_fail"),
+            "error": meta.get("_extract_fail_info") or {},
+            "extract_hint": hint[:80],
+            "has_text_logo": has_text,
+        },
+    )
     meta["_extract_fail"] = meta.get("_extract_fail") or "edit_failed"
     return None
 
 
+def _openai_error_info(exc: Exception) -> dict[str, Any]:
+    """OpenAI 예외에서 사람이 읽을 수 있는 정보를 뽑는다.
+
+    지금까지는 실패를 전부 'api_error' 하나로 뭉개고 원문은 서버 로그에만 남겨서,
+    사용자가 '오류가 났어요'를 보고 물어와도 이유를 알 수 없었다(호스팅 로그를
+    봐야 했다). 상태코드·코드·request_id를 남겨 화면과 DB 양쪽에서 확인한다.
+    """
+    status = getattr(exc, "status_code", None)
+    code: str | None = None
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error") if isinstance(body.get("error"), dict) else {}
+        code = str(err.get("code") or err.get("type") or "") or None
+    return {
+        "type": type(exc).__name__,
+        "status": int(status) if isinstance(status, int) else None,
+        "code": code,
+        "request_id": getattr(exc, "request_id", None),
+        "message": str(getattr(exc, "message", "") or exc)[:300],
+    }
+
+
+def _openai_fail_key(info: dict[str, Any]) -> str:
+    """상태코드·에러코드를 사용자 문구 키로 옮긴다."""
+    status = info.get("status")
+    code = str(info.get("code") or "").lower()
+    text = str(info.get("message") or "").lower()
+    if "moderation" in code or "content_policy" in code or "safety" in text:
+        return "moderation"
+    if "insufficient_quota" in code or "billing" in code:
+        return "quota"
+    if status == 429:
+        return "rate_limit"
+    if status in (401, 403):
+        return "auth"
+    if status == 413 or "too_large" in code or "too large" in text:
+        return "too_large"
+    if isinstance(status, int) and status >= 500:
+        return "upstream"
+    if status == 400:
+        return "bad_request"
+    return "api_error"
+
+
+def _fail_code(info: dict[str, Any]) -> str:
+    """사용자가 그대로 옮겨 적을 수 있는 짧은 코드."""
+    parts = [str(info.get("status") or info.get("type") or "?")]
+    if info.get("code"):
+        parts.append(str(info["code"]))
+    req = str(info.get("request_id") or "")
+    if req:
+        parts.append(req[-8:])
+    return "·".join(parts)
+
+
+def _fail_log(info: dict[str, Any]) -> str:
+    return (
+        f"type={info.get('type')} status={info.get('status')} code={info.get('code')} "
+        f"req={info.get('request_id')} msg={info.get('message')}"
+    )
+
+
 _EXTRACT_FAIL_MSG = {
     "timeout": "AI 이미지 생성이 지연돼 중단했어요(제한 시간 초과). 잠시 후 다시 시도해 주세요.",
+    "network": "AI 이미지 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "rate_limit": "지금 AI 이미지 생성 요청이 한도를 넘었어요. 1~2분 뒤에 다시 시도해 주세요.",
+    "moderation": "AI가 이 사진은 처리할 수 없다고 판단했어요. 다른 사진으로 시도해 주세요.",
+    "auth": "이미지 생성 계정 인증에 문제가 있어요. 관리자에게 알려 주세요.",
+    "quota": "이미지 생성 계정의 크레딧이 부족해요. 관리자에게 알려 주세요.",
+    "too_large": "사진 용량이 너무 커요. 조금 작은 사진으로 다시 시도해 주세요.",
+    "upstream": "AI 이미지 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해 주세요.",
+    "bad_request": "AI가 이 요청을 거절했어요. 다른 사진으로 시도해 주세요.",
     "api_error": "AI 이미지 생성 중 오류가 났어요. 잠시 후 다시 시도해 주세요.",
     "no_openai": "이미지 생성 기능이 비활성화돼 있어요.",
     "edit_failed": "이미지를 추출하지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -1589,10 +1694,15 @@ def resolve_product_image(
         return normalize_product_canvas(product, meta.get("category"))
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
+    info = meta.get("_extract_fail_info") or {}
+    # 문의가 오면 바로 원인을 알 수 있게 짧은 코드를 붙인다(상태코드·에러코드·요청 끝자리).
+    if info:
+        msg = f"{msg} (코드: {_fail_code(info)})"
     # 흰 옷·저대비 원단은 로컬 색상 제거로 대체하면 결과가 빠르게 나와도 일부가
     # 사라질 수 있다. 원본은 이미 보관되어 있으므로 안전하게 실패를 돌려준다.
-    print(f"[extract] failed ({fail}) — preserve original, no local fallback", flush=True)
-    raise HTTPException(status_code=504 if fail == "timeout" else 502, detail=msg)
+    print(f"[extract] failed ({fail}) — preserve original, no local fallback :: {_fail_log(info)}", flush=True)
+    status = 504 if fail in ("timeout", "network") else (429 if fail == "rate_limit" else 502)
+    raise HTTPException(status_code=status, detail=msg)
 
 
 def item_payload(row: dict[str, Any]) -> dict[str, Any]:
