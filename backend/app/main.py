@@ -46,10 +46,13 @@ OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
 OPENAI_CLASSIFY_MODEL = os.environ.get("OPENAI_CLASSIFY_MODEL") or OPENAI_VISION_MODEL
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 옷에 인쇄 텍스트/로고가 있을 때만 쓰는 상위 모델·품질 (비용↑, 글자 보존↑)
-# 로고·글자가 있는 옷 전용 모델. gpt-image-2는 background="transparent"를 아예 거부해서
-# (400 invalid_value·param=background) 로고가 있는 아이템이 전부 실패했다. 컷아웃 파이프라인은
-# 투명 PNG를 전제로 하므로 기본값을 gpt-image-1로 되돌린다 — input_fidelity=high로 글자도 보존된다.
-OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-1")
+# 로고·글자가 있는 옷을 '다시 그려야' 할 때 쓰는 모델. 실측 비교(같은 원본, medium):
+# gpt-image-1은 "IAB"의 B를 뭉갠 글자로 그렸고(25초), gpt-image-2는 철자·자간을 그대로
+# 살렸다(39초). 대신 gpt-image-2는 background="transparent"를 거부하므로(400
+# invalid_value·param=background) 불투명으로 받아 우리 컷아웃을 돌린다.
+# 상품컷이면 애초에 다시 그리지 않고 배경만 지우니(studio cutout) 이 경로는 재생성이
+# 꼭 필요한 사진에만 쓰인다.
+OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
 # 투명 배경을 지원하지 않는 모델. 이 모델을 쓰면 불투명 결과를 받아 우리 컷아웃을 돌린다.
 _NO_TRANSPARENT_MODELS = ("gpt-image-2",)
 
@@ -59,7 +62,8 @@ def _supports_transparent(model: str) -> bool:
 # 비용 설계: 첫 추출은 medium($0.063/장) — 단색 상품컷은 어차피 로컬 컷아웃($0)으로 빠짐.
 # 마음에 안 들어 다시 시도하는 재추출/이미지 변경만 high($0.25/장)로 올린다.
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
-OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "high")
+# gpt-image-2는 medium에서도 글자를 정확히 그리고 high(93초)보다 훨씬 빠르다(39초).
+OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "medium")
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 # 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
 OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
@@ -811,8 +815,8 @@ _STUDIO_BG = (243, 243, 241)  # #F3F3F1 — 이전에 굽던 연회색도 제거
 _RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최대 깊이(px)
 _ALPHA_RAMP = 110  # 알파 재임계 램프 폭 — 좁으면 계단이 남고, 넓으면 테두리가 번진다
 _BLEED_DEPTH = 8  # 리샘플 보간 커널이 닿는 범위를 덮을 만큼 원단 색을 투명 쪽으로 번지게
-_BG_NORM_VERSION = "cutout_v10"  # v10: 갇힌 배경(손잡이 안쪽) 제거 + 알파 계단 완화
-_EXTRACTION_PROFILE = "extract_v12"  # v12: 갇힌 배경 제거 + 액세서리 알파 다듬기
+_BG_NORM_VERSION = "cutout_v11"  # v11: 레터박스 트리밍 + 불투명 결과도 스튜디오 컷아웃
+_EXTRACTION_PROFILE = "extract_v13"  # v13: 상품컷은 누끼만, 글자 재생성은 gpt-image-2
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -1046,6 +1050,20 @@ def finalize_cutout(
         # 플러드필은 건너뛰더라도 알파 경계는 다듬는다 — AI 알파는 이진이라
         # 그대로 두면 확대 단계에서 계단이 그대로 커진다.
         return _polish_cutout_alpha(png_bytes, category)
+    # 불투명 결과(예: 투명 배경을 지원하지 않는 모델)는 스튜디오 컷아웃을 먼저 쓴다.
+    # 생성된 배경은 균일한 판이라 이 경로가 잘 맞고, 갇힌 배경(밑단 그림자 등)도 지운다.
+    try:
+        studio = _studio_cutout_from_image(
+            _trim_letterbox(Image.open(io.BytesIO(png_bytes)).convert("RGBA")),
+            # 밝은 원단은 판과 구분이 안 돼 넓히면 옷이 지워진다. 그 외에는 AI가 깔아 둔
+            # 옅은 그림자까지 배경으로 본다.
+            tol_boost=0 if protect_light_garment else 16,
+        )
+    except Exception:  # noqa: BLE001
+        studio = None
+    if studio:
+        print("[cutout] opaque result → studio cutout", flush=True)
+        return studio
     out = make_transparent_cutout(png_bytes, aggressive=False)
     if _edge_plate_ratio(out) >= 0.12:
         out = make_transparent_cutout(out, aggressive=True)
@@ -1058,6 +1076,78 @@ def local_product_cutout(path: str, category: str | None = None) -> bytes | None
         return finalize_cutout(read_image_as_png_bytes(path), category=category)
     except Exception:
         return None
+
+
+def _line_stats(rgb: Image.Image, index: int, horizontal: bool) -> tuple[tuple[int, int, int], int]:
+    """한 줄(행 또는 열)의 대표색과 색 퍼짐 폭."""
+    w, h = rgb.size
+    box = (0, index, w, index + 1) if horizontal else (index, 0, index + 1, h)
+    line = rgb.crop(box)
+    ext = line.getextrema()
+    mid = tuple((lo + hi) // 2 for lo, hi in ext)
+    spread = max(hi - lo for lo, hi in ext)
+    return mid, spread  # type: ignore[return-value]
+
+
+def _trim_letterbox(img: Image.Image) -> Image.Image:
+    """사진 가장자리에 붙은 균일한 띠(검은 레터박스·색 패딩)를 잘라낸다.
+
+    쇼핑몰 상품컷을 그대로 저장하면 위아래에 검은 띠가 붙어 있는 경우가 많다.
+    그 띠 때문에 '테두리가 균일한 스튜디오 판인가' 판정이 실패해서, 배경만 지우면
+    되는 상품컷이 AI 재생성 경로로 넘어갔다. 로고·글자가 있는 옷일수록 손해가 크다
+    (다시 그리면 글자가 바뀔 수 있다). 띠만 걷어내고 판정을 다시 받게 한다.
+    """
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    if w < 32 or h < 32:
+        return img
+
+    def scan(horizontal: bool, from_end: bool) -> int:
+        total = h if horizontal else w
+        first = total - 1 if from_end else 0
+        edge_color, edge_spread = _line_stats(rgb, first, horizontal)
+        if edge_spread > 8:
+            return 0                                  # 가장자리가 이미 균일하지 않다
+        limit = int(total * 0.4)
+        step = -1 if from_end else 1
+        k = 0
+        idx = first
+        while 0 <= idx < total and k < limit:
+            color, spread = _line_stats(rgb, idx, horizontal)
+            if spread > 8 or max(abs(color[c] - edge_color[c]) for c in range(3)) > 8:
+                break
+            k += 1
+            idx += step
+        if k == 0 or k >= limit:
+            return 0                                  # 전체가 같은 판이면 띠가 아니다
+        if not (0 <= idx < total):
+            return 0
+        inner, inner_spread = _line_stats(rgb, idx, horizontal)
+        # 띠가 끝난 자리도 균일해야 진짜 레터박스다. 단색 판 위에 옷이 놓인 사진은
+        # 이 자리에서 옷이 걸려 색이 섞이므로(퍼짐 큼) 자르지 않는다 — 판 여백을
+        # 잘라내면 테두리 판정이 옷에 걸려 오히려 스튜디오 경로를 잃는다.
+        if inner_spread > 8:
+            return 0
+        if max(abs(inner[c] - edge_color[c]) for c in range(3)) <= 24:
+            return 0                                  # 안쪽과 색이 비슷하면 띠가 아니다
+        return k
+
+    top = scan(True, False)
+    bottom = scan(True, True)
+    left = scan(False, False)
+    right = scan(False, True)
+    if not (top or bottom or left or right):
+        return img
+    box = (left, top, w - right, h - bottom)
+    if box[2] - box[0] < w * 0.4 or box[3] - box[1] < h * 0.4:
+        return img
+    print(f"[cutout] letterbox trimmed t={top} b={bottom} l={left} r={right}", flush=True)
+    return img.crop(box)
+
+
+def _open_source_image(path: str) -> Image.Image:
+    """컷아웃·판정용으로 원본을 열고 레터박스 띠를 걷어낸다."""
+    return _trim_letterbox(Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA"))
 
 
 def _border_bg_stats(img: Image.Image) -> tuple[bool, tuple[int, int, int], float]:
@@ -1210,9 +1300,24 @@ def studio_product_cutout(path: str) -> bytes | None:
     생기기 때문. 대신 안쪽 불투명 원단 색을 밖으로 퍼뜨려(color repair) 채운다.
     """
     try:
-        img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
+        img = _open_source_image(path)
     except Exception:
         return None
+    return _studio_cutout_from_image(img)
+
+
+def _studio_cutout_from_image(img: Image.Image, tol_boost: int = 0) -> bytes | None:
+    """studio_product_cutout의 본체. 이미 열려 있는(그리고 레터박스를 걷어낸) 이미지용.
+
+    AI가 만들어 준 불투명 결과(투명 배경을 지원하지 않는 모델)도 같은 알고리즘으로
+    자를 수 있게 분리했다. 생성된 배경판은 균일해서 이 경로가 특히 잘 맞는다 —
+    옛 플러드필과 달리 밑단 그림자처럼 갇힌 배경까지 지운다.
+
+    tol_boost: 배경으로 볼 색 차이를 넓힌다. AI가 그린 판에는 옷 밑에 옅은 그림자가
+    깔려 있어서(판 색에서 10~20 정도 어두운 회색) 촬영본 기준 임계로는 그 그림자가
+    옷으로 남고, 임계선을 오가며 픽셀이 번갈아 지워져 체크무늬처럼 보였다.
+    밝은 원단은 이 값을 올리면 옷이 지워질 수 있으므로 호출부에서 0을 준다.
+    """
     clean, _bg, local = _border_bg_stats(img)
     if not clean:
         return None
@@ -1220,7 +1325,7 @@ def studio_product_cutout(path: str) -> bytes | None:
     if w < 16 or h < 16:
         return None
     # tol: 확신 배경(연결성 판정용). hi는 본체 거리(sep)를 재고 나서 정한다.
-    tol = max(3, min(9, int(local) + 3))
+    tol = max(3, min(9, int(local) + 3)) + max(0, int(tol_boost))
 
     # 배경색과 거의 같은 픽셀 마스크(255=배경 후보) → 침식으로 누수 통로 차단.
     # 비네팅·그라데이션이 있는 판은 전역 임계 하나로는 한쪽 끝이 잘려나가므로,
@@ -1350,7 +1455,7 @@ def studio_product_cutout(path: str) -> bytes | None:
     if not body:
         return None
     sep = sorted(body)[len(body) // 2]
-    hi = max(tol + 2, min(tol + 16, int(sep * 0.6)))
+    hi = max(tol + 2, min(tol + 16, max(int(sep * 0.6), tol + 2)))
     span = float(hi - tol)
     soft_px = maxdiff.point(lambda v: 255 if v <= hi else 0).load()
 
@@ -1450,8 +1555,7 @@ def _fast_extract_triage(path: str, hint: str) -> dict[str, Any]:
     """LLM 호출 전, 스튜디오 컷·배경 난이도·밝은 원단을 빠르게 판별한다."""
     clean_plate = False
     try:
-        img = Image.open(io.BytesIO(read_image_as_png_bytes(path))).convert("RGBA")
-        clean_plate = _border_bg_stats(img)[0]
+        clean_plate = _border_bg_stats(_open_source_image(path))[0]
     except Exception:
         pass
     return {
