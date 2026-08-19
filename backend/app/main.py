@@ -2190,6 +2190,59 @@ def _ensure_style_attrs(user_id: str, rows: list[dict[str, Any]], limit: int = 2
     return len(updates)
 
 
+def _include_note(include_ids: list[str] | None, items: list[dict[str, Any]]) -> str:
+    """옷장에서 고른 아이템을 모든 코디에 넣으라는 지시."""
+    ids = [str(i) for i in (include_ids or []) if i]
+    if not ids:
+        return ""
+    by_id = {row["id"]: row for row in items}
+    named = [f"{by_id[i].get('name')}(id={i})" for i in ids if i in by_id]
+    if not named:
+        return ""
+    return (
+        "\n[반드시 포함] 사용자가 옷장에서 고른 아이템: " + ", ".join(named) + "\n"
+        "- 이 아이템은 모든 코디에 빠짐없이 넣는다. 이 옷을 살리는 방향으로 나머지를 고른다.\n"
+    )
+
+
+def _wish_note(wish_combos: int, max_combos: int) -> str:
+    """옷장에 없는 아이템을 하나 끼운 코디를 몇 개 만들지."""
+    n = max(0, min(int(wish_combos or 0), max_combos))
+    if not n:
+        return "\n- 옷장에 있는 아이템만 쓴다. 없는 아이템을 만들어 넣지 말 것.\n"
+    return (
+        f"\n[제안 아이템] {max_combos}개 중 {n}개는 '옷장에 없지만 있으면 훨씬 좋아질 아이템' 하나를 더해 만든다.\n"
+        "- 그 코디의 wish에 제안 아이템을 적는다(name·category·color·reason). 나머지는 옷장 아이템으로 채운다.\n"
+        "- 제안은 실제로 살 수 있는 보편적인 아이템으로, 이미 옷장에 있는 것과 겹치지 않게 한다.\n"
+        "- name·color는 한국어로 (색은 블랙·아이보리처럼 패션 음차).\n"
+        "- reason은 왜 이 옷장에 이 아이템이 필요한지 한 문장(한국어).\n"
+        f"- 나머지 {max_combos - n}개는 옷장 아이템만으로 만든다.\n"
+    )
+
+
+_WISH_CATEGORIES = ("top", "bottom", "skirt", "outer", "dress", "shoes", "bag", "hat", "misc")
+
+
+def _clean_wish(raw: Any) -> dict[str, Any] | None:
+    """모델이 제안한 '옷장에 없는 아이템'을 정리한다. 카테고리가 없으면 버린다."""
+    if not isinstance(raw, dict):
+        return None
+    category = str(raw.get("category") or "").strip().lower()
+    if category not in _WISH_CATEGORIES:
+        return None
+    name = str(raw.get("name") or "").strip()[:40]
+    if not name:
+        return None
+    raw_color = str(raw.get("color") or "").strip()[:20]
+    return {
+        "name": name,
+        "category": category,
+        # 옷장 아이템과 같은 표기로 맞춘다 (black → 블랙)
+        "color": _canonicalize_color(raw_color) if raw_color else "",
+        "reason": str(raw.get("reason") or "").strip()[:120],
+    }
+
+
 def recommend_text(
     user_id: str,
     anchor: dict[str, Any] | None,
@@ -2199,6 +2252,8 @@ def recommend_text(
     exclude_item_ids: list[list[str]] | None = None,
     styles: list[str] | None = None,
     profile: dict[str, Any] | None = None,
+    include_ids: list[str] | None = None,
+    wish_combos: int = 0,
 ) -> list[dict[str, Any]]:
     if not items:
         return []
@@ -2230,7 +2285,7 @@ def recommend_text(
     )
     if not openai_client or AI_TEST_MODE:
         print("[recommend] no openai client / TEST MODE — fallback ($0)", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
     prompt = f"""당신은 퍼스널 스타일리스트다. 사용자의 옷장 목록만 사용해 실제로 입고 나갈 만한 코디를 최대 {max_combos}개 만들어라.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
@@ -2240,7 +2295,7 @@ def recommend_text(
 {catalog}
 {exclude_note}
 {_COORD_RULES}
-
+{_include_note(include_ids, items)}{_wish_note(wish_combos, max_combos)}
 규칙:
 - item_ids에는 위 목록에 있는 id만 넣기
 - 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 스커트/원피스)를 포함. 상의+신발만, 하의 없는 조합 금지
@@ -2257,7 +2312,8 @@ def recommend_text(
 - JSON만 응답
 
 형식:
-{{"combos":[{{"label":"", "mood":"", "styles":["minimal"], "item_ids":["..."]}}]}}
+{{"combos":[{{"label":"", "mood":"", "styles":["minimal"], "item_ids":["..."], "wish":{{"name":"","category":"top|bottom|skirt|outer|dress|shoes|bag|hat|misc","color":"","reason":""}}}}]}}
+wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서는 아예 생략한다.
 """
     try:
         # 추천은 실패해도 fallback_combos가 있으니, Render 프록시(~100초)보다 짧게 제한
@@ -2272,19 +2328,30 @@ def recommend_text(
         allowed_styles = set(uniq_styles)
         combos = []
         seen: set[tuple[str, ...]] = set(exclude_keys)
+        must = [str(i) for i in (include_ids or []) if str(i) in valid]
+        wish_left = max(0, min(int(wish_combos or 0), max_combos))
         for combo in data.get("combos") or []:
             ids = [item_id for item_id in combo.get("item_ids", []) if item_id in valid]
             if anchor and anchor["id"] not in ids:
                 ids = [anchor["id"], *ids]
-            ids = ids[:4]
-            if len(ids) < 2:
+            # 옷장에서 고른 아이템은 빠지면 안 된다. 모델이 빼먹었으면 앞에 되돌려 넣는다.
+            for keep in reversed(must):
+                if keep not in ids:
+                    ids = [keep, *ids]
+            ids = ids[: max(4, len(must) + 1)]
+            wish = _clean_wish(combo.get("wish")) if wish_left else None
+            if not ids or (len(ids) < 2 and not wish):
                 continue
-            if not _combo_has_top_and_bottom(ids, valid):
+            if must and not all(keep in ids for keep in must):
                 continue
-            key = tuple(sorted(ids))
+            if not _combo_has_top_and_bottom(ids, valid, wish):
+                continue
+            key = tuple(sorted(ids) + ([f"wish:{wish['category']}:{wish['name']}"] if wish else []))
             if key in seen:
                 continue
             seen.add(key)
+            if wish:
+                wish_left -= 1
             combo_styles = [s for s in (combo.get("styles") or []) if s in allowed_styles][:2]
             if not combo_styles:
                 combo_styles = [uniq_styles[len(combos) % len(uniq_styles)]]
@@ -2294,6 +2361,7 @@ def recommend_text(
                     "mood": combo.get("mood") or _style_tone(combo_styles[0]),
                     "styles": combo_styles,
                     "item_ids": ids,
+                    **({"wish": wish} if wish else {}),
                 }
             )
             if len(combos) >= max_combos:
@@ -2304,12 +2372,12 @@ def recommend_text(
         )
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
-            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
+            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
         # 모델이 max_combos개를 돌려줘도 중복·상하의 미충족으로 걸러지면 그만큼 비어 버린다.
         # 옷장에 남은 조합이 있는데 개수가 모자라면 결정적 페어링으로 채운다.
         if len(combos) < max_combos:
             short = max_combos - len(combos)
-            for extra in fallback_combos(items, anchor, short, tone, seen, uniq_styles, profile):
+            for extra in fallback_combos(items, anchor, short, tone, seen, uniq_styles, profile, include_ids):
                 key = tuple(sorted(extra["item_ids"]))
                 if key in seen:
                     continue
@@ -2322,7 +2390,7 @@ def recommend_text(
         return combos
     except Exception as exc:  # noqa: BLE001
         print(f"[recommend] ai call failed: {exc} — fallback", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile)
+        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -2338,9 +2406,13 @@ def _item_bucket(item: dict[str, Any]) -> str:
     return "other"
 
 
-def _combo_has_top_and_bottom(ids: list[str], by_id: dict[str, Any]) -> bool:
-    """상의(또는 아우터/원피스) + 하의(또는 원피스) 필수."""
+def _combo_has_top_and_bottom(
+    ids: list[str], by_id: dict[str, Any], wish: dict[str, Any] | None = None
+) -> bool:
+    """상의(또는 아우터/원피스) + 하의(또는 원피스) 필수. 제안 아이템도 한 자리로 센다."""
     buckets = [_item_bucket(by_id[i]) for i in ids if i in by_id]
+    if wish:
+        buckets.append(_item_bucket(wish))
     if "dress" in buckets:
         return True
     return ("top" in buckets) and ("bottom" in buckets)
@@ -2399,6 +2471,7 @@ def fallback_combos(
     exclude_keys: set[tuple[str, ...]] | None = None,
     styles: list[str] | None = None,
     profile: dict[str, Any] | None = None,
+    include_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
     tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
@@ -2409,11 +2482,16 @@ def fallback_combos(
     seen: set[tuple[str, ...]] = set(exclude_keys or ())
     style_cycle = [s for s in (styles or []) if s] or []
 
+    must = [str(i) for i in (include_ids or []) if str(i) in by_id]
+
     def _push(ids: list[str], label: str) -> None:
         if len(ids) < 2:
             return
         if anchor and anchor["id"] not in ids:
             ids = [anchor["id"], *[x for x in ids if x != anchor["id"]]]
+        for keep in reversed(must):
+            if keep not in ids:
+                ids = [keep, *ids]
         if not _combo_has_top_and_bottom(ids, by_id):
             return
         key = tuple(sorted(ids[:4]))
@@ -2902,6 +2980,10 @@ class LiveCoordinate(BaseModel):
     face_data_url: str | None = None
     # 오늘 코디의 날짜 선택 — 어느 날짜용으로 만든 코디인지 남긴다 (YYYY-MM-DD)
     for_date: str | None = None
+    # 옷장에서 고른 아이템 — 모든 코디에 반드시 들어간다 (선택 기반 추천)
+    include_item_ids: list[str] = []
+    # 옷장에 없는 아이템 하나를 제안으로 끼운 코디 수 (0이면 옷장 안에서만)
+    wish_combos: int = 0
     # 마이페이지 프로필 — 퍼스널 컬러·선호 실루엣·색 계열까지 코디에 반영한다
     personal_color: str | None = None
     fit: str | None = None
@@ -3273,6 +3355,11 @@ def _canonicalize_color(color: str) -> str:
         "lavender": "라벤더", "lilac": "라일락", "denim": "데님", "indigo": "인디고",
         "tan": "탄", "mocha": "모카", "silver": "실버", "gold": "골드",
         "saxe": "삭스", "skyblue": "스카이블루", "lightblue": "라이트블루",
+        # 기본 색도 영어로 들어오는 경우가 있다(AI 제안 아이템 등)
+        "brown": "브라운", "black": "블랙", "white": "화이트", "grey": "그레이",
+        "gray": "그레이", "navy": "네이비", "blue": "블루", "green": "그린",
+        "red": "레드", "pink": "핑크", "purple": "퍼플", "yellow": "옐로우",
+        "orange": "오렌지", "neutral": "뉴트럴",
     }
     if key in en_map:
         return en_map[key]
@@ -4286,24 +4373,46 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         "gender": body.gender,
         "age": body.age,
     }
+    max_combos = min(max(body.max_combos, 1), 10)
     combos = recommend_text(
         user.id,
         anchor,
         pool,
         body.style,
-        min(max(body.max_combos, 1), 10),
+        max_combos,
         body.exclude_item_ids or [],
         body.styles or None,
         profile,
+        body.include_item_ids or None,
+        body.wish_combos or 0,
     )
     by_id = {row["id"]: row for row in pool}
     outfits, used = [], {}
+    wish_items: list[dict[str, Any]] = []
     for idx, combo in enumerate(combos):
         ids = [item_id for item_id in combo["item_ids"] if item_id in by_id]
-        if not _combo_has_top_and_bottom(ids, by_id):
+        wish = combo.get("wish")
+        if not _combo_has_top_and_bottom(ids, by_id, wish):
             continue
         for item_id in ids:
             used[item_id] = by_id[item_id]
+        if wish:
+            # 옷장에 없는 제안 아이템. DB에 넣지 않고 이 응답에서만 쓰는 가짜 아이템으로
+            # 내려보낸다(프론트가 점선 자리로 그린다). 사용자가 산 뒤에 직접 담으면 된다.
+            wish_id = f"wish-{uuid.uuid4().hex[:8]}"
+            wish_items.append({
+                "id": wish_id,
+                "serverId": None,
+                "name": wish["name"],
+                "category": _category_display(wish["category"]),
+                "color": wish.get("color") or "",
+                "img": None,
+                "status": "wish",
+                "wish": True,
+                "reason": wish.get("reason") or "",
+                "seasons": [],
+            })
+            ids = [*ids, wish_id]
         outfits.append(
             {
                 # 저장은 아래에서 한 번에 — 임시 id로 돌려주면 기기를 옮기는 순간 사라지고
@@ -4314,6 +4423,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 "styles": combo.get("styles") or [],
                 "itemIds": ids,
                 "lookImg": None,
+                **({"wish": wish} if wish else {}),
             }
         )
     _record_recommendation_timing(user.id, len(pool), len(outfits), (time.perf_counter() - t0) * 1000)
@@ -4341,9 +4451,13 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                     "label": outfit["label"],
                     "mood": outfit["mood"],
                     "type": "daily",
-                    "item_ids": outfit["itemIds"],
+                    "item_ids": [i for i in outfit["itemIds"] if not str(i).startswith("wish-")],
                     "look_image_url": outfit["lookImg"],
-                    "metadata": {"styles": outfit["styles"], "for_date": body.for_date or None},
+                    "metadata": {
+                        "styles": outfit["styles"],
+                        "for_date": body.for_date or None,
+                        **({"wish": outfit["wish"]} if outfit.get("wish") else {}),
+                    },
                 })
                 .execute()
                 .data[0]
@@ -4352,7 +4466,10 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         except Exception as exc:  # noqa: BLE001
             print(f"[coordinate] outfit persist failed: {exc}", flush=True)
             outfit["id"] = f"live-{uuid.uuid4().hex[:8]}"
-    return {"outfits": outfits, "items": [live_item_payload(row) for row in used.values()]}
+    return {
+        "outfits": outfits,
+        "items": [live_item_payload(row) for row in used.values()] + wish_items,
+    }
 
 
 @app.get("/api/live/outfits")
@@ -4388,12 +4505,25 @@ def live_list_outfits(user: UserContext = Depends(current_user)) -> dict[str, An
         )
     alive = {i["id"] for i in items}
     out = []
+    wish_items: list[dict[str, Any]] = []
     for r in rows:
         ids = [i for i in (r.get("item_ids") or []) if i in alive]
+        meta = r.get("metadata") or {}
+        # 제안 아이템(옷장에 없는 것)은 코디 메타에만 있다. 다시 가짜 아이템으로 복원해
+        # 저장해 둔 코디가 기기를 옮겨도 같은 모습으로 보이게 한다.
+        wish = _clean_wish(meta.get("wish"))
+        if wish:
+            wish_id = f"wish-{r['id'][:8]}"
+            wish_items.append({
+                "id": wish_id, "serverId": None, "name": wish["name"],
+                "category": _category_display(wish["category"]), "color": wish.get("color") or "",
+                "img": None, "status": "wish", "wish": True,
+                "reason": wish.get("reason") or "", "seasons": [],
+            })
+            ids = [*ids, wish_id]
         # 아이템이 지워져 반쪽이 된 코디는 보여줄 수 없다
         if len(ids) < 2:
             continue
-        meta = r.get("metadata") or {}
         out.append({
             "id": r["id"],
             "label": r.get("label") or "코디",
@@ -4407,7 +4537,7 @@ def live_list_outfits(user: UserContext = Depends(current_user)) -> dict[str, An
             "manual": r.get("type") == "manual",
             "createdAt": r.get("created_at"),
         })
-    return {"outfits": out, "items": [live_item_payload(i) for i in items]}
+    return {"outfits": out, "items": [live_item_payload(i) for i in items] + wish_items}
 
 
 class LiveOutfitState(BaseModel):

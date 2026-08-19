@@ -2,7 +2,7 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -196,10 +196,14 @@ const DAILY_APPEND_BATCH = 2;
 function ownedIdSet(ownedItems) {
   return new Set((ownedItems || []).map((it) => it && (it.id || it.serverId)).filter(Boolean).map(String));
 }
+/** 옷장에 없는 게 정상인 id (AI가 제안한 '있으면 좋을 아이템'). 정리에서 지우지 않는다. */
+function isWishId(id) {
+  return String(id).startsWith('wish-');
+}
 /** owned에 있는 id만 남긴 코디. 2개 미만·상의/하의 미달이면 버린다. */
 function sanitizeDailyOutfit(outfit, owned) {
   if (!outfit) return null;
-  const ids = (outfit.itemIds || []).map(String).filter((id) => owned.has(id));
+  const ids = (outfit.itemIds || []).map(String).filter((id) => owned.has(id) || isWishId(id));
   if (ids.length < 2) return null;
   if (ids.length === (outfit.itemIds || []).length) return outfit;
   return { ...outfit, itemIds: ids };
@@ -232,7 +236,10 @@ function filterDailyOutfitsByOwned(outfits, ownedItems) {
 function dailyCacheItemsFromOwned(ownedItems, outfits) {
   const used = new Set();
   (outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
-  return (ownedItems || []).filter((it) => it && used.has(String(it.id || it.serverId)));
+  const owned = (ownedItems || []).filter((it) => it && used.has(String(it.id || it.serverId)));
+  // 제안 아이템은 옷장에 없으니 LB_DATA에 기억된 값으로 캐시에 함께 담는다.
+  const wish = [...used].filter(isWishId).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+  return [...owned, ...wish];
 }
 /** LB_DATA.DAILY + 로컬 캐시를 현재 owned 옷장에 맞게 정리. 제거된 코디 수를 반환. */
 function pruneDailyAgainstOwned(ownedItems) {
@@ -1081,6 +1088,19 @@ function App() {
     return list;
   };
 
+  // 처음 추천받을 때 만드는 코디 수와, 그중 '옷장에 없는 아이템'을 더한 코디 수.
+  // 둘 다 계정 설정이라 기기를 옮겨도 그대로다.
+  const dailyCount = Math.max(2, Math.min(8, parseInt(prefs.dailyCount, 10) || parseInt(t.dailyCount, 10) || 4));
+  const wishCount = Math.max(0, Math.min(3, parseInt(prefs.wishCount, 10) || 0));
+  const setDailyCount = (n) => {
+    const np = { ...prefs, dailyCount: Math.max(2, Math.min(8, parseInt(n, 10) || 4)) };
+    setPrefs(np); persistPrefs(np);
+  };
+  const setWishCount = (n) => {
+    const np = { ...prefs, wishCount: Math.max(0, Math.min(3, parseInt(n, 10) || 0)) };
+    setPrefs(np); persistPrefs(np);
+  };
+
   const setDailyEnabled = (on) => {
     const np = { ...prefs, dailyEnabled: !!on };
     setPrefs(np);
@@ -1163,7 +1183,7 @@ function App() {
     setDailyAllowed(true);
     setDailyLoading(true);
     try {
-      const baseCount = Math.max(1, parseInt(t.dailyCount, 10) || 4);
+      const baseCount = dailyCount;
       const ownedSig = wardrobeSigOf(items);
       if (force && LB_DATA.DAILY.length > 0) {
         // 첫 줄(4) 미달이면 나머지만, 찼으면 2개씩 추가(리셋 아님).
@@ -1208,6 +1228,7 @@ function App() {
           style,
           styles: preferredStyles,
           for_date: localYmd(),
+          wish_combos: Math.min(wishCount, baseCount),
           ...styleProfile,
           ...modelLook,
         }),
@@ -1578,6 +1599,45 @@ function App() {
     } catch (e) { /* optimistic local save kept */ }
   };
 
+  // 옷장에서 고른 옷으로 코디 추천 — 탭을 바꾸지 않고 모달로 보여준다. 옷장에서
+  // 고르던 흐름을 끊지 않으려면 화면을 갈아타지 않는 편이 낫다.
+  const [pickSheet, setPickSheet] = useState(null); // { ids, loading, outfits, error }
+  const requestPickedOutfits = async (ids, opts = {}) => {
+    const picked = (ids || []).map(String).filter(Boolean);
+    if (!picked.length) return;
+    const append = !!opts.append;
+    const prev = (append && pickSheet && pickSheet.outfits) || [];
+    setPickSheet({ ids: picked, loading: true, outfits: prev, error: '' });
+    try {
+      const payload = await liveJSON('/api/live/coordinate', {
+        method: 'POST',
+        body: JSON.stringify({
+          include_item_ids: picked,
+          max_combos: append ? 2 : dailyCount,
+          style: preferredDailyStyle,
+          styles: preferredStyles,
+          wish_combos: append ? 0 : Math.min(wishCount, dailyCount),
+          exclude_item_ids: prev.map((o) => o.itemIds || []),
+          ...coordProfile(prefs),
+        }),
+      });
+      (payload.items || []).forEach(liveRememberItem);
+      const fresh = (payload.outfits || []).filter((o) => o && (o.itemIds || []).length >= 2);
+      fresh.forEach((o) => { LB_DATA.OUTFIT_BY_ID[o.id] = o; });
+      const merged = [...prev, ...fresh.filter((o) => !prev.some((p) => p.id === o.id))];
+      setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
+      if (append && !fresh.length) showToast('더 추천할 조합이 없어요');
+    } catch (e) {
+      if (append) {
+        setPickSheet({ ids: picked, loading: false, outfits: prev, error: '' });
+        showToast(e.message || '코디를 더 만들지 못했어요');
+      } else {
+        setPickSheet({ ids: picked, loading: false, outfits: [], error: e.message || '코디를 만들지 못했어요' });
+      }
+    }
+  };
+  const closePickSheet = () => setPickSheet(null);
+
   const openDetail = (look, looks, label) => {
     setDetailLook(look);
     setDetailList(looks && looks.length ? { looks, label: label || '다른 코디' } : null);
@@ -1660,7 +1720,8 @@ function App() {
     hasWardrobe: comboReady,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
-    dailyCount: Math.max(1, parseInt(t.dailyCount, 10) || 4),
+    // 코디 개수·제안 코디 수는 계정 설정(prefs)을 따른다. 기기별 tweak은 쇼케이스용 폴백.
+    dailyCount, wishCount, setDailyCount, setWishCount,
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
     modelLook: !!prefs.modelLook, setModelLook,
@@ -1669,6 +1730,7 @@ function App() {
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
+    requestPickedOutfits,
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame,
@@ -1906,6 +1968,18 @@ function App() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 80, background: 'var(--ivory)' }}>
           <Onboarding mode="edit" initial={prefs} onDone={saveEditedPrefs} onCancel={() => setEditPrefs(false)} />
         </div>
+      )}
+
+      {pickSheet && (
+        <PickedOutfitsModal
+          state={pickSheet}
+          onClose={closePickSheet}
+          onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })}
+          savedOutfitIds={savedOutfitIds}
+          onSave={toggleSaveOutfit}
+          onOpen={(look, looks) => { closePickSheet(); openDetail(look, looks, '이 옷으로 만든 다른 코디'); }}
+          wide={wide}
+        />
       )}
 
       {toast && (

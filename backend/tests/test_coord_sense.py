@@ -102,3 +102,43 @@ class PairScoreTest(unittest.TestCase):
         bottom = item(cat="bottom", color="블랙", tone="neutral", formality=3)
         autumn = {"personal_color": "autumn"}
         self.assertGreater(self.score(warm_top, bottom, autumn), self.score(cool_top, bottom, autumn))
+
+
+class IncludeAndWishTest(unittest.TestCase):
+    """옷장에서 고른 아이템은 빠지면 안 되고, 제안 아이템도 한 자리로 센다."""
+
+    def setUp(self):
+        tree = ast.parse(MAIN_PATH.read_text())
+        names = ("_item_bucket", "_combo_has_top_and_bottom", "_clean_wish", "_include_note", "_wish_note")
+        body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
+        consts = [
+            n for n in tree.body
+            if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "_WISH_CATEGORIES"
+        ]
+        ns = {"Any": object, "_canonicalize_color": lambda c: {"black": "블랙"}.get(c.lower(), c)}
+        exec(compile(ast.Module(body=[*body, *consts], type_ignores=[]), "<wish>", "exec"), ns)
+        self.ns = ns
+
+    def test_wish_fills_the_missing_half_of_an_outfit(self):
+        by_id = {"a": {"category": "top"}}
+        has = self.ns["_combo_has_top_and_bottom"]
+        self.assertFalse(has(["a"], by_id))                                   # 상의만 → 코디 아님
+        self.assertTrue(has(["a"], by_id, {"category": "bottom"}))            # 제안 하의가 채운다
+        self.assertFalse(has(["a"], by_id, {"category": "bag"}))              # 가방으론 안 된다
+
+    def test_wish_needs_a_real_category_and_name(self):
+        clean = self.ns["_clean_wish"]
+        self.assertIsNone(clean({"name": "가방", "category": "핸드백"}))       # 목록 밖 카테고리
+        self.assertIsNone(clean({"name": "", "category": "bag"}))              # 이름 없음
+        got = clean({"name": "레더 크로스백", "category": "bag", "color": "black", "reason": "포인트"})
+        self.assertEqual(got["category"], "bag")
+        self.assertEqual(got["color"], "블랙")                                 # 옷장 표기로 통일
+
+    def test_prompt_notes_switch_on_the_inputs(self):
+        items = [{"id": "x1", "name": "와이드 데님"}]
+        note = self.ns["_include_note"](["x1"], items)
+        self.assertIn("모든 코디에 빠짐없이", note)
+        self.assertIn("와이드 데님", note)
+        self.assertEqual(self.ns["_include_note"]([], items), "")
+        self.assertIn("옷장에 있는 아이템만", self.ns["_wish_note"](0, 4))
+        self.assertIn("4개 중 2개", self.ns["_wish_note"](2, 4))

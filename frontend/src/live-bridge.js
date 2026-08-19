@@ -68,14 +68,21 @@ const auth = {
   async current() {
     if (!supabase) return null
     const { data } = await supabase.auth.getSession()
-    const user = data.session?.user
-    if (!user) return null
+    const session = data.session
+    if (!session?.user) return null
+    // 설정은 user_metadata에 둔다(계정에 붙어 다닌다). 다만 세션에 실려 있는
+    // user_metadata는 로그인 시점의 스냅샷이라, 다른 기기에서 바꾼 설정이 이 기기의
+    // 세션에는 반영되지 않는다(코디 설정이 계속 off로 보이던 원인). 서버에서 한 번
+    // 확인해 최신값을 쓰고, 실패하면 세션 값으로 돌아간다.
+    let user = session.user
+    try {
+      const fresh = await supabase.auth.getUser()
+      if (fresh?.data?.user) user = fresh.data.user
+    } catch { /* 오프라인 — 세션 값 사용 */ }
     return {
       id: user.id,
       email: user.email || '',
       anonymous: !!user.is_anonymous,
-      // 설정은 user_metadata에 둔다. 계정에 붙어 다니므로 다른 기기에서도 그대로
-      // 오고, 세션 객체에 이미 실려 와서 별도 왕복이 없다.
       prefs: (user.user_metadata && user.user_metadata.prefs) || null,
     }
   },

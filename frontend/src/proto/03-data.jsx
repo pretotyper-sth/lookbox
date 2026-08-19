@@ -153,6 +153,8 @@ const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
   avatar: '', // 마이페이지 프로필 사진 (data URL)
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
+  dailyCount: 4,       // 처음 추천받을 때 만드는 코디 수 (2~8)
+  wishCount: 0,        // 그 중 '옷장에 없는 아이템'을 하나 더한 코디 수 (0~3)
   modelLook: false,    // 코디를 프로필 사진 얼굴의 모델이 입은 전신 컷으로 — 더 비싸서 기본 off
   // 매장 맞춰보기 — 원본 전신 + 옷 자리가 뚫린 PNG. 카메라에 프레임만 겹친다.
   tryOnBody: '',

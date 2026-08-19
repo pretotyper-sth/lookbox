@@ -217,6 +217,7 @@ function WardrobeScreen({ ctx }) {
     items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, goHome,
+    requestPickedOutfits,
   } = ctx;
   const [cat, setCat] = useS('전체');
   const [seasonFilter, setSeasonFilter] = useS([]); // multi-select season ids, [] = 전체
@@ -226,6 +227,7 @@ function WardrobeScreen({ ctx }) {
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const [sortId, setSortId] = useS('recent');
   const [sortOpen, setSortOpen] = useS(false);
+  const [moreOpen, setMoreOpen] = useS(false);
   const [query, setQuery] = useS('');
   const cats = LB_DATA.CATEGORIES;
   const seasons = LB_DATA.SEASONS;
@@ -256,7 +258,7 @@ function WardrobeScreen({ ctx }) {
   const inSelectUx = wide ? selecting : (selectMode || selecting);
 
   const toggleSel = (id) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
-  const clearSel = () => { setSel([]); setBulkDelAsk(false); };
+  const clearSel = () => { setSel([]); setBulkDelAsk(false); setMoreOpen(false); };
   const exitSelectMode = () => { clearSel(); setSelectMode(false); };
   const runBulkArchive = () => { if (viewingArchive) bulkRestore(sel); else bulkArchive(sel); exitSelectMode(); };
   const runBulkDelete = () => { bulkDelete(sel); exitSelectMode(); };
@@ -377,6 +379,39 @@ function WardrobeScreen({ ctx }) {
           </button>
         );
       })}
+    </div>
+  );
+
+  // 선택한 옷으로 할 수 있는 일. 지금은 '코디 추천' 하나지만, 여기 모아두면
+  // 플로팅 바가 길어지지 않고 나중에 늘리기도 쉽다.
+  const runPickedCoord = () => {
+    setMoreOpen(false);
+    const ids = sel.slice();
+    exitSelectMode();
+    if (requestPickedOutfits) requestPickedOutfits(ids);
+  };
+  const moreOptions = (
+    <div role="none">
+      <button
+        type="button"
+        role="menuitem"
+        onClick={runPickedCoord}
+        disabled={viewingArchive}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: wide ? '9px 12px' : '13px 4px', border: 'none', background: 'transparent',
+          textAlign: 'left', cursor: viewingArchive ? 'default' : 'pointer', borderRadius: 'var(--r-sm)',
+          opacity: viewingArchive ? 0.45 : 1,
+        }}
+      >
+        <Icon name="sparkle" size={18} stroke={1.9} style={{ flex: 'none' }} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>코디 추천</span>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
+            {viewingArchive ? '보관한 옷은 추천에 쓰이지 않아요' : `고른 ${selCount}개가 들어간 코디를 만들어요`}
+          </span>
+        </span>
+      </button>
     </div>
   );
 
@@ -671,8 +706,46 @@ function WardrobeScreen({ ctx }) {
             </Btn>
             <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)}
               style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: '7px 12px' }}>삭제</Btn>
+            {/* 고른 옷으로 할 수 있는 일 — 바를 늘리지 않고 더보기 안에 둔다 */}
+            <div style={{ position: 'relative', flex: 'none' }}>
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                aria-label="더보기"
+                style={{
+                  width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                  background: 'var(--ivory)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1px var(--line-2)',
+                }}
+              >
+                <Icon name="more" size={16} stroke={2.2} />
+              </button>
+              {wide && moreOpen && (
+                <>
+                  <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                  <div role="menu" style={{
+                    position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, zIndex: 41,
+                    width: 234, padding: 6, background: 'var(--surface)',
+                    borderRadius: 'var(--r-md)', boxShadow: '0 12px 32px rgba(0,0,0,0.16)',
+                    border: '1px solid var(--line)',
+                  }}>
+                    {moreOptions}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      )}
+
+      {!wide && (
+        <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)}>
+          <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>선택한 {selCount}개</h2>
+            <div style={{ marginTop: 'var(--s4)' }}>{moreOptions}</div>
+          </div>
+        </BottomSheet>
       )}
 
       <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>

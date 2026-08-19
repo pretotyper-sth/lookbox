@@ -213,6 +213,35 @@ function ActionRow({ icon, label, onClick, danger, last, right, hint }) {
   );
 }
 
+/* ---- 숫자 설정(−/+) — 스위치와 같은 자리에 들어가는 작은 컨트롤 ---- */
+function Stepper({ value, min, max, onChange, unit = '개' }) {
+  const btn = (label, delta, disabled) => (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); onChange(value + delta); }}
+      style={{
+        width: 26, height: 26, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center',
+        background: 'var(--ivory)', color: disabled ? 'var(--ink-3)' : 'var(--ink)',
+        boxShadow: 'inset 0 0 0 1px var(--line-2)', opacity: disabled ? 0.5 : 1,
+        fontSize: 15, fontWeight: 700, lineHeight: 1,
+      }}
+    >
+      {delta < 0 ? '−' : '+'}
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+      {btn('줄이기', -1, value <= min)}
+      <span className="tnum" style={{ minWidth: 34, textAlign: 'center', fontSize: 13.5, fontWeight: 700 }}>
+        {value}{unit}
+      </span>
+      {btn('늘리기', 1, value >= max)}
+    </div>
+  );
+}
+
 /* ---- toggle switch ---- */
 function Switch({ on, onToggle }) {
   return (
@@ -235,7 +264,11 @@ function Switch({ on, onToggle }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
-  const { prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled, modelLook, setModelLook, showToast, openTryOnTab } = ctx;
+  const {
+    prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
+    modelLook, setModelLook, showToast, openTryOnTab,
+    dailyCount, wishCount, setDailyCount, setWishCount,
+  } = ctx;
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
@@ -296,6 +329,24 @@ function MyPageScreen({ ctx }) {
     />
   );
 
+  // 개수 설정은 추천이 켜져 있을 때만 의미가 있다. 꺼진 상태에서 숫자만 남으면 혼란스럽다.
+  const countRows = dailyEnabled ? (
+    <>
+      <ActionRow
+        icon="sparkle"
+        label="처음 추천받는 코디 수"
+        hint="추천을 누르면 이 개수만큼 만들어요"
+        right={<Stepper value={dailyCount} min={2} max={8} onChange={(n) => setDailyCount && setDailyCount(n)} />}
+      />
+      <ActionRow
+        icon="plus"
+        label="새 아이템을 더한 코디 수"
+        hint="옷장에 없지만 잘 어울릴 아이템을 하나 끼워 보여줘요"
+        right={<Stepper value={wishCount} min={0} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
+      />
+    </>
+  ) : null;
+
   const settingsCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
@@ -304,6 +355,7 @@ function MyPageScreen({ ctx }) {
         label="오늘의 추천 코디"
         right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
       />
+      {countRows}
       {modelLookRow}
       {tryOnRow}
       <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
@@ -400,6 +452,7 @@ function MyPageScreen({ ctx }) {
             label="오늘의 추천 코디"
             right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
           />
+          {countRows}
           {modelLookRow}
           {tryOnRow}
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />

@@ -133,16 +133,32 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           transform: 'translate(-50%,-50%)', zIndex: at.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
-        return it.img
-          ? (
+        if (it.img) {
+          return (
             <div key={it.id} style={frame}>
               <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
                 transform: `scale(${lookImageZoom(it.category)})`,
               }} />
             </div>
-          )
-          : <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
+          );
+        }
+        // 옷장에 없는 제안 아이템은 사진이 없다. 점선 자리로 그려 '아직 없는 옷'임을 드러낸다.
+        if (it.wish) {
+          return (
+            <div key={it.id} style={{ ...frame, flexDirection: 'column', gap: 3, padding: 4, boxSizing: 'border-box' }}>
+              <div style={{
+                width: '78%', height: '78%', borderRadius: 'var(--r-md)',
+                border: '1.5px dashed var(--line-2)', color: 'var(--ink-3)',
+                display: 'grid', placeItems: 'center', boxSizing: 'border-box',
+                background: 'color-mix(in srgb, var(--surface) 70%, transparent)',
+              }}>
+                <Silhouette category={it.category} />
+              </div>
+            </div>
+          );
+        }
+        return <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
       })}
     </div>
   );
@@ -166,6 +182,134 @@ function LookExpandBadge({ size = 28, inset = 8 }) {
   );
 }
 
+
+
+/* ============================================================
+   PickedOutfitsModal — 옷장에서 고른 옷으로 만든 코디
+   룩북 카드와 같은 레이아웃·같은 동작(탭하면 상세, 하트로 저장)을 쓴다.
+   탭을 갈아타지 않고 모달로 얹어, 옷장에서 고르던 흐름을 끊지 않는다.
+   ============================================================ */
+function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSave, onOpen, wide }) {
+  const { ids = [], loading, outfits = [], error } = state || {};
+  const picked = ids.map((id) => LB_DATA.ALL[id]).filter(Boolean);
+  const looks = outfits.map((o) => ({ id: 'pick-' + o.id, outfitId: o.id, label: o.label }));
+  const first = loading && !outfits.length;
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const body = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 style={{ margin: 0, fontSize: wide ? 20 : 18.5, fontWeight: 800, lineHeight: 1.3 }}>
+            고른 옷으로 만든 코디
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
+            {picked.map((it) => it.name).join(' · ') || '고른 아이템'}
+          </p>
+        </div>
+        <IconBtn name="x" label="닫기" onClick={onClose} style={{ flex: 'none', marginTop: -4, marginRight: -6 }} />
+      </div>
+
+      <div style={{ marginTop: 'var(--s4)' }}>
+        {error ? (
+          <div style={{ padding: '28px 4px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>{error}</p>
+            <div style={{ marginTop: 16 }}>
+              <Btn variant="soft" icon="sparkle" onClick={onMore}>다시 시도</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: wide ? 'repeat(auto-fill, minmax(178px, 1fr))' : 'repeat(2, minmax(0, 1fr))',
+            gap: wide ? 14 : 12,
+          }}>
+            {outfits.map((o, i) => {
+              const items = (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+              const saved = savedOutfitIds.includes(o.id);
+              return (
+                <div key={o.id} className="lb-anim-in" style={{ position: 'relative', minWidth: 0, background: 'var(--ivory)', borderRadius: 'var(--r-lg)', padding: 10 }}>
+                  <button
+                    onClick={() => onOpen && onOpen(looks[i], looks)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', padding: 0 }}
+                  >
+                    <LookComposite outfit={o} items={items} ratio="1 / 1" bg="var(--surface-2)" />
+                    <div style={{ padding: '10px 4px 4px' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3, textWrap: 'pretty' }}>{o.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 3 }}>
+                        {items.length}개 품목{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onSave && onSave(o.id); }}
+                    className="lb-save"
+                    aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'}
+                    style={{
+                      position: 'absolute', right: 12, top: 12, width: 30, height: 30, borderRadius: '50%',
+                      display: 'grid', placeItems: 'center', zIndex: 2,
+                      color: saved ? 'var(--accent-ink)' : 'var(--ink)',
+                      background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface) 88%, transparent)',
+                      boxShadow: saved ? 'none' : 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(4px)',
+                    }}
+                  >
+                    <Icon name="heart" size={14} fill={saved ? 'currentColor' : 'none'} stroke={saved ? 0 : 2} />
+                  </button>
+                </div>
+              );
+            })}
+            {(first || loading) && Array.from({ length: first ? 4 : 2 }).map((_, i) => (
+              <div key={'sk' + i} style={{ background: 'var(--ivory)', borderRadius: 'var(--r-lg)', padding: 10 }}>
+                <div style={{ borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '1 / 1' }}><Skeleton h="100%" radius="0" /></div>
+                <div style={{ padding: '10px 4px 4px' }}><Skeleton w="70%" h={14} /><Skeleton w="45%" h={11} style={{ marginTop: 7 }} /></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!error && !!outfits.length && (
+        <div style={{ marginTop: 'var(--s4)' }}>
+          <Btn full variant="soft" icon="sparkle" onClick={onMore} disabled={loading}>
+            {loading ? '만드는 중… 최대 10초' : '코디 2개 더 받기'}
+          </Btn>
+        </div>
+      )}
+    </>
+  );
+
+  if (!wide) {
+    return (
+      <BottomSheet open onClose={onClose}>
+        <div className="lb-sheet-body lb-scrollable" style={{ padding: '10px 18px 24px', maxHeight: '78vh' }}>{body}</div>
+      </BottomSheet>
+    );
+  }
+  return (
+    <div
+      className="lb-sheet-scrim"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'color-mix(in srgb, var(--ink) 42%, transparent)', display: 'grid', placeItems: 'center', padding: 24 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="lb-anim-in lb-scrollable"
+        style={{
+          width: 'min(860px, 100%)', maxHeight: '84vh', background: 'var(--surface)',
+          borderRadius: 'var(--r-lg)', padding: '22px 24px 24px', boxSizing: 'border-box',
+          boxShadow: '0 24px 60px -20px rgba(0,0,0,0.4)',
+        }}
+      >
+        {body}
+      </div>
+    </div>
+  );
+}
 
 /* ============================================================
    Outfit card — 오늘의 추천과 같은 컴팩트 카드 (2열 그리드용)
@@ -821,10 +965,14 @@ function DetailScreen({ ctx }) {
               <div style={{ width: 44, flex: 'none' }}><Thumb item={it} radius="var(--r-sm)" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{it.category} · {it.color}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{it.category}{it.color ? ` · ${it.color}` : ''}</div>
+                {it.wish && it.reason ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.45 }}>{it.reason}</div>
+                ) : null}
               </div>
               <div style={{ flex: 'none' }}>
-                {justAdded ? <Badge tone="good" icon="check">추가됨</Badge>
+                {it.wish ? <Badge tone="neutral">옷장에 없어요</Badge>
+                  : justAdded ? <Badge tone="good" icon="check">추가됨</Badge>
                   : !it.isAnchor ? <Badge tone="neutral">옷장에 있음</Badge>
                   : <Btn size="sm" variant="secondary" icon="plus" onClick={() => addToWardrobe(it.id)}>옷장에 추가</Btn>}
               </div>
@@ -915,4 +1063,4 @@ function DetailScreen({ ctx }) {
   );
 }
 
-Object.assign(window, { LookComposite, LookExpandBadge, OutfitCard, OutfitSkeleton, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });
+Object.assign(window, { LookComposite, LookExpandBadge, PickedOutfitsModal, OutfitCard, OutfitSkeleton, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });
