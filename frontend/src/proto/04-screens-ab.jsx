@@ -910,10 +910,57 @@ function useImportProgress(active) {
   return { step, pct, report };
 }
 
+/* 붙여넣기 한 덩어리에서 상품 목록을 뽑는다.
+   ① 수집기(tools/order-collector)가 만든 JSON  ② 그냥 여러 줄의 상품 URL
+   둘 다 받는다. 하나짜리 URL은 기존 단건 등록 흐름을 그대로 쓴다. */
+function normalizeForDup(raw) {
+  const str = String(raw || '').trim();
+  if (!str) return '';
+  try {
+    const u = new URL(/^https?:\/\//i.test(str) ? str : 'https://' + str);
+    const keep = [];
+    u.searchParams.forEach((v, k) => {
+      if (/^(goodsno|productno|itemid|prdno|goods_no|product_id|id|no)$/i.test(k)) keep.push(`${k.toLowerCase()}=${v}`);
+    });
+    return u.hostname.replace(/^www\./, '').toLowerCase()
+      + u.pathname.replace(/\/+$/, '').toLowerCase()
+      + (keep.length ? '?' + keep.sort().join('&') : '');
+  } catch (e) {
+    return str.toLowerCase();
+  }
+}
+
+function parseBulkPaste(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  if (raw.startsWith('{') || raw.startsWith('[')) {
+    try {
+      const data = JSON.parse(raw);
+      const list = Array.isArray(data) ? data : (data.items || []);
+      return list
+        .filter((it) => it && it.url)
+        .map((it) => ({
+          url: String(it.url),
+          name: String(it.name || '').trim(),
+          store: String(it.platform || it.store || '').trim(),
+          price: String(it.price || '').trim(),
+          purchasedAt: String(it.purchasedAt || '').trim(),
+        }));
+    } catch (e) { /* JSON이 아니면 아래 URL 스캔으로 */ }
+  }
+  const urls = raw.match(/https?:\/\/[^\s"'<>)]+/gi) || [];
+  const seen = new Set();
+  return urls
+    .map((u) => u.replace(/[.,)]+$/, ''))
+    .filter((u) => { const k = u.split('#')[0]; if (seen.has(k)) return false; seen.add(k); return true; })
+    .map((u) => ({ url: u, name: '', store: '', price: '', purchasedAt: '' }));
+}
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
+    importOrders, knownSourceUrls = [],
     openTryOn, openTryOnSetup, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -927,6 +974,9 @@ function AddSheet({ ctx }) {
   const [tab, setTab] = useS('photo');
   const [picked, setPicked] = useS(false);
   const [url, setUrl] = useS('');
+  // 여러 개 붙여넣었을 때(구매내역 수집기 JSON 또는 URL 여러 줄)의 후보 목록
+  const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
+  const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
   const [hint, setHint] = useS('');
@@ -1149,7 +1199,47 @@ function AddSheet({ ctx }) {
     closeAdd();
     openTryOn && openTryOn();
   };
-  const canSubmit = tab === 'photo' ? !!file : tab === 'url' ? !!url.trim() : false;
+  // 붙여넣기·입력에서 상품이 2개 이상 잡히면 단건 입력을 후보 목록으로 바꾼다.
+  const takeBulk = (text) => {
+    const found = parseBulkPaste(text);
+    if (found.length < 2) return false;
+    const known = new Set(knownSourceUrls);
+    setBulk(found.map((it) => {
+      const dup = known.has(normalizeForDup(it.url));
+      return { ...it, pick: !dup, dup, state: 'idle', error: '' };
+    }));
+    setUrl('');
+    setErr('');
+    return true;
+  };
+  const onUrlChange = (e) => {
+    const v = e.target.value;
+    if (takeBulk(v)) return;
+    setUrl(v);
+    setErr('');
+  };
+  const onUrlPaste = (e) => {
+    const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (takeBulk(text)) e.preventDefault();
+  };
+  const bulkPicked = (bulk || []).filter((b) => b.pick);
+  const runBulk = async () => {
+    if (!importOrders || !bulkPicked.length) return;
+    setErr('');
+    const targets = bulkPicked.slice();
+    setBulkRun({ index: 0, total: targets.length });
+    setBulk((arr) => arr.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
+    const mark = (url2, patch) => setBulk((arr) => arr.map((b) => (b.url === url2 ? { ...b, ...patch } : b)));
+    const { failed } = await importOrders(targets, (p) => {
+      setBulkRun({ index: p.index, total: p.total, label: p.item.name || p.item.url });
+      if (p.state === 'run') mark(p.item.url, { state: 'run' });
+      if (p.state === 'ok') mark(p.item.url, { state: 'ok', pick: false });
+      if (p.state === 'fail') mark(p.item.url, { state: 'fail', error: p.error || '실패' });
+    });
+    setBulkRun(null);
+    if (!failed.length) closeAdd();
+  };
+  const canSubmit = tab === 'photo' ? !!file : tab === 'url' ? (bulk ? !!bulkPicked.length : !!url.trim()) : false;
   const onSubmitAdd = async () => {
     setErr('');
     if (tab === 'tryon') return;
@@ -1487,6 +1577,74 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </>
+                    ) : bulk ? (
+                      /* 여러 개를 붙여넣었을 때: 후보를 고르고 한 번에 담는다.
+                         이미 옷장에 있는 주소는 미리 체크를 풀어 둔다. */
+                      <div style={{
+                        borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                        boxShadow: 'inset 0 0 0 1px var(--line)', padding: 10,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px 8px' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>
+                            {bulk.length}개 중 <span className="tnum">{bulkPicked.length}</span>개 선택
+                          </span>
+                          <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: b.state !== 'ok' })))}
+                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '2px 4px' }}>전체 선택</button>
+                          <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: false })))}
+                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '2px 4px' }}>해제</button>
+                          <span style={{ flex: 1 }} />
+                          <button type="button" onClick={() => { setBulk(null); setBulkRun(null); }}
+                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', padding: '2px 4px' }}>지우기</button>
+                        </div>
+                        <div className="lb-scrollable" style={{ maxHeight: 236, overflowY: 'auto' }}>
+                          {bulk.map((b) => {
+                            const host = (() => { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch (e) { return b.url; } })();
+                            const busy = b.state === 'run' || b.state === 'wait';
+                            return (
+                              <label key={b.url} style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
+                                borderTop: '1px solid var(--line)', cursor: busy ? 'default' : 'pointer',
+                                opacity: b.state === 'ok' ? 0.55 : 1,
+                              }}>
+                                <input
+                                  type="checkbox"
+                                  checked={!!b.pick}
+                                  disabled={busy || b.state === 'ok'}
+                                  onChange={() => setBulk((arr) => arr.map((x) => (x.url === b.url ? { ...x, pick: !x.pick } : x)))}
+                                  style={{ flex: 'none', width: 16, height: 16, accentColor: 'var(--ink)' }}
+                                />
+                                <span style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 13, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {b.name || host}
+                                  </span>
+                                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {[b.store || host, b.price, b.purchasedAt].filter(Boolean).join(' · ')}
+                                  </span>
+                                </span>
+                                <span style={{ flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)' }}>
+                                  {b.state === 'run' ? '등록 중…'
+                                    : b.state === 'ok' ? '담았어요'
+                                    : b.state === 'fail' ? (b.error || '실패')
+                                    : b.dup ? '이미 있음' : ''}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {bulkRun ? (
+                          <div style={{ padding: '10px 6px 2px' }}>
+                            <div style={{ height: 4, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${Math.round(((bulkRun.index + 1) / Math.max(1, bulkRun.total)) * 100)}%`,
+                                height: '100%', background: 'var(--accent)', transition: 'width var(--dur) var(--ease)',
+                              }} />
+                            </div>
+                            <div className="tnum" style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-2)' }}>
+                              {bulkRun.index + 1} / {bulkRun.total} · {String(bulkRun.label || '').slice(0, 28)}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <div style={{
                         ...dropBase, cursor: 'default', padding: '0 18px',
@@ -1494,7 +1652,8 @@ function AddSheet({ ctx }) {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%' }}>
                           <input
                             value={url}
-                            onChange={(e) => { setUrl(e.target.value); setErr(''); }}
+                            onChange={onUrlChange}
+                            onPaste={onUrlPaste}
                             placeholder="https://…"
                             className="lb-input"
                             style={{
@@ -1504,7 +1663,7 @@ function AddSheet({ ctx }) {
                             }}
                           />
                           <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
-                            무신사·29CM 등 상품 페이지 주소를 붙여넣어요
+                            상품 주소 하나, 또는 여러 개를 한 번에 붙여넣어도 돼요
                           </span>
                         </div>
                       </div>
@@ -1627,8 +1786,15 @@ function AddSheet({ ctx }) {
                           옷 대보기
                         </Btn>
                       ) : (
-                        <Btn full size="lg" icon="sparkle" onClick={onSubmitAdd} disabled={!canSubmit || busy}>
-                          {busy ? '인식 중…' : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
+                        <Btn
+                          full size="lg" icon="sparkle"
+                          onClick={bulk ? runBulk : onSubmitAdd}
+                          disabled={!canSubmit || busy || !!bulkRun}
+                        >
+                          {bulkRun ? '담는 중…'
+                            : bulk ? `${bulkPicked.length}개 옷장에 담기`
+                            : busy ? '인식 중…'
+                            : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
                         </Btn>
                       )}
                     </div>

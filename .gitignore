@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 .env
 uploads/
+tools/order-collector/node_modules/
+tools/order-collector/orders.json

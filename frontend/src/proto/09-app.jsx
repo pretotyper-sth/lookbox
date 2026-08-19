@@ -309,6 +309,23 @@ function syncAllFromWardrobe(ownedItems, archivedItems) {
   (archivedItems || []).forEach(liveRememberItem);
 }
 
+/** 등록 중복 판정용 URL 정규화 — 추적 파라미터·해시·꼬리 슬래시를 떼고 상품 식별자만 남긴다. */
+function normalizeProductUrl(raw) {
+  const str = String(raw || '').trim();
+  if (!str) return '';
+  try {
+    const u = new URL(/^https?:\/\//i.test(str) ? str : 'https://' + str);
+    const keep = [];
+    u.searchParams.forEach((v, k) => {
+      if (/^(goodsno|productno|itemid|prdno|goods_no|product_id|id|no)$/i.test(k)) keep.push(`${k.toLowerCase()}=${v}`);
+    });
+    const path = u.pathname.replace(/\/+$/, '').toLowerCase();
+    return u.hostname.replace(/^www\./, '').toLowerCase() + path + (keep.length ? '?' + keep.sort().join('&') : '');
+  } catch (e) {
+    return str.toLowerCase();
+  }
+}
+
 function liveRememberItem(item) {
   if (!item) return null;
   LB_DATA.ALL[item.id] = item;
@@ -1638,6 +1655,30 @@ function App() {
   };
   const closePickSheet = () => setPickSheet(null);
 
+  // 쇼핑몰 구매내역(또는 URL 여러 개)을 한 번에 등록한다. 한 건씩 순서대로 돌리는 이유:
+  // 추출은 아이템마다 몇 초씩 걸리고, 한 건이 실패해도 나머지는 계속 담겨야 한다.
+  const importOrders = async (list, onProgress) => {
+    const queue = (list || []).filter((it) => it && it.url);
+    const done = [];
+    const failed = [];
+    for (let i = 0; i < queue.length; i++) {
+      const it = queue[i];
+      if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'run' });
+      try {
+        const res = await liveImportSource({ sourceType: 'url', url: it.url, status: 'owned' });
+        const got = (res.items || []).map(liveRememberItem);
+        if (got.length) putLiveItems(got, true);
+        done.push(...got);
+        if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'ok', items: got });
+      } catch (e) {
+        failed.push({ ...it, error: e.message || '등록하지 못했어요' });
+        if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'fail', error: e.message });
+      }
+    }
+    if (done.length) showToast(`${done.length}개를 옷장에 담았어요`, 'check');
+    return { done, failed };
+  };
+
   const openDetail = (look, looks, label) => {
     setDetailLook(look);
     setDetailList(looks && looks.length ? { looks, label: label || '다른 코디' } : null);
@@ -1730,7 +1771,10 @@ function App() {
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    requestPickedOutfits,
+    requestPickedOutfits, importOrders,
+    knownSourceUrls: [...items, ...archived]
+      .map((it) => normalizeProductUrl(it && it.sourceUrl))
+      .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame,

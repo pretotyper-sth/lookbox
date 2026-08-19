@@ -3589,6 +3589,11 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
         page = requests.get(page_url, headers=headers, timeout=15)
     except requests.RequestException as exc:
         raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG) from exc
+    # Content-Type에 charset이 없으면 requests는 text/*를 ISO-8859-1로 읽는다. 그러면
+    # 한글 상품명이 깨져서(ìì´ë…) 그대로 이름·색으로 저장된다. 본문에서 인코딩을 추정하고,
+    # 실패하면 UTF-8로 읽는다 — 국내 쇼핑몰은 사실상 전부 UTF-8이다.
+    if "charset" not in (page.headers.get("content-type") or "").lower():
+        page.encoding = page.apparent_encoding or "utf-8"
     html = page.text or ""
     if _page_looks_blocked(page.status_code, html):
         raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
