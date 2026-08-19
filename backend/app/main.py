@@ -14,7 +14,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 import truststore
@@ -2965,6 +2965,9 @@ class LiveImportUrl(BaseModel):
     url: str
     status: str = "owned"
     extract_hint: str = ""
+    # 이미 옷장에 있는 상품이면 추출·저장을 건너뛴다. 일괄 등록에서 특히 중요하다 —
+    # 프론트가 걸러 주지 않더라도 여기서 막아야 중복도 비용도 막힌다.
+    skip_duplicate: bool = True
 
 
 class LiveCoordinate(BaseModel):
@@ -2995,6 +2998,284 @@ class LiveCoordinate(BaseModel):
 class LiveStatus(BaseModel):
     ids: list[str] = []
     status: str = "owned"
+
+
+# ---- 중복 감지 -----------------------------------------------------------------
+# 이미 등록한 옷을 구매내역에서 또 담으면 옷장이 지저분해지고 추출 비용도 두 번 든다.
+# 주소만 비교하면 같은 상품을 다른 경로(모바일 도메인·단축 URL·다른 몰)로 담은 경우를
+# 놓치므로, 신호를 여러 개 쓴다. 전부 AI 없이 계산한다(주소·상품코드·이름·사진 해시).
+
+_DUP_STOPWORDS = {
+    "유니섹스", "남성", "여성", "공용", "정품", "신상", "무료배송", "단독",
+    "기획", "세트", "택배", "국내배송", "새상품", "미착용",
+}
+_SIZE_TOKEN = re.compile(r"^(xxs|xs|s|m|l|xl|xxl|2xl|3xl|free|\d{2,3}(cm|mm)?)$", re.I)
+
+
+def _product_code(url: str) -> str:
+    """상품 식별자. 쿼리(goodsNo=…)나 경로 끝의 긴 숫자."""
+    try:
+        u = urlparse(url)
+    except Exception:  # noqa: BLE001
+        return ""
+    q = parse_qs(u.query or "")
+    for key in ("goodsno", "productno", "itemid", "prdno", "goods_no", "product_id", "productid"):
+        for k, vals in q.items():
+            if k.lower() == key and vals and vals[0].strip():
+                return f"{key}:{vals[0].strip()}"
+    tail = [seg for seg in (u.path or "").split("/") if seg]
+    for seg in reversed(tail):
+        if re.fullmatch(r"\d{5,}", seg):
+            return f"path:{seg}"
+    return ""
+
+
+def _url_key(url: str) -> str:
+    """추적 파라미터·꼬리 슬래시·m. 서브도메인을 떼고 남는 주소."""
+    try:
+        u = urlparse(url if re.match(r"^https?://", url or "", re.I) else f"https://{url}")
+    except Exception:  # noqa: BLE001
+        return (url or "").strip().lower()
+    host = (u.hostname or "").lower()
+    host = re.sub(r"^(www|m|mobile|order|shop|store)\.", "", host)
+    code = _product_code(url)
+    path = (u.path or "").rstrip("/").lower()
+    return f"{host}{path}" + (f"|{code}" if code else "")
+
+
+def _name_tokens(name: str) -> set[str]:
+    """이름을 비교 가능한 토큰으로. 대괄호·색·사이즈·판매문구는 버린다."""
+    text = html_lib.unescape(str(name or ""))
+    text = re.sub(r"[\[\(\{][^\]\)\}]*[\]\)\}]", " ", text)   # [유니섹스] (단독) 등
+    text = text.split("_")[0] if "_" in text else text             # 이름_색상
+    text = re.sub(r"[^0-9A-Za-z가-힣]+", " ", text).strip().lower()
+    out = set()
+    for tok in text.split():
+        if len(tok) < 2 or tok in _DUP_STOPWORDS or _SIZE_TOKEN.match(tok):
+            continue
+        if _norm_color_token(tok) in {_norm_color_token(c) for c in COLOR_WORDS}:
+            continue
+        out.add(tok)
+    return out
+
+
+def _name_similarity(a: set[str], b: set[str]) -> float:
+    """토큰 포함도. 한쪽이 다른 쪽을 거의 담고 있으면 같은 상품으로 본다."""
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    return inter / min(len(a), len(b))
+
+
+def _content_crop(rgb: Image.Image) -> Image.Image:
+    """상품컷은 대부분이 빈 배경이라 그대로 지문을 뜨면 서로 다 비슷해진다.
+    배경색과 다른 영역(=옷)만 잘라 낸 뒤 비교한다."""
+    w, h = rgb.size
+    edge = rgb.crop((0, 0, w, max(1, h // 20)))
+    ext = edge.getextrema()
+    bg = tuple((lo + hi) // 2 for lo, hi in ext)
+    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, bg)).convert("L")
+    box = diff.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box:
+        return rgb
+    bw, bh = box[2] - box[0], box[3] - box[1]
+    if bw < w * 0.15 or bh < h * 0.15:
+        return rgb
+    return rgb.crop(box)
+
+
+_FP_VERSION = 2
+_FP_GRID = 16   # dHash 해상도(16×16 = 256bit). 64bit는 '흰 배경 + 어두운 옷'끼리 너무 쉽게 겹쳤다.
+_FP_COLOR = 6   # 색 격자(6×6×3 = 108값)
+
+
+def _image_fingerprint(raw: bytes) -> dict[str, Any] | None:
+    """사진 지문: 형태(dHash 256bit) + 색(6×6 평균색).
+
+    상품컷은 대부분 흰 배경이라 저해상도 해시로는 '어두운 상의'끼리 다 비슷해진다.
+    해상도를 올리고 색까지 함께 봐야 '같은 옷 다른 색'과 '다른 옷 같은 배경'을 가른다.
+    리사이즈·재압축·약한 크롭에는 견딘다."""
+    try:
+        rgb = _content_crop(Image.open(io.BytesIO(raw)).convert("RGB"))
+    except Exception:  # noqa: BLE001
+        return None
+    gray = rgb.convert("L").resize((_FP_GRID + 1, _FP_GRID), Image.BILINEAR)
+    px = gray.load()
+    bits = 0
+    for y in range(_FP_GRID):
+        for x in range(_FP_GRID):
+            bits = (bits << 1) | (1 if px[x, y] > px[x + 1, y] else 0)
+    cells = rgb.resize((_FP_COLOR, _FP_COLOR), Image.BILINEAR)
+    color = list(cells.tobytes())   # RGB 순서로 평탄화된 값
+    return {"v": _FP_VERSION, "d": bits, "c": color}
+
+
+def _hamming(a: int, b: int) -> int:
+    return bin(a ^ b).count("1")
+
+
+def _color_distance(a: list[int], b: list[int]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 255.0
+    return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+
+
+def _fp_usable(fp: Any) -> bool:
+    return isinstance(fp, dict) and fp.get("v") == _FP_VERSION and isinstance(fp.get("d"), int)
+
+
+def _fp_match(a: dict[str, Any] | None, b: dict[str, Any] | None) -> str:
+    """두 지문이 같은 사진인지. 'same'(확실) / 'near'(비슷) / ''(다름).
+
+    256비트 중 8%(20비트) 이내 + 색 차이 10 이내면 같은 사진으로 본다. 쇼핑몰은 같은
+    상품에 같은 사진을 쓰므로 이 정도면 리사이즈·재압축 차이만 흡수한다."""
+    if not (_fp_usable(a) and _fp_usable(b)):
+        return ""
+    shape = _hamming(a["d"], b["d"])
+    color = _color_distance(a.get("c") or [], b.get("c") or [])
+    if shape <= 20 and color <= 10:
+        return "same"
+    if shape <= 40 and color <= 18:
+        return "near"
+    return ""
+
+
+def _fetch_bytes(url: str, limit: int = 3_000_000) -> bytes | None:
+    if not url:
+        return None
+    try:
+        res = requests.get(url, timeout=8, stream=True)
+        if res.status_code >= 400:
+            return None
+        raw = res.raw.read(limit + 1, decode_content=True)
+        return raw if raw and len(raw) <= limit else (raw[:limit] if raw else None)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _wardrobe_dupe_index(user_id: str, with_hashes: bool = True) -> list[dict[str, Any]]:
+    """중복 비교용 옷장 색인. 사진 해시는 metadata에 저장해 두고 재사용한다.
+
+    지운 아이템은 넣지 않는다 — 사용자가 지웠으면 다시 담을 수 있어야 한다.
+    보관(archived)은 넣는다 — 옷장에 있는 옷이다.
+    """
+    rows = (
+        supabase_admin.table("wardrobe_items")
+        .select("id,name,color,image_url,metadata,status")
+        .eq("user_id", user_id)
+        .neq("status", "deleted")
+        .limit(1000)
+        .execute()
+        .data
+        or []
+    )
+    index: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    for row in rows:
+        meta = row.get("metadata") or {}
+        entry = {
+            "id": row["id"],
+            "name": row.get("name") or "",
+            "tokens": _name_tokens(row.get("name")),
+            "color": _norm_color_token(_split_color_from_title(row.get("name") or "")[1] or row.get("color") or ""),
+            "brand": str(meta.get("brand") or "").strip().lower(),
+            "store": str(meta.get("store") or "").strip().lower(),
+            "url_key": _url_key(str(meta.get("source_url") or "")),
+            "code": _product_code(str(meta.get("source_url") or "")),
+            "fp": meta.get("img_fp") if _fp_usable(meta.get("img_fp")) else None,
+            "meta": meta,
+        }
+        index.append(entry)
+        if with_hashes and not _fp_usable(entry["fp"]):
+            missing.append(entry)
+
+    if missing:
+        # 원본(쇼핑몰에서 받은 사진)을 해시한다. 컷아웃 결과는 배경이 지워져 있어
+        # 쇼핑몰 썸네일과 비교되지 않는다.
+        def fill(entry: dict[str, Any]) -> None:
+            meta = entry["meta"]
+            src = meta.get("original_url") or ""
+            raw = _fetch_bytes(src)
+            fp = _image_fingerprint(raw) if raw else None
+            if not fp:
+                return
+            entry["fp"] = fp
+            patch = dict(meta)
+            patch["img_fp"] = fp
+            try:
+                (
+                    supabase_admin.table("wardrobe_items")
+                    .update({"metadata": patch})
+                    .eq("id", entry["id"])
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[dupe] hash save failed {entry['id']}: {exc}", flush=True)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(fill, missing[:120]))
+    return index
+
+
+def _match_duplicate(
+    index: list[dict[str, Any]],
+    *,
+    url: str = "",
+    name: str = "",
+    brand: str = "",
+    store: str = "",
+    color: str = "",
+    fp: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str] | None:
+    """후보 하나가 옷장의 어떤 아이템과 같은지 본다. (아이템, 이유) 또는 None."""
+    url_key = _url_key(url) if url else ""
+    code = _product_code(url) if url else ""
+    tokens = _name_tokens(name)
+    brand_l = str(brand or "").strip().lower()
+    store_l = str(store or "").strip().lower()
+    # 이름에 색이 붙어 오는 경우가 많다(…셔츠_블루). 색까지 알면 '같은 상품 다른 색'을 가른다.
+    cand_color = _norm_color_token(_split_color_from_title(name or "")[1] or color or "")
+
+    def color_conflict(row: dict[str, Any]) -> bool:
+        return bool(cand_color and row.get("color") and cand_color != row["color"])
+    best: tuple[dict[str, Any], str] | None = None
+    for row in index:
+        if url_key and row["url_key"] and url_key == row["url_key"]:
+            return row, "same_url"
+        if code and row["code"] and code == row["code"]:
+            return row, "same_code"
+        photo = _fp_match(fp, row.get("fp")) if fp else ""
+        # 사진이 같아 보여도 이름이 완전히 다르면(공통 토큰 0) 단정하지 않는다 —
+        # 흰 배경 상품컷끼리는 형태가 우연히 닮을 수 있다.
+        if photo == "same" and len(tokens) >= 2 and row["tokens"] and _name_similarity(tokens, row["tokens"]) < 0.34:
+            photo = "near"
+        if photo == "same":
+            return row, "same_photo"
+        if photo == "near" and _name_similarity(tokens, row["tokens"]) >= 0.6 and not color_conflict(row):
+            best = best or (row, "same_photo_name")
+        # 이름만 같은 경우는 색이 다르면 다른 상품으로 둔다 — 같은 옷의 다른 색을
+        # 일부러 둘 다 담아 둔 사람이 있다(주소·상품코드·사진이 같으면 위에서 이미 잡힌다).
+        sim = _name_similarity(tokens, row["tokens"])
+        if color_conflict(row):
+            continue
+        if sim >= 0.9 and len(tokens) >= 2:
+            best = best or (row, "same_name")
+        elif sim >= 0.75 and len(tokens) >= 2 and (
+            (brand_l and brand_l == row["brand"]) or (store_l and store_l == row["store"])
+        ):
+            best = best or (row, "same_name_brand")
+    return best
+
+
+_DUP_REASON_KO = {
+    "same_url": "같은 상품 주소예요",
+    "same_code": "같은 상품이에요",
+    "same_photo": "사진이 같아요",
+    "same_photo_name": "사진과 이름이 거의 같아요",
+    "same_name": "이름이 거의 같아요",
+    "same_name_brand": "같은 브랜드의 같은 이름이에요",
+}
 
 
 def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
@@ -3160,6 +3441,9 @@ def _store_uploaded_item(
             "has_text_logo": bool(meta.get("has_text_logo")),
             "logo_text": str(meta.get("logo_text") or "").strip()[:80],
             "source_hash": source_hash,
+            # 중복 비교용 사진 지문. 지금 원본 바이트를 들고 있으니 여기서 남겨 두면
+            # 나중에 비교할 때 이미지를 다시 내려받지 않아도 된다.
+            "img_fp": _image_fingerprint(raw),
             "extract_profile": _EXTRACTION_PROFILE,
             "extraction_timing": {
                 "classify_ms": classify_ms,
@@ -4271,6 +4555,57 @@ def live_refresh_cache(user: UserContext = Depends(current_user)) -> dict[str, A
     return {"updated": updated, "skipped": skipped}
 
 
+class DupeCandidate(BaseModel):
+    url: str = ""
+    name: str = ""
+    brand: str = ""
+    store: str = ""
+    color: str = ""
+    thumb: str = ""
+
+
+class DupeCheck(BaseModel):
+    items: list[DupeCandidate] = []
+
+
+@app.post("/api/live/import/check-duplicates")
+def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """구매내역 후보들이 이미 옷장에 있는지 본다. AI를 쓰지 않으므로 비용이 없다.
+
+    주소·상품코드·이름·사진 지문을 함께 본다. 등록 전에 걸러 내면 추출 비용도 아낀다.
+    """
+    require_supabase()
+    cands = (body.items or [])[:200]
+    if not cands:
+        return {"results": []}
+    index = _wardrobe_dupe_index(user.id)
+
+    # 후보 썸네일은 병렬로 받아 지문만 뽑는다(실패는 그냥 건너뛴다).
+    def hash_of(c: DupeCandidate) -> int | None:
+        raw = _fetch_bytes(c.thumb) if c.thumb else None
+        return _image_fingerprint(raw) if raw else None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        prints = list(pool.map(hash_of, cands))
+
+    results = []
+    for c, fp in zip(cands, prints):
+        hit = _match_duplicate(
+            index, url=c.url, name=c.name, brand=c.brand, store=c.store, color=c.color, fp=fp
+        )
+        results.append({
+            "url": c.url,
+            "duplicate": bool(hit),
+            "reason": _DUP_REASON_KO.get(hit[1], "") if hit else "",
+            "reasonCode": hit[1] if hit else "",
+            "matchedId": hit[0]["id"] if hit else "",
+            "matchedName": hit[0]["name"] if hit else "",
+        })
+    dupes = sum(1 for r in results if r["duplicate"])
+    print(f"[dupe] checked={len(results)} duplicate={dupes}", flush=True)
+    return {"results": results, "duplicates": dupes}
+
+
 @app.post("/api/live/import/photo")
 async def live_import_photo(
     image: UploadFile = File(...),
@@ -4313,6 +4648,28 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
         report("fetch")
         raw, content_type, meta = _fetch_product_meta(url)
         suffix = ".png" if "png" in content_type else ".jpg"
+        if body.skip_duplicate:
+            # 추출·생성 전에 본다. 여기서 걸리면 돈이 한 푼도 안 든다.
+            hit = _match_duplicate(
+                _wardrobe_dupe_index(uid),
+                url=url,
+                name=meta.get("title") or "",
+                brand=meta.get("brand") or "",
+                store=meta.get("store") or "",
+                color=meta.get("color") or "",
+                fp=_image_fingerprint(raw),
+            )
+            if hit:
+                row, reason = hit
+                print(f"[dupe] skip import ({reason}) — {row['name'][:30]}", flush=True)
+                return {
+                    "items": [],
+                    "duplicate": True,
+                    "reason": _DUP_REASON_KO.get(reason, "이미 옷장에 있어요"),
+                    "reasonCode": reason,
+                    "matchedId": row["id"],
+                    "matchedName": row["name"],
+                }
         row = _store_uploaded_item(
             uid,
             raw,

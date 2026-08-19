@@ -1657,15 +1657,40 @@ function App() {
 
   // 쇼핑몰 구매내역(또는 URL 여러 개)을 한 번에 등록한다. 한 건씩 순서대로 돌리는 이유:
   // 추출은 아이템마다 몇 초씩 걸리고, 한 건이 실패해도 나머지는 계속 담겨야 한다.
+  // 후보들이 이미 옷장에 있는지 서버에 물어본다(주소·상품코드·이름·사진 지문 — AI 아님).
+  const checkDuplicates = async (list) => {
+    const items = (list || []).filter((it) => it && it.url).map((it) => ({
+      url: it.url, name: it.name || '', brand: it.brand || '', store: it.store || '', thumb: it.thumb || '',
+    }));
+    if (!items.length) return {};
+    try {
+      const res = await liveJSON('/api/live/import/check-duplicates', {
+        method: 'POST', body: JSON.stringify({ items }),
+      });
+      const map = {};
+      (res.results || []).forEach((r) => { map[r.url] = r; });
+      return map;
+    } catch (e) {
+      return {};   // 확인에 실패해도 등록은 진행한다 — 서버가 등록 시점에 한 번 더 막는다
+    }
+  };
+
   const importOrders = async (list, onProgress) => {
     const queue = (list || []).filter((it) => it && it.url);
     const done = [];
     const failed = [];
+    const skipped = [];
     for (let i = 0; i < queue.length; i++) {
       const it = queue[i];
       if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'run' });
       try {
         const res = await liveImportSource({ sourceType: 'url', url: it.url, status: 'owned' });
+        // 서버가 '이미 옷장에 있다'고 판단하면 등록하지 않고 이유를 돌려준다.
+        if (res && res.duplicate) {
+          skipped.push({ ...it, reason: res.reason || '이미 옷장에 있어요', matchedName: res.matchedName || '' });
+          if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'dup', reason: res.reason });
+          continue;
+        }
         const got = (res.items || []).map(liveRememberItem);
         if (got.length) putLiveItems(got, true);
         done.push(...got);
@@ -1675,8 +1700,7 @@ function App() {
         if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'fail', error: e.message });
       }
     }
-    if (done.length) showToast(`${done.length}개를 옷장에 담았어요`, 'check');
-    return { done, failed };
+    return { done, failed, skipped };
   };
 
   const openDetail = (look, looks, label) => {
@@ -1771,7 +1795,7 @@ function App() {
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    requestPickedOutfits, importOrders,
+    requestPickedOutfits, importOrders, checkDuplicates,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
       .filter(Boolean),

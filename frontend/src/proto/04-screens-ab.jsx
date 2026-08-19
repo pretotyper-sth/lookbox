@@ -960,7 +960,7 @@ function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
-    importOrders, knownSourceUrls = [],
+    importOrders, checkDuplicates, knownSourceUrls = [],
     openTryOn, openTryOnSetup, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -977,6 +977,8 @@ function AddSheet({ ctx }) {
   // 여러 개 붙여넣었을 때(구매내역 수집기 JSON 또는 URL 여러 줄)의 후보 목록
   const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
+  const [bulkResult, setBulkResult] = useS(null); // {ok, dup, fail, failed[], skipped[]}
+  const [bulkChecking, setBulkChecking] = useS(false);
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
   const [hint, setHint] = useS('');
@@ -1204,12 +1206,28 @@ function AddSheet({ ctx }) {
     const found = parseBulkPaste(text);
     if (found.length < 2) return false;
     const known = new Set(knownSourceUrls);
-    setBulk(found.map((it) => {
+    const rows = found.map((it) => {
       const dup = known.has(normalizeForDup(it.url));
-      return { ...it, pick: !dup, dup, state: 'idle', error: '' };
-    }));
+      return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '' };
+    });
+    setBulk(rows);
     setUrl('');
     setErr('');
+    setBulkResult(null);
+    // 주소만으로는 같은 상품을 다른 경로로 담은 경우를 놓친다. 서버가 상품코드·이름·
+    // 사진 지문까지 보고 알려준다(AI 아님, 비용 없음).
+    if (checkDuplicates) {
+      setBulkChecking(true);
+      checkDuplicates(rows)
+        .then((map) => {
+          setBulk((arr) => (arr || []).map((b) => {
+            const hit = map[b.url];
+            if (!hit || !hit.duplicate) return b;
+            return { ...b, dup: true, dupReason: hit.reason || '이미 옷장에 있어요', matchedName: hit.matchedName || '', pick: false };
+          }));
+        })
+        .finally(() => setBulkChecking(false));
+    }
     return true;
   };
   const onUrlChange = (e) => {
@@ -1227,17 +1245,31 @@ function AddSheet({ ctx }) {
     if (!importOrders || !bulkPicked.length) return;
     setErr('');
     const targets = bulkPicked.slice();
+    const preSkipped = (bulk || []).filter((b) => b.dup && !b.pick);
     setBulkRun({ index: 0, total: targets.length });
     setBulk((arr) => arr.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
     const mark = (url2, patch) => setBulk((arr) => arr.map((b) => (b.url === url2 ? { ...b, ...patch } : b)));
-    const { failed } = await importOrders(targets, (p) => {
+    const { done, failed, skipped } = await importOrders(targets, (p) => {
       setBulkRun({ index: p.index, total: p.total, label: p.item.name || p.item.url });
       if (p.state === 'run') mark(p.item.url, { state: 'run' });
       if (p.state === 'ok') mark(p.item.url, { state: 'ok', pick: false });
+      if (p.state === 'dup') mark(p.item.url, { state: 'dup', pick: false, dup: true, dupReason: p.reason || '이미 옷장에 있어요' });
       if (p.state === 'fail') mark(p.item.url, { state: 'fail', error: p.error || '실패' });
     });
     setBulkRun(null);
-    if (!failed.length) closeAdd();
+    setBulkResult({
+      ok: done.length,
+      dup: skipped.length + preSkipped.length,
+      fail: failed.length,
+      failed,
+      skipped: [...skipped, ...preSkipped.map((b) => ({ ...b, reason: b.dupReason || '이미 옷장에 있어요' }))],
+    });
+  };
+  const retryFailed = () => {
+    const again = (bulkResult && bulkResult.failed) || [];
+    if (!again.length) return;
+    setBulkResult(null);
+    setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
   const canSubmit = tab === 'photo' ? !!file : tab === 'url' ? (bulk ? !!bulkPicked.length : !!url.trim()) : false;
   const onSubmitAdd = async () => {
@@ -1577,9 +1609,57 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </>
+                    ) : bulkResult ? (
+                      /* 다 담고 난 뒤 요약. 중복으로 건너뛴 것과 실패한 것을 이유까지 보여준다. */
+                      <div style={{
+                        borderRadius: 'var(--r-md)', background: 'var(--ivory)',
+                        boxShadow: 'inset 0 0 0 1px var(--line)', padding: '16px 14px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            width: 30, height: 30, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center',
+                            background: bulkResult.ok ? 'var(--accent)' : 'var(--surface-2)',
+                            color: bulkResult.ok ? 'var(--accent-ink)' : 'var(--ink-2)',
+                          }}>
+                            <Icon name={bulkResult.ok ? 'check' : 'hanger'} size={16} stroke={2.4} />
+                          </span>
+                          <span style={{ fontSize: 15.5, fontWeight: 800 }}>
+                            {bulkResult.ok ? `${bulkResult.ok}개를 옷장에 담았어요` : '새로 담을 옷이 없었어요'}
+                          </span>
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                          {bulkResult.dup > 0 && (
+                            <div>이미 있는 옷 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>{bulkResult.dup}건</b>은 건너뛰었어요.</div>
+                          )}
+                          {bulkResult.fail > 0 && (
+                            <div>가져오지 못한 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>{bulkResult.fail}건</b>은 아래에 남겨 뒀어요.</div>
+                          )}
+                          {bulkResult.dup === 0 && bulkResult.fail === 0 && <div>중복이나 실패 없이 전부 담겼어요.</div>}
+                        </div>
+                        {(bulkResult.skipped.length > 0 || bulkResult.failed.length > 0) && (
+                          <div className="lb-scrollable" style={{ marginTop: 12, maxHeight: 150, overflowY: 'auto' }}>
+                            {bulkResult.skipped.map((x) => (
+                              <div key={'s' + x.url} style={{ display: 'flex', gap: 8, padding: '6px 2px', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+                                <span style={{ flex: 1, minWidth: 0, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {x.name || x.url}
+                                </span>
+                                <span style={{ flex: 'none', color: 'var(--ink-3)' }}>{x.reason || '이미 있음'}</span>
+                              </div>
+                            ))}
+                            {bulkResult.failed.map((x) => (
+                              <div key={'f' + x.url} style={{ display: 'flex', gap: 8, padding: '6px 2px', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+                                <span style={{ flex: 1, minWidth: 0, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {x.name || x.url}
+                                </span>
+                                <span style={{ flex: 'none', color: '#B0573C' }}>{String(x.error || '실패').slice(0, 22)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ) : bulk ? (
                       /* 여러 개를 붙여넣었을 때: 후보를 고르고 한 번에 담는다.
-                         이미 옷장에 있는 주소는 미리 체크를 풀어 둔다. */
+                         이미 옷장에 있는 것은 미리 체크를 풀어 둔다(주소·상품코드·이름·사진). */
                       <div style={{
                         borderRadius: 'var(--r-md)', background: 'var(--ivory)',
                         boxShadow: 'inset 0 0 0 1px var(--line)', padding: 10,
@@ -1588,6 +1668,7 @@ function AddSheet({ ctx }) {
                           <span style={{ fontSize: 13, fontWeight: 700 }}>
                             {bulk.length}개 중 <span className="tnum">{bulkPicked.length}</span>개 선택
                           </span>
+                          {bulkChecking && <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>중복 확인 중…</span>}
                           <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: b.state !== 'ok' })))}
                             style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '2px 4px' }}>전체 선택</button>
                           <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: false })))}
@@ -1624,8 +1705,9 @@ function AddSheet({ ctx }) {
                                 <span style={{ flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)' }}>
                                   {b.state === 'run' ? '등록 중…'
                                     : b.state === 'ok' ? '담았어요'
+                                    : b.state === 'dup' ? (b.dupReason || '이미 있음')
                                     : b.state === 'fail' ? (b.error || '실패')
-                                    : b.dup ? '이미 있음' : ''}
+                                    : b.dup ? (b.dupReason || '이미 있음') : ''}
                                 </span>
                               </label>
                             );
@@ -1785,6 +1867,15 @@ function AddSheet({ ctx }) {
                         >
                           옷 대보기
                         </Btn>
+                      ) : bulkResult ? (
+                          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                            {bulkResult.fail > 0 && (
+                              <Btn variant="soft" icon="sparkle" onClick={retryFailed} style={{ flex: 1 }}>
+                                {bulkResult.fail}건 다시 시도
+                              </Btn>
+                            )}
+                            <Btn icon="check" onClick={closeAdd} style={{ flex: 1 }}>확인</Btn>
+                          </div>
                       ) : (
                         <Btn
                           full size="lg" icon="sparkle"
