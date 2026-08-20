@@ -428,6 +428,13 @@ CREDIT_COSTS = {
     "model_look": 5,
     "tryon_body": 5,
 }
+# 매달 이 횟수까지는 크레딧을 받지 않는다. '바로 보기'는 카메라로 옷을 대보는 기능이고
+# 그 자체는 API 호출이 없다(전부 기기에서 처리). 전신 이미지를 AI로 한 번 그려 주는 건
+# 준비 단계일 뿐인데, 거기에 크레딧을 물리면 기능 전체가 유료처럼 보인다.
+# 그래서 한 달에 한 번은 무료로 만들고, 그 뒤 다시 만들 때만 크레딧을 받는다.
+FREE_MONTHLY = {
+    "tryon_body": 1,
+}
 CREDIT_LABELS = {
     "import_url": "URL·구매내역으로 옷 등록",
     "import_photo": "사진으로 옷 등록",
@@ -581,11 +588,25 @@ def billing_state(user_id: str) -> dict[str, Any]:
     }
 
 
+def credits_needed(user_id: str, action: str) -> int:
+    """이 작업에 지금 필요한 크레딧. 매달 무료 횟수가 남아 있으면 0."""
+    base = CREDIT_COSTS.get(action, 1)
+    free_left = FREE_MONTHLY.get(action, 0)
+    if not free_left:
+        return base
+    period = _period_key()
+    used = sum(
+        1 for r in _ledger_rows(user_id)
+        if r.get("reason") == action and (r.get("metadata") or {}).get("period") == period
+    )
+    return 0 if used < free_left else base
+
+
 class CreditError(HTTPException):
     """크레딧이 모자랄 때. 프론트가 요금제 안내를 띄울 수 있게 코드를 함께 준다."""
 
-    def __init__(self, action: str, state: dict[str, Any]):
-        need = CREDIT_COSTS.get(action, 1)
+    def __init__(self, action: str, state: dict[str, Any], need: int | None = None):
+        need = CREDIT_COSTS.get(action, 1) if need is None else need
         super().__init__(
             status_code=402,
             detail=(
@@ -599,24 +620,26 @@ class CreditError(HTTPException):
 
 def ensure_credits(user_id: str, action: str) -> dict[str, Any]:
     """작업 전에 잔액을 확인한다. 모자라면 402로 막는다(돈이 나가기 전에)."""
-    need = CREDIT_COSTS.get(action, 1)
+    need = credits_needed(user_id, action)
     state = billing_state(user_id)
     if state["remaining"] < need:
-        raise CreditError(action, state)
+        raise CreditError(action, state, need)
     return state
 
 
 def spend_credits(user_id: str, action: str, metadata: dict[str, Any] | None = None) -> None:
-    """성공한 작업만 차감한다. 실패한 요청에까지 돈을 물리지 않는다."""
-    need = CREDIT_COSTS.get(action, 1)
-    if need <= 0:
-        return
+    """성공한 작업만 차감한다. 실패한 요청에까지 돈을 물리지 않는다.
+
+    무료 횟수로 처리된 경우에도 delta 0으로 기록을 남긴다 — 그래야 다음번에
+    '이번 달 무료를 이미 썼다'는 걸 알 수 있다.
+    """
+    need = credits_needed(user_id, action)
     try:
         supabase_admin.table("credit_ledger").insert({
             "user_id": user_id,
             "delta": -need,
             "reason": action,
-            "metadata": {**(metadata or {}), "period": _period_key()},
+            "metadata": {**(metadata or {}), "period": _period_key(), **({"free": True} if need == 0 else {})},
         }).execute()
     except Exception as exc:  # noqa: BLE001
         # 기록에 실패해도 사용자 요청은 이미 성공했다. 막지 않는다(수익보다 신뢰).
@@ -4992,7 +5015,12 @@ def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
             if not p.get("hidden") or p["id"] == state["plan"]
         ],
         "costs": [
-            {"action": k, "label": CREDIT_LABELS.get(k, k), "credits": v}
+            {
+                "action": k,
+                "label": CREDIT_LABELS.get(k, k),
+                "credits": v,
+                "freeMonthly": FREE_MONTHLY.get(k, 0),
+            }
             for k, v in CREDIT_COSTS.items()
         ],
     }
