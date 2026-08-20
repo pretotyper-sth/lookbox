@@ -426,6 +426,7 @@ CREDIT_COSTS = {
     "replace_image": 2,
     "coordinate": 1,
     "model_look": 5,
+    "tryon_body": 5,
 }
 CREDIT_LABELS = {
     "import_url": "URL·구매내역으로 옷 등록",
@@ -433,6 +434,7 @@ CREDIT_LABELS = {
     "replace_image": "옷 사진 다시 만들기",
     "coordinate": "코디 추천",
     "model_look": "AI 착장 이미지",
+    "tryon_body": "바로 보기 전신 이미지",
 }
 
 PLANS: dict[str, dict[str, Any]] = {
@@ -2282,6 +2284,15 @@ def _profile_block(profile: dict[str, Any] | None) -> str:
     fit = str(p.get("fit") or "").strip()
     if fit:
         lines.append(f"선호 실루엣: {fit}")
+    body = [x for x in (
+        f"{str(p.get('height')).strip()}cm" if str(p.get("height") or "").strip() else "",
+        f"{str(p.get('weight')).strip()}kg" if str(p.get("weight") or "").strip() else "",
+    ) if x]
+    if body:
+        lines.append(
+            "체형: " + " · ".join(body)
+            + " — 기장·핏이 이 체형에서 어떻게 떨어지는지 감안해 고른다(예: 크롭·와이드의 비율)."
+        )
     palettes = [str(x).strip() for x in (p.get("palettes") or []) if str(x).strip()][:5]
     if palettes:
         lines.append("선호 색 계열: " + ", ".join(palettes))
@@ -2892,8 +2903,20 @@ _MODEL_LOOK_PROMPT = """왼쪽 위 인물 사진의 얼굴을 그대로 유지�
 """
 
 
+def _body_note(profile: dict[str, Any] | None) -> str:
+    """키·몸무게가 있으면 그림에 반영할 한 줄. 없으면 빈 문자열(아무 말도 하지 않는다)."""
+    p = profile or {}
+    h = str(p.get("height") or "").strip()
+    w = str(p.get("weight") or "").strip()
+    if not h and not w:
+        return ""
+    bits = " ".join(x for x in (f"키 {h}cm" if h else "", f"몸무게 {w}kg" if w else "") if x)
+    return f"- 인물의 체형은 {bits} 정도로. 실제와 비슷한 비율로 그리고, 과장하지 마세요\n"
+
+
 def generate_model_look_image(
-    user_id: str, item_ids: list[str], items: list[dict[str, Any]], face_bytes: bytes
+    user_id: str, item_ids: list[str], items: list[dict[str, Any]], face_bytes: bytes,
+    profile: dict[str, Any] | None = None,
 ) -> str | None:
     """프로필 사진 얼굴을 쓴 모델이 이 코디를 입은 전신 컷.
 
@@ -2902,7 +2925,9 @@ def generate_model_look_image(
     조합이어도 다시 만든다(예전 얼굴이 남아 있으면 더 이상하다).
     """
     face_sig = hashlib.sha256(face_bytes).hexdigest()[:8]
-    key = f"model-{look_cache_key(item_ids)}-{face_sig}"
+    body_note = _body_note(profile)
+    body_sig = hashlib.sha256(body_note.encode()).hexdigest()[:4] if body_note else "0000"
+    key = f"model-{look_cache_key(item_ids)}-{face_sig}-{body_sig}"
     cached = (
         supabase_admin.table("generated_images")
         .select("*")
@@ -2930,7 +2955,7 @@ def generate_model_look_image(
             result = openai_client.images.edit(
                 model=OPENAI_IMAGE_MODEL,
                 image=source,
-                prompt=_MODEL_LOOK_PROMPT,
+                prompt=_MODEL_LOOK_PROMPT + body_note,
                 size="1024x1536",
                 quality=OPENAI_IMAGE_QUALITY,
             )
@@ -3228,6 +3253,9 @@ class LiveCoordinate(BaseModel):
     palettes: list[str] = []
     gender: str | None = None
     age: str | None = None
+    # 선택 입력. 있으면 착장 이미지와 코디 설명을 체형에 맞춘다.
+    height: str | None = None
+    weight: str | None = None
 
 
 class LiveStatus(BaseModel):
@@ -4849,6 +4877,86 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
+_TRYON_BODY_PROMPT = """이 사진 속 인물의 얼굴을 그대로 유지한 채, 정면 전신 사진을 만드세요.
+- 인물 한 명, 정면, 머리끝부터 발끝까지 잘리지 않게, 팔은 몸 옆에 자연스럽게
+- 몸에 붙는 무채색 기본 이너(반팔 티 + 레깅스/슬랙스)만 착용. 무늬·로고 없이
+- 배경은 #F2F1EE 단색, 그림자 최소, 자연스러운 실내 조명
+- 텍스트·로고·워터마크·프레임·다른 사람 추가 금지
+"""
+
+
+class TryOnBody(BaseModel):
+    face_data_url: str
+    height: str | None = None
+    weight: str | None = None
+
+
+@app.post("/api/live/tryon/body")
+def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """프로필 사진으로 '바로 보기'용 전신 이미지를 만든다.
+
+    예전에는 사용자가 전신 사진을 직접 올려야 했다. 매장에서 쓰려면 결국 전신 사진이
+    필요한데, 그걸 미리 찍어 둔 사람은 드물다. 퍼스널 컬러·AI 착장처럼 프로필 사진
+    하나로 만들어 준다. 이미지 생성이라 크레딧을 받는다(원가 $0.25).
+    """
+    require_supabase()
+    face = _decode_data_url(body.face_data_url)
+    if not face:
+        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요")
+    ensure_credits(user.id, "tryon_body")
+
+    note = _body_note({"height": body.height, "weight": body.weight})
+    sig = hashlib.sha256(face).hexdigest()[:10]
+    key = f"tryon-{sig}-{hashlib.sha256(note.encode()).hexdigest()[:4]}"
+    cached = (
+        supabase_admin.table("generated_images")
+        .select("image_url")
+        .eq("user_id", user.id)
+        .eq("cache_key", key)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if cached:
+        # 같은 얼굴·같은 체형이면 다시 만들지 않는다(크레딧도 받지 않는다).
+        return {"imageUrl": cached[0]["image_url"], "cached": True}
+
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="이미지 생성 기능이 비활성화돼 있어요.")
+    try:
+        source = io.BytesIO(face)
+        source.name = "face.png"
+        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
+            model=OPENAI_IMAGE_MODEL,
+            image=source,
+            prompt=_TRYON_BODY_PROMPT + note,
+            size="1024x1536",
+            quality=OPENAI_IMAGE_QUALITY,
+            input_fidelity="high",
+        )
+        out = base64.b64decode(result.data[0].b64_json)
+        log_ai_usage(user.id, "tryon_body", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY},
+                     usage=getattr(result, "usage", None))
+    except Exception as exc:  # noqa: BLE001
+        info = _openai_error_info(exc)
+        print(f"[tryon] body failed: {_fail_log(info)}", flush=True)
+        msg = _EXTRACT_FAIL_MSG.get(_openai_fail_key(info), _EXTRACT_FAIL_MSG["api_error"])
+        raise HTTPException(status_code=502, detail=msg + (f" (코드: {_fail_code(info)})" if SHOW_ERROR_CODES else "")) from exc
+
+    storage_path = f"{user.id}/tryon/{key}.png"
+    image_url = upload_bytes(storage_path, out, "image/png")
+    try:
+        supabase_admin.table("generated_images").insert({
+            "user_id": user.id, "cache_key": key, "kind": "tryon_body",
+            "storage_path": storage_path, "image_url": image_url,
+        }).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[tryon] cache save failed: {exc}", flush=True)
+    spend_credits(user.id, "tryon_body", {"key": key})
+    return {"imageUrl": image_url, "cached": False}
+
+
 @app.get("/api/live/billing")
 def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
     """마이페이지 '사용량'. 이번 달 크레딧과 요금제, 작업별 사용 내역을 그대로 준다."""
@@ -5055,6 +5163,8 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         "palettes": body.palettes,
         "gender": body.gender,
         "age": body.age,
+        "height": body.height,
+        "weight": body.weight,
     }
     max_combos = min(max(body.max_combos, 1), 10)
     combos = recommend_text(
@@ -5131,7 +5241,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         if face_bytes and targets:
             def _one(outfit: dict[str, Any]) -> str | None:
                 members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
-                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
+                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes, profile)
 
             with ThreadPoolExecutor(max_workers=4) as pool_ex:
                 for outfit, url in zip(targets, pool_ex.map(_one, targets)):

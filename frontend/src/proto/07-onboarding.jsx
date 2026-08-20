@@ -6,7 +6,7 @@ const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLOR
 // LOOKBOX — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
 // 가입 시 선호 정보(스타일·핏·컬러)를 필수로 받고, 이후 '내 스타일'에서 수정 가능.
 
-const { useState } = React;
+const { useState, useEffect, useRef } = React;
 
 // ── 얼굴 감지 (퍼스널 컬러 진단 전 유효성) ──────────────────────────
 // MediaPipe FaceDetector를 지연 로드(진단 시점에만) → 초기 번들 영향 없음.
@@ -629,6 +629,13 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
 
   const steps = isEdit ? [STYLES, FITPREF] : [ACCOUNT, BASIC, STYLES, FITPREF];
   const [i, setI] = useState(0);
+  // 단계가 바뀌면 본문을 맨 위로 올린다. 스크롤이 그대로 남아 있으면 새 단계의 첫 항목
+  // (핏 선택 등)이 화면 밖에 있어서, 왜 '다음'이 안 눌리는지 알 수 없다.
+  const bodyRef = useRef(null);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [i]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const step = steps[i];
@@ -672,7 +679,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
         </div>
 
         {/* 본문 (스크롤) */}
-        <div className="lb-scrollable" style={{
+        <div ref={bodyRef} className="lb-scrollable" style={{
           flex: 1,  padding: '26px 20px 16px',
            
         }}>

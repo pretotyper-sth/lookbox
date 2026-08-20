@@ -716,9 +716,13 @@ function LookbookScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       <div className="lb-scrollable" style={{
-        flex: 1, 
-        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 96px',
-        paddingBottom: selecting ? (wide ? 88 : 96) : undefined,
+        flex: 1,
+        // 단축(padding)과 롱핸드(paddingBottom)를 같이 주면 나머지 방향이 비어 버린다.
+        // 하단은 '직접 코디 만들기' 도크(약 90px)를 가리지 않을 만큼 반드시 비워 둔다.
+        paddingTop: wide ? 28 : 'calc(env(safe-area-inset-top, 0px) + 22px)',
+        paddingLeft: wide ? 0 : 18,
+        paddingRight: wide ? 0 : 18,
+        paddingBottom: wide ? (selecting ? 88 : 36) : (selecting ? 148 : 124),
       }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
           {wide ? (

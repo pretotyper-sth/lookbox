@@ -8,9 +8,12 @@ const { BottomSheet, Btn, Chip, Icon, useEscapeClose } = window;
 
 const { useState, useEffect, useRef } = React;
 
-function loadImage(src) {
+function loadImage(src, cors = false) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // 저장소에서 온 전신 이미지는 다른 도메인이라, CORS 없이 캔버스에 그리면 캔버스가
+    // 오염돼 toDataURL이 막힌다(구멍을 못 뚫는다). 로컬 data URL에는 영향이 없다.
+    if (cors) img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('사진을 열지 못했어요'));
     img.src = src;
@@ -54,6 +57,37 @@ function punchPreset(ctx, w, h, cut) {
     ctx.fill();
   }
   ctx.restore();
+}
+
+// 카메라에서 부위를 바꿀 때마다 새로 뚫는다. 캔버스 한 번이면 되니 전환이 즉시다.
+const TRYON_MODES = [
+  { id: 'top', label: '상의' },
+  { id: 'bottom', label: '하의' },
+  { id: 'full', label: '전체' },
+];
+
+async function punchBody(src, mode) {
+  const img = await loadImage(src, !src.startsWith('data:'));
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  const hole = (cx, cy, rx, ry) => {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  // 전신 컷 기준 대략의 상·하의 자리. 카메라에서 몸을 맞추는 용도라 정확할 필요는 없다.
+  if (mode === 'top') hole(w * 0.5, h * 0.37, w * 0.30, h * 0.15);
+  else if (mode === 'bottom') hole(w * 0.5, h * 0.66, w * 0.26, h * 0.19);
+  else { hole(w * 0.5, h * 0.37, w * 0.30, h * 0.15); hole(w * 0.5, h * 0.66, w * 0.26, h * 0.19); }
+  ctx.restore();
+  return canvas.toDataURL('image/png');
 }
 
 function MobileOnlyNote() {
@@ -381,12 +415,35 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
 /* ============================================================
    TryOnCameraOverlay — 후면 카메라 + 투명 프레임 오버레이
    ============================================================ */
-function TryOnCameraOverlay({ open, frameSrc, onClose, onEdit, wide }) {
+function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [err, setErr] = useState('');
   const [facing, setFacing] = useState('environment');
   const [ready, setReady] = useState(false);
+  // 어느 부위를 비출지 — 카메라 모드처럼 좌우로 넘기거나 눌러서 바꾼다.
+  const [mode, setMode] = useState('top');
+  const [overlay, setOverlay] = useState('');
+  const swipeX = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let dead = false;
+    const src = bodySrc || frameSrc;
+    if (!src) { setOverlay(''); return undefined; }
+    // 전신 사진이 있으면 부위별로 새로 뚫고, 없으면 예전에 저장해 둔 프레임을 그대로 쓴다.
+    if (!bodySrc) { setOverlay(frameSrc || ''); return undefined; }
+    punchBody(bodySrc, mode)
+      .then((url) => { if (!dead) setOverlay(url); })
+      .catch(() => { if (!dead) setOverlay(frameSrc || ''); });
+    return () => { dead = true; };
+  }, [open, bodySrc, frameSrc, mode]);
+
+  const shiftMode = (dir) => {
+    const i = TRYON_MODES.findIndex((m) => m.id === mode);
+    const next = TRYON_MODES[(i + dir + TRYON_MODES.length) % TRYON_MODES.length];
+    setMode(next.id);
+  };
 
   useEscapeClose(open, onClose);
 
@@ -481,14 +538,25 @@ function TryOnCameraOverlay({ open, frameSrc, onClose, onEdit, wide }) {
           style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
           <Icon name="x" size={22} />
         </button>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>구멍을 옷에 맞춰 보세요</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>
+          {bodySrc ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요` : '구멍을 옷에 맞춰 보세요'}
+        </div>
         <button type="button" onClick={onEdit} aria-label="사진 수정"
           style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
           <Icon name="pencil" size={18} />
         </button>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden' }}>
+      <div
+        style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden', touchAction: 'pan-y' }}
+        onPointerDown={(e) => { swipeX.current = e.clientX; }}
+        onPointerUp={(e) => {
+          if (swipeX.current == null) return;
+          const dx = e.clientX - swipeX.current;
+          swipeX.current = null;
+          if (Math.abs(dx) > 48) shiftMode(dx < 0 ? 1 : -1);
+        }}
+      >
         <video
           ref={videoRef}
           playsInline
@@ -499,9 +567,9 @@ function TryOnCameraOverlay({ open, frameSrc, onClose, onEdit, wide }) {
             objectFit: 'cover', transform: facing === 'user' ? 'scaleX(-1)' : 'none',
           }}
         />
-        {frameSrc && (
+        {overlay && (
           <img
-            src={frameSrc}
+            src={overlay}
             alt=""
             draggable={false}
             style={{
@@ -535,8 +603,28 @@ function TryOnCameraOverlay({ open, frameSrc, onClose, onEdit, wide }) {
         background: 'linear-gradient(transparent, rgba(0,0,0,0.55))',
         color: 'rgba(255,255,255,0.9)',
       }}>
+        {bodySrc ? (
+          <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 999, background: 'rgba(255,255,255,0.12)' }}>
+            {TRYON_MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setMode(m.id)}
+                aria-pressed={mode === m.id}
+                style={{
+                  padding: '8px 18px', borderRadius: 999, fontSize: 13.5, fontWeight: 700,
+                  background: mode === m.id ? '#fff' : 'transparent',
+                  color: mode === m.id ? '#1a1814' : 'rgba(255,255,255,0.85)',
+                  transition: 'background var(--dur) var(--ease), color var(--dur) var(--ease)',
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <p style={{ margin: 0, fontSize: 12.5, textAlign: 'center', lineHeight: 1.45, opacity: 0.85, wordBreak: 'keep-all' }}>
-          뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.
+          {bodySrc ? '좌우로 넘기거나 눌러서 비출 부위를 바꿔요.' : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
         </p>
         <div style={{ display: 'flex', gap: 10, width: '100%' }}>
           <button

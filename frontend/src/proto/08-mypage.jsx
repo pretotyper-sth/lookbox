@@ -401,7 +401,7 @@ function Switch({ on, onToggle }) {
 function MyPageScreen({ ctx }) {
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
-    modelLook, setModelLook, showToast, openTryOnTab,
+    modelLook, setModelLook, showToast, openTryOnTab, makeTryOnBody, tryOnMaking,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
   } = ctx;
@@ -421,7 +421,14 @@ function MyPageScreen({ ctx }) {
       <InfoRow label="이메일" value={prefs.email} />
       <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
       <InfoRow label="성별" value={prefs.gender} />
-      <InfoRow label="연령대" value={prefs.age} last />
+      <InfoRow label="연령대" value={prefs.age} last={!(prefs.height || prefs.weight)} />
+      {(prefs.height || prefs.weight) && (
+        <InfoRow
+          label="키 · 몸무게"
+          value={[prefs.height && `${prefs.height}cm`, prefs.weight && `${prefs.weight}kg`].filter(Boolean).join(' · ')}
+          last
+        />
+      )}
     </>
   );
 
@@ -457,33 +464,37 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  // 다른 설정 행들처럼 타이틀만 둔다. 누르면 조합 추천과 같은 시트를 '바로 보기' 탭으로 연다.
+  // 전신 사진을 직접 올리지 않아도 되게, 프로필 사진으로 만들어 준다(퍼스널 컬러와 같은 방식).
+  const hasTryOn = !!(prefs.tryOnFrame);
   const tryOnRow = (
     <ActionRow
       icon="cutout"
-      label="바로 보기 전신 이미지 설정"
-      onClick={() => openTryOnTab && openTryOnTab()}
+      label="바로 보기 전신 이미지"
+      hint={tryOnMaking ? '만드는 중…' : (hasTryOn ? '등록됨 · 눌러서 다시 만들기' : '프로필 사진으로 만들어요')}
+      onClick={() => {
+        if (tryOnMaking) return;
+        if (prefs.avatar && makeTryOnBody) makeTryOnBody();
+        else if (openTryOnTab) openTryOnTab();
+      }}
     />
   );
 
-  // 추천이 꺼져 있어도 항목은 보여준다 — 숨기면 '설정이 원래 없는 것'처럼 보인다.
-  // 대신 흐리게 두고 조절은 막아, 먼저 켜야 한다는 걸 드러낸다.
-  const countRows = (
-    <div style={{ opacity: dailyEnabled ? 1 : 0.45, pointerEvents: dailyEnabled ? 'auto' : 'none' }} aria-disabled={!dailyEnabled}>
+  // 개수 설정은 추천을 켰을 때만 의미가 있다. 설명은 한 줄을 넘기지 않게 짧게.
+  const countRows = dailyEnabled ? (
+    <>
       <ActionRow
         icon="sparkle"
-        label="처음 추천받는 코디 수"
-        hint="추천을 누르면 이 개수만큼 만들어요"
+        label="한 번에 받을 코디 수"
         right={<Stepper value={dailyCount} min={2} max={8} onChange={(n) => setDailyCount && setDailyCount(n)} />}
       />
       <ActionRow
         icon="plus"
-        label="새 아이템을 더한 코디 수"
-        hint="옷장에 없지만 잘 어울릴 아이템을 하나 끼워 보여줘요"
+        label="새 아이템 포함 코디"
+        hint="옷장에 없는 아이템 제안"
         right={<Stepper value={wishCount} min={0} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
       />
-    </div>
-  );
+    </>
+  ) : null;
 
   const settingsCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
@@ -704,8 +715,13 @@ function AccountChips({ options, value, onPick }) {
 }
 
 function AccountEditSheet({ open, prefs, onClose, onSave }) {
-  const [d, setD] = useMp({ email: '', pw: '', pw2: '', gender: '', age: '' });
-  useMe(() => { if (open) setD({ email: prefs.email || '', pw: '', pw2: '', gender: prefs.gender || '', age: prefs.age || '' }); }, [open]);
+  const [d, setD] = useMp({ email: '', pw: '', pw2: '', gender: '', age: '', height: '', weight: '' });
+  useMe(() => {
+    if (open) setD({
+      email: prefs.email || '', pw: '', pw2: '', gender: prefs.gender || '', age: prefs.age || '',
+      height: prefs.height || '', weight: prefs.weight || '',
+    });
+  }, [open]);
   const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
   const emailOk = /\S+@\S+\.\S+/.test(d.email);
   const pwOk = !d.pw || (d.pw.length >= 6 && d.pw === d.pw2);
@@ -742,10 +758,43 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>연령대</div>
             <AccountChips options={LB_DATA.AGES} value={d.age} onPick={set('age')} />
           </div>
+          {/* 체형은 넣으면 코디 그림이 실제 몸에 가까워지지만, 굳이 밝히고 싶지 않을 수 있다.
+              선택 입력으로 두고 비워도 아무 일도 없다는 걸 문구로 분명히 한다. */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 9 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>키 · 몸무게</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>선택 · 비워둬도 돼요</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[['height', 'cm', 100, 230], ['weight', 'kg', 25, 200]].map(([key, unit, lo, hi]) => (
+                <div key={key} style={{ flex: 1, position: 'relative' }}>
+                  <input
+                    className="lb-input"
+                    inputMode="numeric"
+                    value={d[key]}
+                    placeholder={unit === 'cm' ? '키' : '몸무게'}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
+                      set(key)(v && (Number(v) < lo || Number(v) > hi) && v.length >= 3 ? d[key] : v);
+                    }}
+                    style={{
+                      width: '100%', padding: '12px 34px 12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--ink-3)' }}>{unit}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 7, fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+              넣으면 코디를 내 체형에 가깝게 그려요.
+            </div>
+          </div>
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Btn full size="lg" icon="check" disabled={!emailOk || !pwOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age })}>저장</Btn>
+          <Btn full size="lg" icon="check" disabled={!emailOk || !pwOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
         </div>
       </div>
     </BottomSheet>

@@ -503,9 +503,12 @@ function WardrobeScreen({ ctx }) {
       )}
 
       <div className="lb-scrollable" style={{
-        flex: 1,  
-        padding: wide ? '28px 0 36px' : '16px 18px',
-        paddingBottom: selecting ? (!wide ? 96 : 88) : (!wide ? 110 : 72),
+        flex: 1,
+        // 단축과 롱핸드를 섞지 않는다(섞으면 나머지 방향 패딩이 사라진다).
+        paddingTop: wide ? 28 : 16,
+        paddingLeft: wide ? 0 : 18,
+        paddingRight: wide ? 0 : 18,
+        paddingBottom: wide ? (selecting ? 88 : 72) : (selecting ? 148 : 124),
       }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (

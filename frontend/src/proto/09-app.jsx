@@ -122,6 +122,8 @@ function coordProfile(prefs) {
     palettes: Array.isArray(p.palettes) ? p.palettes : [],
     gender: p.gender || '',
     age: p.age || '',
+    height: p.height || '',
+    weight: p.weight || '',
   };
 }
 function wardrobeSigOf(list) {
@@ -716,6 +718,32 @@ function App() {
     setTryOnSeedBody(typeof seed === 'string' ? seed : '');
     setTryOnSetup(true);
   };
+  // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러·AI 착장과 같은 방식).
+  // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
+  const [tryOnMaking, setTryOnMaking] = useState(false);
+  const makeTryOnBody = async () => {
+    if (tryOnMaking) return '';
+    if (!prefs.avatar) { showToast('먼저 프로필 사진을 등록해 주세요'); return ''; }
+    setTryOnMaking(true);
+    try {
+      const res = await liveJSON('/api/live/tryon/body', {
+        method: 'POST',
+        body: JSON.stringify({ face_data_url: prefs.avatar, height: prefs.height || '', weight: prefs.weight || '' }),
+      });
+      const url = res && res.imageUrl;
+      if (!url) throw new Error('전신 이미지를 만들지 못했어요');
+      const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto' };
+      setPrefs(np); persistPrefs(np);
+      reloadBilling();
+      showToast(res.cached ? '전신 이미지를 불러왔어요' : '전신 이미지를 만들었어요', 'check');
+      return url;
+    } catch (e) {
+      showToast(e.message || '전신 이미지를 만들지 못했어요');
+      return '';
+    } finally {
+      setTryOnMaking(false);
+    }
+  };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => {
     prefsSynced.current = false;   // 다음 로그인에서 계정 설정을 읽기 전까지 계정에 쓰지 않는다
@@ -736,9 +764,17 @@ function App() {
     return () => window.removeEventListener('resize', measure);
   }, []);
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
-  const openTryOn = () => {
-    if (!prefs.tryOnFrame) { openTryOnSetup(); return; }
+  const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
+    if (!prefs.tryOnFrame) {
+      // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 사진을 고르게 한다.
+      if (prefs.avatar) {
+        const made = await makeTryOnBody();
+        if (made) { setTryOnCamera(true); return; }
+      }
+      openTryOnSetup();
+      return;
+    }
     setTryOnCamera(true);
   };
   // PC에서 모바일 폭을 미리 볼 때도 손가락처럼 마우스로 끌어 스크롤한다.
@@ -1849,7 +1885,7 @@ function App() {
       .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame,
+    openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame, makeTryOnBody, tryOnMaking,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -2047,6 +2083,7 @@ function App() {
         open={tryOnCamera}
         wide={wide}
         frameSrc={prefs.tryOnFrame}
+        bodySrc={prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : ''}
         onClose={() => setTryOnCamera(false)}
         onEdit={() => { setTryOnCamera(false); openTryOnSetup(); }}
       />
