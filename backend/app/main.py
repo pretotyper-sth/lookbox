@@ -426,14 +426,12 @@ CREDIT_COSTS = {
     "replace_image": 2,
     "coordinate": 1,
     "model_look": 5,
-    "tryon_body": 5,
 }
-# 매달 이 횟수까지는 크레딧을 받지 않는다. '바로 보기'는 카메라로 옷을 대보는 기능이고
-# 그 자체는 API 호출이 없다(전부 기기에서 처리). 전신 이미지를 AI로 한 번 그려 주는 건
-# 준비 단계일 뿐인데, 거기에 크레딧을 물리면 기능 전체가 유료처럼 보인다.
-# 그래서 한 달에 한 번은 무료로 만들고, 그 뒤 다시 만들 때만 크레딧을 받는다.
-FREE_MONTHLY = {
-    "tryon_body": 1,
+# 크레딧을 받지 않는 작업 중 원가가 있는 것(바로 보기 전신 이미지)은 횟수만 막는다.
+# 요금제에 넣으면 '카메라로 대보는 기능이 유료'처럼 보이는데, 실제로 그 기능은 기기에서
+# 돌고 API를 부르지 않는다. 정상 사용은 한두 번이면 끝나므로 상한만 두면 충분하다.
+MONTHLY_LIMITS = {
+    "tryon_body": 5,
 }
 CREDIT_LABELS = {
     "import_url": "URL·구매내역으로 옷 등록",
@@ -441,7 +439,6 @@ CREDIT_LABELS = {
     "replace_image": "옷 사진 다시 만들기",
     "coordinate": "코디 추천",
     "model_look": "AI 착장 이미지",
-    "tryon_body": "바로 보기 전신 이미지",
 }
 
 # 요금제는 둘이면 충분하다. 세 단계로 나눠 봤자 실질 차이는 크레딧 수뿐이라
@@ -563,7 +560,7 @@ def billing_state(user_id: str) -> dict[str, Any]:
     used_rows = [
         r for r in rows
         if int(r.get("delta") or 0) < 0 and (r.get("metadata") or {}).get("period") == period
-    ]
+    ]  # delta 0(무료 작업)은 사용 내역에 넣지 않는다 — 크레딧을 쓴 것만 보여준다
     used = -sum(int(r.get("delta") or 0) for r in used_rows)
     by_action: dict[str, dict[str, int]] = {}
     for r in used_rows:
@@ -588,18 +585,36 @@ def billing_state(user_id: str) -> dict[str, Any]:
     }
 
 
-def credits_needed(user_id: str, action: str) -> int:
-    """이 작업에 지금 필요한 크레딧. 매달 무료 횟수가 남아 있으면 0."""
-    base = CREDIT_COSTS.get(action, 1)
-    free_left = FREE_MONTHLY.get(action, 0)
-    if not free_left:
-        return base
+def monthly_count(user_id: str, action: str) -> int:
+    """이번 달에 이 작업을 몇 번 했는지(크레딧이 0인 작업도 원장에 기록해 둔다)."""
     period = _period_key()
-    used = sum(
+    return sum(
         1 for r in _ledger_rows(user_id)
         if r.get("reason") == action and (r.get("metadata") or {}).get("period") == period
     )
-    return 0 if used < free_left else base
+
+
+def ensure_within_limit(user_id: str, action: str) -> None:
+    """무료지만 원가가 있는 작업의 월 상한. 넘으면 막는다(어뷰징 차단용)."""
+    limit = MONTHLY_LIMITS.get(action, 0)
+    if not limit:
+        return
+    if monthly_count(user_id, action) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"이번 달에는 더 만들 수 없어요. 다음 달에 다시 만들 수 있어요. (월 {limit}회)",
+        )
+
+
+def note_usage(user_id: str, action: str, metadata: dict[str, Any] | None = None) -> None:
+    """크레딧이 들지 않는 작업의 사용 기록. 상한 계산에만 쓴다."""
+    try:
+        supabase_admin.table("credit_ledger").insert({
+            "user_id": user_id, "delta": 0, "reason": action,
+            "metadata": {**(metadata or {}), "period": _period_key(), "free": True},
+        }).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] note failed ({action}): {exc}", flush=True)
 
 
 class CreditError(HTTPException):
@@ -620,7 +635,7 @@ class CreditError(HTTPException):
 
 def ensure_credits(user_id: str, action: str) -> dict[str, Any]:
     """작업 전에 잔액을 확인한다. 모자라면 402로 막는다(돈이 나가기 전에)."""
-    need = credits_needed(user_id, action)
+    need = CREDIT_COSTS.get(action, 1)
     state = billing_state(user_id)
     if state["remaining"] < need:
         raise CreditError(action, state, need)
@@ -630,16 +645,16 @@ def ensure_credits(user_id: str, action: str) -> dict[str, Any]:
 def spend_credits(user_id: str, action: str, metadata: dict[str, Any] | None = None) -> None:
     """성공한 작업만 차감한다. 실패한 요청에까지 돈을 물리지 않는다.
 
-    무료 횟수로 처리된 경우에도 delta 0으로 기록을 남긴다 — 그래야 다음번에
-    '이번 달 무료를 이미 썼다'는 걸 알 수 있다.
     """
-    need = credits_needed(user_id, action)
+    need = CREDIT_COSTS.get(action, 1)
+    if need <= 0:
+        return
     try:
         supabase_admin.table("credit_ledger").insert({
             "user_id": user_id,
             "delta": -need,
             "reason": action,
-            "metadata": {**(metadata or {}), "period": _period_key(), **({"free": True} if need == 0 else {})},
+            "metadata": {**(metadata or {}), "period": _period_key()},
         }).execute()
     except Exception as exc:  # noqa: BLE001
         # 기록에 실패해도 사용자 요청은 이미 성공했다. 막지 않는다(수익보다 신뢰).
@@ -4943,7 +4958,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     face = _decode_data_url(body.face_data_url)
     if not face:
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요")
-    ensure_credits(user.id, "tryon_body")
+    ensure_within_limit(user.id, "tryon_body")
 
     note = _body_note({"height": body.height, "weight": body.weight})
     sig = hashlib.sha256(face).hexdigest()[:10]
@@ -4993,7 +5008,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         }).execute()
     except Exception as exc:  # noqa: BLE001
         print(f"[tryon] cache save failed: {exc}", flush=True)
-    spend_credits(user.id, "tryon_body", {"key": key})
+    note_usage(user.id, "tryon_body", {"key": key})
     return {"imageUrl": image_url, "cached": False}
 
 
@@ -5015,12 +5030,7 @@ def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
             if not p.get("hidden") or p["id"] == state["plan"]
         ],
         "costs": [
-            {
-                "action": k,
-                "label": CREDIT_LABELS.get(k, k),
-                "credits": v,
-                "freeMonthly": FREE_MONTHLY.get(k, 0),
-            }
+            {"action": k, "label": CREDIT_LABELS.get(k, k), "credits": v}
             for k, v in CREDIT_COSTS.items()
         ],
     }

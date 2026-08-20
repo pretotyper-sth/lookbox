@@ -12,7 +12,7 @@ from pathlib import Path
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = ("_period_key", "_period_end", "_plan_of", "plan_perks")
-CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "FREE_MONTHLY")
+CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS")
 
 
 def load():
@@ -70,12 +70,14 @@ class PlanShapeTest(unittest.TestCase):
         for action in c:
             self.assertIn(action, self.ns["CREDIT_LABELS"])      # 화면에 쓸 이름이 있어야 한다
 
-    def test_try_on_setup_does_not_cost_the_free_user(self):
+    def test_try_on_is_free_and_only_rate_limited(self):
         # '바로 보기'는 카메라로 옷을 대보는 기능이고 그 자체는 API 호출이 없다.
-        # 준비용 전신 이미지 한 장 때문에 기능이 유료처럼 보이면 안 된다.
-        self.assertGreaterEqual(self.ns["FREE_MONTHLY"].get("tryon_body", 0), 1)
-        # 반대로 코디 이미지처럼 매번 새로 그리는 건 무료가 아니다
-        self.assertEqual(self.ns["FREE_MONTHLY"].get("model_look", 0), 0)
+        # 크레딧 개념에 넣지 않는다 — 대신 어뷰징만 월 상한으로 막는다.
+        self.assertNotIn("tryon_body", self.ns["CREDIT_COSTS"])
+        self.assertNotIn("tryon_body", self.ns["CREDIT_LABELS"])
+        self.assertGreaterEqual(self.ns["MONTHLY_LIMITS"].get("tryon_body", 0), 1)
+        # 반대로 코디 이미지처럼 매번 새로 그리는 건 크레딧을 받는다
+        self.assertIn("model_look", self.ns["CREDIT_COSTS"])
 
     def test_free_plan_covers_a_real_first_month(self):
         # 무료로도 '옷장을 만들고 코디를 받아보는' 경험은 끝까지 가야 한다:

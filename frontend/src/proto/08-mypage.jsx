@@ -101,13 +101,11 @@ function PlanSheet({ open, onClose, billing }) {
             {costs.map((c) => (
               <div key={c.action} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, color: 'var(--ink-2)', padding: '4px 0' }}>
                 <span style={{ minWidth: 0, wordBreak: 'keep-all' }}>{c.label}</span>
-                <span className="tnum" style={{ flex: 'none', fontWeight: 700 }}>
-                  {c.freeMonthly ? `월 ${c.freeMonthly}회 무료` : c.credits}
-                </span>
+                <span className="tnum" style={{ flex: 'none', fontWeight: 700 }}>{c.credits}</span>
               </div>
             ))}
             <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)' }}>
-              옷장·검색·중복 확인은 크레딧이 안 들어요.
+옷장·검색·바로 보기는 크레딧이 안 들어요.
             </div>
           </div>
         )}
@@ -507,7 +505,7 @@ function MyPageScreen({ ctx }) {
     <ActionRow
       icon="cutout"
       label="바로 보기 전신 이미지"
-      hint={tryOnMaking ? '만드는 중…' : (hasTryOn ? '등록됨 · 다시 만들기' : '프로필 사진으로 · 무료')}
+      hint={tryOnMaking ? '만드는 중…' : (hasTryOn ? '등록됨 · 다시 만들기' : '프로필 사진으로 만들어요')}
       onClick={() => {
         if (tryOnMaking) return;
         if (prefs.avatar && makeTryOnBody) makeTryOnBody();
