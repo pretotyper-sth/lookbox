@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = ("_period_key", "_period_end", "_plan_of")
+FNS = ("_period_key", "_period_end", "_plan_of", "plan_perks")
 CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN")
 
 
@@ -39,14 +39,25 @@ class PlanShapeTest(unittest.TestCase):
         self.assertGreater(plans["free"]["credits"], 0)          # 써볼 수는 있어야 한다
         self.assertFalse(plans["free"]["model_look"])            # 제일 비싼 기능은 유료
 
-    def test_paid_plans_give_more_for_more(self):
+    def test_paid_plan_gives_more_for_more(self):
         plans = self.ns["PLANS"]
-        order = ["free", "basic", "pro"]
-        prices = [plans[p]["price_krw"] for p in order]
-        credits = [plans[p]["credits"] for p in order]
-        self.assertEqual(prices, sorted(prices))
-        self.assertEqual(credits, sorted(credits))
+        self.assertGreater(plans["pro"]["price_krw"], plans["free"]["price_krw"])
+        self.assertGreater(plans["pro"]["credits"], plans["free"]["credits"])
         self.assertTrue(plans["pro"]["model_look"])
+
+    def test_only_two_plans_are_offered(self):
+        # 고를 게 많을수록 이해가 어렵다. 보이는 요금제는 무료·프로 둘뿐.
+        visible = [p for p in self.ns["PLANS"].values() if not p.get("hidden")]
+        self.assertEqual([p["id"] for p in visible], ["free", "pro"])
+        # 예전 요금제는 쓰던 계정을 위해 정의만 남긴다
+        self.assertTrue(self.ns["PLANS"]["basic"].get("hidden"))
+
+    def test_perks_translate_credits_into_real_actions(self):
+        perks = self.ns["plan_perks"](self.ns["PLANS"]["free"])
+        self.assertTrue(any("크레딧 60개" in x for x in perks))
+        self.assertTrue(any("30벌" in x for x in perks))        # 사진 등록 2크레딧 → 30벌
+        self.assertTrue(any("60번" in x for x in perks))        # 코디 추천 1크레딧 → 60번
+        self.assertTrue(any("프로부터" in x for x in perks))     # 무료에 없는 기능은 분명히
 
     def test_heavier_work_costs_more_credits(self):
         c = self.ns["CREDIT_COSTS"]

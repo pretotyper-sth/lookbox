@@ -30,14 +30,21 @@ function CreditBar({ remaining, granted }) {
 function PlanSheet({ open, onClose, billing }) {
   const plans = (billing && billing.plans) || [];
   const costs = (billing && billing.costs) || [];
+  // 카드와 설명 박스가 같은 톤이어야 한 화면으로 읽힌다 — 같은 배경·같은 테두리·같은 반경.
+  const box = (active) => ({
+    borderRadius: 'var(--r-md)',
+    padding: 16,
+    background: 'var(--ivory)',
+    boxShadow: active ? 'inset 0 0 0 2px var(--ink)' : 'inset 0 0 0 1px var(--line)',
+  });
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-sheet-body lb-scrollable" style={{ padding: '10px 22px 26px', maxHeight: '80vh' }}>
+      <div className="lb-sheet-body lb-scrollable" style={{ padding: '10px 22px 8px', maxHeight: '80vh' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>요금제</h2>
             <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-              옷 등록·코디 추천처럼 AI를 쓰는 작업에 크레딧이 들어요. 매달 1일에 다시 채워집니다.
+              무료에서도 기능은 다 열려 있어요. 차이는 매달 쓸 수 있는 양이에요.
             </p>
           </div>
           <button
@@ -53,51 +60,62 @@ function PlanSheet({ open, onClose, billing }) {
             <Icon name="x" size={20} />
           </button>
         </div>
+
         <div style={{ display: 'grid', gap: 10, marginTop: 'var(--s4)' }}>
           {plans.map((p) => (
-            <div key={p.id} style={{
-              borderRadius: 'var(--r-md)', padding: 14,
-              background: p.current ? 'var(--surface)' : 'var(--ivory)',
-              boxShadow: p.current ? 'inset 0 0 0 2px var(--ink)' : 'inset 0 0 0 1px var(--line)',
-            }}>
+            <div key={p.id} style={box(p.current)}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>{p.name}</span>
+                <span style={{ fontSize: 16, fontWeight: 800 }}>{p.name}</span>
                 {p.current && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-ink)', background: 'var(--accent)', padding: '2px 7px', borderRadius: 999 }}>
                     사용 중
                   </span>
                 )}
                 <span style={{ flex: 1 }} />
-                <span className="tnum" style={{ fontSize: 14, fontWeight: 700 }}>
-                  {p.priceKrw ? `${p.priceKrw.toLocaleString()}원/월` : '무료'}
+                <span className="tnum" style={{ fontSize: 15, fontWeight: 800 }}>
+                  {p.priceKrw ? `${p.priceKrw.toLocaleString()}원` : '0원'}
                 </span>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{p.priceKrw ? '/월' : ''}</span>
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{p.blurb}</div>
-              <ul style={{ margin: '10px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 5 }}>
-                {(p.perks || []).map((x) => (
-                  <li key={x} style={{ display: 'flex', gap: 7, alignItems: 'flex-start', fontSize: 13, color: 'var(--ink-2)' }}>
-                    <Icon name="check" size={13} stroke={2.6} style={{ marginTop: 3, flex: 'none' }} /> {x}
-                  </li>
-                ))}
+              <ul style={{ margin: '11px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
+                {(p.perks || []).map((x) => {
+                  const off = x.indexOf('프로부터') >= 0;
+                  return (
+                    <li key={x} style={{
+                      display: 'flex', gap: 7, alignItems: 'flex-start',
+                      fontSize: 13, color: off ? 'var(--ink-3)' : 'var(--ink-2)', wordBreak: 'keep-all',
+                    }}>
+                      <Icon name={off ? 'lock' : 'check'} size={13} stroke={2.4} style={{ marginTop: 3, flex: 'none' }} /> {x}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </div>
+
         {costs.length > 0 && (
-          <div style={{ marginTop: 'var(--s4)', padding: '12px 14px', borderRadius: 'var(--r-md)', background: 'var(--ivory)' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>크레딧이 드는 작업</div>
+          <div style={{ ...box(false), marginTop: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>크레딧은 이럴 때 써요</div>
             {costs.map((c) => (
-              <div key={c.action} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--ink-2)', padding: '3px 0' }}>
-                <span>{c.label}</span>
-                <span className="tnum" style={{ fontWeight: 700 }}>{c.credits}</span>
+              <div key={c.action} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, color: 'var(--ink-2)', padding: '4px 0' }}>
+                <span style={{ minWidth: 0, wordBreak: 'keep-all' }}>{c.label}</span>
+                <span className="tnum" style={{ flex: 'none', fontWeight: 700 }}>{c.credits}</span>
               </div>
             ))}
+            <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
+              옷장·검색·중복 확인처럼 AI를 쓰지 않는 기능은 크레딧이 들지 않아요.
+            </div>
           </div>
         )}
-        <p style={{ margin: '14px 0 0', fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
+
+        <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
           결제는 준비 중이에요. 열리면 여기서 바로 바꿀 수 있어요.
         </p>
         <Btn full variant="soft" onClick={onClose} style={{ marginTop: 14 }}>닫기</Btn>
+        {/* 마지막 요소가 화면 바닥에 붙지 않게 — 손가락이 닿는 자리이기도 하다 */}
+        <div style={{ height: 28 }} />
       </div>
     </BottomSheet>
   );

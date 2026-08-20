@@ -437,6 +437,9 @@ CREDIT_LABELS = {
     "tryon_body": "바로 보기 전신 이미지",
 }
 
+# 요금제는 둘이면 충분하다. 세 단계로 나눠 봤자 실질 차이는 크레딧 수뿐이라
+# 고르는 데 시간만 든다. 기능은 무료에서도 전부 열려 있고, 유일한 차이는
+# 'AI가 코디를 입은 모습을 그려주는 것'과 매달 주어지는 크레딧 양이다.
 PLANS: dict[str, dict[str, Any]] = {
     "free": {
         "id": "free",
@@ -444,29 +447,44 @@ PLANS: dict[str, dict[str, Any]] = {
         "price_krw": 0,
         "credits": 60,
         "model_look": False,
-        "blurb": "가볍게 써보기",
-        "perks": ["매달 크레딧 60개", "옷장·코디·룩북 전부 사용", "구매내역 일괄 등록"],
+        "blurb": "기능은 다 열려 있어요",
     },
+    "pro": {
+        "id": "pro",
+        "name": "프로",
+        "price_krw": 9900,
+        "credits": 400,
+        "model_look": True,
+        "blurb": "넉넉하게 · AI 착장 이미지까지",
+    },
+    # 예전에 베이직을 쓰던 계정이 남아 있을 수 있어 정의만 유지한다(목록에는 안 보인다).
     "basic": {
         "id": "basic",
         "name": "베이직",
         "price_krw": 5900,
         "credits": 250,
         "model_look": False,
-        "blurb": "옷장을 제대로 채우는 달",
-        "perks": ["매달 크레딧 250개", "사진 등록 100장 남짓", "무료 기능 전부"],
-    },
-    "pro": {
-        "id": "pro",
-        "name": "프로",
-        "price_krw": 12900,
-        "credits": 800,
-        "model_look": True,
-        "blurb": "매일 코디까지 받아 보기",
-        "perks": ["매달 크레딧 800개", "AI 착장 이미지", "베이직 기능 전부"],
+        "blurb": "",
+        "hidden": True,
     },
 }
 DEFAULT_PLAN = "free"
+
+
+def plan_perks(plan: dict[str, Any]) -> list[str]:
+    """요금제 카드에 쓸 문장. '크레딧 N개'만으로는 얼마인지 감이 안 오니,
+    그 크레딧으로 실제로 뭘 몇 번 할 수 있는지로 바꿔 적는다."""
+    credits = plan["credits"]
+    photos = credits // CREDIT_COSTS["import_photo"]
+    links = credits // CREDIT_COSTS["import_url"]
+    coords = credits // CREDIT_COSTS["coordinate"]
+    perks = [
+        f"매달 크레딧 {credits}개",
+        f"사진으로 옷 {photos}벌 · 링크로 {links}벌 정도",
+        f"또는 코디 추천 {coords}번",
+    ]
+    perks.append("AI 착장 이미지 (코디 입은 모습)" if plan["model_look"] else "AI 착장 이미지는 프로부터")
+    return perks
 
 
 def _period_key(now: datetime | None = None) -> str:
@@ -4968,10 +4986,11 @@ def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
             {
                 "id": p["id"], "name": p["name"], "priceKrw": p["price_krw"],
                 "credits": p["credits"], "modelLook": p["model_look"],
-                "blurb": p["blurb"], "perks": p["perks"],
+                "blurb": p["blurb"], "perks": plan_perks(p),
                 "current": p["id"] == state["plan"],
             }
             for p in PLANS.values()
+            if not p.get("hidden") or p["id"] == state["plan"]
         ],
         "costs": [
             {"action": k, "label": CREDIT_LABELS.get(k, k), "credits": v}
