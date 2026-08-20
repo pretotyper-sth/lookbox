@@ -33,10 +33,26 @@ function PlanSheet({ open, onClose, billing }) {
   return (
     <BottomSheet open={open} onClose={onClose}>
       <div className="lb-sheet-body lb-scrollable" style={{ padding: '10px 22px 26px', maxHeight: '80vh' }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>요금제</h2>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-          옷 등록·코디 추천처럼 AI를 쓰는 작업에 크레딧이 들어요. 매달 1일에 다시 채워집니다.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>요금제</h2>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
+              옷 등록·코디 추천처럼 AI를 쓰는 작업에 크레딧이 들어요. 매달 1일에 다시 채워집니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="lb-iconbtn"
+            style={{
+              flex: 'none', width: 36, height: 36, borderRadius: '50%', marginTop: -4, marginRight: -6,
+              display: 'grid', placeItems: 'center', color: 'var(--ink-2)',
+            }}
+          >
+            <Icon name="x" size={20} />
+          </button>
+        </div>
         <div style={{ display: 'grid', gap: 10, marginTop: 'var(--s4)' }}>
           {plans.map((p) => (
             <div key={p.id} style={{
@@ -81,6 +97,7 @@ function PlanSheet({ open, onClose, billing }) {
         <p style={{ margin: '14px 0 0', fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
           결제는 준비 중이에요. 열리면 여기서 바로 바꿀 수 있어요.
         </p>
+        <Btn full variant="soft" onClick={onClose} style={{ marginTop: 14 }}>닫기</Btn>
       </div>
     </BottomSheet>
   );

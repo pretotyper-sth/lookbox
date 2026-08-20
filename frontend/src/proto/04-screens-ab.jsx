@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
+const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
@@ -1013,6 +1013,9 @@ function AddSheet({ ctx }) {
 
   // stage machine
   const [stage, setStage] = useS('input'); // input | analyzing | select | register | anchor-ready | reextract-confirm
+  // 단계·등록 중인 옷이 바뀌면 시트 안 스크롤을 위로. 아래까지 내려 본 상태로 다음
+  // 항목에 들어가면 이름 입력칸부터가 화면 밖이라 뭘 해야 하는지 알 수 없다.
+  const sheetBodyRef = useR(null);
   const [detected, setDetected] = useS([]);
   const [sel, setSel] = useS([]); // selected detected ids
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
@@ -1343,6 +1346,7 @@ function AddSheet({ ctx }) {
   };
 
   // ---- register (sequential) ----
+  useScrollTopOn(sheetBodyRef, `${stage}:${stepIdx}`, addSheet.open);
   const cur = steps[stepIdx] || null;
   const patchStep = (patch) => setSteps((arr) => arr.map((x, i) => (i === stepIdx ? { ...x, ...patch } : x)));
   const setStepDraft = (k) => (v) => setSteps((arr) => arr.map((x, i) => (i === stepIdx ? { ...x, draft: { ...x.draft, [k]: v } } : x)));
@@ -1434,7 +1438,7 @@ function AddSheet({ ctx }) {
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
     <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'}>
-      <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {showBack && <IconBtn name="chevL" label="뒤로" onClick={goBack} style={{ marginLeft: -8, marginTop: -4, flex: 'none' }} />}

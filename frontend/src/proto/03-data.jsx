@@ -152,6 +152,7 @@ const PERSONAL_COLORS = [
 const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
   height: '', weight: '',   // 선택 입력. 있으면 코디 그림을 체형에 맞춘다.
+  tutorialDone: false,      // 처음 안내 팝업을 봤는지 (계정 단위, 기기 아님)
   avatar: '', // 마이페이지 프로필 사진 (data URL)
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
   dailyCount: 4,       // 처음 추천받을 때 만드는 코디 수 (2~8)

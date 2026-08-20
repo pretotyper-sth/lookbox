@@ -560,6 +560,9 @@ function App() {
   // true only until the first live wardrobe fetch settles AND there was no cache
   // to paint — lets us show a skeleton instead of flashing the empty state.
   const [wardrobeLoading, setWardrobeLoading] = useState(() => !isShowcase && !readWardrobeCache());
+  // 옷장을 한 번이라도 받아 봤는지. 처음 안내 팝업은 이게 끝난 뒤에만 띄운다 —
+  // 안 그러면 옷이 가득한 계정에서도 로딩 몇 백 ms 동안 팝업이 번쩍인다.
+  const [wardrobeLoaded, setWardrobeLoaded] = useState(() => isShowcase || !!readWardrobeCache());
   const [savedLooks, setSavedLooks] = useState(() => pSaved === 'empty' ? [] : LB_DATA.SAVED.slice());
   const [addSheet, setAddSheet] = useState({ open: pScreen === 'add' || !!pSheet, mode: pSheet || 'wardrobe' });
   const [loading, setLoading] = useState(pLoading);
@@ -586,7 +589,9 @@ function App() {
       DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch (e) { /* noop */ }
   }, []);
-  const [tutorialDone, setTutorialDone] = useState(() => {
+  // 처음 안내 팝업은 계정에 한 번만 뜬다. 기기 플래그만 쓰면 다른 기기에서 로그인할 때
+  // 옷장이 이미 가득한데도 '옷을 먼저 추가해 주세요'가 다시 뜬다.
+  const [tutorialSeen, setTutorialSeen] = useState(() => {
     if (isShowcase) return true;
     try { return localStorage.getItem('lb_tutorial_done') === '1'; } catch (e) { return false; }
   });
@@ -1011,7 +1016,7 @@ function App() {
         bumpDaily();
       })
       .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
-      .finally(() => { if (!dead) setWardrobeLoading(false); });
+      .finally(() => { if (!dead) { setWardrobeLoading(false); setWardrobeLoaded(true); } });
     return () => { dead = true; };
   }, [isShowcase, authUid, hydrateOutfits, showToast, bumpDaily]);
 
@@ -1158,7 +1163,18 @@ function App() {
   const comboProgress = Math.min(comboTops, 2) + Math.min(comboBottoms, 2);
   const comboNeed = [comboTopsNeed ? `상의 ${comboTopsNeed}개` : '', comboBottomsNeed ? `하의 ${comboBottomsNeed}개` : ''].filter(Boolean).join(', ');
   const comboGate = () => startCombo(); // 옷 부족해도 시트 오픈 — '바로 보기'는 옷장 없이도 가능
-  const finishTutorial = () => { try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ } setTutorialDone(true); };
+  // 계정 설정에 남긴다(다른 기기에서도 안 뜨게). 로컬은 계정 응답을 기다리는 동안의 폴백.
+  const finishTutorial = () => {
+    try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ }
+    setTutorialSeen(true);
+    if (!prefs.tutorialDone) {
+      const np = { ...prefs, tutorialDone: true };
+      setPrefs(np);
+      persistPrefs(np);
+    }
+  };
+  // 계정에 이미 봤다고 남아 있거나, 옷장에 옷이 있으면 보여줄 이유가 없다.
+  const tutorialDone = tutorialSeen || !!prefs.tutorialDone || items.length > 0 || !wardrobeLoaded;
   const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
   const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
 

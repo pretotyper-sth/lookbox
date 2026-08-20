@@ -176,6 +176,24 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain',
   );
 }
 
+/**
+ * 단계가 바뀌면 스크롤을 맨 위로 — 아래까지 내려 본 상태에서 다음 단계로 넘어가면
+ * 새 화면의 첫 항목이 화면 밖에 있어서, 왜 진행이 안 되는지 알 수 없다.
+ * 값이 처음 세팅될 때(초기 렌더)는 건드리지 않는다.
+ */
+function useScrollTopOn(ref, key, enabled = true) {
+  const prev = useRef(key);
+  useEffect(() => {
+    if (!enabled) return;
+    if (prev.current === key) return;
+    prev.current = key;
+    const el = ref && ref.current;
+    if (!el) return;
+    // 부드럽게. 사용자가 '올라갔다'는 걸 인지할 수 있어야 방향 감각이 유지된다.
+    try { el.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { el.scrollTop = 0; }
+  }, [key, enabled, ref]);
+}
+
 /* ----------------------------------------------------------------
    ImageViewer — 아이템·코디 공통. 오버레이 + 돋보기 확대/축소/팬.
 ---------------------------------------------------------------- */
@@ -512,6 +530,10 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
+  // 손잡이를 아래로 끌어 닫는다. 시트 안이 스크롤되는 경우(요금제 등) 배경을 누를 자리가
+  // 거의 없어서 닫기가 어려웠다. 손잡이에서 시작한 드래그만 잡아 스크롤과 겹치지 않게 한다.
+  const [dragY, setDragY] = useState(0);
+  const dragFrom = useRef(null);
   const [wide, setWide] = useState(typeof window !== 'undefined' && window.innerWidth >= 760);
   useEscapeClose(open, onClose);
   useEffect(() => {
@@ -535,14 +557,27 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
         width: '100%', maxWidth: wide ? 420 : maxW, background: 'var(--surface)',
         borderRadius: wide ? 'var(--r-lg)' : 'var(--r-lg) var(--r-lg) 0 0',
         boxShadow: wide ? 'var(--pop-shadow)' : 'var(--sheet-shadow)',
-        transform: shown ? 'translateY(0) scale(1)' : hiddenTf,
+        transform: shown ? (dragY ? `translateY(${dragY}px)` : 'translateY(0) scale(1)') : hiddenTf,
         opacity: wide ? (shown ? 1 : 0) : 1,
-        transition: 'transform var(--dur) var(--ease), opacity var(--dur) var(--ease)',
+        transition: dragY ? 'none' : 'transform var(--dur) var(--ease), opacity var(--dur) var(--ease)',
         paddingBottom: wide ? 6 : 'max(env(safe-area-inset-bottom), 12px)',
       }}>
         {!wide && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 2px' }}>
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: 'var(--line-2)' }} />
+          <div
+            onPointerDown={(e) => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+            onPointerMove={(e) => { if (dragFrom.current != null) setDragY(Math.max(0, e.clientY - dragFrom.current)); }}
+            onPointerUp={() => {
+              const far = dragY > 90;
+              dragFrom.current = null;
+              setDragY(0);
+              if (far) onClose();
+            }}
+            onPointerCancel={() => { dragFrom.current = null; setDragY(0); }}
+            role="button"
+            aria-label="내려서 닫기"
+            style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 6px', touchAction: 'none', cursor: 'grab' }}
+          >
+            <div style={{ width: 44, height: 4, borderRadius: 999, background: 'var(--line-2)' }} />
           </div>
         )}
         <div style={{ height: wide ? 14 : 0 }} />
@@ -747,6 +782,9 @@ function formatDotDate(iso) {
 }
 
 function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
+  // 다른 옷을 열면 시트 안 스크롤을 위로 (같은 시트가 재사용된다)
+  const bodyRef = useRef(null);
+  useScrollTopOn(bodyRef, item && item.id, !!open);
   const [draft, setDraft] = useState({});
   useEffect(() => {
     if (open && item) {
@@ -766,7 +804,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const canZoom = !!(item.img && onViewImage);
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div style={{ padding: '10px 24px 26px' }}>
+      <div ref={bodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
             <button
@@ -960,4 +998,4 @@ function EmptyState({
   );
 }
 
-Object.assign(window, { Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState });
+Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState });

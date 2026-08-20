@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, Silhouette, Skeleton, Thumb } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, Silhouette, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
@@ -404,6 +404,8 @@ function TodayScreen({ ctx }) {
   // '추가로 코디 추천받기'는 화면 밖에 카드를 붙인다. 누른 자리에 그대로 있으면
   // 뭐가 늘었는지 안 보이므로, 만드는 동안 붙는 스켈레톤까지 따라 내려간다.
   const scrollRef = React.useRef(null);
+  // 날짜를 바꾸면 그 날 목록을 위부터 본다(지난 날짜에서 스크롤이 남아 있으면 헤더가 안 보인다).
+  useScrollTopOn(scrollRef, ymd(selected));
   const scrollToBottom = () => {
     const el = scrollRef.current;
     if (!el) return;

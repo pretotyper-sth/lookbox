@@ -562,6 +562,36 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>연령대</div>
           <ChipRow options={LB_DATA.AGES} value={d.age} onPick={set('age')} />
         </div>
+        {/* 체형은 넣으면 코디 그림이 실제 몸에 가까워지지만 굳이 밝히고 싶지 않을 수 있다.
+            선택 입력으로 두고, 비워도 다음으로 넘어간다(valid에서 보지 않는다). */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>키 · 몸무게</span>
+            <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>선택 · 비워둬도 돼요</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[['height', 'cm', '키'], ['weight', 'kg', '몸무게']].map(([key, unit, ph]) => (
+              <div key={key} style={{ flex: 1, position: 'relative' }}>
+                <input
+                  className="lb-input"
+                  inputMode="numeric"
+                  value={d[key] || ''}
+                  placeholder={ph}
+                  onChange={(e) => set(key)(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+                  style={{
+                    width: '100%', padding: '12px 34px 12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
+                    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--ink-3)' }}>{unit}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+            넣으면 코디를 내 체형에 가깝게 그려요.
+          </div>
+        </div>
       </div>
     ),
   };

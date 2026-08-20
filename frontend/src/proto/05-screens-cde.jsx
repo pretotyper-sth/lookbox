@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { useScrollTopOn, Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState, LookExpandBadge */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
@@ -856,6 +856,9 @@ function DetailScreen({ ctx }) {
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const multi = detailTotal > 1;
+  // 다른 코디로 넘기면 위부터 본다. 아래 목록을 보다 넘기면 새 코디의 사진이 화면 밖이다.
+  const detailScrollRef = React.useRef(null);
+  useScrollTopOn(detailScrollRef, detailLook.id);
 
   // swipe + slide-direction animation
   const startX = React.useRef(0);
@@ -1032,7 +1035,7 @@ function DetailScreen({ ctx }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {topBar}
-      <div className="lb-scrollable" style={{
+      <div ref={detailScrollRef} className="lb-scrollable" style={{
         flex: 1,  
          padding: 'var(--gap-header) 18px 16px',
       }}>
