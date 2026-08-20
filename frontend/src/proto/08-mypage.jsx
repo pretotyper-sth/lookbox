@@ -7,6 +7,9 @@ const { BottomSheet, Btn, Chip, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_C
 
 const { useState: useMp, useEffect: useMe } = React;
 
+// 빌드 식별자 — 이 기기가 어떤 배포를 보고 있는지 확인용 (vite define)
+const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
+
 /* ---- summary chips (값 요약 표시) ---- */
 function SummaryChips({ items, empty }) {
   if (!items.length) return <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{empty}</span>;
@@ -329,9 +332,10 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  // 개수 설정은 추천이 켜져 있을 때만 의미가 있다. 꺼진 상태에서 숫자만 남으면 혼란스럽다.
-  const countRows = dailyEnabled ? (
-    <>
+  // 추천이 꺼져 있어도 항목은 보여준다 — 숨기면 '설정이 원래 없는 것'처럼 보인다.
+  // 대신 흐리게 두고 조절은 막아, 먼저 켜야 한다는 걸 드러낸다.
+  const countRows = (
+    <div style={{ opacity: dailyEnabled ? 1 : 0.45, pointerEvents: dailyEnabled ? 'auto' : 'none' }} aria-disabled={!dailyEnabled}>
       <ActionRow
         icon="sparkle"
         label="처음 추천받는 코디 수"
@@ -344,8 +348,8 @@ function MyPageScreen({ ctx }) {
         hint="옷장에 없지만 잘 어울릴 아이템을 하나 끼워 보여줘요"
         right={<Stepper value={wishCount} min={0} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
       />
-    </>
-  ) : null;
+    </div>
+  );
 
   const settingsCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
@@ -369,6 +373,9 @@ function MyPageScreen({ ctx }) {
       <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
       <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
       <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
+      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-3)', padding: '8px 0 4px' }}>
+        v1.0.0 · {BUILD_ID}
+      </div>
     </div>
   );
 
@@ -424,7 +431,9 @@ function MyPageScreen({ ctx }) {
               {accountCard}
             </div>
 
-            <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
+            <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
+          LOOKBOX v1.0.0 <span style={{ opacity: 0.7 }}>· {BUILD_ID}</span>
+        </div>
             {sheets}
           </div>
         </div>

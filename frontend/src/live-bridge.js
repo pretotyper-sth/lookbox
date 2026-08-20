@@ -87,9 +87,16 @@ const auth = {
     }
   },
   // 설정을 계정에 저장. 실패해도 로컬 저장은 이미 끝난 상태라 화면은 그대로 간다.
+  // 통째로 덮어쓰지 않고 서버에 있는 값 위에 얹는다 — 예전 버전이 열려 있는 기기가
+  // 뒤늦게 저장해도 다른 기기에서 설정한 값이 지워지지 않는다.
   async savePrefs(prefs) {
     if (!supabase) return
-    try { await supabase.auth.updateUser({ data: { prefs } }) } catch { /* 오프라인 등 */ }
+    let current = {}
+    try {
+      const { data } = await supabase.auth.getUser()
+      current = (data?.user?.user_metadata?.prefs) || {}
+    } catch { /* 오프라인 — 그냥 덮어쓴다 */ }
+    try { await supabase.auth.updateUser({ data: { prefs: { ...current, ...prefs } } }) } catch { /* 오프라인 등 */ }
   },
   // 가입은 Supabase의 signUp을 쓰지 않는다. 확인 메일이 필요한 가입은 기본 메일
   // 발송 한도(시간당 몇 통)에 걸려 'email rate limit'으로 막히고, 그 순간 계정이

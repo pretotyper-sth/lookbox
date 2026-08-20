@@ -326,6 +326,29 @@ function normalizeProductUrl(raw) {
   }
 }
 
+/** 값이 '설정된' 것으로 볼 수 있는지. 빈 문자열·빈 배열은 미설정으로 본다. */
+function prefsFilled(v) {
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'string') return v.trim() !== '';
+  return v !== undefined && v !== null;
+}
+
+/**
+ * 계정 설정과 이 기기 설정을 합친다.
+ * - 계정에 값이 있으면 계정이 정본이다 (다른 기기에서 바꾼 게 반영돼야 하니까).
+ * - 계정에 비어 있는 값만 이 기기 값으로 채운다 — 예전에 기기가 계정을 기본값으로
+ *   덮어써 버린 적이 있어서, 값이 남아 있는 기기가 계정을 되살릴 수 있어야 한다.
+ */
+function mergePrefs(local, account) {
+  const base = { ...LB_DATA.DEFAULT_PREFS, ...(local || {}) };
+  const acc = account || {};
+  const out = { ...base };
+  Object.keys(acc).forEach((k) => {
+    if (prefsFilled(acc[k])) out[k] = acc[k];
+  });
+  return out;
+}
+
 function liveRememberItem(item) {
   if (!item) return null;
   LB_DATA.ALL[item.id] = item;
@@ -582,6 +605,10 @@ function App() {
   // 돌아서, 로그인 전 마운트에서 토큰 없이 401로 실패하고 로그인해도 재요청이 없었다.
   // 그래서 새로고침을 해야 데이터가 나왔다.
   const [authUid, setAuthUid] = useState(null);
+  // 계정 설정(user_metadata.prefs)을 한 번이라도 읽었는지. 읽기 전에는 계정에 쓰지 않는다.
+  const prefsSynced = useRef(false);
+  // 계정 설정이 도착하기 전에 사용자가 바꾼 값은 계정 값으로 되돌리지 않는다.
+  const prefsAtBoot = useRef(null);
   setDailyScope(authUid); // 코디 캐시 키를 현재 계정으로 고정 — 렌더 중 읽는 곳이 있어 effect보다 먼저 세팅한다
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
@@ -594,6 +621,7 @@ function App() {
   useEffect(() => {
     if (isShowcase || forceOnb) return;
     let alive = true;
+    if (!prefsAtBoot.current) prefsAtBoot.current = prefs;
     (async () => {
       if (!window.LB_AUTH) return;
       const me = await window.LB_AUTH.current();
@@ -601,10 +629,16 @@ function App() {
       if (me) setAuthUid(me.id);
       if (me && !me.anonymous) {
         setPrefs((prev) => {
-          // 계정에 저장된 설정이 있으면 그걸 정본으로 쓴다 — 다른 기기에서도 스타일·핏·
-          // 팔레트가 그대로 온다. 없으면 이 기기에 있던 값을 유지한다.
-          const np = { ...prev, ...(me.prefs || {}), email: me.email };
-          if (np.email === prev.email && !me.prefs) return prev;
+          const np = { ...mergePrefs(prev, me.prefs), email: me.email };
+          // 계정 응답을 기다리는 동안 사용자가 만진 값은 그대로 둔다(껐다 켠 스위치가
+          // 잠시 뒤 저절로 되돌아가면 고장 난 것처럼 보인다).
+          const boot = prefsAtBoot.current || {};
+          Object.keys(prev).forEach((k) => {
+            if (JSON.stringify(prev[k]) !== JSON.stringify(boot[k])) np[k] = prev[k];
+          });
+          prefsSynced.current = true;
+          // 합친 결과를 계정에도 되돌려 쓴다 — 계정에서 비어 있던 값이 이 기기에
+          // 남아 있으면 그대로 복구된다.
           persistPrefs(np);
           return np;
         });
@@ -618,14 +652,17 @@ function App() {
   }, []);
   const persistPrefs = (p) => {
     try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
-    // 계정에도 저장해 다른 기기에서 그대로 오게 한다. email/avatar는 제외 —
-    // email은 세션에서 오고, avatar(data URL)는 user_metadata에 담기 너무 크다.
+    // 계정 설정을 아직 못 읽은 상태에서 계정에 쓰면, 이 기기의 기본값이 계정에 저장된
+    // 진짜 설정을 지운다(다른 기기에서 스타일·퍼스널 컬러가 사라지던 원인). 한 번
+    // 읽어 온 뒤에만 계정에 쓴다. 로컬 저장은 항상 한다.
+    if (!prefsSynced.current) return;
+    // email/avatar는 제외 — email은 세션에서 오고, avatar(data URL)는 metadata에 담기 너무 크다.
     if (window.LB_AUTH && window.LB_AUTH.savePrefs) {
       const { email, avatar, ...rest } = p;
       window.LB_AUTH.savePrefs(rest);
     }
   };
-  const completeOnboarding = (p) => { setPrefs(p); persistPrefs(p); setOnboarded(true); };
+  const completeOnboarding = (p) => { prefsSynced.current = true; setPrefs(p); persistPrefs(p); setOnboarded(true); };
   // 가입 — 계정 단계를 넘어갈 때 실제 Supabase 계정을 만든다. 에러 문구를 돌려주면
   // 온보딩이 그 단계에 머문다. 여기서 계정을 만들어야 다음 방문에 같은 옷장이 열린다.
   const createAccount = async (email, pw) => {
@@ -633,6 +670,7 @@ function App() {
     const r = await window.LB_AUTH.signUp(email, pw);
     if (r.error) return r.error;
     const p = { ...prefs, email };
+    prefsSynced.current = true;   // 방금 만든 계정이라 이 기기 설정이 정본이다
     setPrefs(p); persistPrefs(p);
     if (r.user) setAuthUid(r.user.id);
     return '';
@@ -644,7 +682,8 @@ function App() {
     const r = await window.LB_AUTH.signIn(email, pw);
     if (r.error) return r.error;
     // 계정에 저장된 설정이 있으면 그걸 쓴다 (다른 기기에서 처음 로그인하는 경우)
-    const p = { ...LB_DATA.DEFAULT_PREFS, ...prefs, ...(r.user.prefs || {}), email: r.user.email || email };
+    const p = { ...mergePrefs(prefs, r.user.prefs), email: r.user.email || email };
+    prefsSynced.current = true;
     setPrefs(p); persistPrefs(p); setOnboarded(true);
     setAuthUid(r.user.id);
     return '';
@@ -679,6 +718,7 @@ function App() {
   };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => {
+    prefsSynced.current = false;   // 다음 로그인에서 계정 설정을 읽기 전까지 계정에 쓰지 않는다
     if (window.LB_AUTH) window.LB_AUTH.signOut();
     try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ }
     setAuthUid(null);
