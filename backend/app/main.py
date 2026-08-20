@@ -180,7 +180,7 @@ def stream_with_keepalive(work) -> StreamingResponse:
                 # 사용자도, 우리도 원인을 좁힐 수 없다(호스팅 로그를 봐야 했다).
                 print(f"[stream] work failed: {type(exc).__name__}: {exc}", flush=True)
                 detail = f" (코드: {type(exc).__name__})" if SHOW_ERROR_CODES else ""
-                error.append(f"요청 처리 중 오류가 났어요{detail}. 잠시 후 다시 시도해 주세요.")
+                error.append(f"처리 중 문제가 생겼어요{detail}. 잠시 후 다시 시도해 주세요.")
 
         def event(payload: dict[str, Any]) -> str:
             return "data: " + json.dumps(payload, ensure_ascii=False, default=str) + "\n\n"
@@ -295,20 +295,20 @@ def now_iso() -> str:
 
 def require_supabase() -> None:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        raise HTTPException(status_code=500, detail="Supabase is not configured")
+        raise HTTPException(status_code=500, detail="서버 설정이 아직 안 됐어요. 잠시 후 다시 시도해 주세요.")
 
 
 async def current_user(authorization: str | None = Header(default=None)) -> UserContext:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="login_required")
+        raise HTTPException(status_code=401, detail="로그인이 필요해요.")
     token = authorization.split(" ", 1)[1]
     try:
         result = supabase_user.auth.get_user(token)
         user = result.user
     except Exception as exc:
-        raise HTTPException(status_code=401, detail="invalid_session") from exc
+        raise HTTPException(status_code=401, detail="로그인이 만료됐어요. 다시 로그인해 주세요.") from exc
     if not user:
-        raise HTTPException(status_code=401, detail="invalid_session")
+        raise HTTPException(status_code=401, detail="로그인이 만료됐어요. 다시 로그인해 주세요.")
     upsert_profile(user.id, user.email)
     return UserContext(id=user.id, email=user.email)
 
@@ -602,7 +602,10 @@ def ensure_within_limit(user_id: str, action: str) -> None:
     if monthly_count(user_id, action) >= limit:
         raise HTTPException(
             status_code=429,
-            detail=f"이번 달에는 더 만들 수 없어요. 다음 달에 다시 만들 수 있어요. (월 {limit}회)",
+            detail=(
+                f"전신 이미지는 한 달에 {limit}번까지 만들 수 있어요. "
+                f"{_reset_day(billing_state(user_id))}부터 다시 만들 수 있어요."
+            ),
         )
 
 
@@ -617,17 +620,24 @@ def note_usage(user_id: str, action: str, metadata: dict[str, Any] | None = None
         print(f"[billing] note failed ({action}): {exc}", flush=True)
 
 
+def _reset_day(state: dict[str, Any]) -> str:
+    """'9월 1일'처럼 언제 다시 채워지는지. 문구에 날짜가 있어야 기다릴지 결정할 수 있다."""
+    try:
+        d = datetime.fromisoformat(str(state.get("resetsAt")).replace("Z", "+00:00"))
+        return f"{d.month}월 {d.day}일"
+    except Exception:  # noqa: BLE001
+        return "다음 달"
+
+
 class CreditError(HTTPException):
-    """크레딧이 모자랄 때. 프론트가 요금제 안내를 띄울 수 있게 코드를 함께 준다."""
+    """크레딧이 모자랄 때. 프론트가 요금제 안내를 띄울 수 있게 상태를 함께 들고 다닌다."""
 
     def __init__(self, action: str, state: dict[str, Any], need: int | None = None):
         need = CREDIT_COSTS.get(action, 1) if need is None else need
+        upgrade = "" if state.get("plan") != DEFAULT_PLAN else " 지금 이어서 쓰려면 프로로 바꾸면 돼요."
         super().__init__(
             status_code=402,
-            detail=(
-                f"이번 달 크레딧을 다 썼어요. {CREDIT_LABELS.get(action, '이 작업')}에는 "
-                f"크레딧 {need}개가 필요해요. 다음 달에 다시 채워지고, 요금제를 올리면 지금 바로 쓸 수 있어요."
-            ),
+            detail=f"이번 달 크레딧을 다 썼어요. {_reset_day(state)}에 다시 채워져요.{upgrade}",
         )
         self.action = action
         self.state = state
@@ -1028,10 +1038,9 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 
 
 _FASHION_REJECT_MSG = {
-    "not_fashion": "옷이나 패션 아이템이 잘 보이는 사진으로 올려주세요.",
-    "unclear": "어떤 옷인지 알기 어려워요. 아이템이 크게 나온 사진으로 다시 올려주세요.",
-    # 정면 상품컷을 만들 수 없는 원본 — 이미지 생성에 돈을 쓰기 전에 되돌린다.
-    "no_front": "아이템 정면이 잘 보이는 사진으로 올려주세요. 지금 사진은 가려지거나 일부만 보여서 앞모습을 만들 수 없어요.",
+    "not_fashion": "옷이 잘 보이는 사진으로 올려 주세요.",
+    "unclear": "어떤 옷인지 알아보기 어려워요. 옷이 크게 나온 사진으로 다시 올려 주세요.",
+    "no_front": "옷 앞모습이 잘 보이는 사진으로 올려 주세요. 지금 사진은 가려지거나 일부만 보여요.",
 }
 
 
@@ -2171,19 +2180,19 @@ def _fail_log(info: dict[str, Any]) -> str:
 # 사용자가 읽고 다음 행동을 정할 수 있는 문구만 둔다. 원인이 우리 쪽이면 사진을
 # 바꾸라고 하지 않고(바꿔도 안 되니까) 잠시 후 다시 시도하도록 안내한다.
 _EXTRACT_FAIL_MSG = {
-    "timeout": "이미지를 만드는 데 시간이 너무 오래 걸려 멈췄어요. 잠시 후 다시 시도해 주세요.",
-    "network": "이미지 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
-    "rate_limit": "지금 이미지 요청이 몰려 있어요. 1~2분 뒤에 다시 시도해 주세요.",
-    "moderation": "이 사진은 처리할 수 없어요. 아이템이 또렷하게 보이는 다른 사진으로 다시 시도해 주세요.",
-    "auth": "이미지 만들기 설정에 문제가 있어요. 잠시 후 다시 시도해 주세요.",
-    "quota": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
-    "too_large": "사진 용량이 너무 커요. 조금 작은 사진으로 다시 시도해 주세요.",
+    "timeout": "이미지를 만드는 데 너무 오래 걸려서 멈췄어요. 잠시 후 다시 시도해 주세요.",
+    "network": "서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "rate_limit": "지금 요청이 몰려 있어요. 1~2분 뒤에 다시 시도해 주세요.",
+    "moderation": "이 사진은 처리할 수 없어요. 다른 사진으로 시도해 주세요.",
+    "too_large": "사진 용량이 너무 커요. 조금 작은 사진으로 다시 올려 주세요.",
+    "bad_request": "이 사진에서는 옷을 알아보기 어려웠어요. 옷이 크고 또렷하게 나온 사진으로 다시 올려 주세요.",
     "upstream": "이미지 서버가 잠시 불안정해요. 조금 뒤에 다시 시도해 주세요.",
-    "bad_request": "이 사진에서는 아이템을 구별하기 어려웠어요. 아이템 하나가 크고 또렷하게 보이는 사진으로 다시 시도해 주세요.",
-    # 우리가 보낸 요청 자체가 잘못된 경우 — 사진을 바꿔도 해결되지 않는다.
+    # 아래는 우리 쪽 문제 — 사진을 바꿔도 해결되지 않으니 그런 말은 하지 않는다.
+    "auth": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "quota": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
     "bad_setup": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "no_openai": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
     "api_error": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
-    "no_openai": "이미지 생성 기능이 비활성화돼 있어요.",
     "edit_failed": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
 }
 
@@ -3159,7 +3168,7 @@ def recommend_daily(body: RecommendRequest, user: UserContext = Depends(current_
 @app.post("/recommend/purchase-check")
 def recommend_purchase(body: RecommendRequest, user: UserContext = Depends(current_user)) -> dict[str, Any]:
     if not body.anchor_id:
-        raise HTTPException(status_code=400, detail="anchor_id_required")
+        raise HTTPException(status_code=400, detail="어떤 옷과 맞춰 볼지 먼저 골라 주세요.")
     anchor_rows = (
         supabase_admin.table("wardrobe_items")
         .select("*")
@@ -3171,7 +3180,7 @@ def recommend_purchase(body: RecommendRequest, user: UserContext = Depends(curre
         or []
     )
     if not anchor_rows:
-        raise HTTPException(status_code=404, detail="anchor_not_found")
+        raise HTTPException(status_code=404, detail="고민 중인 옷을 찾지 못했어요. 다시 올려 주세요.")
     return create_recommendations(user, anchor_rows[0], body, "purchase")
 
 
@@ -3190,7 +3199,7 @@ def create_recommendations(user: UserContext, anchor: dict[str, Any] | None, bod
     if anchor:
         pool = [anchor, *pool]
     if len(pool) < 2:
-        raise HTTPException(status_code=400, detail="not_enough_items")
+        raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요.")
     combos = recommend_text(user.id, anchor, pool, body.style, min(max(body.max_combos, 1), 10))
     outfits = []
     by_id = {item["id"]: item for item in pool}
@@ -4235,7 +4244,7 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
             raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
         raise HTTPException(
             status_code=422,
-            detail="상품 이미지를 찾지 못했어요. 사진으로 추가해 주세요.",
+            detail="이 주소에서 상품 사진을 찾지 못했어요. 사진으로 올려 주세요.",
         )
     img_url = match.group(1)
     if img_url.startswith("//"):
@@ -4420,7 +4429,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         or []
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     row = rows[0]
     meta = dict(row.get("metadata") or {})
     patch: dict[str, Any] = {}
@@ -4476,18 +4485,18 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
         or []
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     row = rows[0]
     if row.get("status") == "deleted":
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     meta = dict(row.get("metadata") or {})
     source_path = (meta.get("original_path") or "").strip() or (row.get("storage_path") or "").strip()
     if not source_path:
-        raise HTTPException(status_code=400, detail="원본 이미지가 없어 다시 추출할 수 없어요")
+        raise HTTPException(status_code=400, detail="원본 사진이 없어서 다시 만들 수 없어요. 사진을 새로 올려 주세요.")
     try:
         raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(source_path)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail="원본 이미지를 불러오지 못했어요") from exc
+        raise HTTPException(status_code=400, detail="원본 사진을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.") from exc
     suffix = os.path.splitext(source_path)[1] or ".png"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
@@ -4510,7 +4519,7 @@ def live_reextract_item(item_id: str, user: UserContext = Depends(current_user))
                 gen_meta["logo_text"] = str(meta.get("logo_text") or "").strip()[:80]
             product_bytes = resolve_product_image(uid, tmp_path, gen_meta)
             if not product_bytes:
-                raise HTTPException(status_code=502, detail="이미지 추출에 실패했어요. 잠시 후 다시 시도해 주세요")
+                raise HTTPException(status_code=502, detail="옷만 오려내지 못했어요. 잠시 후 다시 시도해 주세요.")
             new_path, image_url = save_product_image(uid, product_bytes)
             meta["bg_norm"] = _BG_NORM_VERSION
             if "has_text_logo" in gen_meta:
@@ -4564,10 +4573,10 @@ async def live_replace_image(
         or []
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     row = rows[0]
     if row.get("status") == "deleted":
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
 
     raw: bytes | None = None
     content_type = "image/jpeg"
@@ -4584,12 +4593,12 @@ async def live_replace_image(
         except HTTPException:
             raise
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요") from exc
+            raise HTTPException(status_code=400, detail="사진을 불러오지 못했어요. 다시 시도해 주세요.") from exc
     else:
-        raise HTTPException(status_code=400, detail="사진 또는 URL을 넣어 주세요")
+        raise HTTPException(status_code=400, detail="사진이나 상품 주소를 넣어 주세요.")
 
     if not raw:
-        raise HTTPException(status_code=400, detail="이미지를 불러오지 못했어요")
+        raise HTTPException(status_code=400, detail="사진을 불러오지 못했어요. 다시 시도해 주세요.")
 
     meta = dict(row.get("metadata") or {})
     hint = (extract_hint or "").strip()[:500]
@@ -4683,10 +4692,10 @@ def live_replace_image_confirm(
         or []
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     row = rows[0]
     if row.get("status") == "deleted":
-        raise HTTPException(status_code=404, detail="item_not_found")
+        raise HTTPException(status_code=404, detail="그 옷을 찾지 못했어요. 목록을 새로고침해 주세요.")
     patch = {"image_url": body.image_url, "storage_path": body.storage_path, "metadata": body.metadata}
     updated = (
         supabase_admin.table("wardrobe_items")
@@ -4957,7 +4966,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     require_supabase()
     face = _decode_data_url(body.face_data_url)
     if not face:
-        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요")
+        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
     ensure_within_limit(user.id, "tryon_body")
 
     note = _body_note({"height": body.height, "weight": body.weight})
@@ -4978,7 +4987,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         return {"imageUrl": cached[0]["image_url"], "cached": True}
 
     if not openai_client:
-        raise HTTPException(status_code=503, detail="이미지 생성 기능이 비활성화돼 있어요.")
+        raise HTTPException(status_code=503, detail="지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.")
     try:
         source = io.BytesIO(face)
         source.name = "face.png"
@@ -5051,9 +5060,9 @@ def live_set_plan(
     사용자가 스스로 프로로 올릴 수 있으면 요금제가 아니다."""
     require_supabase()
     if body.plan not in PLANS:
-        raise HTTPException(status_code=400, detail="없는 요금제예요")
+        raise HTTPException(status_code=400, detail="없는 요금제예요.")
     if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="결제 준비 중이에요. 곧 열립니다.")
+        raise HTTPException(status_code=403, detail="결제는 준비 중이에요. 열리면 바로 알려드릴게요.")
     target = user.id
     if body.user_email:
         found = None
@@ -5069,7 +5078,7 @@ def live_set_plan(
                     break
             page += 1
         if not found:
-            raise HTTPException(status_code=404, detail="그 이메일의 계정이 없어요")
+            raise HTTPException(status_code=404, detail="그 이메일의 계정이 없어요.")
         target = found
     supabase_admin.table("credit_ledger").insert({
         "user_id": target, "delta": 0, "reason": "plan",
@@ -5121,7 +5130,7 @@ async def live_import_photo(
 def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_user)) -> StreamingResponse:
     require_supabase()
     if not body.url.strip():
-        raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
+        raise HTTPException(status_code=400, detail="상품 주소를 입력해 주세요.")
     url = _normalize_product_url(body.url)
     ensure_credits(user.id, "import_url")
     uid = user.id
@@ -5209,7 +5218,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     pool = [anchor, *owned] if anchor else owned[:]
     pool = [row for row in pool if row]
     if len(pool) < 2:
-        raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요")
+        raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요.")
     # 이전에 담아둔 아이템에는 숨은 스타일 속성이 없다. 추천 전에 한 번 채운다
     # (이름 기반 일괄 추론 1회, 이후에는 저장돼 있어 호출이 없다).
     _ensure_style_attrs(user.id, pool)
@@ -5433,7 +5442,7 @@ def live_outfit_state(
         or []
     )
     if not updated:
-        raise HTTPException(status_code=404, detail="코디를 찾지 못했어요")
+        raise HTTPException(status_code=404, detail="그 코디를 찾지 못했어요. 목록을 새로고침해 주세요.")
     return {"ok": True}
 
 
@@ -5450,7 +5459,7 @@ def live_create_manual_outfit(
     require_supabase()
     ids = [i for i in (body.item_ids or []) if i][:6]
     if len(ids) < 2:
-        raise HTTPException(status_code=400, detail="아이템을 2개 이상 골라주세요")
+        raise HTTPException(status_code=400, detail="옷을 2개 이상 골라 주세요.")
     row = (
         supabase_admin.table("outfits")
         .insert({

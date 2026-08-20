@@ -728,7 +728,7 @@ function App() {
   const [tryOnMaking, setTryOnMaking] = useState(false);
   const makeTryOnBody = async () => {
     if (tryOnMaking) return '';
-    if (!prefs.avatar) { showToast('먼저 프로필 사진을 등록해 주세요'); return ''; }
+    if (!prefs.avatar) { showToast('프로필 사진을 먼저 등록해 주세요.'); return ''; }
     setTryOnMaking(true);
     try {
       const res = await liveJSON('/api/live/tryon/body', {
@@ -743,7 +743,7 @@ function App() {
       showToast(res.cached ? '전신 이미지를 불러왔어요' : '전신 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
-      showToast(e.message || '전신 이미지를 만들지 못했어요');
+      showToast(e.message || '전신 이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       return '';
     } finally {
       setTryOnMaking(false);
@@ -1015,7 +1015,7 @@ function App() {
         else if (removed) setDailyAllowed(false);
         bumpDaily();
       })
-      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
+      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'))
       .finally(() => { if (!dead) { setWardrobeLoading(false); setWardrobeLoaded(true); } });
     return () => { dead = true; };
   }, [isShowcase, authUid, hydrateOutfits, showToast, bumpDaily]);
@@ -1326,7 +1326,7 @@ function App() {
         });
         bumpDaily();
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
-        else if (!quiet) showToast('더 추천할 조합이 없어요');
+        else if (!quiet) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
         return { added: added.length, wardrobeGrew };
       }
       // force여도 당일 이력이 있으면 전체 리셋 대신 추가만 (위에서 처리). 여기 도달 = 오늘 첫 추천.
@@ -1363,7 +1363,7 @@ function App() {
       return { added: outfits.length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
-      showToast(e.message || '오늘의 코디 추천에 실패했어요');
+      showToast(e.message || '오늘의 코디를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       return { added: 0, wardrobeGrew, error: true };
     } finally {
       setDailyLoading(false);
@@ -1398,7 +1398,7 @@ function App() {
         setComboRev((n) => n + 1);
         showToast(`${preferredStyleLabel} 무드로 코디를 추천했어요`, 'sparkle');
       } catch (e) {
-        showToast(e.message || '코디 추천에 실패했어요');
+        showToast(e.message || '코디를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       } finally {
         setLoading(false);
       }
@@ -1415,7 +1415,7 @@ function App() {
     if (moreLoading || loading) return;
     const anchorId = LB_DATA.ANCHOR?.serverId;
     if (!anchorId) {
-      showToast('고민 중인 옷을 다시 불러와 주세요');
+      showToast('고민 중인 옷을 다시 올려 주세요.');
       return;
     }
     setMoreLoading(true);
@@ -1434,10 +1434,10 @@ function App() {
       stampOutfitStyle(payload.outfits);
       const added = liveAppendOutfits(payload);
       setComboRev((n) => n + 1);
-      if (!added.length) showToast('더 추천할 조합이 없어요');
+      if (!added.length) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
       else showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
     } catch (e) {
-      showToast(e.message || '추가 추천에 실패했어요');
+      showToast(e.message || '코디를 더 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setMoreLoading(false);
     }
@@ -1450,7 +1450,7 @@ function App() {
     if (!outfitId || String(outfitId).startsWith('live-') || String(outfitId).startsWith('manual-')) return;
     liveJSON(`/api/live/outfits/${encodeURIComponent(outfitId)}/state`, {
       method: 'POST', body: JSON.stringify(patch),
-    }).catch(() => showToast('서버에 반영하지 못했어요. 잠시 후 다시 시도해 주세요'));
+    }).catch(() => showToast('서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
   };
   const saveOutfit = (outfitId) => {
     setSavedLooks((arr) => {
@@ -1479,7 +1479,7 @@ function App() {
       });
       outfitId = res && res.id;
     } catch (e) {
-      showToast(e.message || '룩북에 저장하지 못했어요');
+      showToast(e.message || '룩북에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
       return;
     }
     LB_DATA.OUTFIT_BY_ID[outfitId] = {
@@ -1741,11 +1741,11 @@ function App() {
       const merged = [...prev, ...fresh.filter((o) => !prev.some((p) => p.id === o.id))];
       setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
       reloadBilling();
-      if (append && !fresh.length) showToast('더 추천할 조합이 없어요');
+      if (append && !fresh.length) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
     } catch (e) {
       if (append) {
         setPickSheet({ ids: picked, loading: false, outfits: prev, error: '' });
-        showToast(e.message || '코디를 더 만들지 못했어요');
+        showToast(e.message || '코디를 더 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       } else {
         setPickSheet({ ids: picked, loading: false, outfits: [], error: e.message || '코디를 만들지 못했어요' });
       }
@@ -1844,7 +1844,7 @@ function App() {
         body: JSON.stringify({ ids: list.map((it) => it.id), status: 'owned' }),
       });
     } catch (e) {
-      showToast(e.message || '저장은 됐지만 서버 반영 확인에 실패했어요');
+      showToast(e.message || '옷장에는 담겼지만 저장이 늦어지고 있어요. 잠시 후 새로고침해 주세요.');
     }
     // 2) 등록 화면에서 고친 이름·분류·상세를 서버에 반영 (status만 바꾸면 AI 초깃값으로 덮임)
     const finalList = await Promise.all(list.map(async (it) => {
