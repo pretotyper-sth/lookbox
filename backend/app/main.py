@@ -408,6 +408,207 @@ def image_to_data_url(path: str, max_side: int = 768) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode("ascii")
 
 
+# ---- 요금제 · 크레딧 ------------------------------------------------------------
+# AI를 쓰는 작업마다 실측 원가가 다르다(아래 주석의 값은 이 저장소에서 직접 잰 것).
+# 사용자에게는 '크레딧 N개'라는 한 가지 단위로만 보여주고, 무거운 작업일수록 많이 깎는다.
+#
+#   상품컷 URL 등록      분류 $0.0055 + 로컬 컷아웃 $0        → 1
+#   사진 등록            분류 $0.0055 + AI 추출 $0.07~0.25    → 2
+#   이미지 다시 만들기    위와 동일                            → 2
+#   코디 추천 1회        gpt-4o $0.010 (여러 벌 한 번에)       → 1
+#   AI 착장 이미지        이미지 생성 $0.25                    → 5
+#
+# 크레딧당 원가는 가벼운 작업 $0.006, 무거운 작업 $0.05 수준이다. 요금은 '평균 사용'을
+# 기준으로 잡았고(등록은 초반에 몰리고 그 뒤엔 추천 위주), 크레딧 상한이 손실의 뚜껑 역할을 한다.
+CREDIT_COSTS = {
+    "import_url": 1,
+    "import_photo": 2,
+    "replace_image": 2,
+    "coordinate": 1,
+    "model_look": 5,
+}
+CREDIT_LABELS = {
+    "import_url": "URL·구매내역으로 옷 등록",
+    "import_photo": "사진으로 옷 등록",
+    "replace_image": "옷 사진 다시 만들기",
+    "coordinate": "코디 추천",
+    "model_look": "AI 착장 이미지",
+}
+
+PLANS: dict[str, dict[str, Any]] = {
+    "free": {
+        "id": "free",
+        "name": "무료",
+        "price_krw": 0,
+        "credits": 60,
+        "model_look": False,
+        "blurb": "가볍게 써보기",
+        "perks": ["매달 크레딧 60개", "옷장·코디·룩북 전부 사용", "구매내역 일괄 등록"],
+    },
+    "basic": {
+        "id": "basic",
+        "name": "베이직",
+        "price_krw": 5900,
+        "credits": 250,
+        "model_look": False,
+        "blurb": "옷장을 제대로 채우는 달",
+        "perks": ["매달 크레딧 250개", "사진 등록 100장 남짓", "무료 기능 전부"],
+    },
+    "pro": {
+        "id": "pro",
+        "name": "프로",
+        "price_krw": 12900,
+        "credits": 800,
+        "model_look": True,
+        "blurb": "매일 코디까지 받아 보기",
+        "perks": ["매달 크레딧 800개", "AI 착장 이미지", "베이직 기능 전부"],
+    },
+}
+DEFAULT_PLAN = "free"
+
+
+def _period_key(now: datetime | None = None) -> str:
+    """크레딧이 초기화되는 주기(달)."""
+    d = now or datetime.now(timezone.utc)
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def _period_end(period: str) -> str:
+    year, month = (int(x) for x in period.split("-"))
+    nxt = datetime(year + (month // 12), (month % 12) + 1, 1, tzinfo=timezone.utc)
+    return nxt.isoformat()
+
+
+def _ledger_rows(user_id: str) -> list[dict[str, Any]]:
+    try:
+        return (
+            supabase_admin.table("credit_ledger")
+            .select("delta,reason,metadata,created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .limit(5000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] ledger read failed: {exc}", flush=True)
+        return []
+
+
+def _plan_of(rows: list[dict[str, Any]]) -> str:
+    plan = DEFAULT_PLAN
+    for row in rows:
+        if row.get("reason") == "plan":
+            candidate = str((row.get("metadata") or {}).get("plan") or "")
+            if candidate in PLANS:
+                plan = candidate
+    return plan
+
+
+def billing_state(user_id: str) -> dict[str, Any]:
+    """이번 달 크레딧 상태. 달이 바뀌면 첫 조회 때 자동으로 새 크레딧을 넣는다."""
+    rows = _ledger_rows(user_id)
+    plan_id = _plan_of(rows)
+    plan = PLANS[plan_id]
+    period = _period_key()
+
+    granted = sum(
+        int(r.get("delta") or 0)
+        for r in rows
+        if r.get("reason") == "grant" and (r.get("metadata") or {}).get("period") == period
+    )
+    if granted <= 0:
+        # 이번 달 지급분이 없다 → 지금 넣는다(월초 배치 없이도 정확히 동작한다).
+        try:
+            supabase_admin.table("credit_ledger").insert({
+                "user_id": user_id,
+                "delta": plan["credits"],
+                "reason": "grant",
+                "metadata": {"period": period, "plan": plan_id},
+            }).execute()
+            granted = plan["credits"]
+            rows.append({"delta": plan["credits"], "reason": "grant",
+                         "metadata": {"period": period, "plan": plan_id}})
+        except Exception as exc:  # noqa: BLE001
+            print(f"[billing] grant failed: {exc}", flush=True)
+            granted = plan["credits"]
+
+    used_rows = [
+        r for r in rows
+        if int(r.get("delta") or 0) < 0 and (r.get("metadata") or {}).get("period") == period
+    ]
+    used = -sum(int(r.get("delta") or 0) for r in used_rows)
+    by_action: dict[str, dict[str, int]] = {}
+    for r in used_rows:
+        key = r.get("reason") or "etc"
+        slot = by_action.setdefault(key, {"count": 0, "credits": 0})
+        slot["count"] += 1
+        slot["credits"] += -int(r.get("delta") or 0)
+    return {
+        "plan": plan_id,
+        "planName": plan["name"],
+        "priceKrw": plan["price_krw"],
+        "modelLook": plan["model_look"],
+        "granted": granted,
+        "used": used,
+        "remaining": max(0, granted - used),
+        "period": period,
+        "resetsAt": _period_end(period),
+        "byAction": [
+            {"action": k, "label": CREDIT_LABELS.get(k, k), **v}
+            for k, v in sorted(by_action.items(), key=lambda kv: -kv[1]["credits"])
+        ],
+    }
+
+
+class CreditError(HTTPException):
+    """크레딧이 모자랄 때. 프론트가 요금제 안내를 띄울 수 있게 코드를 함께 준다."""
+
+    def __init__(self, action: str, state: dict[str, Any]):
+        need = CREDIT_COSTS.get(action, 1)
+        super().__init__(
+            status_code=402,
+            detail=(
+                f"이번 달 크레딧을 다 썼어요. {CREDIT_LABELS.get(action, '이 작업')}에는 "
+                f"크레딧 {need}개가 필요해요. 다음 달에 다시 채워지고, 요금제를 올리면 지금 바로 쓸 수 있어요."
+            ),
+        )
+        self.action = action
+        self.state = state
+
+
+def ensure_credits(user_id: str, action: str) -> dict[str, Any]:
+    """작업 전에 잔액을 확인한다. 모자라면 402로 막는다(돈이 나가기 전에)."""
+    need = CREDIT_COSTS.get(action, 1)
+    state = billing_state(user_id)
+    if state["remaining"] < need:
+        raise CreditError(action, state)
+    return state
+
+
+def spend_credits(user_id: str, action: str, metadata: dict[str, Any] | None = None) -> None:
+    """성공한 작업만 차감한다. 실패한 요청에까지 돈을 물리지 않는다."""
+    need = CREDIT_COSTS.get(action, 1)
+    if need <= 0:
+        return
+    try:
+        supabase_admin.table("credit_ledger").insert({
+            "user_id": user_id,
+            "delta": -need,
+            "reason": action,
+            "metadata": {**(metadata or {}), "period": _period_key()},
+        }).execute()
+    except Exception as exc:  # noqa: BLE001
+        # 기록에 실패해도 사용자 요청은 이미 성공했다. 막지 않는다(수익보다 신뢰).
+        print(f"[billing] spend failed ({action}): {exc}", flush=True)
+
+
+def plan_allows(user_id: str, feature: str) -> bool:
+    state = billing_state(user_id)
+    return bool(PLANS[state["plan"]].get(feature))
+
+
 def credit_balance(user_id: str) -> int:
     rows = (
         supabase_admin.table("credit_ledger")
@@ -4180,6 +4381,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
 def live_reextract_item(item_id: str, user: UserContext = Depends(current_user)) -> StreamingResponse:
     """이름·메타는 유지하고 제품 컷(이미지 추출)만 다시 생성."""
     require_supabase()
+    ensure_credits(user.id, "replace_image")
     rows = (
         supabase_admin.table("wardrobe_items")
         .select("*")
@@ -4349,6 +4551,7 @@ async def live_replace_image(
                 meta["logo_text"] = str(gen_meta.get("logo_text") or "").strip()[:80]
             meta["original_path"] = original_path
             meta["original_url"] = original_url
+            spend_credits(uid, "replace_image", {"item_id": item_id, "commit": commit})
             if not commit:
                 # DB는 그대로 두고 미리보기만 반환. pending을 그대로 /confirm에 보내면 반영된다.
                 return {
@@ -4646,6 +4849,79 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
+@app.get("/api/live/billing")
+def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """마이페이지 '사용량'. 이번 달 크레딧과 요금제, 작업별 사용 내역을 그대로 준다."""
+    require_supabase()
+    state = billing_state(user.id)
+    return {
+        **state,
+        "plans": [
+            {
+                "id": p["id"], "name": p["name"], "priceKrw": p["price_krw"],
+                "credits": p["credits"], "modelLook": p["model_look"],
+                "blurb": p["blurb"], "perks": p["perks"],
+                "current": p["id"] == state["plan"],
+            }
+            for p in PLANS.values()
+        ],
+        "costs": [
+            {"action": k, "label": CREDIT_LABELS.get(k, k), "credits": v}
+            for k, v in CREDIT_COSTS.items()
+        ],
+    }
+
+
+class PlanChange(BaseModel):
+    plan: str
+    user_email: str | None = None
+
+
+@app.post("/api/live/billing/plan")
+def live_set_plan(
+    body: PlanChange,
+    user: UserContext = Depends(current_user),
+    x_admin_token: str = Header("", alias="X-Admin-Token"),
+) -> dict[str, Any]:
+    """요금제 변경. 결제 연동 전이라 관리자 토큰이 있을 때만 바꿀 수 있다 —
+    사용자가 스스로 프로로 올릴 수 있으면 요금제가 아니다."""
+    require_supabase()
+    if body.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="없는 요금제예요")
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="결제 준비 중이에요. 곧 열립니다.")
+    target = user.id
+    if body.user_email:
+        found = None
+        page = 1
+        while page <= 20 and not found:
+            res = supabase_admin.auth.admin.list_users(page=page, per_page=200)
+            users = res if isinstance(res, list) else getattr(res, "users", [])
+            if not users:
+                break
+            for u in users:
+                if (getattr(u, "email", "") or "").lower() == body.user_email.lower():
+                    found = u.id
+                    break
+            page += 1
+        if not found:
+            raise HTTPException(status_code=404, detail="그 이메일의 계정이 없어요")
+        target = found
+    supabase_admin.table("credit_ledger").insert({
+        "user_id": target, "delta": 0, "reason": "plan",
+        "metadata": {"plan": body.plan, "by": "admin", "period": _period_key()},
+    }).execute()
+    # 요금제를 바꾸면 이번 달 지급분도 새 요금제 기준으로 맞춘다(차액만 추가 지급).
+    state = billing_state(target)
+    gap = PLANS[body.plan]["credits"] - state["granted"]
+    if gap > 0:
+        supabase_admin.table("credit_ledger").insert({
+            "user_id": target, "delta": gap, "reason": "grant",
+            "metadata": {"period": _period_key(), "plan": body.plan, "topup": True},
+        }).execute()
+    return billing_state(target)
+
+
 @app.post("/api/live/import/photo")
 async def live_import_photo(
     image: UploadFile = File(...),
@@ -4654,6 +4930,7 @@ async def live_import_photo(
     user: UserContext = Depends(current_user),
 ) -> StreamingResponse:
     require_supabase()
+    ensure_credits(user.id, "import_photo")
     suffix = os.path.splitext(image.filename or "image.jpg")[1] or ".jpg"
     content_type = image.content_type or "image/jpeg"
     raw = await image.read()
@@ -4669,6 +4946,7 @@ async def live_import_photo(
         timing = dict(meta.get("extraction_timing") or {})
         timing["policy"] = meta.get("extract_policy") or {}
         _record_extraction_timing(uid, "photo", len(items), (time.perf_counter() - t0) * 1000, timing)
+        spend_credits(uid, "import_photo", {"items": len(items)})
         return {"items": items, "primary_idx": 0}
 
     # AI 추출(high)은 100초를 넘을 수 있는데 Render 프록시가 미응답 요청을 끊음 → keep-alive 스트리밍
@@ -4681,6 +4959,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     if not body.url.strip():
         raise HTTPException(status_code=400, detail="상품 URL을 입력해주세요")
     url = _normalize_product_url(body.url)
+    ensure_credits(user.id, "import_url")
     uid = user.id
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
@@ -4730,6 +5009,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
         timing = dict(item_meta.get("extraction_timing") or {})
         timing["policy"] = item_meta.get("extract_policy") or {}
         _record_extraction_timing(uid, "url", len(items), (time.perf_counter() - t0) * 1000, timing)
+        spend_credits(uid, "import_url", {"items": len(items)})
         return {"items": items, "primary_idx": 0}
 
     return stream_with_keepalive(work)
@@ -4738,6 +5018,7 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
 @app.post("/api/live/coordinate")
 def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)) -> dict[str, Any]:
     t0 = time.perf_counter()
+    ensure_credits(user.id, "coordinate")
     owned = (
         supabase_admin.table("wardrobe_items")
         .select("*")
@@ -4829,18 +5110,34 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             }
         )
     _record_recommendation_timing(user.id, len(pool), len(outfits), (time.perf_counter() - t0) * 1000)
+    if outfits:
+        spend_credits(user.id, "coordinate", {"count": len(outfits)})
 
     # AI 착장 이미지 — 한 장에 20~30초라 4개를 순서대로 만들면 2분이 넘는다. 같이 돌린다.
+    # 원가가 코디 추천의 25배라 요금제로 가르고, 만든 장수만큼 크레딧을 받는다.
     face_bytes = _decode_data_url(body.face_data_url) if body.model_look else None
+    targets: list[dict[str, Any]] = []
     if face_bytes and outfits:
-        def _one(outfit: dict[str, Any]) -> str | None:
-            members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
-            return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
+        state = billing_state(user.id)
+        if not PLANS[state["plan"]]["model_look"]:
+            face_bytes = None
+            print(f"[billing] model_look blocked on plan={state['plan']}", flush=True)
+        else:
+            # 만들 수 있는 만큼만 만든다(남은 크레딧 안에서).
+            budget = state["remaining"] // CREDIT_COSTS["model_look"]
+            if budget < len(outfits):
+                print(f"[billing] model_look limited to {budget}/{len(outfits)}", flush=True)
+            targets = outfits[:budget]
+        if face_bytes and targets:
+            def _one(outfit: dict[str, Any]) -> str | None:
+                members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
+                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
 
-        with ThreadPoolExecutor(max_workers=4) as pool_ex:
-            for outfit, url in zip(outfits, pool_ex.map(_one, outfits)):
-                if url:
-                    outfit["lookImg"] = url
+            with ThreadPoolExecutor(max_workers=4) as pool_ex:
+                for outfit, url in zip(targets, pool_ex.map(_one, targets)):
+                    if url:
+                        outfit["lookImg"] = url
+                        spend_credits(user.id, "model_look", {"outfit": outfit["label"][:40]})
 
     # 생성 결과를 저장한다. 실패해도 화면은 그대로 가게 하되(추천을 버리진 않는다)
     # id는 임시값으로 남아 저장·착용을 서버에 남길 수 없다는 걸 로그로 남긴다.

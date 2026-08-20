@@ -931,6 +931,20 @@ function App() {
     }
   }, []);
 
+  // 요금제·크레딧 — 서버가 정본이다(기기에 저장하지 않는다). 마이페이지 사용량과
+  // 크레딧 부족 안내에 쓰고, AI를 쓰는 작업 뒤에 다시 읽어 숫자를 맞춘다.
+  const [billing, setBilling] = useState(null);
+  const [billingTick, setBillingTick] = useState(0);
+  const reloadBilling = useCallback(() => setBillingTick((n) => n + 1), []);
+  useEffect(() => {
+    if (isShowcase || !authUid) return;
+    let dead = false;
+    liveJSON('/api/live/billing')
+      .then((data) => { if (!dead) setBilling(data); })
+      .catch(() => { /* 요금제를 못 읽어도 앱은 그대로 돈다 */ });
+    return () => { dead = true; };
+  }, [isShowcase, authUid, billingTick]);
+
   useEffect(() => {
     if (isShowcase) return;
     // 세션이 없으면 부르지 않는다. 토큰 없이 부르면 401로 실패하고 '불러오지 못했어요'
@@ -1292,6 +1306,7 @@ function App() {
         wardrobeCount: items.length,
       });
       bumpDaily();
+      reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
       return { added: outfits.length, wardrobeGrew: false };
     } catch (e) {
@@ -1673,6 +1688,7 @@ function App() {
       fresh.forEach((o) => { LB_DATA.OUTFIT_BY_ID[o.id] = o; });
       const merged = [...prev, ...fresh.filter((o) => !prev.some((p) => p.id === o.id))];
       setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
+      reloadBilling();
       if (append && !fresh.length) showToast('더 추천할 조합이 없어요');
     } catch (e) {
       if (append) {
@@ -1730,6 +1746,7 @@ function App() {
         if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'fail', error: e.message });
       }
     }
+    reloadBilling();
     return { done, failed, skipped };
   };
 
@@ -1825,6 +1842,7 @@ function App() {
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
+    billing, reloadBilling,
     requestPickedOutfits, importOrders, checkDuplicates,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
