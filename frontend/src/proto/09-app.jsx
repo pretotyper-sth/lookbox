@@ -994,30 +994,9 @@ function App() {
     return () => { dead = true; };
   }, [isShowcase, bumpDaily]);
 
-  // 기존 이미지 오브젝트에 장기 캐시 헤더 1회 백필 → 새로고침 깜빡임 방지
-  useEffect(() => {
-    if (isShowcase) return;
-    const key = 'lb_img_cache_hdr_v2';
-    try { if (localStorage.getItem(key) === '1') return; } catch (e) { /* noop */ }
-    liveJSON('/api/live/wardrobe/refresh-cache', { method: 'POST', body: '{}' })
-      .then((res) => {
-        try { localStorage.setItem(key, '1'); } catch (e) { /* noop */ }
-        if (!res || !res.updated) return;
-        // WebP로 경로가 바뀌었으므로 목록을 다시 불러와 새 URL 반영
-        return Promise.all([
-          liveJSON('/api/live/wardrobe'),
-          liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
-        ]).then(([owned, arch]) => {
-          const liveItems = (owned.items || []).map(liveRememberItem);
-          const archItems = (arch.items || []).map(liveRememberItem);
-          setItems(liveItems);
-          setArchived(archItems);
-          syncAllFromWardrobe(liveItems, archItems);
-          bumpDaily();
-        });
-      })
-      .catch(() => {});
-  }, [isShowcase]);
+  // (제거) 예전에는 부팅할 때마다 /wardrobe/refresh-cache 를 불러 옛 이미지를 WebP로
+  // 다시 올렸다. 마이그레이션은 끝났는데 기기 캐시를 지울 때마다 다시 돌면서 첫 화면에
+  // 왕복 세 번(마이그레이션 + 옷장 재조회 2번)을 얹고 있었다. 필요하면 스크립트로 한 번만 돈다.
 
   // 스크롤 위치 표시 — 스크롤 중에만 보인다. 리스너는 반드시 passive + capture로 단다.
   // 스크롤 경로에 비패시브 리스너를 다시 달면 컴포지터 스크롤이 또 꺼진다.
@@ -1072,21 +1051,32 @@ function App() {
     writeWardrobeCache(authUid, items, archived);
   }, [authUid, items, archived, isShowcase]);
 
-  // 이미지 프리로드: 목록이 생기는 즉시(상호작용 없이) 브라우저 캐시로 미리 받아 디코드해 둔다.
-  // → 그리드가 그려질 때 캐시에서 바로 페인트되어 '클릭해야 뜨는' 지연을 없앰.
+  // 원본 이미지 미리 받기 — 목록 전체를 한꺼번에 받으면(예전 동작) 옷이 늘수록 첫 화면이
+  // 느려진다. 43개에 1.7MB, 200개면 8MB를 그리드 썸네일과 동시에 경쟁시키는 셈이었다.
+  // 이제 목록은 썸네일로 그리고, 원본은 '먼저 열어 볼 만한 앞쪽 몇 개'만 한가할 때 데운다.
   useEffect(() => {
     if (isShowcase) return;
-    const urls = [...(items || []), ...(archived || [])]
-      .map((it) => it && it.img)
-      .filter(Boolean);
-    urls.forEach((u) => {
-      const im = new Image();
-      im.decoding = 'async';
-      im.src = u;
-      // decode()로 디코딩까지 미리 끝내 페인트를 즉시화 (실패 무시)
-      if (im.decode) im.decode().catch(() => {});
-    });
-  }, [items, archived, isShowcase]);
+    const urls = (items || []).slice(0, 12).map((it) => it && it.img).filter(Boolean);
+    if (!urls.length) return undefined;
+    let cancelled = false;
+    const warm = () => {
+      if (cancelled) return;
+      urls.forEach((u) => {
+        const im = new Image();
+        im.decoding = 'async';
+        im.fetchPriority = 'low';
+        im.src = u;
+      });
+    };
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(warm, { timeout: 3000 })
+      : setTimeout(warm, 1200);
+    return () => {
+      cancelled = true;
+      if (window.cancelIdleCallback && window.requestIdleCallback) window.cancelIdleCallback(idle);
+      else clearTimeout(idle);
+    };
+  }, [items, isShowcase]);
 
   // ---- actions ----
   const savedOutfitIds = savedLooks.map((l) => l.outfitId);

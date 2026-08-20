@@ -18,6 +18,14 @@ window.__resources = protoManifest.resources
 // the background so we don't delay first paint on a network round trip.
 initLiveBridge()
 
+// 옷 사진 전용 캐시(서비스 워커). 스토리지가 no-cache로 내려줘 매번 다시 받던 것을 막는다.
+// 앱 셸은 캐시하지 않으므로 배포는 평소처럼 즉시 반영된다.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* 지원 안 하면 그냥 넘어간다 */ })
+  })
+}
+
 await import('./proto/01-tweaks.jsx')
 await import('./proto/02-shared.jsx')
 await import('./proto/03-data.jsx')

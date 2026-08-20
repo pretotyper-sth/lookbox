@@ -348,11 +348,45 @@ def to_webp(png_bytes: bytes, max_side: int = 1024, quality: int = 82) -> bytes:
     return out.getvalue()
 
 
+# 옷장 그리드는 한 칸이 140~200px인데 지금까지 1024px 원본을 그대로 내려받았다.
+# 옷이 늘수록 첫 화면이 느려지는 가장 큰 이유라, 목록용 썸네일을 따로 만들어 둔다.
+_THUMB_SIDE = 360
+_THUMB_QUALITY = 72
+
+
+def make_thumb(webp_bytes: bytes) -> bytes | None:
+    try:
+        img = Image.open(io.BytesIO(webp_bytes)).convert("RGBA")
+        img.thumbnail((_THUMB_SIDE, _THUMB_SIDE), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="WEBP", quality=_THUMB_QUALITY, method=4)
+        return out.getvalue()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[thumb] failed: {exc}", flush=True)
+        return None
+
+
 def save_product_image(user_id: str, product_bytes: bytes) -> tuple[str, str]:
     """제품 컷을 WebP로 저장하고 (storage_path, public_url) 반환."""
     data = to_webp(product_bytes)
     path = f"{user_id}/items/{uuid.uuid4().hex}.webp"
     return path, upload_bytes(path, data, "image/webp")
+
+
+def save_product_image_set(user_id: str, product_bytes: bytes) -> tuple[str, str, str]:
+    """제품 컷 + 목록용 썸네일을 함께 저장하고 (storage_path, url, thumb_url) 반환."""
+    data = to_webp(product_bytes)
+    key = uuid.uuid4().hex
+    path = f"{user_id}/items/{key}.webp"
+    url = upload_bytes(path, data, "image/webp")
+    thumb = make_thumb(data)
+    thumb_url = ""
+    if thumb:
+        try:
+            thumb_url = upload_bytes(f"{user_id}/items/{key}_t.webp", thumb, "image/webp")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[thumb] upload failed: {exc}", flush=True)
+    return path, url, thumb_url
 
 
 def read_image_as_png_bytes(path: str, max_side: int = 1024) -> bytes:
@@ -3288,6 +3322,8 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "category": _category_display(row.get("category")),
         "color": _canonicalize_color(raw_color) if raw_color else "",
         "img": row.get("image_url"),
+        # 목록용 작은 이미지. 없으면 원본을 쓴다(예전에 담은 아이템).
+        "thumb": meta.get("thumb_url") or row.get("image_url"),
         "status": row.get("status"),
         "brand": meta.get("brand") or "",
         "size": meta.get("size") or "",
@@ -3394,7 +3430,9 @@ def _store_uploaded_item(
             extract_ms = 0
             triage: dict[str, Any] = {}
             product_bytes = None
+            thumb_url = ""
         else:
+            thumb_url = ""
             # 분류로 패션 여부를 먼저 본 뒤, 통과할 때만 업로드·트리아지·컷아웃.
             step("classify")
             classify_started = time.perf_counter()
@@ -3428,7 +3466,7 @@ def _store_uploaded_item(
             image_path, image_url = cached["storage_path"], cached["image_url"]
             meta["_extract_mode"] = "cache"
         elif product_bytes:
-            image_path, image_url = save_product_image(user_id, product_bytes)
+            image_path, image_url, thumb_url = save_product_image_set(user_id, product_bytes)
         # brand/store/source_url은 스키마 변경 없이 metadata(jsonb)에 저장.
         # original_* 는 이미지 재추출 시 원본 소스로 사용.
         item_metadata: dict[str, Any] = {
@@ -3444,6 +3482,7 @@ def _store_uploaded_item(
             # 중복 비교용 사진 지문. 지금 원본 바이트를 들고 있으니 여기서 남겨 두면
             # 나중에 비교할 때 이미지를 다시 내려받지 않아도 된다.
             "img_fp": _image_fingerprint(raw),
+            "thumb_url": thumb_url if (not cached and product_bytes) else (cached_meta.get("thumb_url") if cached else ""),
             "extract_profile": _EXTRACTION_PROFILE,
             "extraction_timing": {
                 "classify_ms": classify_ms,
@@ -4302,7 +4341,8 @@ async def live_replace_image(
             report("save")
             image_path, image_url = original_path, original_url
             if product_bytes:
-                image_path, image_url = save_product_image(uid, product_bytes)
+                image_path, image_url, thumb_url = save_product_image_set(uid, product_bytes)
+                meta["thumb_url"] = thumb_url
                 meta["bg_norm"] = _BG_NORM_VERSION
             if "has_text_logo" in gen_meta:
                 meta["has_text_logo"] = bool(gen_meta.get("has_text_logo"))

@@ -136,7 +136,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         if (it.img) {
           return (
             <div key={it.id} style={frame}>
-              <img src={it.img} alt={it.name} loading="lazy" decoding="async" style={{
+              <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
                 width: '100%', height: '100%', objectFit: 'contain', display: 'block',
                 transform: `scale(${lookImageZoom(it.category)})`,
               }} />

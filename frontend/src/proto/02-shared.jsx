@@ -119,7 +119,7 @@ function Silhouette({ category, scale = 1 }) {
    SmartImg — 이미지 로드가 간헐적으로 실패해도 자동 재시도 → 폴백.
    (새로고침 때 랜덤하게 안 뜨는 문제 방지: 실패한 칸이 빈 채로 남지 않음)
 ---------------------------------------------------------------- */
-function SmartImg({ src, alt, style, fallback }) {
+function SmartImg({ src, alt, style, fallback, loading = 'eager', fetchPriority = 'auto' }) {
   const [attempt, setAttempt] = useState(0);
   const [dead, setDead] = useState(false);
   const timer = useRef(null);
@@ -136,9 +136,9 @@ function SmartImg({ src, alt, style, fallback }) {
       key={attempt}
       src={url}
       alt={alt}
-      loading="eager"
+      loading={loading}
       decoding="async"
-      fetchPriority="auto"
+      fetchPriority={fetchPriority}
       style={style}
       onError={() => {
         if (attempt >= 3) { setDead(true); return; }
@@ -152,7 +152,10 @@ function SmartImg({ src, alt, style, fallback }) {
 /* ----------------------------------------------------------------
    Thumb — square garment tile. Photo OR silhouette on soft gray plate.
 ---------------------------------------------------------------- */
-function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' }) {
+function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain', full = false, eager = false }) {
+  // 목록 칸은 140~200px이라 1024px 원본이 필요 없다. 서버가 만들어 둔 썸네일을 쓰고,
+  // 없으면(예전 아이템) 원본으로 떨어진다. 화면 밖 이미지는 스크롤할 때 받는다.
+  const src = item && (full ? item.img : (item.thumb || item.img));
   return (
     <div style={{
       position: 'relative', width: '100%', aspectRatio: ratio,
@@ -160,10 +163,11 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain' 
       boxShadow: 'inset 0 0 0 1px var(--line)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {item && item.img
+      {src
         ? <SmartImg
-            src={item.img}
+            src={src}
             alt={item.name || ''}
+            loading={eager ? 'eager' : 'lazy'}
             style={{ width: '100%', height: '100%', objectFit: fit, padding: '8%', boxSizing: 'border-box' }}
             fallback={<Silhouette category={item ? item.category : '상의'} />}
           />
