@@ -44,7 +44,7 @@ function PlanSheet({ open, onClose, billing }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>요금제</h2>
             <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-              무료에서도 기능은 다 열려 있어요. 차이는 매달 쓸 수 있는 양이에요.
+기능은 무료도 같아요. 쓸 수 있는 양만 달라요.
             </p>
           </div>
           <button
@@ -104,14 +104,14 @@ function PlanSheet({ open, onClose, billing }) {
                 <span className="tnum" style={{ flex: 'none', fontWeight: 700 }}>{c.credits}</span>
               </div>
             ))}
-            <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
-              옷장·검색·중복 확인처럼 AI를 쓰지 않는 기능은 크레딧이 들지 않아요.
+            <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)' }}>
+              옷장·검색·중복 확인은 크레딧이 안 들어요.
             </div>
           </div>
         )}
 
         <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
-          결제는 준비 중이에요. 열리면 여기서 바로 바꿀 수 있어요.
+결제는 준비 중이에요.
         </p>
         <Btn full variant="soft" onClick={onClose} style={{ marginTop: 14 }}>닫기</Btn>
         {/* 마지막 요소가 화면 바닥에 붙지 않게 — 손가락이 닿는 자리이기도 하다 */}
@@ -151,8 +151,8 @@ function UsageCard({ billing, onOpenPlans, compact }) {
       </div>
       <div style={{ marginTop: 10 }}><CreditBar remaining={remaining} granted={granted} /></div>
       <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
-        {reset ? `${reset.getMonth() + 1}월 ${reset.getDate()}일에 다시 채워져요` : ''}
-        {used > 0 ? ` · 이번 달 ${used}개 사용` : ''}
+        {reset ? `${reset.getMonth() + 1}월 ${reset.getDate()}일 초기화` : ''}
+        {used > 0 ? ` · ${used}개 사용` : ''}
       </div>
 
       {byAction.length > 0 && (
@@ -169,8 +169,8 @@ function UsageCard({ billing, onOpenPlans, compact }) {
         </div>
       )}
       {remaining <= Math.max(3, Math.round(granted * 0.1)) && (
-        <div style={{ marginTop: 12, fontSize: 12.5, color: '#B0573C', lineHeight: 1.5, wordBreak: 'keep-all' }}>
-          크레딧이 얼마 남지 않았어요. 다 쓰면 등록·추천이 잠시 멈춰요.
+        <div style={{ marginTop: 12, fontSize: 12.5, color: '#B0573C' }}>
+          크레딧이 얼마 안 남았어요.
         </div>
       )}
     </div>

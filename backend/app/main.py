@@ -447,7 +447,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "price_krw": 0,
         "credits": 60,
         "model_look": False,
-        "blurb": "기능은 다 열려 있어요",
+        "blurb": "가볍게 시작",
     },
     "pro": {
         "id": "pro",
@@ -455,7 +455,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "price_krw": 9900,
         "credits": 400,
         "model_look": True,
-        "blurb": "넉넉하게 · AI 착장 이미지까지",
+        "blurb": "넉넉하게 쓰기",
     },
     # 예전에 베이직을 쓰던 계정이 남아 있을 수 있어 정의만 유지한다(목록에는 안 보인다).
     "basic": {
@@ -478,13 +478,12 @@ def plan_perks(plan: dict[str, Any]) -> list[str]:
     photos = credits // CREDIT_COSTS["import_photo"]
     links = credits // CREDIT_COSTS["import_url"]
     coords = credits // CREDIT_COSTS["coordinate"]
-    perks = [
-        f"매달 크레딧 {credits}개",
-        f"사진으로 옷 {photos}벌 · 링크로 {links}벌 정도",
-        f"또는 코디 추천 {coords}번",
+    return [
+        f"매달 {credits}크레딧",
+        f"사진 {photos}벌 · 링크 {links}벌",
+        f"코디 추천 {coords}번",
+        "AI 착장 이미지" + ("" if plan["model_look"] else " (프로)"),
     ]
-    perks.append("AI 착장 이미지 (코디 입은 모습)" if plan["model_look"] else "AI 착장 이미지는 프로부터")
-    return perks
 
 
 def _period_key(now: datetime | None = None) -> str:
