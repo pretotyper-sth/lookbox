@@ -603,7 +603,7 @@ def ensure_within_limit(user_id: str, action: str) -> None:
         raise HTTPException(
             status_code=429,
             detail=(
-                f"전신 이미지는 한 달에 {limit}번까지 만들 수 있어요. "
+                f"전신 이미지는 한 달에 {limit}번까지예요. "
                 f"{_reset_day(billing_state(user_id))}부터 다시 만들 수 있어요."
             ),
         )

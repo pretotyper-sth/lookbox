@@ -728,7 +728,7 @@ function App() {
   const [tryOnMaking, setTryOnMaking] = useState(false);
   const makeTryOnBody = async () => {
     if (tryOnMaking) return '';
-    if (!prefs.avatar) { showToast('프로필 사진을 먼저 등록해 주세요.'); return ''; }
+    if (!prefs.avatar) { showToast('프로필 사진을 먼저 등록해 주세요'); return ''; }
     setTryOnMaking(true);
     try {
       const res = await liveJSON('/api/live/tryon/body', {
@@ -743,7 +743,7 @@ function App() {
       showToast(res.cached ? '전신 이미지를 불러왔어요' : '전신 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
-      showToast(e.message || '전신 이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+      showToast(e.message || '전신 이미지를 만들지 못했어요');
       return '';
     } finally {
       setTryOnMaking(false);
@@ -908,8 +908,18 @@ function App() {
     Object.entries(tone).forEach(([k, v]) => r.setProperty(k, v));
   }, [t.accent, t.tone]);
 
+  // 토스트는 1.9초 스쳐 가는 알림이다. 모바일에서 한 줄을 넘기면 읽기도 전에 사라지고
+  // 화면만 가린다. 서버 문구처럼 두세 문장짜리가 들어오면 첫 문장만 띄운다 —
+  // 자세한 안내가 필요한 자리(추가 시트·일괄 등록 목록)에는 전체 문장이 그대로 남는다.
+  const shortToast = (msg) => {
+    // 개발용 코드는 토스트에 띄우지 않는다(자세한 화면·로그에는 그대로 남는다).
+    const text = String(msg || '').replace(/\s*\(코드:[^)]*\)/g, '').trim();
+    if (text.length <= 22) return text.replace(/\.$/, '');
+    const first = (text.split(/(?<=[.!?])\s+/)[0] || text).replace(/\.$/, '');
+    return first.length <= 22 ? first : first.slice(0, 21) + '…';
+  };
   const showToast = useCallback((msg, icon) => {
-    setToast({ msg, icon });
+    setToast({ msg: shortToast(msg), icon });
     clearTimeout(toastT.current);
     toastT.current = setTimeout(() => setToast(null), 1900);
   }, []);
@@ -1015,7 +1025,7 @@ function App() {
         else if (removed) setDailyAllowed(false);
         bumpDaily();
       })
-      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'))
+      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
       .finally(() => { if (!dead) { setWardrobeLoading(false); setWardrobeLoaded(true); } });
     return () => { dead = true; };
   }, [isShowcase, authUid, hydrateOutfits, showToast, bumpDaily]);
@@ -1326,7 +1336,7 @@ function App() {
         });
         bumpDaily();
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
-        else if (!quiet) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
+        else if (!quiet) showToast('더 만들 조합이 없어요');
         return { added: added.length, wardrobeGrew };
       }
       // force여도 당일 이력이 있으면 전체 리셋 대신 추가만 (위에서 처리). 여기 도달 = 오늘 첫 추천.
@@ -1363,7 +1373,7 @@ function App() {
       return { added: outfits.length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
-      showToast(e.message || '오늘의 코디를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+      showToast(e.message || '코디를 만들지 못했어요');
       return { added: 0, wardrobeGrew, error: true };
     } finally {
       setDailyLoading(false);
@@ -1398,7 +1408,7 @@ function App() {
         setComboRev((n) => n + 1);
         showToast(`${preferredStyleLabel} 무드로 코디를 추천했어요`, 'sparkle');
       } catch (e) {
-        showToast(e.message || '코디를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+        showToast(e.message || '코디를 만들지 못했어요');
       } finally {
         setLoading(false);
       }
@@ -1415,7 +1425,7 @@ function App() {
     if (moreLoading || loading) return;
     const anchorId = LB_DATA.ANCHOR?.serverId;
     if (!anchorId) {
-      showToast('고민 중인 옷을 다시 올려 주세요.');
+      showToast('고민 중인 옷을 다시 올려 주세요');
       return;
     }
     setMoreLoading(true);
@@ -1434,10 +1444,10 @@ function App() {
       stampOutfitStyle(payload.outfits);
       const added = liveAppendOutfits(payload);
       setComboRev((n) => n + 1);
-      if (!added.length) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
+      if (!added.length) showToast('더 만들 조합이 없어요');
       else showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
     } catch (e) {
-      showToast(e.message || '코디를 더 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+      showToast(e.message || '더 만들지 못했어요');
     } finally {
       setMoreLoading(false);
     }
@@ -1450,7 +1460,7 @@ function App() {
     if (!outfitId || String(outfitId).startsWith('live-') || String(outfitId).startsWith('manual-')) return;
     liveJSON(`/api/live/outfits/${encodeURIComponent(outfitId)}/state`, {
       method: 'POST', body: JSON.stringify(patch),
-    }).catch(() => showToast('서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    }).catch(() => showToast('서버에 저장하지 못했어요'));
   };
   const saveOutfit = (outfitId) => {
     setSavedLooks((arr) => {
@@ -1479,7 +1489,7 @@ function App() {
       });
       outfitId = res && res.id;
     } catch (e) {
-      showToast(e.message || '룩북에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      showToast(e.message || '룩북에 저장하지 못했어요');
       return;
     }
     LB_DATA.OUTFIT_BY_ID[outfitId] = {
@@ -1741,11 +1751,11 @@ function App() {
       const merged = [...prev, ...fresh.filter((o) => !prev.some((p) => p.id === o.id))];
       setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
       reloadBilling();
-      if (append && !fresh.length) showToast('더 만들 수 있는 조합이 없어요. 옷을 더 담으면 늘어나요.');
+      if (append && !fresh.length) showToast('더 만들 조합이 없어요');
     } catch (e) {
       if (append) {
         setPickSheet({ ids: picked, loading: false, outfits: prev, error: '' });
-        showToast(e.message || '코디를 더 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+        showToast(e.message || '더 만들지 못했어요');
       } else {
         setPickSheet({ ids: picked, loading: false, outfits: [], error: e.message || '코디를 만들지 못했어요' });
       }
@@ -1844,7 +1854,7 @@ function App() {
         body: JSON.stringify({ ids: list.map((it) => it.id), status: 'owned' }),
       });
     } catch (e) {
-      showToast(e.message || '옷장에는 담겼지만 저장이 늦어지고 있어요. 잠시 후 새로고침해 주세요.');
+      showToast(e.message || '저장이 늦어지고 있어요');
     }
     // 2) 등록 화면에서 고친 이름·분류·상세를 서버에 반영 (status만 바꾸면 AI 초깃값으로 덮임)
     const finalList = await Promise.all(list.map(async (it) => {
@@ -2092,7 +2102,7 @@ function App() {
           setTryOnSetup(false);
           setTryOnSeedBody('');
           if (!wide) setTryOnCamera(true);
-          else showToast('휴대폰에서 카메라로 바로 볼 수 있어요', 'camera');
+          else showToast('휴대폰에서 열어 주세요', 'camera');
         }}
       />
       <TryOnCameraOverlay
