@@ -16,3 +16,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 요금제 무료+광고 카피([[plan-sheet-free-ads]]). 같은 패스에서 홈 FAB·검색 헤더, PTR,
 스타일 WebP, 바로보기 문구, 설정 시트 헤더 통일.
 
+## [2026-08-22] query | 요금제 광고 카피
+화면에 「광고는 아직 거의 없고…」를 쓰지 않는다. 무료 카드 항목 `광고 포함`만.
+[[plan-sheet-free-ads]]
+

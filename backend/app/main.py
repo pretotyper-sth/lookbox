@@ -451,7 +451,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "price_krw": 0,
         "credits": 60,
         "model_look": False,
-        "blurb": "광고 포함 · 지금은 광고가 거의 없어요",
+        "blurb": "가볍게 시작",
     },
     "pro": {
         "id": "pro",

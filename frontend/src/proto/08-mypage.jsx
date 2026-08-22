@@ -65,7 +65,6 @@ function PlanSheet({ open, onClose, billing }) {
                 <span style={{ flex: 1 }} />
                 <span className="tnum" style={{ fontSize: 15, fontWeight: 800 }}>0원</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>지금은 광고 없이 열려 있어요</div>
               <ul style={{ margin: '11px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
                 {(p.perks || []).map((x) => (
                   <li key={x} style={{
@@ -79,10 +78,6 @@ function PlanSheet({ open, onClose, billing }) {
             </div>
           ))}
         </div>
-
-        <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-          광고 요금제예요. 광고는 아직 거의 없고, 나중에 붙일 수 있어요. 결제가 생기면 그때 알려드릴게요.
-        </p>
         <div style={{ height: 28 }} />
       </div>
     </BottomSheet>
