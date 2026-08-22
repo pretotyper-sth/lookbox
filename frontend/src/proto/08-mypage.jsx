@@ -444,12 +444,10 @@ function MyPageScreen({ ctx }) {
   );
 
   // 전신 사진을 직접 올리지 않아도 되게, 프로필 사진으로 만들어 준다(퍼스널 컬러와 같은 방식).
-  const hasTryOn = !!(prefs.tryOnFrame);
   const tryOnRow = (
     <ActionRow
       icon="cutout"
       label="바로 보기 이미지"
-      hint={tryOnMaking ? '만드는 중…' : (hasTryOn ? '등록됨 · 다시 만들기' : '프로필 사진으로 만들어요')}
       onClick={() => {
         if (tryOnMaking) return;
         if (prefs.avatar && makeTryOnBody) makeTryOnBody();
