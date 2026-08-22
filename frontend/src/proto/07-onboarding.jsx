@@ -605,14 +605,31 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
     key: 'styles', eyebrow: '선호 스타일', title: '어떤 무드를 좋아하세요?',
     sub: '마음에 드는 스타일을 모두 골라주세요. (최소 1개)',
     valid: () => d.styles.length >= 1,
-    render: () => (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {LB_DATA.STYLES.map((s, idx) => (
-          <StyleCard key={s.id} style={s} eager={idx < 4} selected={d.styles.includes(s.id)}
-            onToggle={() => set('styles')(d.styles.includes(s.id) ? d.styles.filter((x) => x !== s.id) : [...d.styles, s.id])} />
-        ))}
-      </div>
-    ),
+    render: () => {
+      const groups = LB_DATA.STYLE_GROUPS || [{ id: 'common', name: '공통' }];
+      let eagerLeft = 4;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {groups.map((g) => {
+            const items = LB_DATA.STYLES.filter((s) => (s.group || 'common') === g.id);
+            if (!items.length) return null;
+            const startEager = eagerLeft;
+            eagerLeft = Math.max(0, eagerLeft - items.length);
+            return (
+              <div key={g.id}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{g.name}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {items.map((s, idx) => (
+                    <StyleCard key={s.id} style={s} eager={idx < startEager} selected={d.styles.includes(s.id)}
+                      onToggle={() => set('styles')(d.styles.includes(s.id) ? d.styles.filter((x) => x !== s.id) : [...d.styles, s.id])} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
   };
 
   const FITPREF = {
