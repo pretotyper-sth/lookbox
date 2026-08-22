@@ -451,7 +451,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "price_krw": 0,
         "credits": 60,
         "model_look": False,
-        "blurb": "가볍게 시작",
+        "blurb": "광고 포함 · 지금은 광고가 거의 없어요",
     },
     "pro": {
         "id": "pro",
@@ -482,12 +482,16 @@ def plan_perks(plan: dict[str, Any]) -> list[str]:
     photos = credits // CREDIT_COSTS["import_photo"]
     links = credits // CREDIT_COSTS["import_url"]
     coords = credits // CREDIT_COSTS["coordinate"]
-    return [
+    perks = [
         f"매달 {credits}크레딧",
         f"사진 {photos}벌 · 링크 {links}벌",
         f"코디 추천 {coords}번",
-        "AI 착장 이미지" + ("" if plan["model_look"] else " (프로)"),
     ]
+    if not plan.get("price_krw"):
+        perks.append("광고 포함")
+    else:
+        perks.append("광고 없음")
+    return perks
 
 
 def _period_key(now: datetime | None = None) -> str:

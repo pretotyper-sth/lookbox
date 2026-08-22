@@ -195,11 +195,15 @@ function useScrollTopOn(ref, key, enabled = true) {
 }
 
 /* ----------------------------------------------------------------
-   ImageViewer — 아이템·코디 공통. 오버레이 + 돋보기 확대/축소/팬.
+   ImageViewer — 아이템·코디 공통. 오버레이 + 핀치/휠/더블탭 확대.
 ---------------------------------------------------------------- */
 const VIEWER_ZOOM_MIN = 1;
-const VIEWER_ZOOM_MAX = 3;
+const VIEWER_ZOOM_MAX = 4;
 const VIEWER_ZOOM_STEP = 0.5;
+
+function pinchDist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
 
 function ImageViewer({ open, item, outfit, items, onClose }) {
   const outfitItems = (items || []).filter(Boolean);
@@ -208,18 +212,128 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [pinching, setPinching] = useState(false);
+  const zoomRef = useRef(1);
+  const offsetRef = useRef({ x: 0, y: 0 });
   const drag = useRef(null);
+  const pinch = useRef(null);
+  const lastTap = useRef(0);
+  const stageRef = useRef(null);
 
   useEscapeClose(open && (!!(item && item.img) || isOutfit), onClose);
 
+  const commitZoom = (next, nextOffset) => {
+    const z = Math.min(VIEWER_ZOOM_MAX, Math.max(VIEWER_ZOOM_MIN, next));
+    zoomRef.current = z;
+    setZoom(z);
+    if (z <= 1) {
+      offsetRef.current = { x: 0, y: 0 };
+      setOffset({ x: 0, y: 0 });
+      return z;
+    }
+    if (nextOffset) {
+      offsetRef.current = nextOffset;
+      setOffset(nextOffset);
+    }
+    return z;
+  };
+
   useEffect(() => {
     if (!open) return undefined;
+    zoomRef.current = 1;
+    offsetRef.current = { x: 0, y: 0 };
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     setDragging(false);
+    setPinching(false);
     drag.current = null;
+    pinch.current = null;
+    lastTap.current = 0;
     return undefined;
   }, [open, item && item.id, outfit && outfit.id]);
+
+  // 휠·핀치는 preventDefault가 필요하다. React 합성 이벤트는 패시브라 막히지 않는다.
+  useEffect(() => {
+    if (!open) return undefined;
+    const el = stageRef.current;
+    if (!el) return undefined;
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      commitZoom(zoomRef.current * factor);
+    };
+    const onTouchStart = (e) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        drag.current = null;
+        setDragging(false);
+        pinch.current = { dist: pinchDist(e.touches[0], e.touches[1]), zoom: zoomRef.current };
+        setPinching(true);
+        lastTap.current = 0;
+        return;
+      }
+      if (e.touches.length === 1 && zoomRef.current > 1) {
+        const t = e.touches[0];
+        drag.current = { x: t.clientX, y: t.clientY, ox: offsetRef.current.x, oy: offsetRef.current.y };
+        setDragging(true);
+      }
+    };
+    const onTouchMove = (e) => {
+      if (pinch.current && e.touches.length >= 2) {
+        e.preventDefault();
+        const d = pinchDist(e.touches[0], e.touches[1]);
+        if (pinch.current.dist > 0) commitZoom(pinch.current.zoom * (d / pinch.current.dist));
+        return;
+      }
+      if (drag.current && e.touches.length === 1) {
+        e.preventDefault();
+        const t = e.touches[0];
+        const next = {
+          x: drag.current.ox + (t.clientX - drag.current.x),
+          y: drag.current.oy + (t.clientY - drag.current.y),
+        };
+        offsetRef.current = next;
+        setOffset(next);
+      }
+    };
+    const endPinch = () => { pinch.current = null; setPinching(false); };
+    const onTouchEnd = (e) => {
+      if (pinch.current) {
+        if (e.touches.length < 2) endPinch();
+        return;
+      }
+      if (drag.current) {
+        drag.current = null;
+        setDragging(false);
+      }
+      if (e.touches.length !== 0) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const now = Date.now();
+      if (now - lastTap.current < 280) {
+        lastTap.current = 0;
+        if (zoomRef.current > 1) commitZoom(1);
+        else commitZoom(2);
+      } else {
+        lastTap.current = now;
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [open]);
 
   if (!open) return null;
   if (!isOutfit && !(item && item.img)) return null;
@@ -231,37 +345,30 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
     ? [outfit.styleLabel || outfit.mood, outfitItems.length ? `${outfitItems.length}개 조합` : ''].filter(Boolean).join(' · ')
     : [item.category, item.color].filter(Boolean).join(' · ');
 
-  const clampZoom = (z) => Math.min(VIEWER_ZOOM_MAX, Math.max(VIEWER_ZOOM_MIN, Math.round(z * 10) / 10));
-  const applyZoom = (next) => {
-    const z = clampZoom(next);
-    setZoom(z);
-    if (z <= 1) setOffset({ x: 0, y: 0 });
-  };
-  const zoomIn = () => applyZoom(zoom + VIEWER_ZOOM_STEP);
-  const zoomOut = () => applyZoom(zoom - VIEWER_ZOOM_STEP);
-  const resetZoom = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
-
-  const onWheel = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.deltaY < 0) applyZoom(zoom + VIEWER_ZOOM_STEP);
-    else applyZoom(zoom - VIEWER_ZOOM_STEP);
-  };
+  const applyZoom = (next) => commitZoom(next);
+  const zoomIn = () => applyZoom(zoomRef.current + VIEWER_ZOOM_STEP);
+  const zoomOut = () => applyZoom(zoomRef.current - VIEWER_ZOOM_STEP);
+  const resetZoom = () => applyZoom(1);
 
   const onPointerDown = (e) => {
-    if (zoom <= 1) return;
+    if (e.pointerType === 'touch') return;
+    if (zoomRef.current <= 1) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    drag.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    drag.current = { x: e.clientX, y: e.clientY, ox: offsetRef.current.x, oy: offsetRef.current.y };
     setDragging(true);
   };
   const onPointerMove = (e) => {
+    if (e.pointerType === 'touch') return;
     if (!drag.current) return;
-    setOffset({
+    const next = {
       x: drag.current.ox + (e.clientX - drag.current.x),
       y: drag.current.oy + (e.clientY - drag.current.y),
-    });
+    };
+    offsetRef.current = next;
+    setOffset(next);
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e) => {
+    if (e && e.pointerType === 'touch') return;
     drag.current = null;
     setDragging(false);
   };
@@ -346,15 +453,15 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       </div>
 
       <div
+        ref={stageRef}
         onClick={(e) => e.stopPropagation()}
-        onWheel={onWheel}
         style={{
           position: 'relative', width: '100%', maxWidth: 440, flex: '1 1 auto',
           minHeight: 0, maxHeight: 'min(72vh, 640px)',
           background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
           boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
           overflow: 'hidden',
-          touchAction: zoom > 1 ? 'none' : 'pan-y',
+          touchAction: 'none',
           cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default',
         }}
       >
@@ -365,14 +472,15 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           onPointerCancel={onPointerUp}
           onDoubleClick={(e) => {
             e.stopPropagation();
-            if (zoom > 1) resetZoom();
+            if (Date.now() - lastTap.current < 400) return;
+            if (zoomRef.current > 1) resetZoom();
             else applyZoom(2);
           }}
           style={{
             width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
             transformOrigin: 'center center',
-            transition: dragging ? 'none' : 'transform 120ms var(--ease)',
+            transition: (dragging || pinching) ? 'none' : 'transform 120ms var(--ease)',
           }}
         >
           {media}
@@ -431,7 +539,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         flex: 'none', marginTop: -4, fontSize: 11.5,
         color: 'rgba(255,255,255,0.55)', textAlign: 'center',
       }}>
-        휠·더블탭으로도 확대할 수 있어요
+        핀치 · 더블탭 · 휠로 확대할 수 있어요
       </div>
     </div>
   );
@@ -548,7 +656,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
   const hiddenTf = wide ? 'translateY(10px) scale(0.97)' : 'translateY(101%)';
   return (
     <div onClick={dismissOnScrim ? onClose : undefined} style={{
-      position: 'absolute', inset: 0, zIndex: 60, display: 'flex',
+      position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
       alignItems: wide ? 'center' : 'flex-end', justifyContent: 'center',
       background: shown ? 'rgba(30,27,21,0.42)' : 'rgba(30,27,21,0)',
       transition: 'background var(--dur) var(--ease)', padding: wide ? 24 : 0,
@@ -998,4 +1106,94 @@ function EmptyState({
   );
 }
 
-Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState });
+/* ----------------------------------------------------------------
+   PullRefresh — 모바일에서 목록을 끌어 내리면 서버 값을 다시 받는다.
+   네이티브 러버밴드를 끄고(overscroll contain) 있어서 직접 당김을 그린다.
+---------------------------------------------------------------- */
+function PullRefresh({ onRefresh, disabled, children, style, className, scrollRef }) {
+  const local = useRef(null);
+  const [pull, setPull] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const startY = useRef(0);
+  const pulling = useRef(false);
+  const pullRef = useRef(0);
+  const busyRef = useRef(false);
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
+  const setNode = (node) => {
+    local.current = node;
+    if (scrollRef) scrollRef.current = node;
+  };
+
+  useEffect(() => {
+    const el = local.current;
+    if (!el || disabled) return undefined;
+    const THRESHOLD = 56;
+    const onStart = (e) => {
+      if (busyRef.current || e.touches.length !== 1) return;
+      if (el.scrollTop > 1) return;
+      startY.current = e.touches[0].clientY;
+      pulling.current = true;
+    };
+    const onMove = (e) => {
+      if (!pulling.current || busyRef.current) return;
+      if (el.scrollTop > 1) {
+        pulling.current = false;
+        pullRef.current = 0;
+        setPull(0);
+        return;
+      }
+      const dy = e.touches[0].clientY - startY.current;
+      if (dy <= 0) {
+        pullRef.current = 0;
+        setPull(0);
+        return;
+      }
+      e.preventDefault();
+      const next = Math.min(72, dy * 0.42);
+      pullRef.current = next;
+      setPull(next);
+    };
+    const onEnd = () => {
+      if (!pulling.current) return;
+      pulling.current = false;
+      const should = pullRef.current >= THRESHOLD && onRefreshRef.current;
+      pullRef.current = 0;
+      setPull(0);
+      if (!should) return;
+      busyRef.current = true;
+      setBusy(true);
+      Promise.resolve(onRefreshRef.current())
+        .catch(() => {})
+        .finally(() => { busyRef.current = false; setBusy(false); });
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [disabled]);
+
+  const show = busy || pull > 6;
+  const h = busy ? 40 : pull;
+
+  return (
+    <div ref={setNode} className={'lb-scrollable' + (className ? ' ' + className : '')} style={style}>
+      <div aria-hidden={!show} style={{
+        height: h, flex: 'none', overflow: 'hidden',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        paddingBottom: show ? 8 : 0,
+      }}>
+        {show ? <span className="lb-spin" /> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, SmartImg, PullRefresh });

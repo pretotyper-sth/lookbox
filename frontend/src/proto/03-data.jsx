@@ -118,7 +118,7 @@ const STYLES = [
   { id: 'minimal', name: '미니멀',   en: 'MINIMAL',   desc: '군더더기 없는 기본기',     img: R('styleMinimal', 'app/img/style-minimal.png') },
   { id: 'street',  name: '스트릿',   en: 'STREET',    desc: '자유로운 시티 무드',       img: R('styleStreet', 'app/img/style-street.png') },
   { id: 'chic',    name: '시크',     en: 'CHIC',      desc: '모던하고 절제된',           img: R('styleChic', 'app/img/style-chic.png') },
-  { id: 'dandy',   name: '댄디',     en: 'DANDY',     desc: '단정한 클래식 신사',       img: R('styleDandy', 'app/img/style-dandy.png') },
+  { id: 'dandy',   name: '댄디',     en: 'DANDY',     desc: '단정한 클래식 신사',       img: R('styleDandy', 'app/img/style-dandy.webp') },
   { id: 'sporty',  name: '스포티',   en: 'SPORTY',    desc: '활동적이고 가벼운',         img: R('styleSporty', 'app/img/style-sporty.png') },
   { id: 'classic', name: '클래식',   en: 'CLASSIC',   desc: '격식 있는 정통',             img: R('styleClassic', 'app/img/style-classic.png') },
   { id: 'amekaji', name: '아메카지', en: 'AMEKAJI',   desc: '빈티지 워크웨어',           img: R('styleAmekaji', 'app/img/style-amekaji.png') },

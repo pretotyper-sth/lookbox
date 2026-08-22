@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
+const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // LOOKBOX — screens A–E + layout chrome. Exported to window.
@@ -216,8 +216,8 @@ function WardrobeScreen({ ctx }) {
   const {
     items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
-    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, goHome,
-    requestPickedOutfits,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
+    requestPickedOutfits, refreshLive,
   } = ctx;
   const [cat, setCat] = useS('전체');
   const [seasonFilter, setSeasonFilter] = useS([]); // multi-select season ids, [] = 전체
@@ -267,7 +267,7 @@ function WardrobeScreen({ ctx }) {
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={<Wordmark onClick={goHome} />} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
+        {!wide && <TopBar left={null} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
         <EmptyState
           icon="hanger"
           iconSize={40}
@@ -303,7 +303,7 @@ function WardrobeScreen({ ctx }) {
   const searchField = (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
-      padding: '0 12px', height: 40, borderRadius: 'var(--r-pill)',
+      padding: wide ? '0 12px' : '0 10px', height: wide ? 40 : 34, borderRadius: 'var(--r-pill)',
       background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
       minWidth: 0, flex: 1, width: '100%',
     }}>
@@ -318,7 +318,7 @@ function WardrobeScreen({ ctx }) {
         aria-label="옷장 검색"
         style={{
           flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'transparent',
-          fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', outline: 'none',
+          fontSize: wide ? 13.5 : 13, fontWeight: 500, color: 'var(--ink)', outline: 'none',
         }}
       />
       {query && (
@@ -470,45 +470,44 @@ function WardrobeScreen({ ctx }) {
       {!wide && (
         <div style={{
           flex: 'none',
-          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6px)',
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)',
           background: 'var(--ivory)',
           borderBottom: '1px solid color-mix(in srgb, var(--line) 85%, transparent)',
         }}>
-          <TopBar
-            sticky={false}
-            border={false}
-            left={<Wordmark onClick={goHome} />}
-            right={(
-              <>
-                {(count > 0 || archived.length > 0) && (
-                  <button
-                    type="button"
-                    onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-                    style={{
-                      fontSize: 13, fontWeight: 700, padding: '6px 8px',
-                      color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
-                    }}
-                  >
-                    {selectMode ? '완료' : '선택'}
-                  </button>
-                )}
-                {!selectMode && <IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />}
-              </>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '0 18px 8px',
+          }}>
+            {searchField}
+            {(count > 0 || archived.length > 0) && (
+              <button
+                type="button"
+                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                style={{
+                  flex: 'none', fontSize: 13, fontWeight: 700, padding: '6px 4px',
+                  color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
+                }}
+              >
+                {selectMode ? '완료' : '선택'}
+              </button>
             )}
-          />
-          <div style={{ padding: '2px 18px 10px' }}>{searchField}</div>
+            {!selectMode && <IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />}
+          </div>
           {chips}
           {seasonChips}
         </div>
       )}
 
-      <div className="lb-scrollable" style={{
+      <PullRefresh
+        onRefresh={refreshLive}
+        disabled={wide || !refreshLive}
+        style={{
         flex: 1,
         // 단축과 롱핸드를 섞지 않는다(섞으면 나머지 방향 패딩이 사라진다).
         paddingTop: wide ? 28 : 16,
         paddingLeft: wide ? 0 : 18,
         paddingRight: wide ? 0 : 18,
-        paddingBottom: wide ? (selecting ? 88 : 72) : (selecting ? 148 : 124),
+        paddingBottom: wide ? (selecting ? 88 : 72) : (selecting ? 96 : 88),
       }}>
        <div className={wide ? 'lb-wide-inner' : ''}>
         {wide && (
@@ -682,33 +681,38 @@ function WardrobeScreen({ ctx }) {
         </div>
         )}
        </div>
-      </div>
+      </PullRefresh>
 
       {/* 선택 시 하단 플로팅 메뉴 */}
       {selecting && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: wide ? 22 : 12, zIndex: 30,
+          position: 'absolute', left: 0, right: 0, bottom: wide ? 22 : 10, zIndex: 30,
           display: 'flex', justifyContent: 'center', pointerEvents: 'none',
-          padding: wide ? '0 24px' : '0 14px',
+          padding: wide ? '0 24px' : '0 18px',
         }}>
           <div style={{
             pointerEvents: 'auto',
-            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            display: 'flex', alignItems: 'center', gap: wide ? 8 : 6,
+            flexWrap: wide ? 'wrap' : 'nowrap',
+            width: wide ? 'auto' : '100%',
             maxWidth: '100%',
-            padding: '10px 22px',
+            padding: wide ? '10px 22px' : '8px 8px 8px 14px',
             borderRadius: 'var(--r-pill)',
             background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
             boxShadow: '0 10px 32px -10px color-mix(in srgb, var(--ink) 28%, transparent), inset 0 0 0 1px var(--line)',
             backdropFilter: 'blur(10px)',
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }} className="tnum">{selCount}개 선택됨</span>
-            <button onClick={clearSel} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px' }}>선택 해제</button>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', flex: 'none' }} className="tnum">{selCount}개</span>
+            <button onClick={clearSel} style={{
+              fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
+              marginRight: wide ? 0 : 'auto', flex: 'none',
+            }}>{wide ? '선택 해제' : '해제'}</button>
             <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}
-              style={{ fontSize: 12, padding: '7px 12px' }}>
+              style={{ fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none' }}>
               {viewingArchive ? '옷장으로' : '보관'}
             </Btn>
             <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)}
-              style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: '7px 12px' }}>삭제</Btn>
+              style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none' }}>삭제</Btn>
             {/* 고른 옷으로 할 수 있는 일 — 바를 늘리지 않고 더보기 안에 둔다 */}
             <div style={{ position: 'relative', flex: 'none' }}>
               <button
@@ -765,9 +769,14 @@ function WardrobeScreen({ ctx }) {
       </BottomSheet>
 
       {!wide && !selectMode && !selecting && (
-        <div className="lb-cta-dock">
-          <Btn full size="lg" icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>조합 추천받기</Btn>
-        </div>
+        <button
+          type="button"
+          className={'lb-fab' + (comboReady ? '' : ' soft')}
+          onClick={comboGate}
+          aria-label="조합 추천받기"
+        >
+          <Icon name="sparkle" size={26} stroke={1.7} fill={comboReady ? 'currentColor' : 'none'} />
+        </button>
       )}
     </div>
   );
@@ -1169,11 +1178,11 @@ function AddSheet({ ctx }) {
         ? await window.countFacesInImage(dataUrl)
         : -1;
       if (faces === 0) {
-        setTryOnErr('전신이 잘 나오는 사진으로 올려주세요. 얼굴이 보여야 해요.');
+        setTryOnErr('얼굴이 잘 나온 사진으로 올려주세요.');
         return;
       }
       if (faces > 1) {
-        setTryOnErr('한 명만 나온 전신 사진을 선택해주세요.');
+        setTryOnErr('한 명만 나온 사진을 선택해주세요.');
         return;
       }
       if (faces !== 1) {
@@ -1580,10 +1589,10 @@ function AddSheet({ ctx }) {
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none', padding: '0 16px' }}>
                               <Icon name={tryOnChecking ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
                               <span style={{ fontSize: 14, fontWeight: 600 }}>
-                                {tryOnChecking ? '사진 확인 중…' : '전신 사진 업로드'}
+                                {tryOnChecking ? '사진 확인 중…' : '프로필 사진 올리기'}
                               </span>
                               <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
-                                본인 얼굴에 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)
+                                얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)
                               </span>
                             </div>
                           </div>

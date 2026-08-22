@@ -217,12 +217,12 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
         ? await window.countFacesInImage(dataUrl)
         : -1;
       if (faces === 0) {
-        setError('전신이 잘 나오는 사진으로 올려주세요. 얼굴이 보여야 해요.');
+        setError('얼굴이 잘 나온 사진으로 올려주세요.');
         setPhase('idle');
         return;
       }
       if (faces > 1) {
-        setError('한 명만 나온 전신 사진을 선택해주세요.');
+        setError('한 명만 나온 사진을 선택해주세요.');
         setPhase('idle');
         return;
       }
@@ -333,7 +333,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
             ) : (
               <>
                 <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
-                  전신 사진 한 장을 고르면, 옷 자리만 비워 매장에서 바로 볼 수 있어요.
+                  얼굴이 나온 사진 한 장이면, 옷 자리만 비워 매장에서 바로 볼 수 있어요.
                 </p>
                 {error && (
                   <div style={{
@@ -343,7 +343,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
                   }}>{error}</div>
                 )}
                 <Btn full size="lg" icon="camera" onClick={() => fileRef.current && fileRef.current.click()}>
-                  전신 사진 올리기
+                  프로필 사진 올리기
                 </Btn>
                 {wide && (
                   <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>

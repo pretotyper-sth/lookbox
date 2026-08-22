@@ -28,25 +28,18 @@ function CreditBar({ remaining, granted }) {
 }
 
 function PlanSheet({ open, onClose, billing }) {
-  const plans = (billing && billing.plans) || [];
-  const costs = (billing && billing.costs) || [];
-  // 카드와 설명 박스가 같은 톤이어야 한 화면으로 읽힌다 — 같은 배경·같은 테두리·같은 반경.
-  const box = (active) => ({
+  const plans = ((billing && billing.plans) || []).filter((p) => p.id === 'free');
+  const box = {
     borderRadius: 'var(--r-md)',
     padding: 16,
     background: 'var(--ivory)',
-    boxShadow: active ? 'inset 0 0 0 2px var(--ink)' : 'inset 0 0 0 1px var(--line)',
-  });
+    boxShadow: 'inset 0 0 0 2px var(--ink)',
+  };
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-sheet-body lb-scrollable" style={{ padding: '10px 22px 8px', maxHeight: '80vh' }}>
+      <div className="lb-sheet-body" style={{ padding: '10px 22px 8px', maxHeight: '80vh' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>요금제</h2>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-기능은 무료도 같아요. 쓸 수 있는 양만 달라요.
-            </p>
-          </div>
+          <h2 style={{ margin: 0, flex: 1, fontSize: 19, fontWeight: 800 }}>요금제</h2>
           <button
             type="button"
             onClick={onClose}
@@ -63,58 +56,33 @@ function PlanSheet({ open, onClose, billing }) {
 
         <div style={{ display: 'grid', gap: 10, marginTop: 'var(--s4)' }}>
           {plans.map((p) => (
-            <div key={p.id} style={box(p.current)}>
+            <div key={p.id} style={box}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontSize: 16, fontWeight: 800 }}>{p.name}</span>
-                {p.current && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-ink)', background: 'var(--accent)', padding: '2px 7px', borderRadius: 999 }}>
-                    사용 중
-                  </span>
-                )}
-                <span style={{ flex: 1 }} />
-                <span className="tnum" style={{ fontSize: 15, fontWeight: 800 }}>
-                  {p.priceKrw ? `${p.priceKrw.toLocaleString()}원` : '0원'}
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-ink)', background: 'var(--accent)', padding: '2px 7px', borderRadius: 999 }}>
+                  사용 중
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{p.priceKrw ? '/월' : ''}</span>
+                <span style={{ flex: 1 }} />
+                <span className="tnum" style={{ fontSize: 15, fontWeight: 800 }}>0원</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{p.blurb}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>지금은 광고 없이 열려 있어요</div>
               <ul style={{ margin: '11px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
-                {(p.perks || []).map((x) => {
-                  const off = x.indexOf('프로부터') >= 0;
-                  return (
-                    <li key={x} style={{
-                      display: 'flex', gap: 7, alignItems: 'flex-start',
-                      fontSize: 13, color: off ? 'var(--ink-3)' : 'var(--ink-2)', wordBreak: 'keep-all',
-                    }}>
-                      <Icon name={off ? 'lock' : 'check'} size={13} stroke={2.4} style={{ marginTop: 3, flex: 'none' }} /> {x}
-                    </li>
-                  );
-                })}
+                {(p.perks || []).map((x) => (
+                  <li key={x} style={{
+                    display: 'flex', gap: 7, alignItems: 'flex-start',
+                    fontSize: 13, color: 'var(--ink-2)', wordBreak: 'keep-all',
+                  }}>
+                    <Icon name="check" size={13} stroke={2.4} style={{ marginTop: 3, flex: 'none' }} /> {x}
+                  </li>
+                ))}
               </ul>
             </div>
           ))}
         </div>
 
-        {costs.length > 0 && (
-          <div style={{ ...box(false), marginTop: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>크레딧은 이럴 때 써요</div>
-            {costs.map((c) => (
-              <div key={c.action} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, color: 'var(--ink-2)', padding: '4px 0' }}>
-                <span style={{ minWidth: 0, wordBreak: 'keep-all' }}>{c.label}</span>
-                <span className="tnum" style={{ flex: 'none', fontWeight: 700 }}>{c.credits}</span>
-              </div>
-            ))}
-            <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)' }}>
-옷장·검색·바로 보기는 크레딧이 안 들어요.
-            </div>
-          </div>
-        )}
-
-        <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>
-결제는 준비 중이에요.
+        <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
+          광고 요금제예요. 광고는 아직 거의 없고, 나중에 붙일 수 있어요. 결제가 생기면 그때 알려드릴게요.
         </p>
-        <Btn full variant="soft" onClick={onClose} style={{ marginTop: 14 }}>닫기</Btn>
-        {/* 마지막 요소가 화면 바닥에 붙지 않게 — 손가락이 닿는 자리이기도 하다 */}
         <div style={{ height: 28 }} />
       </div>
     </BottomSheet>
@@ -504,7 +472,7 @@ function MyPageScreen({ ctx }) {
   const tryOnRow = (
     <ActionRow
       icon="cutout"
-      label="바로 보기 전신 이미지"
+      label="바로 보기 이미지"
       hint={tryOnMaking ? '만드는 중…' : (hasTryOn ? '등록됨 · 다시 만들기' : '프로필 사진으로 만들어요')}
       onClick={() => {
         if (tryOnMaking) return;
@@ -764,9 +732,9 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
 
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div style={{ padding: '8px 24px 26px' }}>
+      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>개인 정보 수정</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>개인 정보</div>
           <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
         </div>
 

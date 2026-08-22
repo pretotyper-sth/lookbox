@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, Silhouette, Skeleton, Thumb, TopBar } = window;
+const { useScrollTopOn, Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, PullRefresh, Silhouette, Skeleton, Thumb, TopBar } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState, LookExpandBadge */
 // LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
@@ -646,7 +646,7 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
 }
 
 function LookbookScreen({ ctx }) {
-  const { saved, openDetail, tab, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, requestUnsave, bulkUnsave } = ctx;
+  const { saved, openDetail, tab, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, requestUnsave, bulkUnsave, refreshLive } = ctx;
   const [makeOpen, setMakeOpen] = useSc(false);
   // 여러 개 정리 — 옷장 선택 모드와 같은 규칙. 데스크탑은 hover로 체크가 뜨고,
   // 모바일은 hover가 없어서 헤더의 '선택'으로 모드를 켠다.
@@ -715,7 +715,10 @@ function LookbookScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
-      <div className="lb-scrollable" style={{
+      <PullRefresh
+        onRefresh={refreshLive}
+        disabled={wide || !refreshLive}
+        style={{
         flex: 1,
         // 단축(padding)과 롱핸드(paddingBottom)를 같이 주면 나머지 방향이 비어 버린다.
         // 하단은 '직접 코디 만들기' 도크(약 90px)를 가리지 않을 만큼 반드시 비워 둔다.
@@ -774,7 +777,7 @@ function LookbookScreen({ ctx }) {
             })}
           </div>
         </div>
-      </div>
+      </PullRefresh>
 
       {selecting && (
         <div style={{

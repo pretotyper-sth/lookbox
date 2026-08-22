@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, useEscapeClose, WARDROBE, Wordmark } = window;
+const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, SmartImg, useEscapeClose, WARDROBE, Wordmark } = window;
 
 /* global React, Btn, Chip, Icon, Wordmark, Eyebrow, LabeledField, Thumb, LB_DATA */
 // LOOKBOX — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
@@ -365,7 +365,7 @@ function Login({ onDone, onCancel, onSignup }) {
 /* ----------------------------------------------------------------
    선호 스타일 카드 — 대표 이미지는 빈칸(placeholder). style.img 가 있으면 사진 표시.
 ---------------------------------------------------------------- */
-function StyleCard({ style, selected, onToggle }) {
+function StyleCard({ style, selected, onToggle, eager }) {
   return (
     <button onClick={onToggle} className="lb-stylecard" style={{
       display: 'block', width: '100%', textAlign: 'left', padding: 0,
@@ -379,7 +379,12 @@ function StyleCard({ style, selected, onToggle }) {
         background: 'var(--ivory)', display: 'grid', placeItems: 'center',
       }}>
         {style.img
-          ? <img src={style.img} alt={style.name} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <SmartImg src={style.img} alt={style.name} loading={eager ? 'eager' : 'lazy'} fetchPriority={eager ? 'high' : 'low'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallback={
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--ink-3)' }}>
+              <Icon name="image" size={26} stroke={1.5} />
+              <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em' }}>이미지 준비 중</span>
+            </div>
+          } />
           : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--ink-3)' }}>
               <Icon name="image" size={26} stroke={1.5} />
@@ -602,8 +607,8 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
     valid: () => d.styles.length >= 1,
     render: () => (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {LB_DATA.STYLES.map((s) => (
-          <StyleCard key={s.id} style={s} selected={d.styles.includes(s.id)}
+        {LB_DATA.STYLES.map((s, idx) => (
+          <StyleCard key={s.id} style={s} eager={idx < 4} selected={d.styles.includes(s.id)}
             onToggle={() => set('styles')(d.styles.includes(s.id) ? d.styles.filter((x) => x !== s.id) : [...d.styles, s.id])} />
         ))}
       </div>
@@ -690,9 +695,11 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
     <div className="lb-app" style={{ alignItems: 'center' }}>
       <div className="lb-page-cap" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* 헤더: 워드마크 + 진행 바 */}
-        <div style={{ padding: '14px 20px 4px' }}>
-          <div style={{ position: 'relative' }}>
-            <Wordmark size={18} />
+        <div style={{ padding: isEdit ? '14px 20px 4px' : '14px 20px 4px' }}>
+          <div style={{ position: 'relative', minHeight: 24 }}>
+            {isEdit
+              ? <div style={{ fontSize: 18, fontWeight: 800, lineHeight: '24px' }}>내 스타일</div>
+              : <Wordmark size={18} />}
             <button onClick={() => (onCancel ? onCancel() : null)} aria-label="닫기" className="lb-iconbtn"
               style={{
                 position: 'absolute', right: -8, top: '50%', transform: 'translateY(-50%)',

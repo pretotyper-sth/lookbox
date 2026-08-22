@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, Silhouette, Skeleton, Thumb } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // LOOKBOX — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
@@ -336,7 +336,7 @@ function TodayScreen({ ctx }) {
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
-    getDayRecord, openDetail,
+    getDayRecord, openDetail, refreshLive,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -606,7 +606,11 @@ function TodayScreen({ ctx }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div ref={scrollRef} className="lb-scrollable" style={{
+      <PullRefresh
+        scrollRef={scrollRef}
+        onRefresh={refreshLive}
+        disabled={wide || !refreshLive}
+        style={{
         flex: 1,  
         padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 28px',
       }}>
@@ -614,7 +618,7 @@ function TodayScreen({ ctx }) {
           {header}
           {list}
         </div>
-      </div>
+      </PullRefresh>
       <BottomSheet open={needMoreOpen} onClose={() => setNeedMoreOpen(false)}>
         <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
           {needMoreKind === 'grewButNone' ? (

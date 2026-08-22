@@ -736,14 +736,14 @@ function App() {
         body: JSON.stringify({ face_data_url: prefs.avatar, height: prefs.height || '', weight: prefs.weight || '' }),
       });
       const url = res && res.imageUrl;
-      if (!url) throw new Error('전신 이미지를 만들지 못했어요');
+      if (!url) throw new Error('바로 보기 이미지를 만들지 못했어요');
       const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto' };
       setPrefs(np); persistPrefs(np);
       reloadBilling();
-      showToast(res.cached ? '전신 이미지를 불러왔어요' : '전신 이미지를 만들었어요', 'check');
+      showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
-      showToast(e.message || '전신 이미지를 만들지 못했어요');
+      showToast(e.message || '바로 보기 이미지를 만들지 못했어요');
       return '';
     } finally {
       setTryOnMaking(false);
@@ -996,39 +996,40 @@ function App() {
     return () => { dead = true; };
   }, [isShowcase, authUid, billingTick]);
 
+  const refreshLive = useCallback(async () => {
+    if (isShowcase || !authUid) return;
+    const mutAtStart = outfitMutRef.current;
+    try {
+      const [ownedData, archData, outfitData] = await Promise.all([
+        liveJSON('/api/live/wardrobe'),
+        liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
+        liveJSON('/api/live/outfits').catch(() => null),
+      ]);
+      const liveItems = (ownedData.items || []).map(liveRememberItem);
+      const archItems = (archData.items || []).map(liveRememberItem);
+      setItems(liveItems);
+      setArchived(archItems);
+      syncAllFromWardrobe(liveItems, archItems);
+      if (outfitData) hydrateOutfits(outfitData, liveItems, mutAtStart);
+      const removed = pruneDailyAgainstOwned(liveItems);
+      if (LB_DATA.DAILY.length) setDailyAllowed(true);
+      else if (removed) setDailyAllowed(false);
+      bumpDaily();
+      reloadBilling();
+    } catch (e) {
+      showToast(e.message || '옷장을 불러오지 못했어요');
+    }
+  }, [isShowcase, authUid, hydrateOutfits, bumpDaily, reloadBilling, showToast]);
+
   useEffect(() => {
     if (isShowcase) return;
-    // 세션이 없으면 부르지 않는다. 토큰 없이 부르면 401로 실패하고 '불러오지 못했어요'
-    // 토스트만 띄운다. authUid가 정해지는 순간(부팅 복원 또는 로그인) 바로 돈다.
     if (!authUid) return;
     let dead = false;
-    const mutAtStart = outfitMutRef.current;
     setWardrobeLoading(true);
-    // 코디·룩북도 같은 라운드에서 받는다. 서버가 정본이라 다른 기기에서 만든 코디와
-    // 룩북이 로그인만 하면 그대로 보인다. 옷장 목록이 손에 있어야 코디를 정리할 수 있어
-    // 세 요청을 한 번에 묶는다.
-    Promise.all([
-      liveJSON('/api/live/wardrobe'),
-      liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
-      liveJSON('/api/live/outfits').catch(() => null),
-    ])
-      .then(([ownedData, archData, outfitData]) => {
-        if (dead) return;
-        const liveItems = (ownedData.items || []).map(liveRememberItem);
-        const archItems = (archData.items || []).map(liveRememberItem);
-        setItems(liveItems);
-        setArchived(archItems);
-        syncAllFromWardrobe(liveItems, archItems);
-        if (outfitData) hydrateOutfits(outfitData, liveItems, mutAtStart);
-        const removed = pruneDailyAgainstOwned(liveItems);
-        if (LB_DATA.DAILY.length) setDailyAllowed(true);
-        else if (removed) setDailyAllowed(false);
-        bumpDaily();
-      })
-      .catch((e) => showToast(e.message || '옷장을 불러오지 못했어요'))
+    refreshLive()
       .finally(() => { if (!dead) { setWardrobeLoading(false); setWardrobeLoaded(true); } });
     return () => { dead = true; };
-  }, [isShowcase, authUid, hydrateOutfits, showToast, bumpDaily]);
+  }, [isShowcase, authUid, refreshLive]);
 
   // 기존 흰/연회색 판 제품 컷 → 투명 컷아웃으로 1회 정규화
   useEffect(() => {
@@ -1904,7 +1905,7 @@ function App() {
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    billing, reloadBilling,
+    billing, reloadBilling, refreshLive,
     requestPickedOutfits, importOrders, checkDuplicates,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))

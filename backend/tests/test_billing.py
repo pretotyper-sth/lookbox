@@ -57,7 +57,7 @@ class PlanShapeTest(unittest.TestCase):
         self.assertTrue(any("60크레딧" in x for x in perks))
         self.assertTrue(any("30벌" in x for x in perks))        # 사진 등록 2크레딧 → 30벌
         self.assertTrue(any("60번" in x for x in perks))        # 코디 추천 1크레딧 → 60번
-        self.assertTrue(any("(프로)" in x for x in perks))       # 무료에 없는 기능은 분명히
+        self.assertTrue(any("광고 포함" in x for x in perks))
         # 카드에서 한 줄이 넘어가면 비교가 안 된다 — 짧게 유지
         self.assertTrue(all(len(x) <= 20 for x in perks), perks)
 
