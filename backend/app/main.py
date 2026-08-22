@@ -826,6 +826,7 @@ def _record_recommendation_timing(user_id: str | None, pool_size: int, combo_cou
 _STYLE_IDS = (
     "dandy", "minimal", "casual", "office", "street", "chic", "sporty",
     "classic", "amekaji", "gorpcore", "hiphop", "y2k", "preppy",
+    "blokecore", "bodyfit", "business",
 )
 _FITS = ("slim", "regular", "relaxed", "oversized", "wide", "crop", "skinny")
 _PATTERNS = ("solid", "stripe", "check", "floral", "graphic", "logo", "camo", "dot", "other")
@@ -931,7 +932,7 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
     "depth": "light|mid|deep (명도)",
     "chroma": "vivid|muted (채도)",
     "formality": 1,
-    "styles": ["dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy 중 이 옷이 실제로 잘 어울리는 무드만 1~3개"],
+    "styles": ["dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy|blokecore|bodyfit|business 중 이 옷이 실제로 잘 어울리는 무드만 1~3개"],
     "details": ["카고 포켓·와이드 실루엣처럼 코디에 영향을 주는 특징 0~3개"]
   }
 }
@@ -2271,6 +2272,9 @@ def _style_tone(style: str) -> str:
         "hiphop": "자유분방한 힙합 톤",
         "y2k": "과감한 Y2K 톤",
         "preppy": "단정한 프레피 톤",
+        "blokecore": "져지와 와이드의 블록코어 톤",
+        "bodyfit": "몸을 살리는 슬림 애슬레저 톤",
+        "business": "단정한 비즈니스 캐주얼 톤",
     }
     return style_map.get(style) or f"{style} 무드"
 
@@ -2397,8 +2401,9 @@ def _style_attr_prompt(rows: list[dict[str, Any]]) -> str:
 - subtype: 한국어 종류명 ("카고 팬츠", "옥스퍼드 셔츠", "첼시 부츠"). 영어로 쓰지 말 것.
 - formality: 1 운동복 · 2 데일리 캐주얼 · 3 스마트 캐주얼 · 4 오피스 · 5 정장.
 - styles: 그 아이템이 실제로 어울리는 무드만 1~3개, 아이템마다 다르게 판단할 것.
-  슬랙스·코트·로퍼 → office/classic/dandy, 데님·티셔츠 → casual/minimal,
-  스니커·후디·카고 → street/casual/sporty, 니트·셔츠 → preppy/dandy 처럼 성격에 맞게.
+  슬랙스·코트·로퍼 → office/classic/dandy/business, 데님·티셔츠 → casual/minimal,
+  스니커·후디·카고 → street/casual/sporty, 니트·셔츠 → preppy/dandy,
+  축구 져지·와이드 → blokecore, 크롭·레깅스·슬림 티 → bodyfit 처럼 성격에 맞게.
   전부 minimal로 채우지 말 것."""
 
 
@@ -2416,7 +2421,7 @@ def style_attrs_from_image(image_url: str, name: str, category: str, color: str,
 이름: {name} / 카테고리: {_category_display(category)} / 색: {color}
 
 JSON만 응답:
-{{"subtype":"한국어 종류명(예: 카고 팬츠, 옥스퍼드 셔츠, 첼시 부츠)","fit":"slim|regular|relaxed|oversized|wide|crop|skinny","pattern":"solid|stripe|check|floral|graphic|logo|camo|dot|other","material":"cotton|denim|linen|wool|knit|leather|nylon|corduroy|fleece|blend","tone":"warm|cool|neutral","depth":"light|mid|deep","chroma":"vivid|muted","formality":3,"styles":["어울리는 무드 1~3개: dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy"],"details":["코디에 영향 주는 특징 0~3개"]}}
+{{"subtype":"한국어 종류명(예: 카고 팬츠, 옥스퍼드 셔츠, 첼시 부츠)","fit":"slim|regular|relaxed|oversized|wide|crop|skinny","pattern":"solid|stripe|check|floral|graphic|logo|camo|dot|other","material":"cotton|denim|linen|wool|knit|leather|nylon|corduroy|fleece|blend","tone":"warm|cool|neutral","depth":"light|mid|deep","chroma":"vivid|muted","formality":3,"styles":["어울리는 무드 1~3개: dandy|minimal|casual|office|street|chic|sporty|classic|amekaji|gorpcore|hiphop|y2k|preppy|blokecore|bodyfit|business"],"details":["코디에 영향 주는 특징 0~3개"]}}
 - 이름에 없어도 사진에서 보이면 반영한다: 카고 포켓, 센터프레스, 워싱, 광택, 크롭 기장, 절개.
 - formality: 1 운동복 · 2 데일리 캐주얼 · 3 스마트 캐주얼 · 4 오피스 · 5 정장.
 - tone: 원단 색이 웜(아이보리·카멜·올리브)/쿨(애쉬·네이비·버건디)/뉴트럴(블랙·화이트·그레이) 중 어디인지.

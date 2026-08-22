@@ -24,3 +24,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 사용량을 계정 카드에 합침([[mypage-usage-in-account]]). 선택 모드 GNB 폭 고정
 ([[wardrobe-select-header]]). 추가 시트 CTA `옷 대보기` → `바로 보기`.
 
+## [2026-08-22] ingest | 공통 무드 3개
+공통 섹션에 블록코어·바디핏·비즈니스 캐주얼. 카드 이미지 480px WebP
+(기존 스타일과 동일). [[mood-groups]]
+

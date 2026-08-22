@@ -113,6 +113,10 @@ const DETECT = [
 // 회원가입 — 선호 스타일. 대표 이미지는 빈칸(img:null)으로 두고 추후 교체.
 // img 에 경로를 넣으면 자동으로 placeholder 대신 사진이 표시됩니다.
 // 무드(선호 스타일) — 사람들이 많이 찾는 순으로 위에서부터 나열.
+// group 없으면 공통. 나중에 여성/남성 그룹을 같은 배열에 이어 붙이면 된다.
+const STYLE_GROUPS = [
+  { id: 'common', name: '공통' },
+];
 const STYLES = [
   { id: 'casual',  name: '캐주얼',   en: 'CASUAL',    desc: '편안한 데일리 무드',       img: R('styleCasual', 'app/img/style-casual.png') },
   { id: 'minimal', name: '미니멀',   en: 'MINIMAL',   desc: '군더더기 없는 기본기',     img: R('styleMinimal', 'app/img/style-minimal.png') },
@@ -126,6 +130,9 @@ const STYLES = [
   { id: 'hiphop',  name: '힙합',     en: 'HIPHOP',    desc: '자유분방한 힙합 무드',     img: R('styleHiphop', 'app/img/style-hiphop.png') },
   { id: 'y2k',     name: 'Y2K',      en: 'Y2K',       desc: '과감한 2000년대 무드',     img: R('styleY2k', 'app/img/style-y2k.png') },
   { id: 'preppy',  name: '프레피',   en: 'PREPPY',    desc: '단정한 캠퍼스 무드',       img: R('stylePreppy', 'app/img/style-preppy.png') },
+  { id: 'blokecore', name: '블록코어', en: 'BLOKECORE', desc: '져지 스트릿 무드',         group: 'common', img: R('styleBlokecore', '/prototype-assets/styleBlokecore.webp') },
+  { id: 'bodyfit', name: '바디핏',   en: 'BODY FIT',  desc: '슬림한 애슬레저',           group: 'common', img: R('styleBodyfit', '/prototype-assets/styleBodyfit.webp') },
+  { id: 'business', name: '비즈니스 캐주얼', en: 'BUSINESS', desc: '단정한 출근 캐주얼', group: 'common', img: R('styleBusiness', '/prototype-assets/styleBusiness.webp') },
 ];
 
 // 선호 핏 · 선호 컬러 (옷 추천에 사용)
@@ -164,7 +171,7 @@ const DEFAULT_PREFS = {
   tryOnCut: '', // 'top' | 'bottom' | 'custom'
 };
 
-Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLE_GROUPS, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
 
 
 /* @prototype-ported: real-service start = empty user content */
