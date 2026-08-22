@@ -20,3 +20,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 화면에 「광고는 아직 거의 없고…」를 쓰지 않는다. 무료 카드 항목 `광고 포함`만.
 [[plan-sheet-free-ads]]
 
+## [2026-08-22] ingest | 마이페이지 사용량 + 옷장 헤더 + 바로 보기
+사용량을 계정 카드에 합침([[mypage-usage-in-account]]). 선택 모드 GNB 폭 고정
+([[wardrobe-select-header]]). 추가 시트 CTA `옷 대보기` → `바로 보기`.
+

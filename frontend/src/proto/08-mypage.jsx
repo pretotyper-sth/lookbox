@@ -11,8 +11,8 @@ const { useState: useMp, useEffect: useMe } = React;
 const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 
 /* ---- 사용량 · 요금제 ---------------------------------------------------------
-   AI를 쓰는 작업(등록·추천·착장 이미지)은 실제로 돈이 나간다. 얼마나 남았는지, 무엇에
-   썼는지를 숫자로 보여주고, 더 필요하면 요금제를 올리는 길을 같은 카드 안에 둔다.   */
+   AI를 쓰는 작업(등록·추천·착장 이미지)은 실제로 돈이 나간다. 남은 크레딧은
+   계정 카드 안에 짧게 두고, 요금제는 시트로 연다. 버전 문자열은 페이지 맨 아래에만. */
 function CreditBar({ remaining, granted }) {
   const pct = granted > 0 ? Math.max(0, Math.min(100, (remaining / granted) * 100)) : 0;
   const low = pct <= 15;
@@ -84,22 +84,22 @@ function PlanSheet({ open, onClose, billing }) {
   );
 }
 
-function UsageCard({ billing, onOpenPlans, compact }) {
+function UsageBlock({ billing, onOpenPlans }) {
   if (!billing) {
     return (
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 16, height: '100%', boxSizing: 'border-box' }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800 }}>사용량</div>
-        <div style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-3)' }}>불러오는 중…</div>
+      <div style={{ padding: '8px 12px 12px' }}>
+        <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>불러오는 중…</div>
       </div>
     );
   }
-  const { planName, remaining, granted, used, resetsAt, byAction = [] } = billing;
+  const { planName, remaining, granted, used, resetsAt } = billing;
   const reset = resetsAt ? new Date(resetsAt) : null;
+  const low = remaining <= Math.max(3, Math.round(granted * 0.1));
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: compact ? 16 : 18, height: '100%', boxSizing: 'border-box' }}>
+    <div style={{ padding: '8px 12px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 14.5, fontWeight: 800 }}>사용량</span>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--ivory)', padding: '3px 9px', borderRadius: 999 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700 }}>사용량</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--ivory)', padding: '2px 8px', borderRadius: 999 }}>
           {planName}
         </span>
         <span style={{ flex: 1 }} />
@@ -107,35 +107,16 @@ function UsageCard({ billing, onOpenPlans, compact }) {
           요금제 보기
         </button>
       </div>
-
-      <div style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span className="tnum" style={{ fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{remaining}</span>
-        <span className="tnum" style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧</span>
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span className="tnum" style={{ fontSize: 18, fontWeight: 800, lineHeight: 1 }}>{remaining}</span>
+        <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧</span>
       </div>
-      <div style={{ marginTop: 10 }}><CreditBar remaining={remaining} granted={granted} /></div>
-      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
+      <div style={{ marginTop: 8 }}><CreditBar remaining={remaining} granted={granted} /></div>
+      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)' }}>
         {reset ? `${reset.getMonth() + 1}월 ${reset.getDate()}일 초기화` : ''}
         {used > 0 ? ` · ${used}개 사용` : ''}
+        {low ? ' · 얼마 안 남았어요' : ''}
       </div>
-
-      {byAction.length > 0 && (
-        <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-          {byAction.map((a) => (
-            <div key={a.action} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12.5 }}>
-              <span style={{ flex: 1, minWidth: 0, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {a.label}
-              </span>
-              <span className="tnum" style={{ color: 'var(--ink-3)' }}>{a.count}회</span>
-              <span className="tnum" style={{ fontWeight: 700, minWidth: 34, textAlign: 'right' }}>-{a.credits}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {remaining <= Math.max(3, Math.round(granted * 0.1)) && (
-        <div style={{ marginTop: 12, fontSize: 12.5, color: '#B0573C' }}>
-          크레딧이 얼마 안 남았어요.
-        </div>
-      )}
     </div>
   );
 }
@@ -509,20 +490,19 @@ function MyPageScreen({ ctx }) {
     </div>
   );
 
+  const usageBlock = <UsageBlock billing={billing} onOpenPlans={() => setPlanSheet(true)} />;
+
   const accountCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>계정 및 지원</div>
+      {usageBlock}
+      <div style={{ height: 1, background: 'var(--line)', margin: '2px 12px 4px' }} />
       <ActionRow icon="help" label="고객센터" onClick={() => {}} />
       <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
       <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
       <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
-      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-3)', padding: '8px 0 4px' }}>
-        v1.0.0 · {BUILD_ID}
-      </div>
     </div>
   );
-
-  const usageCard = <UsageCard billing={billing} onOpenPlans={() => setPlanSheet(true)} />;
 
   const sheets = (
     <>
@@ -572,12 +552,10 @@ function MyPageScreen({ ctx }) {
               <Section title="내 스타일" action={<EditLink onClick={openPrefs} />} fill>{styleBody}</Section>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
-              {usageCard}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, alignItems: 'stretch', marginBottom: 18 }}>
               {settingsCard}
+              {accountCard}
             </div>
-
-            <div style={{ marginBottom: 18 }}>{accountCard}</div>
 
             <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
           LOOKBOX v1.0.0 <span style={{ opacity: 0.7 }}>· {BUILD_ID}</span>
@@ -603,7 +581,6 @@ function MyPageScreen({ ctx }) {
         </div>
         <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>{personalBody}</Section>
         <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>{styleBody}</Section>
-        <div style={{ marginBottom: 14 }}>{usageCard}</div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
           <ActionRow
             icon="sparkle"
@@ -616,13 +593,17 @@ function MyPageScreen({ ctx }) {
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
+          {usageBlock}
+          <div style={{ height: 1, background: 'var(--line)', margin: '2px 12px 4px' }} />
           <ActionRow icon="help" label="고객센터" onClick={() => {}} />
           <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
           <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
           <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
         </div>
         {sheets}
-        <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>LOOKBOX v1.0.0</div>
+        <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
+          LOOKBOX v1.0.0 <span style={{ opacity: 0.7 }}>· {BUILD_ID}</span>
+        </div>
       </div>
     </div>
   );

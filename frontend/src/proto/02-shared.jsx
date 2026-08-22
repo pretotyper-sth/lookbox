@@ -619,14 +619,14 @@ function Badge({ children, tone = 'neutral', icon }) {
 /* ----------------------------------------------------------------
    IconButton — circular
 ---------------------------------------------------------------- */
-function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style }) {
+function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style, ...rest }) {
   return (
     <button onClick={onClick} aria-label={label} className="lb-iconbtn" style={{
       width: size, height: size, borderRadius: '50%', display: 'grid', placeItems: 'center',
       color: active ? 'var(--accent-ink)' : 'var(--ink)',
       background: active ? 'var(--accent)' : 'transparent',
       transition: 'all var(--dur) var(--ease)', ...style,
-    }}>
+    }} {...rest}>
       <Icon name={name} size={iconSize} fill={active && name === 'heart' ? 'currentColor' : 'none'} />
     </button>
   );

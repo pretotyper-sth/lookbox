@@ -485,13 +485,21 @@ function WardrobeScreen({ ctx }) {
                 onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
                 style={{
                   flex: 'none', fontSize: 13, fontWeight: 700, padding: '6px 4px',
+                  minWidth: 36, textAlign: 'center',
                   color: selectMode ? 'var(--ink)' : 'var(--ink-2)',
                 }}
               >
                 {selectMode ? '완료' : '선택'}
               </button>
             )}
-            {!selectMode && <IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />}
+            <IconBtn
+              name="plus"
+              label="아이템 추가"
+              onClick={() => openAdd('wardrobe')}
+              style={selectMode ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}
+              aria-hidden={selectMode || undefined}
+              tabIndex={selectMode ? -1 : undefined}
+            />
           </div>
           {chips}
           {seasonChips}
@@ -1881,7 +1889,7 @@ function AddSheet({ ctx }) {
                           onClick={onTryOnSubmit}
                           disabled={wide || tryOnChecking || !canTryOn}
                         >
-                          옷 대보기
+                          바로 보기
                         </Btn>
                       ) : bulkResult ? (
                           <div style={{ display: 'flex', gap: 10, width: '100%' }}>
