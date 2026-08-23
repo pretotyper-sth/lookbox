@@ -3229,18 +3229,113 @@ def _decode_data_url(data_url: str | None) -> bytes | None:
         return None
 
 
-def _model_look_board(face_bytes: bytes, items: list[dict[str, Any]]) -> bytes:
-    """참고 보드 — 왼쪽 위에 얼굴, 나머지 칸에 이 코디의 옷."""
-    board = Image.new("RGB", (1024, 1024), (242, 241, 238))
-    face = Image.open(io.BytesIO(face_bytes)).convert("RGB")
-    face.thumbnail((432, 432))
-    board.paste(face, (40, 40))
-    # 얼굴 자리(왼쪽 위)를 뺀 ㄱ자 영역에 옷을 채운다.
-    slots = [
-        (536, 40, 984, 488), (40, 536, 344, 840), (360, 536, 664, 840),
-        (680, 536, 984, 840), (40, 856, 344, 1000), (360, 856, 664, 1000),
-    ]
-    for slot, item in zip(slots, items):
+# 상품 카드 `--thumb-bg`와 같은 회색. 착장 컷 배경을 여기로 맞추면
+# 4:5 카드에 2:3 이미지를 contain 해도 옆 여백이 다른 색으로 안 보인다.
+_LOOK_PLATE_HEX = "#E5E3DE"
+_LOOK_PLATE_RGB = (229, 227, 222)
+
+
+def _look_gender_key(gender: str | None) -> str:
+    g = (gender or "").strip()
+    if g.startswith("남"):
+        return "m"
+    if g.startswith("여"):
+        return "f"
+    return "x"
+
+
+def _model_look_subject(gender: str | None) -> str:
+    """착장 모델은 프로필 사진이 아니라, 성별만 맞춘 룩북 모델."""
+    g = (gender or "").strip()
+    if g.startswith("남"):
+        return (
+            "20대 한국인 남성 패션 모델. 무신사 룩북처럼 잘생기고 이목구비가 또렷하며 "
+            "피부는 깨끗하고 헤어는 정돈된, 키 크고 비율 좋은 카탈로그 모델"
+        )
+    if g.startswith("여"):
+        return (
+            "20대 한국인 여성 패션 모델. 무신사 룩북처럼 예쁘고 이목구비가 또렷하며 "
+            "피부는 깨끗하고 헤어는 정돈된, 키 크고 비율 좋은 카탈로그 모델"
+        )
+    return (
+        "20대 한국인 패션 모델. 무신사 룩북처럼 매력적이고 이목구비가 또렷하며 "
+        "옷의 성별에 맞는, 키 크고 비율 좋은 카탈로그 모델"
+    )
+
+
+def _model_look_prompt(gender: str | None) -> str:
+    return f"""참고 이미지는 옷의 색·형태·프린트를 알려 주는 자료일 뿐입니다. 격자 배치를 복사하지 말고, 한 명의 모델이 그 옷을 입은 무신사 룩북 화보 한 장으로 재구성하세요.
+모델: {_model_look_subject(gender)}. 사용자 얼굴·프로필 사진·체형을 쓰지 마세요. 실존 인물 모사 금지.
+- 인물 한 명, 정면 전신, 카탈로그 포즈(체중을 한쪽에, 팔은 자연스럽게)
+- 머리 위와 발 아래에 각각 프레임의 약 12% 여백. 인물이 프레임을 가득 채우지 말 것
+- 참고 이미지의 옷만 착용. 색·형태·프린트·디테일을 바꾸지 말 것
+- 배경은 {_LOOK_PLATE_HEX} 단색 스튜디오 한 장만. 벽과 바닥이 같은 색. 그라데이션·비네트·다른 색 판·인물 주변 후광 금지
+- 텍스트, 로고, 워터마크, 프레임, 다른 사람 추가 금지
+"""
+
+
+def _flatten_look_plate(png_bytes: bytes) -> bytes:
+    """가장자리와 이어진 밝은 회·베이지 픽셀을 상품 카드와 같은 #E5E3DE로 칠한다.
+
+    images.edit가 인물 주변만 다른 톤으로 깔아 판이 두 장처럼 보이는 걸 막는다.
+    채도 낮은 밝은 픽셀만, 테두리에서 연결된 것만 바꿔 회색 옷은 건드리지 않는다.
+    """
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    w, h = img.size
+    if w < 8 or h < 8:
+        return png_bytes
+    px = img.load()
+    corners = (px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2])
+    tr, tg, tb = _LOOK_PLATE_RGB
+    visited = bytearray(w * h)
+    q: deque[tuple[int, int]] = deque()
+
+    def is_plate(r: int, g: int, b: int) -> bool:
+        if max(r, g, b) - min(r, g, b) > 28:
+            return False
+        luma = 0.299 * r + 0.587 * g + 0.114 * b
+        if luma < 175:
+            return False
+        if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 90:
+            return True
+        return any(abs(r - cr) + abs(g - cg) + abs(b - cb) <= 48 for cr, cg, cb in corners)
+
+    def seed(x: int, y: int) -> None:
+        i = y * w + x
+        if visited[i]:
+            return
+        r, g, b = px[x, y]
+        if is_plate(r, g, b):
+            visited[i] = 1
+            q.append((x, y))
+
+    for x in range(w):
+        seed(x, 0)
+        seed(x, h - 1)
+    for y in range(h):
+        seed(0, y)
+        seed(w - 1, y)
+    if not q:
+        return png_bytes
+    while q:
+        x, y = q.popleft()
+        px[x, y] = _LOOK_PLATE_RGB
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not visited[ny * w + nx]:
+                r, g, b = px[nx, ny]
+                if is_plate(r, g, b):
+                    visited[ny * w + nx] = 1
+                    q.append((nx, ny))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _model_look_board(items: list[dict[str, Any]]) -> bytes:
+    """참고 보드 — 옷만. 얼굴은 넣지 않는다. 배경은 상품 카드와 같은 회색."""
+    board = Image.new("RGB", (1024, 1024), _LOOK_PLATE_RGB)
+    slots = [(64, 64, 448, 448), (576, 64, 960, 448), (64, 576, 448, 960), (576, 576, 960, 960)]
+    for slot, item in zip(slots, items[:4]):
         try:
             raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(item["storage_path"])
             image = Image.open(io.BytesIO(raw)).convert("RGBA")
@@ -3248,31 +3343,25 @@ def _model_look_board(face_bytes: bytes, items: list[dict[str, Any]]) -> bytes:
             continue
         x1, y1, x2, y2 = slot
         image.thumbnail((x2 - x1, y2 - y1))
-        board.paste(image, (x1 + ((x2 - x1) - image.width) // 2, y1 + ((y2 - y1) - image.height) // 2), image)
+        board.paste(
+            image,
+            (x1 + ((x2 - x1) - image.width) // 2, y1 + ((y2 - y1) - image.height) // 2),
+            image,
+        )
     buf = io.BytesIO()
     board.save(buf, format="PNG")
     return buf.getvalue()
 
 
-_MODEL_LOOK_PROMPT = """왼쪽 위 인물 사진의 얼굴을 그대로 유지한 채, 나머지 참고 이미지의 옷을 모두 입은 전신 패션 화보를 만드세요.
-- 인물 한 명, 정면 전신. 머리끝부터 신발까지 잘리지 않게
-- 참고한 옷만 착용하고, 색·형태·프린트·디테일을 바꾸지 마세요
-- 배경은 #F2F1EE 단색 스튜디오, 자연스러운 조명
-- 텍스트, 로고, 워터마크, 프레임, 다른 사람 추가 금지
-"""
-
-
 def generate_model_look_image(
-    user_id: str, item_ids: list[str], items: list[dict[str, Any]], face_bytes: bytes,
+    user_id: str, item_ids: list[str], items: list[dict[str, Any]], gender: str | None = None,
 ) -> str | None:
-    """프로필 사진 얼굴을 쓴 모델이 이 코디를 입은 전신 컷.
+    """룩북 모델이 이 코디를 입은 전신 컷. 프로필 얼굴은 쓰지 않고 성별만 본다.
 
     플랫레이보다 비싼 경로라 마이페이지 토글이 켜진 사용자가 '코디 추천받기'를
-    눌렀을 때만 탄다. 캐시 키에 얼굴 지문을 섞어, 프로필 사진을 바꾸면 같은
-    조합이어도 다시 만든다(예전 얼굴이 남아 있으면 더 이상하다).
+    눌렀을 때만 탄다. 캐시 키에 성별을 섞어, 성별을 바꾸면 같은 조합이어도 다시 만든다.
     """
-    face_sig = hashlib.sha256(face_bytes).hexdigest()[:8]
-    key = f"model-{look_cache_key(item_ids)}-{face_sig}"
+    key = f"model-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
     cached = (
         supabase_admin.table("generated_images")
         .select("*")
@@ -3290,7 +3379,7 @@ def generate_model_look_image(
     ):
         return None
     try:
-        board = _model_look_board(face_bytes, items)
+        board = _model_look_board(items)
         if AI_TEST_MODE:
             print("[model-look] TEST MODE — 참고 보드만, AI 미호출 ($0)", flush=True)
             out = board
@@ -3300,11 +3389,15 @@ def generate_model_look_image(
             result = openai_client.images.edit(
                 model=OPENAI_IMAGE_MODEL,
                 image=source,
-                prompt=_MODEL_LOOK_PROMPT,
+                prompt=_model_look_prompt(gender),
                 size="1024x1536",
                 quality=OPENAI_IMAGE_QUALITY,
             )
             out = base64.b64decode(result.data[0].b64_json)
+        try:
+            out = _flatten_look_plate(out)
+        except Exception as flat_exc:  # noqa: BLE001
+            print(f"[model-look] plate flatten skip: {flat_exc}", flush=True)
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")
         supabase_admin.table("generated_images").insert(
@@ -3613,7 +3706,9 @@ class LiveLookOutfit(BaseModel):
 
 
 class LiveLooks(BaseModel):
-    face_data_url: str
+    gender: str | None = None
+    # 예전 클라가 얼굴을 실어 보내도 422 나지 않게 받을 뿐, 착장에는 쓰지 않는다.
+    face_data_url: str | None = None
     outfits: list[LiveLookOutfit] = []
 
 
@@ -5635,7 +5730,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     """프로필 사진으로 '바로 보기'용 전신 이미지를 만든다.
 
     예전에는 사용자가 전신 사진을 직접 올려야 했다. 매장에서 쓰려면 결국 전신 사진이
-    필요한데, 그걸 미리 찍어 둔 사람은 드물다. 퍼스널 컬러·AI 착장처럼 프로필 사진
+    필요한데, 그걸 미리 찍어 둔 사람은 드물다. 퍼스널 컬러처럼 프로필 사진
     하나로 만들어 준다. 이미지 생성이라 크레딧을 받는다(원가 $0.25).
     """
     require_supabase()
@@ -5951,11 +6046,11 @@ def live_orders_collect(
 def _apply_model_looks(
     user_id: str,
     outfits: list[dict[str, Any]],
-    face_bytes: bytes | None,
     by_id: dict[str, Any],
+    gender: str | None = None,
 ) -> None:
     """코디 목록에 착장 이미지를 채운다. 요금제가 아니라 남은 크레딧으로만 막는다."""
-    if not face_bytes or not outfits:
+    if not outfits:
         return
     state = billing_state(user_id)
     budget = state["remaining"] // CREDIT_COSTS["model_look"]
@@ -5972,7 +6067,7 @@ def _apply_model_looks(
         members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
         if not members:
             return None
-        return generate_model_look_image(user_id, outfit["itemIds"], members, face_bytes)
+        return generate_model_look_image(user_id, outfit["itemIds"], members, gender)
 
     with ThreadPoolExecutor(max_workers=4) as pool_ex:
         for outfit, url in zip(targets, pool_ex.map(_one, targets)):
@@ -6090,9 +6185,9 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         spend_credits(user.id, "coordinate", {"count": len(outfits)})
 
     # AI 착장 이미지 — 한 장에 20~30초라 여러 장을 같이 돌린다. 요금제가 아니라
-    # 남은 크레딧으로만 막는다(무료도 장당 5크레딧).
-    face_bytes = _decode_data_url(body.face_data_url) if body.model_look else None
-    _apply_model_looks(user.id, outfits, face_bytes, by_id)
+    # 남은 크레딧으로만 막는다(무료도 장당 5크레딧). 프로필 얼굴은 쓰지 않고 성별만 본다.
+    if body.model_look:
+        _apply_model_looks(user.id, outfits, by_id, body.gender)
 
     # 생성 결과를 저장한다. 실패해도 화면은 그대로 가게 하되(추천을 버리진 않는다)
     # id는 임시값으로 남아 저장·착용을 서버에 남길 수 없다는 걸 로그로 남긴다.
@@ -6130,9 +6225,6 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
 def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_user)) -> dict[str, Any]:
     """이미 받아 둔 코디에 착장 이미지만 채운다. 추천을 다시 돌리지 않는다."""
     require_supabase()
-    face_bytes = _decode_data_url(body.face_data_url)
-    if not face_bytes:
-        raise HTTPException(status_code=400, detail="얼굴 사진이 필요해요.")
     owned = (
         supabase_admin.table("wardrobe_items")
         .select("*")
@@ -6153,7 +6245,7 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
         for row in (body.outfits or [])
         if row.item_ids
     ]
-    _apply_model_looks(user.id, outfits, face_bytes, by_id)
+    _apply_model_looks(user.id, outfits, by_id, body.gender)
     return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
 
 

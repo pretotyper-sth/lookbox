@@ -731,7 +731,7 @@ function App() {
   const [tryOnDesktopHint, setTryOnDesktopHint] = useState(false);
   const [tryOnSetupAsSettings, setTryOnSetupAsSettings] = useState(false);
   const [tryOnSetupMaking, setTryOnSetupMaking] = useState(false);
-  // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러·AI 착장과 같은 방식).
+  // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러와 같은 방식). 착장 컷은 얼굴을 쓰지 않는다.
   // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
   const [tryOnMaking, setTryOnMaking] = useState(false);
   const makeTryOnBody = async (opts) => {
@@ -1267,13 +1267,13 @@ function App() {
     }
   };
 
-  const applyModelLooks = async (avatar, list) => {
+  const applyModelLooks = async (list) => {
     const targets = (list || LB_DATA.DAILY || []).filter((o) => o && (o.itemIds || []).length && !o.lookImg);
-    if (!avatar || !targets.length) return 0;
+    if (!targets.length) return 0;
     const payload = await liveJSON('/api/live/coordinate/looks', {
       method: 'POST',
       body: JSON.stringify({
-        face_data_url: avatar,
+        gender: prefs.gender || '',
         outfits: targets.map((o) => ({ id: o.id, item_ids: o.itemIds || [], label: o.label || '' })),
       }),
     });
@@ -1297,19 +1297,15 @@ function App() {
     return n;
   };
 
-  const setModelLook = (on, avatarOverride) => {
-    const avatar = avatarOverride || prefs.avatar || '';
-    if (on && !avatar) return false;
-    // 토글 팝업에서 받은 사진도 같은 prefs.avatar에 저장한다. 마이페이지 프로필과
-    // AI 생성 요청이 별도 사본을 갖지 않아 어느 쪽에서 바꿔도 즉시 함께 바뀐다.
-    const np = { ...prefs, avatar, modelLook: !!on };
+  const setModelLook = (on) => {
+    const np = { ...prefs, modelLook: !!on };
     setPrefs(np);
     persistPrefs(np);
     if (on) {
       const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
       if (pending.length) {
         showToast('착장 이미지를 만들고 있어요. 조금 걸려요.');
-        applyModelLooks(avatar, pending).then((n) => {
+        applyModelLooks(pending).then((n) => {
           showToast(n ? '착장 이미지로 바꿔 보여드려요' : '다음 추천부터 착장 이미지로 보여드려요');
         }).catch((e) => showToast(e.message || '착장 이미지를 만들지 못했어요'));
       } else {
@@ -1329,11 +1325,9 @@ function App() {
     syncAllFromWardrobe(items, archived);
     pruneDailyAgainstOwned(items);
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
-    // AI 착장 이미지 — 토글이 켜져 있고 프로필 사진이 있을 때만. 얼굴을 서버에 두지
-    // 않아서(마이페이지 prefs에만 있음) 요청마다 같이 실어 보낸다.
-    const modelLook = (prefs.modelLook && prefs.avatar)
-      ? { model_look: true, face_data_url: prefs.avatar }
-      : {};
+    // AI 착장 이미지 — 토글이 켜져 있으면 성별만 맞춰 룩북 모델을 그린다.
+    // 성별은 coordProfile에 이미 들어 있다.
+    const modelLook = prefs.modelLook ? { model_look: true } : {};
     // 마이페이지에 저장한 취향은 계정(user_metadata)에만 있어서 서버가 모른다.
     // 코디는 퍼스널 컬러·선호 실루엣까지 봐야 감이 맞으므로 요청마다 같이 싣는다.
     const styleProfile = coordProfile(prefs);
@@ -1344,8 +1338,8 @@ function App() {
         setDailyStyle((cached && cached.style) || style);
         setDailyAllowed(true);
         bumpDaily();
-        if (prefs.modelLook && prefs.avatar && LB_DATA.DAILY.some((o) => !o.lookImg)) {
-          applyModelLooks(prefs.avatar, LB_DATA.DAILY.filter((o) => !o.lookImg));
+        if (prefs.modelLook && LB_DATA.DAILY.some((o) => !o.lookImg)) {
+          applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg));
         }
         return { added: 0, wardrobeGrew, fromCache: true };
       }
@@ -1369,8 +1363,8 @@ function App() {
           setDailyStyle(cached.style || style);
           setDailyAllowed(true);
           bumpDaily();
-          if (prefs.modelLook && prefs.avatar && outfits.some((o) => !o.lookImg)) {
-            applyModelLooks(prefs.avatar, outfits.filter((o) => !o.lookImg));
+          if (prefs.modelLook && outfits.some((o) => !o.lookImg)) {
+            applyModelLooks(outfits.filter((o) => !o.lookImg));
           }
           return { added: 0, wardrobeGrew, fromCache: true };
         }
@@ -1823,9 +1817,7 @@ function App() {
           wish_combos: append ? 0 : Math.min(wishCount, dailyCount),
           exclude_item_ids: prev.map((o) => o.itemIds || []),
           ...coordProfile(prefs),
-          ...(prefs.modelLook && prefs.avatar
-            ? { model_look: true, face_data_url: prefs.avatar }
-            : {}),
+          ...(prefs.modelLook ? { model_look: true } : {}),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);

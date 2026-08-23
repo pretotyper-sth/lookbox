@@ -29,7 +29,7 @@ description: Lookbox 마이페이지 사용량·요금제·버전·키/몸무게
 
 - 보여주기: `InfoRow` 키 / 몸무게 각 한 줄 (`personalBody`)
 - 작성: `AccountEditSheet`·온보딩 `NumberSlider` 두 개
-- 이미지: `_MODEL_LOOK_PROMPT` / `_TRYON_BODY_PROMPT`에 체형 넣지 않음. 바로 보기 POST도 face만.
+- 이미지: 착장은 성별만 맞춘 룩북 모델(`_model_look_prompt`). 프로필 얼굴·체형 넣지 않음. 바로 보기 POST는 예전처럼 face만.
 - 추천 `_profile_block`에도 키·몸무게를 넣지 않는다.
 
 ## 파일

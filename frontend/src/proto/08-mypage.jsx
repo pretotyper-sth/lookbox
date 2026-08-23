@@ -301,54 +301,6 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
   );
 }
 
-function ModelLookAvatarSheet({ open, onClose, onSelect, src }) {
-  const [error, setError] = useMp('');
-  useMe(() => { if (open) setError(''); }, [open]);
-  const hasPhoto = !!src;
-  return (
-    <BottomSheet open={open} onClose={onClose}>
-      <div style={{ padding: '6px 24px 26px', textAlign: 'center' }}>
-        <div style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.3 }}>AI 착장에 사용할 사진</div>
-        <p style={{
-          margin: '9px auto 20px', maxWidth: 300, fontSize: 13.5,
-          color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all',
-        }}>
-          프로필 사진 얼굴로 코디를 입은 모습을 만들어요.<br />
-          단, 일반 추천보다 생성에 시간·비용이 더 들어요.
-        </p>
-        {error && (
-          <div style={{
-            margin: '-8px auto 16px', maxWidth: 300, padding: '9px 12px',
-            borderRadius: 'var(--r-sm)', background: 'color-mix(in srgb, #B0573C 10%, transparent)',
-            color: '#9D472F', fontSize: 12, lineHeight: 1.45, fontWeight: 600,
-          }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <ProfileAvatar
-            src={src}
-            size={96}
-            onInvalid={setError}
-            onChange={(dataUrl) => { setError(''); onSelect(dataUrl); }}
-          />
-        </div>
-        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700 }}>{hasPhoto ? '사진을 눌러 변경' : '사진을 눌러 등록'}</div>
-        <p style={{
-          margin: '7px auto 0', maxWidth: 300, fontSize: 11.5,
-          color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all',
-        }}>
-          등록한 사진은 마이페이지 프로필에도 동일하게 표시돼요.
-        </p>
-        {hasPhoto && (
-          <Btn full size="lg" onClick={() => onSelect(src)} style={{ width: '100%', marginTop: 22 }}>이 사진으로 보기</Btn>
-        )}
-        <Btn variant="soft" onClick={onClose} style={{ width: '100%', marginTop: hasPhoto ? 10 : 22 }}>취소</Btn>
-      </div>
-    </BottomSheet>
-  );
-}
-
 /* ---- action row ---- */
 // hint — 켜기 전에 알아야 할 게 있는 항목(비용·조건)에만 한 줄 덧붙인다.
 function ActionRow({ icon, label, onClick, danger, last, right, hint }) {
@@ -423,7 +375,7 @@ function Switch({ on, onToggle }) {
 function MyPageScreen({ ctx }) {
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
-    modelLook, setModelLook, showToast, openTryOnTab, openTryOnSetup, makeTryOnBody, tryOnMaking,
+    modelLook, setModelLook, showToast, openTryOnTab, tryOnMaking,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
   } = ctx;
@@ -431,7 +383,6 @@ function MyPageScreen({ ctx }) {
   const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
-  const [modelPhoto, setModelPhoto] = useMp(false);
 
   const styleNames = (prefs.styles || []).map((id) => (LB_DATA.STYLES.find((s) => s.id === id) || {}).name).filter(Boolean);
   const pc = LB_DATA.PERSONAL_COLORS.find((p) => p.id === prefs.personalColor);
@@ -468,29 +419,26 @@ function MyPageScreen({ ctx }) {
   );
 
   const toggleModelLook = () => {
-    if (modelLook) { setModelLook && setModelLook(false); return; }
-    setModelPhoto(true);
+    setModelLook && setModelLook(!modelLook);
   };
 
-  // 켤 때는 항상 사진 확인 시트를 연다. 프로필에 얼굴이 있으면 그대로 보여주고, 없으면 빈 상태로 등록을 받는다.
   const modelLookRow = (
     <ActionRow
       icon="user"
       label="AI 캐릭터 착장 이미지로 보기"
+      hint="무신사 룩북 모델 · 장당 5크레딧"
       right={<Switch on={!!modelLook} onToggle={toggleModelLook} />}
     />
   );
 
-  // 전신 사진을 직접 올리지 않아도 되게, 프로필 사진으로 만들어 준다(퍼스널 컬러와 같은 방식).
-  // 설정에서는 상의·하의를 지우는 시트를 열지 않는다. 원래처럼 바로 보기 탭을 연다.
-  // 프사가 있으면 그 탭 미리보기만 전신 이미지로 채운다.
+  // 설정에서는 상의·하의를 지우는 시트를 열지 않는다. 바로 보기 탭을 연다.
+  // 미리보기는 비운다. 저장된 전신이 있어도 예시처럼 채워 두지 않는다.
   const tryOnRow = (
     <ActionRow
       icon="cutout"
       label="바로 보기 이미지"
       onClick={() => {
         if (tryOnMaking) return;
-        if (prefs.avatar && makeTryOnBody && !prefs.tryOnBody) makeTryOnBody({ silent: true });
         if (openTryOnTab) openTryOnTab();
       }}
     />
@@ -549,15 +497,6 @@ function MyPageScreen({ ctx }) {
       <PlanSheet open={planSheet} onClose={() => setPlanSheet(false)} billing={billing} />
       <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
-      <ModelLookAvatarSheet
-        open={modelPhoto}
-        src={prefs.avatar}
-        onClose={() => setModelPhoto(false)}
-        onSelect={(dataUrl) => {
-          if (setModelLook) setModelLook(true, dataUrl);
-          setModelPhoto(false);
-        }}
-      />
     </>
   );
 

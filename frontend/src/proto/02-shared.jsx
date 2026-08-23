@@ -380,7 +380,11 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         src={outfit.lookImg}
         alt={title}
         draggable={false}
-        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)', userSelect: 'none' }}
+        style={{
+          width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+          borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)', userSelect: 'none',
+          padding: '6% 5%', boxSizing: 'border-box',
+        }}
       />
     ) : (Composite ? (
       <div style={{ width: '100%' }}>
@@ -636,7 +640,7 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 /* ----------------------------------------------------------------
    BottomSheet — bottom sheet on mobile, centered modal on desktop
 ---------------------------------------------------------------- */
-function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true, zIndex = 60 }) {
+function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true, zIndex = 60, tightBottom = false }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   // 손잡이를 아래로 끌어 닫는다. 시트 안이 스크롤되는 경우(요금제 등) 배경을 누를 자리가
@@ -669,7 +673,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
         transform: shown ? (dragY ? `translateY(${dragY}px)` : 'translateY(0) scale(1)') : hiddenTf,
         opacity: wide ? (shown ? 1 : 0) : 1,
         transition: dragY ? 'none' : 'transform var(--dur) var(--ease), opacity var(--dur) var(--ease)',
-        paddingBottom: wide ? 6 : 'max(env(safe-area-inset-bottom), 12px)',
+        paddingBottom: wide ? 6 : (tightBottom ? 'env(safe-area-inset-bottom, 0px)' : 'max(env(safe-area-inset-bottom), 12px)'),
       }}>
         {!wide && (
           <div

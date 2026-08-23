@@ -117,7 +117,11 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   // AI 착장 이미지는 세로로 길어(2:3) 카드 비율에 맞춰 자르면 머리나 신발이 날아간다. 통째로 넣는다.
   if (outfit && outfit.lookImg) {
     return (
-      <div style={{ background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+      <div style={{
+        background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '8% 6%', boxSizing: 'border-box',
+      }}>
         <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
     );
