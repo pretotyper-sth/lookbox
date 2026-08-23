@@ -103,3 +103,6 @@ URL로 상품이 떠도 `register`에 「담고 완료」가 없었다. `Connect
 ## [2026-08-23] ingest | 담기 CTA 독 + 가격·재질
 sticky는 시트 안에서 묻혔다. 「담고 완료」·상세 「저장」을 `.lb-sheet-dock`으로 스크롤 밖에 고정했다 ([[add-item-bulk]]). 선택 입력에 가격·재질을 계절과 구매처 사이에 넣었다 ([[item-optional-fields]]).
 
+## [2026-08-23] ingest | CTA 고정을 되돌림
+상세 「저장」과 추가 「담고 완료」를 다시 상세 정보 아래(본문 스크롤 안)로 되돌렸다. 독·sticky 없음 ([[add-item-bulk]]).
+

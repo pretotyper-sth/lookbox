@@ -940,8 +940,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const canZoom = !!(item.img && onViewImage);
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-sheet-stack">
-      <div ref={bodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 20px' }}>
+      <div ref={bodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
             <button
@@ -1011,8 +1010,8 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
             </div>
           )}
         </div>
-      </div>
-        <div className="lb-sheet-dock">
+
+        <div style={{ marginTop: 26 }}>
           <Btn full size="lg" icon="check" onClick={() => {
             rememberStore(draft.store);
             onSave(item.id, { ...draft, name: (draft.name || '').trim() || item.name || '옷' });

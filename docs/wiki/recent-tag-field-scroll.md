@@ -16,7 +16,7 @@
 실측(390x844, 2026-08-17): 바닥에서 지그재그 ↔ 직접입력 4회 왕복 — gap 0 유지
 (scrollTop 297↔245, max도 같이 움직임). 중간 위치(120)에서 왕복 — 120 유지.
 
-주의: `ItemDetailSheet`도 `.lb-sheet-stack` + `.lb-sheet-body` + `.lb-sheet-dock`이다.
-저장 버튼은 스크롤 밖에 고정한다. 칩 토글 스크롤 보정은 본문 `.lb-sheet-body`만 본다.
+주의: `ItemDetailSheet`의 「저장」은 상세 입력 아래, `.lb-sheet-body` 안에 있다.
+스크롤과 같이 움직인다. 칩 토글 스크롤 보정은 본문 `.lb-sheet-body`만 본다.
 
 관련: [[large-display-layout]]

@@ -1699,8 +1699,7 @@ function AddSheet({ ctx }) {
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
     <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'}>
-      <div className="lb-sheet-stack">
-      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 20px' }}>
+      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {showBack && <IconBtn name="chevL" label="뒤로" onClick={goBack} style={{ marginLeft: -8, marginTop: -4, flex: 'none' }} />}
@@ -2512,21 +2511,17 @@ function AddSheet({ ctx }) {
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>
+
+            <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
+              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
+                {steps.length <= 1 ? '취소' : '건너뛰기'}
+              </Btn>
+              <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
+                {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
+              </Btn>
+            </div>
           </div>
         )}
-      </div>
-      {stage === 'register' && cur ? (
-        <div className="lb-sheet-dock">
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
-              {steps.length <= 1 ? '취소' : '건너뛰기'}
-            </Btn>
-            <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
-              {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
-            </Btn>
-          </div>
-        </div>
-      ) : null}
       <ConnectOrdersModal
         open={connectOpen}
         onClose={() => setConnectOpen(false)}

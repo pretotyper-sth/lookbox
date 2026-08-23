@@ -16,7 +16,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 마이페이지 바로 보기는 설정 시트를 연 채 이미지를 보여 줌
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음
-- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 구매내역 박스는 힌트 칸까지. 연결은 별도 시트. 담기 CTA는 스크롤 밖 독
+- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 구매내역 박스는 힌트 칸까지. 연결은 별도 시트. 「담고 완료」는 상세 입력 아래
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. metadata 문자열
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷을 고른다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼
