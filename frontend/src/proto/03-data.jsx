@@ -1,6 +1,6 @@
 /* @prototype-ported */
 
-/* LOOKBOX — sample data. Exported to window. */
+/* RealCloset — sample data. Exported to window. */
 
 // 번들(standalone) 시 window.__resources 의 blob URL을 우선 사용, 아니면 원본 경로.
 const R = (id, path) => (window.__resources && window.__resources[id]) || path;

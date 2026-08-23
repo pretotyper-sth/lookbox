@@ -1,6 +1,6 @@
 {
-  "name": "LOOKBOX",
-  "short_name": "LOOKBOX",
+  "name": "RealCloset",
+  "short_name": "RealCloset",
   "description": "내 옷장 기반 AI 코디 추천",
   "start_url": "/",
   "display": "standalone",

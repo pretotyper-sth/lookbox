@@ -11,7 +11,7 @@
 무료 월 크레딧은 50 (`backend/app/main.py` `PLANS["free"]["credits"]`). 이미 그 달
 지급분이 다른 숫자면 `billing_state`가 grant 행을 맞춘다.
 
-버전은 페이지 맨 아래 `LOOKBOX v1.0.0 · {날짜}`만. 커밋 해시는 안 넣는다
+버전은 페이지 맨 아래 `RealCloset v1.0.0 · {날짜}`만. 커밋 해시는 안 넣는다
 (`frontend/vite.config.js` `__BUILD_DATE__`). PC는 설정 | 계정 2열.
 
 근거: `frontend/src/proto/08-mypage.jsx` `UsageBlock`, `accountCard`, `VersionLine`.

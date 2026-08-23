@@ -4,7 +4,7 @@ const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
-// LOOKBOX — screens A–E + layout chrome. Exported to window.
+// RealCloset — screens A–E + layout chrome. Exported to window.
 
 const { useState: useS, useEffect: useE, useRef: useR } = React;
 
@@ -16,12 +16,12 @@ function Wordmark({ size = 19, onClick }) {
   const box = { display: 'inline-flex', alignItems: 'center', gap: 5, userSelect: 'none', height: 24 };
   const mark = (
     <>
-      <span style={{ fontWeight: 800, fontSize: size, letterSpacing: '-0.03em', color: 'var(--ink)', lineHeight: 1 }}>LOOK</span>
+      <span style={{ fontWeight: 800, fontSize: size, letterSpacing: '-0.03em', color: 'var(--ink)', lineHeight: 1 }}>REAL</span>
       <span style={{
         fontWeight: 800, fontSize: size - 2, letterSpacing: '-0.01em', lineHeight: 1,
         background: 'var(--accent)', color: 'var(--accent-ink)',
         padding: '3px 7px', borderRadius: 7,
-      }}>BOX</span>
+      }}>CLOSET</span>
     </>
   );
   if (!onClick) return <div style={box}>{mark}</div>;
@@ -890,7 +890,7 @@ function ConnectOrdersModal({ open, onClose, onReady }) {
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'LOOKBOX 구매내역.zip';
+      a.download = 'RealCloset 구매내역.zip';
       document.body.appendChild(a);
       a.click();
       a.remove();

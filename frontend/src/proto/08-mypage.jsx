@@ -3,7 +3,7 @@ const React = window.React;
 const { BottomSheet, Btn, Chip, Icon, LB_DATA, LabeledField, NumberSlider, PALETTE, PERSONAL_COLORS, STYLES } = window;
 
 /* global React, Btn, Icon, Chip, BottomSheet, LabeledField, LB_DATA */
-// LOOKBOX — 마이페이지: 개인 정보(계정) + 내 스타일(취향) 허브. 실서비스 IA 기준.
+// RealCloset — 마이페이지: 개인 정보(계정) + 내 스타일(취향) 허브. 실서비스 IA 기준.
 
 const { useState: useMp, useEffect: useMe } = React;
 
@@ -13,7 +13,7 @@ const BUILD_DATE = typeof __BUILD_DATE__ === 'string' ? __BUILD_DATE__ : '';
 function VersionLine() {
   return (
     <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
-      LOOKBOX v1.0.0{BUILD_DATE ? ` · ${BUILD_DATE}` : ''}
+      RealCloset v1.0.0{BUILD_DATE ? ` · ${BUILD_DATE}` : ''}
     </div>
   );
 }

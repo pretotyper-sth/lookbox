@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * LOOKBOX 구매내역 수집기 — 내 PC의 크롬을 그대로 띄워, 내가 로그인한 쇼핑몰의
+ * RealCloset 구매내역 수집기 — 내 PC의 크롬을 그대로 띄워, 내가 로그인한 쇼핑몰의
  * 구매내역에서 '상품 목록'만 긁어 온다.
  *
  *   로그인은 사람이 직접 한다. 이 스크립트는 아이디·비밀번호를 묻지도, 저장하지도 않는다.
@@ -12,7 +12,7 @@
  *   npm run collect -- --all   # 등록된 플랫폼 전부
  *   npm run collect -- --platform musinsa,29cm
  *
- * 결과: orders.json + 클립보드용 한 줄 JSON. LOOKBOX '아이템 추가 → URL' 칸에 붙여넣으면
+ * 결과: orders.json + 클립보드용 한 줄 JSON. RealCloset '아이템 추가 → URL' 칸에 붙여넣으면
  * 후보 목록이 뜨고, 고른 것만 자동으로 이미지 추출·등록된다.
  */
 import { chromium } from 'playwright';
@@ -24,7 +24,7 @@ import { PLATFORMS, byId } from './platforms.mjs';
 import { PAGE_EXTRACTOR, PAGE_EXPAND } from './extract.mjs';
 
 const PROFILE_DIR = path.join(os.homedir(), '.lookbox-collector', 'chrome');
-const OUT = process.env.LOOKBOX_OUT || path.join(process.cwd(), 'orders.json');
+const OUT = process.env.REALCLOSET_OUT || process.env.LOOKBOX_OUT || path.join(process.cwd(), 'orders.json');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -186,7 +186,7 @@ async function collectFromAuto(page, platform) {
       const { execSync } = await import('node:child_process');
       if (process.platform === 'darwin') { execSync('pbcopy', { input: oneLine }); console.log('\n클립보드에 복사했어요.'); }
     } catch { /* 클립보드 실패는 무시 — 파일이 있다 */ }
-    console.log('LOOKBOX에서 [아이템 추가 → URL] 칸에 붙여넣으면 고를 수 있어요.\n');
+    console.log('RealCloset에서 [아이템 추가 → URL] 칸에 붙여넣으면 고를 수 있어요.\n');
   }
 
   if (!flag('keep-open')) await ctx.close();

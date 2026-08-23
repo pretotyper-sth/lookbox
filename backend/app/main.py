@@ -114,7 +114,7 @@ def _vision_client():
     """짧은 타임아웃의 분류/감지용 클라이언트. 타임아웃 시 각자 폴백으로 진행."""
     return openai_client.with_options(timeout=OPENAI_VISION_TIMEOUT)
 
-app = FastAPI(title="LOOKBOX API")
+app = FastAPI(title="RealCloset API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
@@ -5652,11 +5652,11 @@ def live_orders_extension_zip(user: UserContext = Depends(current_user)) -> Resp
                     continue
                 full = os.path.join(dirpath, name)
                 rel = os.path.relpath(full, root)
-                zf.write(full, os.path.join("LOOKBOX 구매내역", rel))
+                zf.write(full, os.path.join("RealCloset 구매내역", rel))
     return Response(
         content=buf.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="LOOKBOX-orders.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="RealCloset-orders.zip"'},
     )
 
 
@@ -5669,7 +5669,7 @@ def live_orders_collect(
     if host not in ("127.0.0.1", "::1"):
         raise HTTPException(
             status_code=403,
-            detail="이 컴퓨터에서 실행 중인 LOOKBOX에서만 크롬을 열 수 있어요.",
+            detail="이 컴퓨터에서 실행 중인 RealCloset에서만 크롬을 열 수 있어요.",
         )
     platform = re.sub(r"[^a-z0-9]", "", (body.platform or "musinsa").lower()) or "musinsa"
     collector = os.path.abspath(

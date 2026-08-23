@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "내 PC 크롬으로 쇼핑몰 구매내역을 모아 LOOKBOX에 일괄 등록하기 위한 로컬 수집기",
+  "description": "내 PC 크롬으로 쇼핑몰 구매내역을 모아 RealCloset에 일괄 등록하기 위한 로컬 수집기",
   "scripts": {
     "collect": "node collect.mjs",
     "postinstall": "playwright install chromium --with-deps || true"

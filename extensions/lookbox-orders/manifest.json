@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LOOKBOX 구매내역",
+  "name": "RealCloset 구매내역",
   "version": "0.1.0",
-  "description": "로그인된 크롬에서 쇼핑몰 주문내역을 읽어 LOOKBOX 옷장에 담습니다.",
+  "description": "로그인된 크롬에서 쇼핑몰 주문내역을 읽어 RealCloset 옷장에 담습니다.",
   "permissions": ["tabs", "scripting"],
   "host_permissions": [
     "https://*/*",
@@ -18,13 +18,14 @@
       "matches": [
         "http://localhost:5173/*",
         "http://127.0.0.1:5173/*",
-        "https://lookbox.vercel.app/*"
+        "https://lookbox.vercel.app/*",
+        "https://realcloset.vercel.app/*"
       ],
       "js": ["lookbox-bridge.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "LOOKBOX 구매내역"
+    "default_title": "RealCloset 구매내역"
   }
 }

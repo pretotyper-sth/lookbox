@@ -3,7 +3,7 @@ const React = window.React;
 const { BottomSheet, Btn, Chip, Icon, useEscapeClose } = window;
 
 /* global React, Btn, Chip, Icon, BottomSheet, useEscapeClose */
-// LOOKBOX — 바로 보기: 전신 사진에서 옷을 비우고, 카메라로 실제 옷에 겹쳐 본다.
+// RealCloset — 바로 보기: 전신 사진에서 옷을 비우고, 카메라로 실제 옷에 겹쳐 본다.
 // 설정은 바텀시트(서비스 안). 사진 없으면 프로필처럼 바로 앨범을 연다.
 
 const { useState, useEffect, useRef } = React;

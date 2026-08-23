@@ -3,7 +3,7 @@ const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, PullRefresh, Silhouette, Skeleton, Thumb, TopBar } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Badge, IconBtn, Icon, LB_DATA, TopBar, Eyebrow, EmptyState, LookExpandBadge */
-// LOOKBOX — screens C (results), D (lookbook), E (detail). Exported to window.
+// RealCloset — screens C (results), D (lookbook), E (detail). Exported to window.
 
 const { useState: useSc, useEffect: useEc } = React;
 

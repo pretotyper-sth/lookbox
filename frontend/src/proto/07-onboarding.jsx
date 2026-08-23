@@ -3,7 +3,7 @@ const React = window.React;
 const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, NumberSlider, PALETTE, PERSONAL_COLORS, SmartImg, useEscapeClose, WARDROBE, Wordmark } = window;
 
 /* global React, Btn, Chip, Icon, Wordmark, Eyebrow, LabeledField, Thumb, LB_DATA */
-// LOOKBOX — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
+// RealCloset — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
 // 가입 시 선호 정보(스타일·핏·컬러)를 필수로 받고, 이후 '내 스타일'에서 수정 가능.
 
 const { useState, useEffect, useRef } = React;
@@ -539,7 +539,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
   // 단계 정의 — 가입은 계정부터, 수정은 선호 정보만.
   const ACCOUNT = {
     key: 'account', eyebrow: '계정 만들기', title: '이메일로 시작하기',
-    sub: 'LOOKBOX 계정을 만들어 옷장과 추천을 저장해요.',
+    sub: 'RealCloset 계정을 만들어 옷장과 추천을 저장해요.',
     valid: () => /\S+@\S+\.\S+/.test(d.email) && pw.length >= 6,
     render: () => (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
