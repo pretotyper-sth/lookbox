@@ -1777,6 +1777,8 @@ function App() {
       store: draft.store || '',
       note: draft.note || '',
       seasons: draft.seasons || [],
+      price: draft.price || '',
+      material: draft.material || '',
     };
     setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
     setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
@@ -1943,6 +1945,8 @@ function App() {
         store: it.store || '',
         note: it.note || '',
         seasons: it.seasons || [],
+        price: it.price || '',
+        material: it.material || '',
       };
       try {
         const res = await liveJSON('/api/live/items/' + id, {

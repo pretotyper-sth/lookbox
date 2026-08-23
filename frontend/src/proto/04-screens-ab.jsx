@@ -170,7 +170,7 @@ function searchHaystack(item) {
   const seasons = (item.seasons || [])
     .map((id) => ((LB_DATA.SEASONS || []).find((s) => s.id === id) || {}).name || '')
     .join(' ');
-  return [item.name, item.brand, item.category, item.cat, item.color, item.store, item.note, seasons]
+  return [item.name, item.brand, item.category, item.cat, item.color, item.store, item.note, item.price, item.material, seasons]
     .filter(Boolean).join(' ').toLowerCase();
 }
 
@@ -1085,6 +1085,18 @@ function bulkRowMeta(b) {
   return { title, subtitle: bits.join(' · ') };
 }
 
+function makeItemDraft(d = {}) {
+  return {
+    brand: d.brand || '',
+    size: d.size || '',
+    color: d.color || '',
+    store: d.store || '',
+    note: d.note || '',
+    price: d.price || '',
+    material: d.material || '',
+  };
+}
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
@@ -1262,7 +1274,7 @@ function AddSheet({ ctx }) {
       }
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' } })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
           setStepIdx(0);
           return 'register';
         }
@@ -1580,7 +1592,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: { brand: d.brand || '', size: '', color: d.color || '', store: d.store || '', note: '' } })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
     setStepIdx(0);
     setStage('register');
   };
@@ -1605,6 +1617,8 @@ function AddSheet({ ctx }) {
       size: clean.size || s.size || '',
       store: clean.store || s.store || '',
       note: clean.note || s.note || '',
+      price: clean.price || s.price || '',
+      material: clean.material || s.material || '',
     };
   };
   const advance = (keep) => {
@@ -1685,7 +1699,8 @@ function AddSheet({ ctx }) {
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
     <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'}>
-      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+      <div className="lb-sheet-stack">
+      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 20px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {showBack && <IconBtn name="chevL" label="뒤로" onClick={goBack} style={{ marginLeft: -8, marginTop: -4, flex: 'none' }} />}
@@ -2491,26 +2506,27 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
+                <LabeledField label="가격" value={cur.draft.price} onChange={setStepDraft('price')} placeholder="예) 89,000" />
+                <LabeledField label="재질" value={cur.draft.material} onChange={setStepDraft('material')} placeholder="예) 코튼 100%" />
                 <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>
-
-            <div style={{
-              marginTop: 'var(--s7)', display: 'flex', gap: 10,
-              position: 'sticky', bottom: 0, zIndex: 1,
-              padding: '12px 0 4px',
-              background: 'var(--surface)',
-            }}>
-              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
-                {steps.length <= 1 ? '취소' : '건너뛰기'}
-              </Btn>
-              <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
-                {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
-              </Btn>
-            </div>
           </div>
         )}
+      </div>
+      {stage === 'register' && cur ? (
+        <div className="lb-sheet-dock">
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
+              {steps.length <= 1 ? '취소' : '건너뛰기'}
+            </Btn>
+            <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
+              {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
+            </Btn>
+          </div>
+        </div>
+      ) : null}
       <ConnectOrdersModal
         open={connectOpen}
         onClose={() => setConnectOpen(false)}

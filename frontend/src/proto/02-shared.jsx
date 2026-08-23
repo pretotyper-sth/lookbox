@@ -930,6 +930,8 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
         store: item.store || '',
         note: item.note || '',
         seasons: item.seasons || [],
+        price: item.price || '',
+        material: item.material || '',
       });
     }
   }, [open, item && item.id]);
@@ -938,7 +940,8 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   const canZoom = !!(item.img && onViewImage);
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div ref={bodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+      <div className="lb-sheet-stack">
+      <div ref={bodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
             <button
@@ -998,6 +1001,8 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
+          <LabeledField label="가격" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
+          <LabeledField label="재질" value={draft.material} onChange={set('material')} placeholder="예) 코튼 100%" />
           <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
           {formatDotDate(item.createdAt) && (
@@ -1006,8 +1011,8 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
             </div>
           )}
         </div>
-
-        <div style={{ marginTop: 26 }}>
+      </div>
+        <div className="lb-sheet-dock">
           <Btn full size="lg" icon="check" onClick={() => {
             rememberStore(draft.store);
             onSave(item.id, { ...draft, name: (draft.name || '').trim() || item.name || '옷' });

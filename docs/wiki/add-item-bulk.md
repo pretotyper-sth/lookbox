@@ -8,6 +8,6 @@
 
 연결이 안 되어 있으면 시트 안에 설치 설명을 넣지 않는다. 별도 시트(`ConnectOrdersModal`)에서 허용 → 저장하기(zip) → 열었어요 순으로 버튼만 누른다. zip은 `GET /api/live/orders/extension.zip`. 웹페이지는 크롬 확장 설치 권한 창을 대신 띄울 수 없다. (`extensions/lookbox-orders`, `backend/app/main.py`)
 
-URL·사진 추출 뒤 `register` 단계에는 「담고 완료」(여러 개면 「담고 다음 옷」)가 시트 바닥에 붙어 있어야 한다. `ConnectOrdersModal`은 그 버튼의 형제로 둔다. 2026-08-23 커밋 `7bb3449`에서 모달을 넣으며 버튼을 지웠고, 상품은 보이는데 담을 수 없게 됐다. (`frontend/src/proto/04-screens-ab.jsx` `advance`)
+URL·사진 추출 뒤 `register`의 「담고 완료」는 `.lb-sheet-body` 스크롤 **밖** `.lb-sheet-dock`에 둔다. sticky는 시트 `transform`과 내부 스크롤에 묻혀 메모 칸에서 버튼이 안 보였다. `ConnectOrdersModal`은 스택의 형제다. (`frontend/src/proto/04-screens-ab.jsx` `advance`, `frontend/src/proto/proto.css` `.lb-sheet-dock`)
 
 구매내역 탭은 옷장 추가 시트에 있다(사진·URL 옆). 모바일은 잠금 안내만. PC는 쇼핑몰을 고르고 가져오기를 누르면, 확장이 있으면 그 크롬 세션에서 읽고, 이 컴퓨터(127.0.0.1)에서는 수집기 크롬도 띄운다. (`tools/order-collector/collect.mjs`, `/api/live/orders/collect`)

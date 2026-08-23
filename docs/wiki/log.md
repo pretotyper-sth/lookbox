@@ -100,3 +100,6 @@ URL 탭은 +로 입력칸을 늘리고 박스가 커지면 안에서 스크롤�
 ## [2026-08-23] ingest | 담기 버튼 복구
 URL로 상품이 떠도 `register`에 「담고 완료」가 없었다. `ConnectOrdersModal`을 AddSheet 안에 넣으며 버튼을 지운 탓이다. 바닥에 다시 붙였다 ([[add-item-bulk]]).
 
+## [2026-08-23] ingest | 담기 CTA 독 + 가격·재질
+sticky는 시트 안에서 묻혔다. 「담고 완료」·상세 「저장」을 `.lb-sheet-dock`으로 스크롤 밖에 고정했다 ([[add-item-bulk]]). 선택 입력에 가격·재질을 계절과 구매처 사이에 넣었다 ([[item-optional-fields]]).
+

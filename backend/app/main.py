@@ -3928,6 +3928,8 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         "size": meta.get("size") or "",
         "store": meta.get("store") or "",
         "note": row.get("note") or meta.get("note") or "",
+        "price": meta.get("price") or "",
+        "material": meta.get("material") or "",
         "sourceUrl": meta.get("source_url") or "",
         "extractWarning": meta.get("extract_warning") or "",
         "createdAt": row.get("created_at"),
@@ -3943,6 +3945,8 @@ class LiveItemUpdate(BaseModel):
     size: str | None = None
     store: str | None = None
     note: str | None = None
+    price: str | None = None
+    material: str | None = None
     category: str | None = None  # KO('상의') 또는 EN('top')
     seasons: list[str] | None = None  # ["spring","autumn"] 등, 다중 선택
 
@@ -4887,9 +4891,20 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         meta["size"] = body.size
     if body.store is not None:
         meta["store"] = body.store
+    if body.price is not None:
+        meta["price"] = body.price
+    if body.material is not None:
+        meta["material"] = body.material
     if body.seasons is not None:
         meta["seasons"] = _clean_seasons(body.seasons)
-    if body.brand is not None or body.size is not None or body.store is not None or body.seasons is not None:
+    if (
+        body.brand is not None
+        or body.size is not None
+        or body.store is not None
+        or body.seasons is not None
+        or body.price is not None
+        or body.material is not None
+    ):
         patch["metadata"] = meta
     if not patch:
         return {"item": live_item_payload(row)}

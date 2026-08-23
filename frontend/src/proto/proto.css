@@ -310,6 +310,25 @@ img { display: block; max-width: 100%; }
   overscroll-behavior: contain;
 }
 
+/* 담기/저장 CTA는 스크롤 밖에 고정한다. sticky는 시트 transform·내부 스크롤에 묻힌다. */
+.lb-sheet-stack {
+  display: flex;
+  flex-direction: column;
+  max-height: min(76vh, 640px);
+  min-height: 0;
+}
+.lb-sheet-stack > .lb-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.lb-sheet-dock {
+  flex: none;
+  padding: var(--s3) 24px var(--s4);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
 /* ---- toast ---- */
 .lb-toast {
   position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%) translateY(8px);
