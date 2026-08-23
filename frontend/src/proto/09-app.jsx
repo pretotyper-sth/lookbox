@@ -729,16 +729,15 @@ function App() {
   const [tryOnSeedBody, setTryOnSeedBody] = useState('');
   const [tryOnCamera, setTryOnCamera] = useState(false);
   const [tryOnDesktopHint, setTryOnDesktopHint] = useState(false);
-  const openTryOnSetup = (seed) => {
-    setTryOnSeedBody(typeof seed === 'string' ? seed : '');
-    setTryOnSetup(true);
-  };
+  const [tryOnSetupAsSettings, setTryOnSetupAsSettings] = useState(false);
+  const [tryOnSetupMaking, setTryOnSetupMaking] = useState(false);
   // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러·AI 착장과 같은 방식).
   // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
   const [tryOnMaking, setTryOnMaking] = useState(false);
-  const makeTryOnBody = async () => {
+  const makeTryOnBody = async (opts) => {
+    const silent = !!(opts && opts.silent);
     if (tryOnMaking) return '';
-    if (!prefs.avatar) { showToast('프로필 사진을 먼저 등록해 주세요'); return ''; }
+    if (!prefs.avatar) { if (!silent) showToast('프로필 사진을 먼저 등록해 주세요'); return ''; }
     setTryOnMaking(true);
     try {
       const res = await liveJSON('/api/live/tryon/body', {
@@ -750,13 +749,26 @@ function App() {
       const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto' };
       setPrefs(np); persistPrefs(np);
       reloadBilling();
-      showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
+      if (!silent) showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
-      showToast(e.message || '바로 보기 이미지를 만들지 못했어요');
+      if (!silent) showToast(e.message || '바로 보기 이미지를 만들지 못했어요');
       return '';
     } finally {
       setTryOnMaking(false);
+    }
+  };
+  const openTryOnSetup = async (seed, opts) => {
+    const settings = !!(opts && opts.settings);
+    setTryOnSetupAsSettings(settings);
+    let seedStr = typeof seed === 'string' ? seed : '';
+    setTryOnSeedBody(seedStr);
+    setTryOnSetup(true);
+    if (settings && !seedStr && !prefs.tryOnBody && prefs.avatar) {
+      setTryOnSetupMaking(true);
+      const url = await makeTryOnBody({ silent: true });
+      setTryOnSetupMaking(false);
+      if (url) setTryOnSeedBody(url);
     }
   };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
@@ -1249,6 +1261,36 @@ function App() {
     }
   };
 
+  const applyModelLooks = async (avatar, list) => {
+    const targets = (list || LB_DATA.DAILY || []).filter((o) => o && (o.itemIds || []).length && !o.lookImg);
+    if (!avatar || !targets.length) return 0;
+    const payload = await liveJSON('/api/live/coordinate/looks', {
+      method: 'POST',
+      body: JSON.stringify({
+        face_data_url: avatar,
+        outfits: targets.map((o) => ({ id: o.id, item_ids: o.itemIds || [], label: o.label || '' })),
+      }),
+    });
+    const byId = {};
+    (payload.outfits || []).forEach((row) => {
+      if (row && row.id && row.lookImg) byId[row.id] = row.lookImg;
+    });
+    let n = 0;
+    (list || LB_DATA.DAILY).forEach((o) => {
+      if (byId[o.id]) { o.lookImg = byId[o.id]; n += 1; }
+    });
+    writeDailyCache({
+      style: dailyStyle,
+      outfits: LB_DATA.DAILY.slice(),
+      items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
+      wardrobeSig: wardrobeSigOf(items),
+      wardrobeCount: items.length,
+    });
+    bumpDaily();
+    reloadBilling();
+    return n;
+  };
+
   const setModelLook = (on, avatarOverride) => {
     const avatar = avatarOverride || prefs.avatar || '';
     if (on && !avatar) return false;
@@ -1257,8 +1299,19 @@ function App() {
     const np = { ...prefs, avatar, modelLook: !!on };
     setPrefs(np);
     persistPrefs(np);
-    // 이미 받아둔 코디는 그대로 둔다. 다음 '코디 추천받기'부터 바뀐 방식으로 만든다.
-    showToast(on ? '다음 추천부터 착장 이미지로 보여드려요' : '착장 이미지를 껐어요');
+    if (on) {
+      const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
+      if (pending.length) {
+        showToast('착장 이미지를 만들고 있어요. 조금 걸려요.');
+        applyModelLooks(avatar, pending).then((n) => {
+          showToast(n ? '착장 이미지로 바꿔 보여드려요' : '다음 추천부터 착장 이미지로 보여드려요');
+        }).catch((e) => showToast(e.message || '착장 이미지를 만들지 못했어요'));
+      } else {
+        showToast('다음 추천부터 착장 이미지로 보여드려요');
+      }
+    } else {
+      showToast('착장 이미지를 껐어요');
+    }
     return true;
   };
 
@@ -1285,6 +1338,9 @@ function App() {
         setDailyStyle((cached && cached.style) || style);
         setDailyAllowed(true);
         bumpDaily();
+        if (prefs.modelLook && prefs.avatar && LB_DATA.DAILY.some((o) => !o.lookImg)) {
+          applyModelLooks(prefs.avatar, LB_DATA.DAILY.filter((o) => !o.lookImg));
+        }
         return { added: 0, wardrobeGrew, fromCache: true };
       }
       const cached = readDailyCache();
@@ -1307,6 +1363,9 @@ function App() {
           setDailyStyle(cached.style || style);
           setDailyAllowed(true);
           bumpDaily();
+          if (prefs.modelLook && prefs.avatar && outfits.some((o) => !o.lookImg)) {
+            applyModelLooks(prefs.avatar, outfits.filter((o) => !o.lookImg));
+          }
           return { added: 0, wardrobeGrew, fromCache: true };
         }
         clearDailyCache();
@@ -1756,6 +1815,9 @@ function App() {
           wish_combos: append ? 0 : Math.min(wishCount, dailyCount),
           exclude_item_ids: prev.map((o) => o.itemIds || []),
           ...coordProfile(prefs),
+          ...(prefs.modelLook && prefs.avatar
+            ? { model_look: true, face_data_url: prefs.avatar }
+            : {}),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);
@@ -2105,13 +2167,23 @@ function App() {
       <TryOnSetupOverlay
         open={tryOnSetup}
         wide={wide}
+        making={tryOnSetupMaking}
         seedBody={tryOnSeedBody}
         initialBody={prefs.tryOnBody}
         initialFrame={prefs.tryOnFrame}
         initialCut={prefs.tryOnCut}
-        onClose={() => { setTryOnSetup(false); setTryOnSeedBody(''); }}
+        onClose={() => {
+          setTryOnSetup(false);
+          setTryOnSeedBody('');
+          setTryOnSetupAsSettings(false);
+          setTryOnSetupMaking(false);
+        }}
         onSave={(payload) => {
           setTryOnFrame(payload);
+          if (tryOnSetupAsSettings) {
+            setTryOnSeedBody('');
+            return;
+          }
           setTryOnSetup(false);
           setTryOnSeedBody('');
           if (!wide) setTryOnCamera(true);

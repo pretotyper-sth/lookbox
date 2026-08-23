@@ -4,7 +4,8 @@
 (`08-mypage.jsx` 예전 `UsageCard`). **PC(wide)** 는 크레딧 숫자·막대·초기화만
 `UsageBlock variant=inline`으로 **계정 및 지원** 카드 상단에 넣되, 여백을 넉넉히
 둔다(`padding 18/16/22`, 숫자 28px, 막대 8px). **모바일** 은 계정 카드에서 빼
-`variant=card`로 스타일 카드와 설정 사이에 둔다. 동작별 차감 목록은 안 그린다.
+`variant=card`로 스타일 카드와 설정 사이에 둔다. 동작별 차감 목록은 안 그린다
+(그건 [[plan-sheet-free-ads]] 요금제 시트).
 요금제는 같은 블록의 `요금제 보기` → `PlanSheet`.
 
 무료 월 크레딧은 50 (`backend/app/main.py` `PLANS["free"]["credits"]`). 이미 그 달

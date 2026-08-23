@@ -108,7 +108,7 @@ function MobileOnlyNote() {
 /* ============================================================
    TryOnSetupOverlay — 바텀시트. 사진 고르기 → 비우기 → 저장
    ============================================================ */
-function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCut, seedBody, onSave, wide }) {
+function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCut, seedBody, onSave, wide, making }) {
   const [phase, setPhase] = useState('idle'); // idle | cut
   const [bodySrc, setBodySrc] = useState('');
   const [cut, setCut] = useState('top');
@@ -134,6 +134,11 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
     setError('');
     setChecking(false);
     setTool('erase');
+    if (making) {
+      setPhase('idle');
+      setBodySrc('');
+      return undefined;
+    }
     // 조합 시트 등에서 이미 고른 전신 사진이 있으면 앨범 없이 바로 비우기.
     if (seedBody) {
       setBodySrc(seedBody);
@@ -165,7 +170,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [open, initialBody, initialFrame, initialCut, seedBody]);
+  }, [open, initialBody, initialFrame, initialCut, seedBody, making]);
 
   useEffect(() => {
     if (!open || phase !== 'cut' || !bodySrc) return undefined;
@@ -328,7 +333,9 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
 
         {phase === 'idle' && (
           <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-            {checking ? (
+            {making ? (
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>바로 보기 이미지를 만들고 있어요…</div>
+            ) : checking ? (
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>사진 확인 중…</div>
             ) : (
               <>

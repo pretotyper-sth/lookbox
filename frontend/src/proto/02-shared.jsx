@@ -636,7 +636,7 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 /* ----------------------------------------------------------------
    BottomSheet — bottom sheet on mobile, centered modal on desktop
 ---------------------------------------------------------------- */
-function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true }) {
+function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true, zIndex = 60 }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   // 손잡이를 아래로 끌어 닫는다. 시트 안이 스크롤되는 경우(요금제 등) 배경을 누를 자리가
@@ -657,7 +657,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
   const hiddenTf = wide ? 'translateY(10px) scale(0.97)' : 'translateY(101%)';
   return (
     <div onClick={dismissOnScrim ? onClose : undefined} style={{
-      position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
+      position: 'fixed', inset: 0, zIndex, display: 'flex',
       alignItems: wide ? 'center' : 'flex-end', justifyContent: 'center',
       background: shown ? 'rgba(30,27,21,0.42)' : 'rgba(30,27,21,0)',
       transition: 'background var(--dur) var(--ease)', padding: wide ? 24 : 0,

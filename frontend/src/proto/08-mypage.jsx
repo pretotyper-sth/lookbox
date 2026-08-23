@@ -86,6 +86,37 @@ function PlanSheet({ open, onClose, billing }) {
             </div>
           ))}
         </div>
+
+        {(() => {
+          const costs = (billing && billing.costs && billing.costs.length)
+            ? billing.costs
+            : [
+                { action: 'import_url', label: 'URL·구매내역으로 옷 등록', credits: 1 },
+                { action: 'import_photo', label: '사진으로 옷 등록', credits: 2 },
+                { action: 'replace_image', label: '옷 사진 다시 만들기', credits: 2 },
+                { action: 'coordinate', label: '코디 추천', credits: 1 },
+                { action: 'model_look', label: 'AI 착장 이미지', credits: 5 },
+              ];
+          return (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>작업별 크레딧</div>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+                {costs.map((c) => (
+                  <li key={c.action} style={{
+                    display: 'flex', justifyContent: 'space-between', gap: 12,
+                    fontSize: 13, color: 'var(--ink-2)', wordBreak: 'keep-all',
+                  }}>
+                    <span>{c.label}</span>
+                    <span className="tnum" style={{ fontWeight: 800, color: 'var(--ink)', flex: 'none' }}>{c.credits}</span>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
+                바로 보기 이미지는 크레딧을 쓰지 않아요.
+              </p>
+            </div>
+          );
+        })()}
         <div style={{ height: 28 }} />
       </div>
     </BottomSheet>
@@ -395,7 +426,7 @@ function Switch({ on, onToggle }) {
 function MyPageScreen({ ctx }) {
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
-    modelLook, setModelLook, showToast, openTryOnTab, makeTryOnBody, tryOnMaking,
+    modelLook, setModelLook, showToast, openTryOnTab, openTryOnSetup, makeTryOnBody, tryOnMaking,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
   } = ctx;
@@ -460,7 +491,7 @@ function MyPageScreen({ ctx }) {
       label="바로 보기 이미지"
       onClick={() => {
         if (tryOnMaking) return;
-        if (prefs.avatar && makeTryOnBody) makeTryOnBody();
+        if (openTryOnSetup) openTryOnSetup(null, { settings: true });
         else if (openTryOnTab) openTryOnTab();
       }}
     />

@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -29,7 +30,7 @@ from dotenv import load_dotenv
 truststore.inject_into_ssl()
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
 from PIL import Image, ImageChops, ImageFilter
 from pydantic import BaseModel
@@ -558,15 +559,15 @@ CREDIT_LABELS = {
 }
 
 # 요금제는 둘이면 충분하다. 세 단계로 나눠 봤자 실질 차이는 크레딧 수뿐이라
-# 고르는 데 시간만 든다. 기능은 무료에서도 전부 열려 있고, 유일한 차이는
-# 'AI가 코디를 입은 모습을 그려주는 것'과 매달 주어지는 크레딧 양이다.
+# 고르는 데 시간만 든다. 착장 이미지도 무료에서 쓸 수 있고, 장당 크레딧으로
+# 막는다. 매달 주어지는 양만 요금제마다 다르다.
 PLANS: dict[str, dict[str, Any]] = {
     "free": {
         "id": "free",
         "name": "무료",
         "price_krw": 0,
         "credits": 50,
-        "model_look": False,
+        "model_look": True,
         "blurb": "가볍게 시작",
     },
     "pro": {
@@ -3605,6 +3606,17 @@ class LiveCoordinate(BaseModel):
     weight: str | None = None
 
 
+class LiveLookOutfit(BaseModel):
+    id: str
+    item_ids: list[str] = []
+    label: str = ""
+
+
+class LiveLooks(BaseModel):
+    face_data_url: str
+    outfits: list[LiveLookOutfit] = []
+
+
 class LiveStatus(BaseModel):
     ids: list[str] = []
     status: str = "owned"
@@ -5609,6 +5621,30 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
     return stream_with_keepalive(work)
 
 
+@app.get("/api/live/orders/extension.zip")
+def live_orders_extension_zip(user: UserContext = Depends(current_user)) -> Response:
+    """구매내역 연결용 크롬 확장 폴더를 zip으로 내려준다. 설치 안내 문구 대신 버튼이 이 파일을 저장한다."""
+    root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "extensions", "lookbox-orders")
+    )
+    if not os.path.isdir(root):
+        raise HTTPException(status_code=404, detail="연결 파일이 없어요.")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for name in filenames:
+                if name.startswith("."):
+                    continue
+                full = os.path.join(dirpath, name)
+                rel = os.path.relpath(full, root)
+                zf.write(full, os.path.join("LOOKBOX 구매내역", rel))
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="LOOKBOX-orders.zip"'},
+    )
+
+
 @app.post("/api/live/orders/collect")
 def live_orders_collect(
     body: LiveOrderCollect, request: Request, user: UserContext = Depends(current_user)
@@ -5667,6 +5703,47 @@ def live_orders_collect(
         return {"items": items or []}
 
     return stream_with_keepalive(work)
+
+
+def _apply_model_looks(
+    user_id: str,
+    outfits: list[dict[str, Any]],
+    face_bytes: bytes | None,
+    by_id: dict[str, Any],
+) -> None:
+    """코디 목록에 착장 이미지를 채운다. 요금제가 아니라 남은 크레딧으로만 막는다."""
+    if not face_bytes or not outfits:
+        return
+    state = billing_state(user_id)
+    budget = state["remaining"] // CREDIT_COSTS["model_look"]
+    if budget <= 0:
+        print(f"[billing] model_look skipped, remaining={state['remaining']}", flush=True)
+        return
+    targets = [o for o in outfits if not o.get("lookImg")][:budget]
+    if not targets:
+        return
+    if len(targets) < len(outfits):
+        print(f"[billing] model_look limited to {len(targets)}/{len(outfits)}", flush=True)
+
+    def _one(outfit: dict[str, Any]) -> str | None:
+        members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
+        if not members:
+            return None
+        return generate_model_look_image(user_id, outfit["itemIds"], members, face_bytes)
+
+    with ThreadPoolExecutor(max_workers=4) as pool_ex:
+        for outfit, url in zip(targets, pool_ex.map(_one, targets)):
+            if url:
+                outfit["lookImg"] = url
+                spend_credits(user_id, "model_look", {"outfit": (outfit.get("label") or "")[:40]})
+                oid = outfit.get("id")
+                if oid and not str(oid).startswith("live-"):
+                    try:
+                        supabase_admin.table("outfits").update(
+                            {"look_image_url": url}
+                        ).eq("id", oid).eq("user_id", user_id).execute()
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[model-look] persist skip: {exc}", flush=True)
 
 
 @app.post("/api/live/coordinate")
@@ -5769,31 +5846,10 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     if outfits:
         spend_credits(user.id, "coordinate", {"count": len(outfits)})
 
-    # AI 착장 이미지 — 한 장에 20~30초라 4개를 순서대로 만들면 2분이 넘는다. 같이 돌린다.
-    # 원가가 코디 추천의 25배라 요금제로 가르고, 만든 장수만큼 크레딧을 받는다.
+    # AI 착장 이미지 — 한 장에 20~30초라 여러 장을 같이 돌린다. 요금제가 아니라
+    # 남은 크레딧으로만 막는다(무료도 장당 5크레딧).
     face_bytes = _decode_data_url(body.face_data_url) if body.model_look else None
-    targets: list[dict[str, Any]] = []
-    if face_bytes and outfits:
-        state = billing_state(user.id)
-        if not PLANS[state["plan"]]["model_look"]:
-            face_bytes = None
-            print(f"[billing] model_look blocked on plan={state['plan']}", flush=True)
-        else:
-            # 만들 수 있는 만큼만 만든다(남은 크레딧 안에서).
-            budget = state["remaining"] // CREDIT_COSTS["model_look"]
-            if budget < len(outfits):
-                print(f"[billing] model_look limited to {budget}/{len(outfits)}", flush=True)
-            targets = outfits[:budget]
-        if face_bytes and targets:
-            def _one(outfit: dict[str, Any]) -> str | None:
-                members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
-                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
-
-            with ThreadPoolExecutor(max_workers=4) as pool_ex:
-                for outfit, url in zip(targets, pool_ex.map(_one, targets)):
-                    if url:
-                        outfit["lookImg"] = url
-                        spend_credits(user.id, "model_look", {"outfit": outfit["label"][:40]})
+    _apply_model_looks(user.id, outfits, face_bytes, by_id)
 
     # 생성 결과를 저장한다. 실패해도 화면은 그대로 가게 하되(추천을 버리진 않는다)
     # id는 임시값으로 남아 저장·착용을 서버에 남길 수 없다는 걸 로그로 남긴다.
@@ -5825,6 +5881,37 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         "outfits": outfits,
         "items": [live_item_payload(row) for row in used.values()] + wish_items,
     }
+
+
+@app.post("/api/live/coordinate/looks")
+def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """이미 받아 둔 코디에 착장 이미지만 채운다. 추천을 다시 돌리지 않는다."""
+    require_supabase()
+    face_bytes = _decode_data_url(body.face_data_url)
+    if not face_bytes:
+        raise HTTPException(status_code=400, detail="얼굴 사진이 필요해요.")
+    owned = (
+        supabase_admin.table("wardrobe_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "owned")
+        .execute()
+        .data
+        or []
+    )
+    by_id = {row["id"]: row for row in owned}
+    outfits = [
+        {
+            "id": row.id,
+            "itemIds": row.item_ids,
+            "label": row.label or "",
+            "lookImg": None,
+        }
+        for row in (body.outfits or [])
+        if row.item_ids
+    ]
+    _apply_model_looks(user.id, outfits, face_bytes, by_id)
+    return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
 
 
 @app.get("/api/live/outfits")

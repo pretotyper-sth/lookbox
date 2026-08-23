@@ -849,6 +849,105 @@ function onThisComputer() {
   return /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
 }
 
+function looksLikeProductUrl(s) {
+  const t = String(s || '').trim();
+  if (!t) return false;
+  return /^(https?:\/\/)/i.test(t) || /^[\w.-]+\.[a-z]{2,}/i.test(t);
+}
+
+function splitProductUrls(text) {
+  return String(text || '').split(/[\n\r,;\s]+/).map((s) => s.trim()).filter(looksLikeProductUrl);
+}
+
+function toHttpsUrl(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return '';
+  return /^https?:\/\//i.test(t) ? t : ('https://' + t.replace(/^\/+/, ''));
+}
+
+function ConnectOrdersModal({ open, onClose, onReady }) {
+  const [phase, setPhase] = useS('ask'); // ask | save | check
+  const [busy, setBusy] = useS(false);
+  useE(() => {
+    if (open) { setPhase('ask'); setBusy(false); }
+  }, [open]);
+
+  const pingOk = () => extCall({ type: 'PING' }, 800).then(() => true).catch(() => false);
+
+  const onAllow = async () => {
+    setBusy(true);
+    const ok = await pingOk();
+    setBusy(false);
+    if (ok) { onReady(); return; }
+    setPhase('save');
+  };
+
+  const onSave = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/live/orders/extension.zip');
+      if (!res.ok) throw new Error('save');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'LOOKBOX 구매내역.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) { /* 저장에 실패해도 다음 화면에서 다시 확인할 수 있다 */ }
+    setBusy(false);
+    setPhase('check');
+  };
+
+  const onOpened = async () => {
+    setBusy(true);
+    const ok = await pingOk();
+    setBusy(false);
+    if (ok) onReady();
+  };
+
+  const title = phase === 'ask' ? '구매내역을 가져올까요?'
+    : phase === 'save' ? '연결 파일을 저장할게요'
+    : '저장한 파일을 열어 주세요';
+  const body = phase === 'ask' ? '크롬에 로그인된 쇼핑몰에서 산 옷 목록만 읽어요. 비밀번호는 받지 않아요.'
+    : phase === 'save' ? '한 번만 저장하면, 다음부터는 버튼만 누르면 가져와요.'
+    : '브라우저 아래 받은 파일을 누르면 크롬이 연결을 물어요. 허용을 누르면 끝나요.';
+  const cta = phase === 'ask' ? (busy ? '확인 중…' : '허용')
+    : phase === 'save' ? (busy ? '저장 중…' : '저장하기')
+    : (busy ? '확인 중…' : '열었어요');
+
+  return (
+    <BottomSheet open={open} onClose={onClose} zIndex={80} dismissOnScrim={!busy}>
+      <div className="lb-sheet-body" style={{ padding: '8px 24px 28px' }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>{title}</h2>
+        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all' }}>{body}</p>
+        <Btn
+          full
+          size="lg"
+          icon={phase === 'ask' ? 'bag' : (phase === 'save' ? 'plus' : 'check')}
+          disabled={busy}
+          onClick={phase === 'ask' ? onAllow : (phase === 'save' ? onSave : onOpened)}
+          style={{ marginTop: 22 }}
+        >
+          {cta}
+        </Btn>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          style={{
+            display: 'block', width: '100%', marginTop: 10, padding: '12px 8px',
+            fontSize: 14, fontWeight: 600, color: 'var(--ink-3)', background: 'none',
+          }}
+        >
+          나중에
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
 function extCall(payload, timeoutMs) {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
@@ -1003,8 +1102,10 @@ function AddSheet({ ctx }) {
   // input
   const [tab, setTab] = useS('photo');
   const [picked, setPicked] = useS(false);
-  const [url, setUrl] = useS('');
-  // 구매내역에서 가져온 후보 목록. URL 탭은 단건만 다룬다.
+  const [urls, setUrls] = useS(['']);
+  const urlFieldRefs = useR([]);
+  const [connectOpen, setConnectOpen] = useS(false);
+  // 구매내역에서 가져온 후보 목록. URL 탭은 여러 주소를 이 목록으로 넘길 수 있다.
   const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
   const [bulkResult, setBulkResult] = useS(null); // {ok, dup, fail, failed[], skipped[]}
@@ -1065,12 +1166,12 @@ function AddSheet({ ctx }) {
 
   const resetLocalDraft = () => {
     setPreviewFromFile(null);
-    setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrl(''); setFile(null); setHint(''); setShowHint(false);
+    setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrls(['']); setFile(null); setHint(''); setShowHint(false);
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
     setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
-    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null);
+    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null); setConnectOpen(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -1116,7 +1217,7 @@ function AddSheet({ ctx }) {
           itemId,
           sourceType: source.sourceType || tab,
           file: source.file || file,
-          url: source.url != null ? source.url : url,
+          url: source.url != null ? source.url : (urls.find((u) => u.trim()) || ''),
           extractHint: source.extractHint != null ? source.extractHint : hint,
           commit: false,
           onProgress: progress.report,
@@ -1130,7 +1231,7 @@ function AddSheet({ ctx }) {
       const data = await liveImportSource({
         sourceType: source.sourceType || tab,
         file: source.file || file,
-        url: source.url != null ? source.url : url,
+        url: source.url != null ? source.url : (urls.find((u) => u.trim()) || ''),
         status: anchor ? 'considering' : 'pending',
         extractHint: source.extractHint != null ? source.extractHint : hint,
         onProgress: progress.report,
@@ -1253,7 +1354,7 @@ function AddSheet({ ctx }) {
       return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '' };
     });
     setBulk(rows);
-    setUrl('');
+    setUrls(['']);
     setErr('');
     setBulkResult(null);
     setOrderNeedLogin(false);
@@ -1307,8 +1408,7 @@ function AddSheet({ ctx }) {
         return;
       }
       if (!onThisComputer() || typeof liveCollectOrders !== 'function') {
-        setOrderNeedExt(true);
-        setErr('크롬에서 한 번만 연결하면, 로그인된 쇼핑몰에서 주문 목록을 가져와요.');
+        setConnectOpen(true);
         return;
       }
       const data = await liveCollectOrders({ platform: orderShop });
@@ -1332,8 +1432,7 @@ function AddSheet({ ctx }) {
         return;
       }
       if (msg === 'NEED_SETUP' || msg === 'NO_EXT') {
-        setOrderNeedExt(true);
-        setErr('크롬에서 한 번만 연결하면, 로그인된 쇼핑몰에서 주문 목록을 가져와요.');
+        setConnectOpen(true);
         return;
       }
       setErr(msg || '주문 내역을 가져오지 못했어요.');
@@ -1341,10 +1440,36 @@ function AddSheet({ ctx }) {
       setOrderBusy(false);
     }
   };
-  const onUrlChange = (e) => {
-    setUrl(e.target.value);
+  const URL_ROW_MAX = 20;
+  const setUrlAt = (idx, value) => {
+    setUrls((prev) => prev.map((u, i) => (i === idx ? value : u)));
     setErr('');
   };
+  const addUrlRow = () => {
+    setUrls((prev) => (prev.length >= URL_ROW_MAX ? prev : prev.concat([''])));
+    setErr('');
+    requestAnimationFrame(() => {
+      const el = urlFieldRefs.current[urls.length];
+      if (el) el.focus();
+    });
+  };
+  const removeUrlRow = (idx) => {
+    setUrls((prev) => (prev.length <= 1 ? [''] : prev.filter((_, i) => i !== idx)));
+  };
+  const pasteUrlsAt = (idx, text) => {
+    const parts = splitProductUrls(text);
+    if (parts.length <= 1) return false;
+    setUrls((prev) => {
+      const next = prev.slice();
+      next[idx] = parts[0];
+      const extra = parts.slice(1);
+      const merged = next.concat(extra).slice(0, URL_ROW_MAX);
+      return merged.length ? merged : [''];
+    });
+    setErr('');
+    return true;
+  };
+  const filledUrls = urls.map((u) => toHttpsUrl(u)).filter(Boolean);
   const bulkPicked = (bulk || []).filter((b) => b.pick);
   const runBulk = async () => {
     if (!importOrders || !bulkPicked.length) return;
@@ -1377,7 +1502,7 @@ function AddSheet({ ctx }) {
     setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
   const canSubmit = tab === 'photo' ? !!file
-    : tab === 'url' ? !!url.trim()
+    : tab === 'url' ? filledUrls.length > 0
     : tab === 'orders' ? (bulk ? !!bulkPicked.length : !orderBusy)
     : false;
   const onSubmitAdd = async () => {
@@ -1391,18 +1516,30 @@ function AddSheet({ ctx }) {
       return;
     }
     if (tab !== 'url' && tab !== 'orders') return;
-    const raw = url.trim();
-    if (!raw) { setErr('상품 URL을 입력해 주세요'); return; }
-    const blocked = urlImportBlockedHint(raw);
-    if (blocked) {
-      setErr(blocked);
+    if (!filledUrls.length) { setErr('상품 URL을 입력해 주세요'); return; }
+    const blockedOne = filledUrls.map(urlImportBlockedHint).find(Boolean);
+    if (blockedOne && filledUrls.length === 1) {
+      setErr(blockedOne);
       return;
     }
-    const normalized = /^https?:\/\//i.test(raw) ? raw : ('https://' + raw.replace(/^\/+/, ''));
-    if (normalized !== raw) setUrl(normalized);
+    const usable = filledUrls.filter((u) => !urlImportBlockedHint(u));
+    if (!usable.length) {
+      setErr(blockedOne || '이 주소는 사진으로 추가해 주세요');
+      return;
+    }
     rememberExtractHint(hint);
     setHintHistory(readExtractHints());
-    await runDetect({ sourceType: 'url', url: normalized, extractHint: hint });
+    if (usable.length === 1) {
+      await runDetect({ sourceType: 'url', url: usable[0], extractHint: hint });
+      return;
+    }
+    applyCollectedRows(usable.map((u) => ({
+      url: u,
+      name: '',
+      store: '',
+      price: '',
+      purchasedAt: '',
+    })));
   };
 
   // ---- clipboard paste (PC: Ctrl/⌘+V, 모바일: 꾹 눌러 붙여넣기) ----
@@ -1616,7 +1753,9 @@ function AddSheet({ ctx }) {
             <div style={{ marginTop: 'var(--s5)' }}>
               {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
               {(() => {
-                const panelH = 168;
+                const STAGE_H = 168;
+                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역은 이 칸까지 박스를 키운다
+                const panelH = tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',
@@ -1919,39 +2058,71 @@ function AddSheet({ ctx }) {
                             </button>
                           ))}
                         </div>
-                        {orderNeedExt ? (
-                          <ol style={{
-                            margin: 'var(--s4) 0 0', padding: '0 0 0 18px', fontSize: 12.5, color: 'var(--ink-2)',
-                            lineHeight: 1.55, wordBreak: 'keep-all',
-                          }}>
-                            <li>크롬 주소창에 chrome://extensions 를 엽니다.</li>
-                            <li>오른쪽 위 개발자 모드를 켭니다.</li>
-                            <li>압축해제된 확장 프로그램 로드에서 extensions/lookbox-orders 폴더를 고릅니다.</li>
-                          </ol>
-                        ) : null}
                       </div>
                     ) : (
-                      <div style={{ ...stagePanel, display: 'flex', flexDirection: 'column' }}>
-                        <input
-                          type="url"
-                          value={url}
-                          onChange={onUrlChange}
-                          placeholder="https://…"
-                          inputMode="url"
-                          autoCapitalize="off"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          className="lb-input"
-                          style={{
-                            width: '100%', height: 48, flex: 'none',
-                            padding: '0 var(--s4)',
-                            background: 'var(--ivory)',
-                            border: '1.5px dashed var(--line-2)',
-                            borderRadius: 'var(--r-md)',
-                            color: 'var(--ink)', fontSize: 14, lineHeight: '48px',
-                            outline: 'none', boxSizing: 'border-box',
-                          }}
-                        />
+                      <div className="lb-scrollable" style={{
+                        ...stagePanel, display: 'flex', flexDirection: 'column', gap: 8,
+                        overflow: 'auto', paddingRight: 2,
+                      }}>
+                        {urls.map((value, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 8, flex: 'none' }}>
+                            <input
+                              ref={(el) => { urlFieldRefs.current[idx] = el; }}
+                              type="url"
+                              value={value}
+                              onChange={(e) => setUrlAt(idx, e.target.value)}
+                              onPaste={(e) => {
+                                const text = e.clipboardData && e.clipboardData.getData('text');
+                                if (text && pasteUrlsAt(idx, text)) e.preventDefault();
+                              }}
+                              placeholder="https://…"
+                              inputMode="url"
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              className="lb-input"
+                              style={{
+                                width: '100%', height: 48, flex: 1, minWidth: 0,
+                                padding: '0 var(--s4)',
+                                background: 'var(--ivory)',
+                                border: '1.5px dashed var(--line-2)',
+                                borderRadius: 'var(--r-md)',
+                                color: 'var(--ink)', fontSize: 14, lineHeight: '48px',
+                                outline: 'none', boxSizing: 'border-box',
+                              }}
+                            />
+                            {urls.length > 1 ? (
+                              <button
+                                type="button"
+                                aria-label="이 주소 지우기"
+                                onClick={() => removeUrlRow(idx)}
+                                style={{
+                                  width: 48, height: 48, flex: 'none', borderRadius: 'var(--r-md)',
+                                  background: 'var(--ivory)', color: 'var(--ink-3)',
+                                  boxShadow: 'inset 0 0 0 1px var(--line)',
+                                  display: 'grid', placeItems: 'center',
+                                }}
+                              >
+                                <Icon name="x" size={16} />
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                        {urls.length < URL_ROW_MAX ? (
+                          <button
+                            type="button"
+                            onClick={addUrlRow}
+                            style={{
+                              height: 40, flex: 'none', borderRadius: 'var(--r-md)',
+                              background: 'transparent', color: 'var(--ink-2)',
+                              boxShadow: 'inset 0 0 0 1.5px dashed var(--line-2)',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              gap: 6, fontSize: 13, fontWeight: 600,
+                            }}
+                          >
+                            <Icon name="plus" size={15} /> 주소 추가
+                          </button>
+                        ) : null}
                       </div>
                     )}
 
@@ -1989,15 +2160,17 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
+                    {tab !== 'orders' && (
+                    <>
                     <div style={{
                       marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
-                      visibility: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'hidden' : 'visible',
-                      pointerEvents: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'none' : 'auto',
-                    }} aria-hidden={tab === 'tryon' || tab === 'orders' || tabLocked}>
+                      visibility: (tab === 'tryon' || tabLocked) ? 'hidden' : 'visible',
+                      pointerEvents: (tab === 'tryon' || tabLocked) ? 'none' : 'auto',
+                    }} aria-hidden={tab === 'tryon' || tabLocked}>
                       <button
                         type="button"
                         onClick={() => setShowHint((v) => !v)}
-                        tabIndex={tab === 'tryon' || tab === 'orders' ? -1 : undefined}
+                        tabIndex={tab === 'tryon' ? -1 : undefined}
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
                           fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
@@ -2011,11 +2184,7 @@ function AddSheet({ ctx }) {
                       </button>
                     </div>
                     {showHint && tab !== 'tryon' && (
-                      <div style={{
-                        marginTop: 'var(--s4)',
-                        visibility: tab === 'orders' ? 'hidden' : 'visible',
-                        pointerEvents: tab === 'orders' ? 'none' : 'auto',
-                      }} aria-hidden={tab === 'orders'}>
+                      <div style={{ marginTop: 'var(--s4)' }}>
                         {hintHistory.length > 0 && (
                           <div style={{ marginBottom: 'var(--s5)' }}>
                             <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>최근에 쓴 힌트</div>
@@ -2061,6 +2230,8 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </div>
+                    )}
+                    </>
                     )}
 
                     <div style={{ marginTop: 'var(--s5)', minHeight: 52 }}>
@@ -2324,15 +2495,13 @@ function AddSheet({ ctx }) {
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>
-
-            <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
-              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>{steps.length <= 1 ? '취소' : '건너뛰기'}</Btn>
-              <Btn full icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
-                {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
-              </Btn>
-            </div>
           </div>
         )}
+      <ConnectOrdersModal
+        open={connectOpen}
+        onClose={() => setConnectOpen(false)}
+        onReady={() => { setConnectOpen(false); startOrderCollect(); }}
+      />
       </div>
     </BottomSheet>
   );

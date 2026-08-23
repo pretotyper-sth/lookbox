@@ -10,11 +10,13 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Features
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. 100%에서도 핀치가 먹게 touch-action none
-- [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함, 광고 미노출 설명은 화면에 안 씀
-- [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 버전은 날짜만
+- [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
+- [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 버전은 날짜만. 차감 목록은 요금제 시트
+- [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림(장당 5크레딧). 이미 받은 코디에도 lookImg를 채움
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 마이페이지 바로 보기는 설정 시트를 연 채 이미지를 보여 줌
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음
-- [add-item-bulk](add-item-bulk.md) — URL 탭은 주소 하나. 여러 개는 구매내역 탭. 모바일 잠금
+- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 구매내역 박스는 힌트 칸까지. 연결은 별도 시트
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷을 고른다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼
 - [stacked-product-hero](stacked-product-hero.md) — 세로로 붙은 상세컷은 정면 전신 한 칸만 잘라 등록한다

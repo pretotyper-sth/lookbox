@@ -37,7 +37,7 @@ class PlanShapeTest(unittest.TestCase):
         self.assertEqual(self.ns["DEFAULT_PLAN"], "free")
         self.assertEqual(plans["free"]["price_krw"], 0)
         self.assertGreater(plans["free"]["credits"], 0)          # 써볼 수는 있어야 한다
-        self.assertFalse(plans["free"]["model_look"])            # 제일 비싼 기능은 유료
+        self.assertTrue(plans["free"]["model_look"])             # 착장은 크레딧으로 열고, 요금제로 잠그지 않는다
 
     def test_paid_plan_gives_more_for_more(self):
         plans = self.ns["PLANS"]
