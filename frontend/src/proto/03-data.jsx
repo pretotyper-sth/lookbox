@@ -126,6 +126,13 @@ const STYLES = [
   { id: 'hiphop',  name: '힙합',     en: 'HIPHOP',    desc: '자유분방한 힙합 무드',     img: R('styleHiphop', 'app/img/style-hiphop.png') },
   { id: 'y2k',     name: 'Y2K',      en: 'Y2K',       desc: '과감한 2000년대 무드',     img: R('styleY2k', 'app/img/style-y2k.png') },
   { id: 'preppy',  name: '프레피',   en: 'PREPPY',    desc: '단정한 캠퍼스 무드',       img: R('stylePreppy', 'app/img/style-preppy.png') },
+  { id: 'blockcore', name: '블록코어', en: 'BLOCKCORE', desc: '스포츠 저지 레이어드 무드', img: R('styleBlockcore', 'app/img/style-blockcore.png') },
+  { id: 'bodyfit', name: '바디핏',   en: 'BODY FIT',  desc: '몸에 붙는 애슬레저 무드',   img: R('styleBodyfit', 'app/img/style-bodyfit.png') },
+  { id: 'bizcasual', name: '비즈니스 캐주얼', en: 'BIZ CASUAL', desc: '단정한 오피스 무드', img: R('styleBizcasual', 'app/img/style-bizcasual.png') },
+  // 아래 셋은 선택한 성별이 여성일 때만 무드 목록에 나온다 (gender 필드로 구분).
+  { id: 'girlish', name: '걸리시',   en: 'GIRLISH',   desc: '사랑스러운 러블리 무드',   img: R('styleGirlish', 'app/img/style-girlish.png'), gender: '여성' },
+  { id: 'glam',    name: '섹시 · 글램', en: 'GLAM',   desc: '과감하고 화려한 무드',     img: R('styleGlam', 'app/img/style-glam.png'), gender: '여성' },
+  { id: 'feminine', name: '페미닌', en: 'FEMININE',  desc: '부드럽고 여성스러운 무드', img: R('styleFeminine', 'app/img/style-feminine.png'), gender: '여성' },
 ];
 
 // 선호 핏 · 선호 컬러 (옷 추천에 사용)

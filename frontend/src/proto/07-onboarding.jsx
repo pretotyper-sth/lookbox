@@ -580,7 +580,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
     valid: () => d.styles.length >= 1,
     render: () => (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {LB_DATA.STYLES.map((s, idx) => (
+        {LB_DATA.STYLES.filter((s) => !s.gender || s.gender === d.gender).map((s, idx) => (
           <StyleCard key={s.id} style={s} eager={idx < 4} selected={d.styles.includes(s.id)}
             onToggle={() => set('styles')(d.styles.includes(s.id) ? d.styles.filter((x) => x !== s.id) : [...d.styles, s.id])} />
         ))}

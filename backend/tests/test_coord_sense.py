@@ -55,6 +55,11 @@ class StyleAttrTest(unittest.TestCase):
         self.assertEqual(self.ns["_clean_style_attrs"]({"formality": 9}), {})
         self.assertEqual(self.ns["_clean_style_attrs"]("nope"), {})
 
+    def test_new_mood_ids_are_known(self):
+        ids = self.ns["_STYLE_IDS"]
+        for s in ("blockcore", "bodyfit", "bizcasual", "girlish", "glam", "feminine"):
+            self.assertIn(s, ids)
+
     def test_catalog_line_carries_hidden_attributes(self):
         line = self.ns["_catalog_line"](item(
             cat="bottom", color="블랙", name="와이드 팬츠",

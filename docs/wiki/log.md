@@ -34,3 +34,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 `_profile_block`의 키·몸무게 문장을 뺀다. 그림뿐 아니라 코디 설명에도 체형을
 넣지 않는다. [[profile-height-weight]]
 
+## [2026-08-23] ingest | 무드 6종 추가
+블록코어·바디핏·비즈니스 캐주얼 + 여성 전용 걸리시·글램·페미닌.
+카드 WebP와 `_STYLE_IDS`를 맞춤([[mood-groups]]).
+
