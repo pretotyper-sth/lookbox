@@ -1,11 +1,13 @@
-# 바로 보기 이미지는 설정 시트를 연 채로 보여 준다
+# 마이페이지 바로 보기는 원래 사진 팝업이다
 
-마이페이지 `바로 보기 이미지`는 프로필로 전신을 만든 뒤 토스트만 반복하지 않는다.
-`openTryOnSetup(null, { settings: true })`로 `TryOnSetupOverlay`를 연다. 이미 만든
-전신/프레임이 있으면 비우기 화면이 채워진 채 뜬다. 없으면 프사로 만든 다음 그 시트를
-유지한다(`09-app.jsx` `openTryOnSetup`, `tryOnSetupAsSettings`).
+설정 `바로 보기 이미지`는 상의·하의를 체크무늬로 지우는 시트를 열지 않는다.
+`openTryOnTab()`으로 추가 시트의 바로 보기 탭을 연다. 프사가 없으면 예전처럼
+「프로필 사진 올리기」다. 프사가 있으면 그 탭 미리보기만 전신 이미지로 채운다
+(`makeTryOnBody`, `prefs.tryOnBody`). 나머지 탭·버튼은 그대로다.
 
-PC에서 설정으로 연 시트의 저장은 카메라를 열지 않고 시트를 닫지 않는다.
-조합 흐름에서 연 저장만 모바일 카메라 / PC 안내 토스트를 탄다.
+바로 보기의 구멍은 편집 화면이 아니라 카메라에서 뚫린다. 전신 사진에서 옷 자리만
+투명하게 비워 후면 카메라가 그 사이로 비친다. 매장에서 종이 옷 본을 대고 보는
+느낌이다 (`10-tryon.jsx` `punchBody`, `TryOnCameraOverlay`).
 
-근거: `frontend/src/proto/08-mypage.jsx` `tryOnRow`; `10-tryon.jsx` `making`.
+근거: `frontend/src/proto/08-mypage.jsx` `tryOnRow`; `04-screens-ab.jsx` `tryOnPreview`;
+`09-app.jsx` `startTryOn`.

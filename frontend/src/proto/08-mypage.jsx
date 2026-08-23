@@ -482,14 +482,16 @@ function MyPageScreen({ ctx }) {
   );
 
   // 전신 사진을 직접 올리지 않아도 되게, 프로필 사진으로 만들어 준다(퍼스널 컬러와 같은 방식).
+  // 설정에서는 상의·하의를 지우는 시트를 열지 않는다. 원래처럼 바로 보기 탭을 연다.
+  // 프사가 있으면 그 탭 미리보기만 전신 이미지로 채운다.
   const tryOnRow = (
     <ActionRow
       icon="cutout"
       label="바로 보기 이미지"
       onClick={() => {
         if (tryOnMaking) return;
-        if (openTryOnSetup) openTryOnSetup(null, { settings: true });
-        else if (openTryOnTab) openTryOnTab();
+        if (prefs.avatar && makeTryOnBody && !prefs.tryOnBody) makeTryOnBody({ silent: true });
+        if (openTryOnTab) openTryOnTab();
       }}
     />
   );

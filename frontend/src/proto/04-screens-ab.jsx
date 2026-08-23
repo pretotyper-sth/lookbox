@@ -1102,7 +1102,8 @@ function AddSheet({ ctx }) {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
-    openTryOn, openTryOnSetup, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
+    openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
+    tryOnMaking,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
@@ -1345,16 +1346,15 @@ function AddSheet({ ctx }) {
     setTryOnErr('');
     setTryOnCleared(true);
   };
-  const tryOnPreview = tryOnLocal || (!tryOnCleared && prefs && prefs.tryOnFrame) || '';
+  const tryOnPreview = tryOnLocal || (!tryOnCleared && prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '';
   const canTryOn = !!tryOnPreview;
   const onTryOnSubmit = () => {
     if (wide || tryOnChecking || !canTryOn) return;
-    if (tryOnLocal) {
-      closeAdd();
-      openTryOnSetup && openTryOnSetup(tryOnLocal);
+    closeAdd();
+    if (typeof startTryOn === 'function') {
+      startTryOn({ body: tryOnPreview, frame: tryOnPreview, cut: 'auto' });
       return;
     }
-    closeAdd();
     openTryOn && openTryOn();
   };
   // 붙여넣기·입력에서 상품이 2개 이상 잡히면 단건 입력을 후보 목록으로 바꾼다.
@@ -1834,20 +1834,20 @@ function AddSheet({ ctx }) {
                           <div
                             role="button"
                             tabIndex={0}
-                            onClick={() => { if (!tryOnChecking && tryOnFileRef.current) tryOnFileRef.current.click(); }}
+                            onClick={() => { if (!tryOnChecking && !tryOnMaking && tryOnFileRef.current) tryOnFileRef.current.click(); }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
-                                if (!tryOnChecking && tryOnFileRef.current) tryOnFileRef.current.click();
+                                if (!tryOnChecking && !tryOnMaking && tryOnFileRef.current) tryOnFileRef.current.click();
                               }
                             }}
                             className="lb-drop"
-                            style={{ ...dropBase, cursor: tryOnChecking ? 'wait' : 'pointer' }}
+                            style={{ ...dropBase, cursor: (tryOnChecking || tryOnMaking) ? 'wait' : 'pointer' }}
                           >
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none', padding: '0 16px' }}>
-                              <Icon name={tryOnChecking ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
+                              <Icon name={(tryOnChecking || tryOnMaking) ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
                               <span style={{ fontSize: 14, fontWeight: 600 }}>
-                                {tryOnChecking ? '사진 확인 중…' : '프로필 사진 올리기'}
+                                {tryOnMaking ? '바로 보기 이미지를 만들고 있어요…' : tryOnChecking ? '사진 확인 중…' : '프로필 사진 올리기'}
                               </span>
                               <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
                                 얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)

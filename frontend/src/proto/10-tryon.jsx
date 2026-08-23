@@ -66,6 +66,39 @@ const TRYON_MODES = [
   { id: 'full', label: '전체' },
 ];
 
+function punchShirt(ctx, w, h) {
+  const x = (n) => n * w;
+  const y = (n) => n * h;
+  ctx.beginPath();
+  ctx.moveTo(x(0.28), y(0.30));
+  ctx.quadraticCurveTo(x(0.50), y(0.18), x(0.72), y(0.30));
+  ctx.lineTo(x(0.92), y(0.34));
+  ctx.lineTo(x(0.86), y(0.44));
+  ctx.lineTo(x(0.70), y(0.40));
+  ctx.lineTo(x(0.72), y(0.54));
+  ctx.lineTo(x(0.28), y(0.54));
+  ctx.lineTo(x(0.30), y(0.40));
+  ctx.lineTo(x(0.14), y(0.44));
+  ctx.lineTo(x(0.08), y(0.34));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function punchPants(ctx, w, h) {
+  const x = (n) => n * w;
+  const y = (n) => n * h;
+  ctx.beginPath();
+  ctx.moveTo(x(0.30), y(0.52));
+  ctx.lineTo(x(0.70), y(0.52));
+  ctx.lineTo(x(0.72), y(0.84));
+  ctx.lineTo(x(0.56), y(0.84));
+  ctx.lineTo(x(0.50), y(0.62));
+  ctx.lineTo(x(0.44), y(0.84));
+  ctx.lineTo(x(0.28), y(0.84));
+  ctx.closePath();
+  ctx.fill();
+}
+
 async function punchBody(src, mode) {
   const img = await loadImage(src, !src.startsWith('data:'));
   const canvas = document.createElement('canvas');
@@ -73,19 +106,11 @@ async function punchBody(src, mode) {
   canvas.height = img.naturalHeight || img.height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  const w = canvas.width;
-  const h = canvas.height;
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
-  const hole = (cx, cy, rx, ry) => {
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  // 전신 컷 기준 대략의 상·하의 자리. 카메라에서 몸을 맞추는 용도라 정확할 필요는 없다.
-  if (mode === 'top') hole(w * 0.5, h * 0.37, w * 0.30, h * 0.15);
-  else if (mode === 'bottom') hole(w * 0.5, h * 0.66, w * 0.26, h * 0.19);
-  else { hole(w * 0.5, h * 0.37, w * 0.30, h * 0.15); hole(w * 0.5, h * 0.66, w * 0.26, h * 0.19); }
+  // 종이에서 옷을 오려 낸 자리. 카메라가 그 구멍으로 비친다.
+  if (mode === 'top' || mode === 'full') punchShirt(ctx, canvas.width, canvas.height);
+  if (mode === 'bottom' || mode === 'full') punchPants(ctx, canvas.width, canvas.height);
   ctx.restore();
   return canvas.toDataURL('image/png');
 }
@@ -139,36 +164,19 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
       setBodySrc('');
       return undefined;
     }
-    // 조합 시트 등에서 이미 고른 전신 사진이 있으면 앨범 없이 바로 비우기.
+    // 상의·하의를 체크무늬로 지우는 단계는 쓰지 않는다. 사진만 넘기고 카메라가 구멍을 뚫는다.
     if (seedBody) {
-      setBodySrc(seedBody);
-      setCut('top');
-      pendingPunch.current = 'top';
-      setPhase('cut');
-      setBootKey((k) => k + 1);
+      onSave({ body: seedBody, frame: seedBody, cut: 'auto' });
       return undefined;
     }
     if (initialBody && initialFrame) {
-      setBodySrc(initialBody);
-      setCut(initialCut || 'custom');
-      pendingPunch.current = null;
-      setPhase('cut');
-      setBootKey((k) => k + 1);
-    } else {
-      // 마이페이지 등: 시트만 열고 곧바로 앨범.
-      setBodySrc('');
-      setCut('top');
-      pendingPunch.current = 'top';
-      setPhase('idle');
-      baseRef.current = null;
-      autoPicked.current = false;
-      const t = setTimeout(() => {
-        if (autoPicked.current) return;
-        autoPicked.current = true;
-        if (fileRef.current) fileRef.current.click();
-      }, 80);
-      return () => clearTimeout(t);
+      onSave({ body: initialBody, frame: initialFrame, cut: initialCut || 'auto' });
+      return undefined;
     }
+    setBodySrc('');
+    setCut('top');
+    setPhase('idle');
+    baseRef.current = null;
     return undefined;
   }, [open, initialBody, initialFrame, initialCut, seedBody, making]);
 
@@ -231,11 +239,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
         setPhase('idle');
         return;
       }
-      setBodySrc(dataUrl);
-      setCut('top');
-      pendingPunch.current = 'top';
-      setPhase('cut');
-      setBootKey((k) => k + 1);
+      onSave({ body: dataUrl, frame: dataUrl, cut: 'auto' });
     } catch (err) {
       setError(err.message || '사진을 확인하지 못했어요.');
       setPhase('idle');

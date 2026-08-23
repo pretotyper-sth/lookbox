@@ -771,6 +771,12 @@ function App() {
       if (url) setTryOnSeedBody(url);
     }
   };
+  // 전신 사진을 저장한 뒤 바로 카메라를 연다. 상의·하의 구멍을 손으로 지우는 시트는 거치지 않는다.
+  const startTryOn = (payload) => {
+    if (payload && (payload.body || payload.frame)) setTryOnFrame(payload);
+    if (wide) { setTryOnDesktopHint(true); return; }
+    setTryOnCamera(true);
+  };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => {
     prefsSynced.current = false;   // 다음 로그인에서 계정 설정을 읽기 전까지 계정에 쓰지 않는다
@@ -794,12 +800,12 @@ function App() {
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
     if (!prefs.tryOnFrame) {
-      // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 사진을 고르게 한다.
+      // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (prefs.avatar) {
         const made = await makeTryOnBody();
         if (made) { setTryOnCamera(true); return; }
       }
-      openTryOnSetup();
+      openTryOnTab();
       return;
     }
     setTryOnCamera(true);
@@ -1990,7 +1996,7 @@ function App() {
       .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, openTryOnTab, setTryOnFrame, makeTryOnBody, tryOnMaking,
+    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, tryOnMaking,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -2200,7 +2206,7 @@ function App() {
         frameSrc={prefs.tryOnFrame}
         bodySrc={prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : ''}
         onClose={() => setTryOnCamera(false)}
-        onEdit={() => { setTryOnCamera(false); openTryOnSetup(); }}
+        onEdit={() => { setTryOnCamera(false); openTryOnTab(); }}
       />
       <TryOnDesktopSheet open={tryOnDesktopHint} onClose={() => setTryOnDesktopHint(false)} />
 
