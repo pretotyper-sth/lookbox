@@ -97,3 +97,6 @@ URL 탭은 +로 입력칸을 늘리고 박스가 커지면 안에서 스크롤�
 장당 5크레딧으로 열리고, 이미 받은 코디에도 lookImg를 채운다([[model-look-toggle]]).
 마이페이지 바로 보기는 토스트만 반복하지 않고 설정 시트를 연 채 이미지를 보여 준다([[tryon-setup-from-mypage]]).
 
+## [2026-08-23] ingest | 담기 버튼 복구
+URL로 상품이 떠도 `register`에 「담고 완료」가 없었다. `ConnectOrdersModal`을 AddSheet 안에 넣으며 버튼을 지운 탓이다. 바닥에 다시 붙였다 ([[add-item-bulk]]).
+

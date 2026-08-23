@@ -2495,6 +2495,20 @@ function AddSheet({ ctx }) {
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>
+
+            <div style={{
+              marginTop: 'var(--s7)', display: 'flex', gap: 10,
+              position: 'sticky', bottom: 0, zIndex: 1,
+              padding: '12px 0 4px',
+              background: 'var(--surface)',
+            }}>
+              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
+                {steps.length <= 1 ? '취소' : '건너뛰기'}
+              </Btn>
+              <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
+                {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
+              </Btn>
+            </div>
           </div>
         )}
       <ConnectOrdersModal
