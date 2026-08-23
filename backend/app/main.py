@@ -14,7 +14,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 import truststore
@@ -991,14 +991,10 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 촬영 형태(옷장 카드를 정면 상품컷으로 통일하는 데 쓰인다):
 - shot: product = 사람 없이 옷만 있는 상품컷·플랫레이. worn = 사람이 입거나 들고 있음(마네킹 포함).
   detail = 원단·디테일 부분 확대라 아이템 전체 형태가 안 보임.
-- angle: 주 아이템을 보는 방향. 조금이라도 틀어져 있으면 front가 아니다.
-  front = 앞판 전체가 정면으로 보이고 좌우가 거의 대칭. 바지면 두 가랑이가 나란히 벌어져 보이고
-    양쪽 다리 폭이 비슷하다. 상의면 양 소매가 좌우로 다 보이고 앞단추·지퍼 라인이 화면 중앙에 수직.
-  side = 측면이거나 3/4 사선. 다음 중 하나라도 해당하면 side다:
-    · 바지: 두 다리가 겹쳐 보이거나 한쪽 다리만 보인다 / 옆선(사이드 심)이 실루엣 윤곽으로 보인다
-      / 허리 앞단추가 중앙이 아니라 한쪽으로 치우쳐 있다 / 밑단이 사선으로 어긋나 있다
-    · 상의: 한쪽 어깨·소매만 보인다 / 앞단추 라인이 중앙에서 벗어나 기울어 있다 / 옆구리 실루엣이 보인다
-    · 신발: 옆모습(프로파일)만 보인다
+- angle: 주 아이템을 보는 방향. shot이 product이면 앞판이 보이면 front.
+  살짝 기울거나 좌우가 조금 비대칭인 상품컷도 front다. 완전히 옆모습일 때만 side.
+  front = 앞판이 보이고 아이템 전체 실루엣이 드러남.
+  side = 측면 프로파일(한쪽 소매만, 옆선이 실루엣, 앞판이 거의 안 보임) 또는 착장 3/4 사선.
   back = 뒷면(등판·뒤포켓 위주). unclear = 접혀 있거나 가려져 방향 판단 불가.
 - front_ok: 이 사진만 보고 '정면에서 본 이 아이템의 상품컷'을 그려낼 수 있는지.
   true: 아이템 전체 실루엣과 색·패턴·주요 디테일이 충분히 보인다 (측면·착장이어도 형태가 파악되면 true).
@@ -1149,7 +1145,8 @@ _RIM_DEPTH = 7  # 스튜디오 컷 경계 띠를 연속 알파로 되찾는 최�
 _ALPHA_RAMP = 110  # 알파 재임계 램프 폭 — 좁으면 계단이 남고, 넓으면 테두리가 번진다
 _BLEED_DEPTH = 8  # 리샘플 보간 커널이 닿는 범위를 덮을 만큼 원단 색을 투명 쪽으로 번지게
 _BG_NORM_VERSION = "cutout_v11"  # v11: 레터박스 트리밍 + 불투명 결과도 스튜디오 컷아웃
-_EXTRACTION_PROFILE = "extract_v13"  # v13: 상품컷은 누끼만, 글자 재생성은 gpt-image-2
+_EXTRACTION_PROFILE = "extract_v14"  # v14: 어두운 상품컷 JPEG 링잉 헤일로 제거
+_FRINGE_MAX_STEPS = 16  # 어두운 옷 실루엣의 판색 혼합대를 배경으로 흡수하는 최대 깊이(px)
 
 # 추출 컷 정규화 캔버스: 경로·모델마다 여백이 제각각이라 카드 크기가 들쭉날쭉해지는 것 방지.
 # 값 = 정사각 캔버스에서 아이템의 긴 변이 차지하는 비율 (같은 카테고리 = 같은 체감 크기)
@@ -1577,6 +1574,153 @@ def _bleed_edge_colors(img: Image.Image, depth: int) -> None:
             frontier.append((nx, ny, dep + 1))
 
 
+def _is_plate_fringe(
+    r: int, g: int, b: int, d: int, local_plate: float, body_luma: float, max_d: int
+) -> bool:
+    """판과 어두운 원단 사이 혼합/링잉 픽셀이면 True. 라벨·유채색 디테일은 False."""
+    luma = (r + g + b) / 3.0
+    if luma >= local_plate + 8:
+        return False
+    if max(r, g, b) - min(r, g, b) > 36 and d > 20:
+        return False
+    luma_cut = body_luma + 0.28 * (local_plate - body_luma)
+    return d <= max_d and luma >= luma_cut
+
+
+def _fill_enclosed_bg(
+    mask: bytes | bytearray,
+    bg_set: bytearray,
+    hole_set: bytearray,
+    boundary: deque,
+    w: int,
+    h: int,
+    obj_area: int,
+    reach: int,
+    hole_cap: int,
+    holes_total: int,
+) -> int:
+    """mask가 표시한 픽셀 중 테두리에 안 닿는 작은 연결 성분을 배경 구멍으로 넣는다."""
+    for _pass in (0, 1):
+        shrink = 4
+        sw, sh = max(1, w // shrink), max(1, h // shrink)
+        near = (
+            Image.frombytes("L", (w, h), bytes(bg_set))
+            .point(lambda v: 255 if v else 0)
+            .resize((sw, sh), Image.BOX)
+            .point(lambda v: 255 if v else 0)
+        )
+        for _ in range(max(1, (reach // shrink + 1) // 2)):
+            near = near.filter(ImageFilter.MaxFilter(5))
+        near_bytes = near.resize((w, h), Image.NEAREST).tobytes()
+        seen = bytearray(w * h)
+        found = 0
+        for idx, v in enumerate(mask):
+            if not v or bg_set[idx] or seen[idx]:
+                continue
+            comp = [idx]
+            seen[idx] = 1
+            touches_border = False
+            dq: deque[int] = deque(comp)
+            while dq:
+                i = dq.popleft()
+                ix, iy = i % w, i // w
+                if ix == 0 or iy == 0 or ix == w - 1 or iy == h - 1:
+                    touches_border = True
+                for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
+                    if not (0 <= nx < w and 0 <= ny < h):
+                        continue
+                    j = ny * w + nx
+                    if seen[j] or bg_set[j] or not mask[j]:
+                        continue
+                    seen[j] = 1
+                    comp.append(j)
+                    dq.append(j)
+            if touches_border or len(comp) < 12 or len(comp) > hole_cap:
+                continue
+            if holes_total + len(comp) > obj_area * 0.2:
+                continue
+            if not any(near_bytes[i] for i in comp):
+                continue
+            holes_total += len(comp)
+            found += len(comp)
+            for i in comp:
+                bg_set[i] = 1
+                hole_set[i] = 1
+                boundary.append((i % w, i // w, 0))
+        if not found:
+            break
+    return holes_total
+
+
+def _absorb_plate_fringe(
+    px: Any,
+    bg_set: bytearray,
+    diff_px: Any,
+    bgmap_px: Any,
+    w: int,
+    h: int,
+) -> None:
+    """어두운 옷 실루엣에 남은 판색 혼합 픽셀을 배경으로 흡수한다 (제자리).
+
+    스튜디오 플러드필의 tol은 판 노이즈에 맞춘 값이다. 어두운 원단과 밝은 판
+    사이 JPEG 링잉·안티에일리어싱 혼합대는 tol을 넘어 '옷'으로 남고, 카드·확대
+    보기에서 지글거리는 흰 테두리가 된다. 밝은 원단은 판과 값이 겹치므로
+    건드리지 않는다. 판보다 밝은 픽셀(라벨·흰 스티치)도 보호한다.
+    """
+    step = max(1, min(w, h) // 90)
+    body_lumas: list[float] = []
+    body_diffs: list[int] = []
+    plate_lumas: list[float] = []
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            pr, pg, pb = bgmap_px[x, y]
+            plate_lumas.append((pr + pg + pb) / 3.0)
+            if bg_set[y * w + x]:
+                continue
+            r, g, b, _a = px[x, y]
+            body_lumas.append((r + g + b) / 3.0)
+            body_diffs.append(int(diff_px[x, y]))
+    if len(body_lumas) < 8 or not plate_lumas:
+        return
+    body_luma = sorted(body_lumas)[len(body_lumas) // 2]
+    sep = sorted(body_diffs)[len(body_diffs) // 2]
+    plate_luma = sorted(plate_lumas)[len(plate_lumas) // 2]
+    # 밝은 니트·흰 셔츠는 판과 원단이 겹친다. 혼합대 흡수는 고대비일 때만.
+    if sep < 70 or plate_luma - body_luma < 60:
+        return
+
+    frontier: deque[tuple[int, int, int]] = deque()
+    seen = bytearray(w * h)
+    for i, is_bg in enumerate(bg_set):
+        if not is_bg:
+            continue
+        x, y = i % w, i // w
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not bg_set[ny * w + nx]:
+                frontier.append((x, y, 0))
+                break
+
+    max_d = max(24, int(sep * 0.45))
+    while frontier:
+        x, y, dep = frontier.popleft()
+        if dep >= _FRINGE_MAX_STEPS:
+            continue
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < w and 0 <= ny < h):
+                continue
+            j = ny * w + nx
+            if bg_set[j] or seen[j]:
+                continue
+            seen[j] = 1
+            r, g, b, _a = px[nx, ny]
+            pr, pg, pb = bgmap_px[nx, ny]
+            local_plate = (pr + pg + pb) / 3.0
+            d = int(diff_px[nx, ny])
+            if _is_plate_fringe(r, g, b, d, local_plate, body_luma, max_d):
+                bg_set[j] = 1
+                frontier.append((nx, ny, dep + 1))
+
+
 def _repair_rim_colors(px: Any, rim: list[tuple[int, int]], w: int, h: int) -> None:
     """반투명 경계 픽셀의 RGB를 안쪽 불투명 픽셀 색으로 채운다.
 
@@ -1628,9 +1772,12 @@ def studio_product_cutout(path: str) -> bytes | None:
     다만 그 알파 램프의 상한(hi)이 원단이 배경에서 떨어진 거리(sep)보다 넓으면
     원단 픽셀이 램프 중간에 걸려 반투명해지고, 원단 노이즈 때문에 알파가
     위아래로 튀면서 실루엣이 지글거린다(글리치). 그래서 hi를 sep에서 역산해
-    램프가 항상 원단보다 안쪽에서 끝나게 한다. 반투명 픽셀의 색은 배경색을
-    역산하지 않는다 — 알파가 작을수록 노이즈가 증폭돼 실루엣에 어두운 실선이
-    생기기 때문. 대신 안쪽 불투명 원단 색을 밖으로 퍼뜨려(color repair) 채운다.
+    램프가 항상 원단보다 안쪽에서 끝나게 한다. 그 상한(tol+16)은 어두운 옷의
+    JPEG 링잉 혼합대보다 좁아서, 혼합 픽셀이 불투명 흰 테두리로 남는다. 고대비
+    상품컷에서는 실루엣의 판색 혼합대를 배경으로 한 번 더 흡수한다. 반투명
+    픽셀의 색은 배경색을 역산하지 않는다 — 알파가 작을수록 노이즈가 증폭돼
+    실루엣에 어두운 실선이 생기기 때문. 대신 안쪽 불투명 원단 색을 밖으로
+    퍼뜨려(color repair) 채운다.
     """
     try:
         img = _open_source_image(path)
@@ -1667,11 +1814,19 @@ def _studio_cutout_from_image(img: Image.Image, tol_boost: int = 0) -> bytes | N
     bgmap = _estimate_plate(rgb)
     diff_bands = ImageChops.difference(rgb, bgmap).split()
     maxdiff = ImageChops.lighter(ImageChops.lighter(diff_bands[0], diff_bands[1]), diff_bands[2])
+    diff_px = maxdiff.load()
+    # 밝은 옷은 누수 통로를 끊기 위해 침식을 강하게. 어두운 옷은 소매·칼라 틈의
+    # 판까지 침식에 막혀 섬으로 남고, 그 섬이 흰 덩어리로 카드에 보인다.
+    center = [
+        diff_px[x, y]
+        for y in range(h // 4, 3 * h // 4, max(1, h // 40))
+        for x in range(w // 4, 3 * w // 4, max(1, w // 40))
+    ]
+    center_sep = int(sorted(center)[len(center) // 2]) if center else 0
     cand = maxdiff.point(lambda v: 255 if v <= tol else 0)
-    core = cand.filter(ImageFilter.MinFilter(5))
+    core = cand.filter(ImageFilter.MinFilter(5 if center_sep < 55 else 3))
 
     core_px = core.load()
-    diff_px = maxdiff.load()
     visited = bytearray(w * h)
     q: deque[tuple[int, int]] = deque()
 
@@ -1712,62 +1867,43 @@ def _studio_cutout_from_image(img: Image.Image, tol_boost: int = 0) -> bytes | N
         tight_bytes = maxdiff.point(lambda v: 255 if v <= hole_tol else 0).tobytes()
         hole_cap = int(obj_area * 0.15)
         reach = max(5, int(min(w, h) * 0.03))
+        holes_total = _fill_enclosed_bg(
+            tight_bytes, bg_set, hole_set, boundary, w, h, obj_area, reach, hole_cap, 0
+        )
+    else:
+        hole_cap = 0
+        reach = 0
         holes_total = 0
-        # 두 번 돈다: 첫 번째에 손잡이 안쪽이 열리면, 끈이 겹쳐 만든 더 안쪽 틈이
-        # 그때 비로소 '배경에 가까운' 구멍이 된다.
-        for _pass in (0, 1):
-            # '배경에서 reach px 안'은 1/4 축소판에서 팽창시켜 구한다. 원본 크기로
-            # MaxFilter를 수십 번 돌리면 1500px 이미지에서 1초 이상 걸린다.
-            shrink = 4
-            sw, sh = max(1, w // shrink), max(1, h // shrink)
-            near = (
-                Image.frombytes("L", (w, h), bytes(bg_set))
-                .point(lambda v: 255 if v else 0)
-                .resize((sw, sh), Image.BOX)
-                .point(lambda v: 255 if v else 0)
-            )
-            for _ in range(max(1, (reach // shrink + 1) // 2)):
-                near = near.filter(ImageFilter.MaxFilter(5))
-            near_bytes = near.resize((w, h), Image.NEAREST).tobytes()
-            seen = bytearray(w * h)
-            found = 0
-            for idx, v in enumerate(tight_bytes):
-                if not v or bg_set[idx] or seen[idx]:
-                    continue
-                comp = [idx]
-                seen[idx] = 1
-                touches_border = False
-                dq: deque[int] = deque(comp)
-                while dq:
-                    i = dq.popleft()
-                    ix, iy = i % w, i // w
-                    if ix == 0 or iy == 0 or ix == w - 1 or iy == h - 1:
-                        touches_border = True
-                    for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
-                        if not (0 <= nx < w and 0 <= ny < h):
-                            continue
-                        j = ny * w + nx
-                        if seen[j] or bg_set[j] or not tight_bytes[j]:
-                            continue
-                        seen[j] = 1
-                        comp.append(j)
-                        dq.append(j)
-                if touches_border or len(comp) < 12 or len(comp) > hole_cap:
-                    continue
-                if holes_total + len(comp) > obj_area * 0.2:
-                    continue
-                if not any(near_bytes[i] for i in comp):
-                    continue  # 옷 안쪽 프린트 — 배경이 아니다
-                holes_total += len(comp)
-                found += len(comp)
-                for i in comp:
-                    bg_set[i] = 1
-                    hole_set[i] = 1
-                    boundary.append((i % w, i // w, 0))
-            if not found:
-                break
 
     px = img.load()
+    bgmap_px = bgmap.load()
+    _absorb_plate_fringe(px, bg_set, diff_px, bgmap_px, w, h)
+
+    # 침식에 막혀 섬이 된 소매 틈·칼라 안쪽 판. 라벨은 판보다 밝아 마스크에 안 들어간다.
+    if obj_area > 0 and center_sep >= 70:
+        step = max(1, min(w, h) // 90)
+        body_lumas = [
+            sum(px[x, y][:3]) / 3.0
+            for y in range(0, h, step)
+            for x in range(0, w, step)
+            if not bg_set[y * w + x]
+        ]
+        if len(body_lumas) >= 8:
+            body_luma = sorted(body_lumas)[len(body_lumas) // 2]
+            max_d = max(24, int(center_sep * 0.45))
+            fringe = bytearray(w * h)
+            for i in range(w * h):
+                if bg_set[i]:
+                    continue
+                x, y = i % w, i // w
+                r, g, b, _a = px[x, y]
+                pr, pg, pb = bgmap_px[x, y]
+                if _is_plate_fringe(r, g, b, int(diff_px[x, y]), (pr + pg + pb) / 3.0, body_luma, max_d):
+                    fringe[i] = 255
+            _fill_enclosed_bg(
+                fringe, bg_set, hole_set, boundary, w, h, obj_area, reach, hole_cap, holes_total
+            )
+
     removed = 0
     for y in range(h):
         base = y * w
@@ -1845,13 +1981,26 @@ def _studio_cutout_from_image(img: Image.Image, tol_boost: int = 0) -> bytes | N
     # 불투명 픽셀이 다수라 다시 메워버린다(가운데 흰 선이 남던 원인). 그래서 미디언
     # 뒤에 '지운 배경은 지운 채로' 다시 눌러주고, 블러는 그 다음에 걸어 경계만 부드럽게 한다.
     # 블러 반경은 이미지 크기에 맞춘다 — 0.6 고정은 큰 원본(1024px+)에서 계단이 남았다.
-    alpha_out = img.getchannel("A").filter(ImageFilter.MedianFilter(3))
+    alpha_before = img.getchannel("A")
+    alpha_out = alpha_before.filter(ImageFilter.MedianFilter(3))
+    # 미디언이 지운 배경(소매 틈·1px 구멍)을 다시 메우지 못하게 0은 0으로 유지.
+    alpha_out = ImageChops.darker(
+        alpha_out,
+        alpha_before.point(lambda v: 0 if v == 0 else 255),
+    )
     if any(hole_set):
         alpha_out = ImageChops.darker(
             alpha_out,
             Image.frombytes("L", (w, h), bytes(hole_set)).point(lambda v: 0 if v else 255),
         )
     img.putalpha(alpha_out.filter(ImageFilter.GaussianBlur(max(0.6, min(1.3, min(w, h) / 900.0)))))
+    # 블러가 투명(판색 RGB) 픽셀 쪽으로 알파를 밀어 넣는다. 그 픽셀의 색을
+    # 원단으로 덮지 않으면 1px짜리 흰 헤일로가 다시 생긴다.
+    px = img.load()
+    rim_bytes = img.getchannel("A").point(lambda v: 255 if 0 < v < 250 else 0).tobytes()
+    blur_rim = [(i % w, i // w) for i, v in enumerate(rim_bytes) if v]
+    if blur_rim:
+        _repair_rim_colors(px, blur_rim, w, h)
     bbox = img.getchannel("A").getbbox() or bbox
     pad = round(0.04 * max(w, h))
     img = img.crop((
@@ -1904,11 +2053,9 @@ def _resolve_extract_policy(meta: dict[str, Any], triage: dict[str, Any], hint: 
     has_text = bool(meta.get("has_text_logo"))
     override = str(meta.get("_quality_override") or "").strip()
     messy_background = bool(triage.get("messy_background"))
-    # 정면으로 다시 세워 그리는 건 배경만 지우는 것보다 훨씬 어렵다 → 고품질로
-    needs_front = (
-        str(meta.get("shot") or "product") != "product"
-        or str(meta.get("angle") or "front") != "front"
-    )
+    # 정면으로 다시 세워 그리는 건 배경만 지우는 것보다 훨씬 어렵다 → 고품질로.
+    # 상품컷은 각도가 조금 틀어져 있어도 재구성하지 않는다(원단이 뭉개진다).
+    needs_front = str(meta.get("shot") or "product") != "product"
     if override:
         tier, quality, timeout = "retry", override, OPENAI_IMAGE_TIMEOUT
     elif has_text:
@@ -1963,9 +2110,9 @@ def generate_product_image(
     hint = str(meta.get("extract_hint") or "").strip()[:500]
     name = meta.get("name") or "패션 아이템"
 
-    # 정면 상품컷일 때만 로컬 누끼를 쓴다. 측면·착장 사진을 그대로 오려내면 옷장에
-    # 측면 컷이 들어가 카드가 제각각이 된다(정면으로 다시 그려야 한다).
-    needs_front = str(meta.get("shot") or "product") != "product" or str(meta.get("angle") or "front") != "front"
+    # 착장·디테일만 정면으로 다시 그린다. 상품컷은 살짝 기울어도 원본 누끼 —
+    # 분류가 side로 보내면 images.edit가 니트 조직·실루엣을 뭉갠다.
+    needs_front = str(meta.get("shot") or "product") != "product"
     triage = triage or _fast_extract_triage(path, hint)
     studio = None if needs_front else triage.get("studio")
     if studio:
@@ -4172,17 +4319,30 @@ _MARKETPLACE_HOSTS = (
     "tmon.co.kr",
 )
 _URL_BLOCKED_MSG = "이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요."
+_URL_NO_IMAGE_MSG = "이 주소에서 상품 사진을 찾지 못했어요. 사진으로 올려 주세요."
+_URL_IMAGE_FAIL_MSG = "상품 사진을 불러오지 못했어요. 사진으로 올려 주세요."
+# 'robot' 단독은 <meta name="robots"> 에 걸려 멀쩡한 상품 페이지를 차단으로 오인한다.
 _BLOCKED_PAGE_HINTS = (
     "access denied",
     "요청이 차단",
     "비정상적인 접근",
-    "captcha",
-    "robot",
+    "are you a robot",
+    "i'm not a robot",
+    "robot check",
+    "recaptcha",
     "too many requests",
     "시스템오류",
     "에러페이지",
     "오류페이지",
     "error page",
+)
+_BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+_PRODUCT_IMG_SKIP = re.compile(
+    r"careguide|care.?guide|/icons?/|favicon|sprite|1x1|spacer|pixel\.gif|blank\.(gif|png)",
+    re.I,
 )
 
 
@@ -4207,18 +4367,95 @@ def _page_looks_blocked(status: int, html: str) -> bool:
     return any(h in low for h in _BLOCKED_PAGE_HINTS)
 
 
+def _abs_page_url(page_url: str, src: str) -> str:
+    raw = html_lib.unescape((src or "").strip()).replace("\\/", "/")
+    if not raw or raw.startswith("data:"):
+        return ""
+    if raw.startswith("//"):
+        raw = "https:" + raw
+    return urljoin(page_url, raw)
+
+
+def _product_image_score(url: str) -> int:
+    low = (url or "").lower()
+    if not low or _PRODUCT_IMG_SKIP.search(low):
+        return -1
+    score = 1
+    if "/web/product/extra/" in low or "/product/extra/" in low:
+        score += 50
+    if "/web/product/big/" in low or "/product/big/" in low:
+        score += 40
+    if "/web/product/medium/" in low or "/product/medium/" in low:
+        score += 20
+    if "/tiny/" in low or "/small/" in low:
+        score -= 8
+    return score
+
+
+def _product_image_candidates(html: str, page_url: str) -> list[str]:
+    """og:image → 카페24 상품컷 경로 → <img>. 케어가이드·아이콘은 버린다."""
+    found: list[str] = []
+
+    def add(src: str) -> None:
+        u = _abs_page_url(page_url, src)
+        if u and u not in found:
+            found.append(u)
+
+    for key, attr in (
+        ("og:image", "property"),
+        ("og:image:url", "property"),
+        ("og:image:secure_url", "property"),
+        ("twitter:image", "name"),
+        ("twitter:image:src", "name"),
+    ):
+        val = _meta_content(html, key, attr)
+        if val:
+            add(val)
+    for m in re.finditer(
+        r"""["']((?:https?:)?//[^"']*web/product/(?:extra|big|medium)/[^"']+)["']""",
+        html,
+        re.I,
+    ):
+        add(m.group(1))
+    for m in re.finditer(
+        r"""["'](/web/product/(?:extra|big|medium)/[^"']+)["']""",
+        html,
+        re.I,
+    ):
+        add(m.group(1))
+    for m in re.finditer(
+        r"""<img[^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']""",
+        html,
+        re.I,
+    ):
+        add(m.group(1))
+    ranked = [(_product_image_score(u), u) for u in found]
+    ranked = [(s, u) for s, u in ranked if s >= 0]
+    ranked.sort(key=lambda x: -x[0])
+    return [u for _, u in ranked]
+
+
+def _looks_like_image(raw: bytes, content_type: str) -> bool:
+    if not raw or len(raw) < 1500:
+        return False
+    if raw[:3] == b"\xff\xd8\xff" or raw[:8] == b"\x89PNG\r\n\x1a\n" or raw[:4] == b"RIFF":
+        return True
+    ct = (content_type or "").lower()
+    return ct.startswith("image/") and "html" not in ct and "json" not in ct
+
+
 def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
     """상품 이미지 바이트 + (brand, store, title) 컨텍스트."""
     page_url = _normalize_product_url(page_url)
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "ko-KR,ko;q=0.9",
+        "User-Agent": _BROWSER_UA,
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     }
+    sess = requests.Session()
+    sess.headers.update(headers)
     try:
-        page = requests.get(page_url, headers=headers, timeout=15)
+        page = sess.get(page_url, timeout=15, allow_redirects=True)
     except requests.RequestException as exc:
         raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG) from exc
     # Content-Type에 charset이 없으면 requests는 text/*를 ISO-8859-1로 읽는다. 그러면
@@ -4251,27 +4488,32 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
         color = _extract_page_color(html)
         if color and title.endswith("_" + color):
             title = title[: -(len(color) + 1)].strip()
-    match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
-    if not match:
-        match = re.search(r'<img[^>]+src=["\']([^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)["\']', html, re.I)
-    if not match:
-        # 마켓/차단 페이지는 '못 찾음'보다 원인(쇼핑몰 측 차단)을 짧게 안내
-        if _is_marketplace_host(page_url) or _page_looks_blocked(page.status_code, html):
+    candidates = _product_image_candidates(html, page.url or page_url)
+    if not candidates:
+        if _is_marketplace_host(page_url):
             raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
-        raise HTTPException(
-            status_code=422,
-            detail="이 주소에서 상품 사진을 찾지 못했어요. 사진으로 올려 주세요.",
-        )
-    img_url = match.group(1)
-    if img_url.startswith("//"):
-        img_url = "https:" + img_url
-    try:
-        resp = requests.get(img_url, headers=headers, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG) from exc
-    meta = {"brand": brand, "store": store, "title": (title or "")[:120], "color": color}
-    return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
+        raise HTTPException(status_code=422, detail=_URL_NO_IMAGE_MSG)
+    img_headers = {
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": page.url or page_url,
+    }
+    last_exc: Exception | None = None
+    for img_url in candidates[:8]:
+        try:
+            resp = sess.get(img_url, headers=img_headers, timeout=15, allow_redirects=True)
+            if resp.status_code >= 400:
+                last_exc = requests.HTTPError(f"{resp.status_code} {img_url}")
+                continue
+            if not _looks_like_image(resp.content, resp.headers.get("content-type", "")):
+                continue
+            meta = {"brand": brand, "store": store, "title": (title or "")[:120], "color": color}
+            return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
+        except requests.RequestException as exc:
+            last_exc = exc
+            continue
+    if _is_marketplace_host(page_url):
+        raise HTTPException(status_code=422, detail=_URL_BLOCKED_MSG)
+    raise HTTPException(status_code=422, detail=_URL_IMAGE_FAIL_MSG) from last_exc
 
 
 @app.get("/api/live/extraction-stats")

@@ -49,6 +49,23 @@ class ExtractionPolicyTest(unittest.TestCase):
         self.assertEqual((background["model"], background["quality"]), ("gpt-image-1", "high"))
         self.assertEqual(background["timeout_s"], 120)
 
+    def test_product_shot_is_not_reframe_even_if_angle_side(self):
+        policy = self.resolve(
+            {"has_text_logo": False, "shot": "product", "angle": "side"},
+            {"messy_background": False, "whiteish": False},
+            "",
+        )
+        self.assertEqual(policy["tier"], "standard")
+        self.assertNotIn("reframe_front", policy["difficulty"])
+
+    def test_worn_shot_still_reframes(self):
+        policy = self.resolve(
+            {"has_text_logo": False, "shot": "worn", "angle": "front"},
+            {"messy_background": False, "whiteish": False},
+            "",
+        )
+        self.assertEqual(policy["tier"], "reframe_front")
+
     def test_studio_cutout_does_not_blur_light_garment_alpha(self):
         source = MAIN_PATH.read_text()
         studio = source[source.index("def studio_product_cutout"):source.index("def _source_is_whiteish")]

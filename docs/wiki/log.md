@@ -42,3 +42,23 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 푸시 메일은 vercel[bot] GitHub 댓글. `frontend/vercel.json` `github.silent`
 ([[vercel-github-silent]]).
 
+## [2026-08-23] ingest | 아이템 추가 여러 URL
+URL은 한 줄에 하나. 호스트 중복 표시를 없앰. 주문내역 크롬 UX는 앱 밖
+`tools/order-collector` ([[add-item-bulk]]).
+
+## [2026-08-23] ingest | URL 상품컷 조회
+`robot`이 robots 메타에 걸려 브랜드몰을 차단으로 오인. 카페24 big 컷을
+케어가이드보다 앞에 ([[url-import-fetch]]).
+
+## [2026-08-23] ingest | 구매내역 탭
+구매내역은 시트에 보인다. 모바일은 PC 안내만, PC는 수집기 명령 + JSON 붙여넣기
+([[add-item-bulk]]).
+
+## [2026-08-23] query | Lookbox 리네임 30후보
+bin·bag·실사이트·알려진 상표/앱 제외 후 shortlist 30. KIPRIS 공식 전수 아님.
+[[rename-candidates-2026-08]].
+
+## [2026-08-23] ingest | 상품컷 흰 테두리
+어두운 폴로 실루엣에 JPEG 링잉이 불투명 판색으로 남음. 고대비만 혼합대 흡수,
+상품컷은 side여도 누끼 ([[studio-cutout-fringe]]).
+

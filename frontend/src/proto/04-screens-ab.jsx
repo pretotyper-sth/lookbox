@@ -843,6 +843,7 @@ function DetectRow({ item, on, onToggle }) {
 
 const URL_IMPORT_BLOCKED_MSG = '이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요.';
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
+const ORDER_COLLECT_CMD = 'cd tools/order-collector && npm i && npm run collect';
 
 // 추출 힌트 — 배달의민족 '사장님께'처럼 최근 문구를 골라 넣는다.
 const EXTRACT_HINT_KEY = 'lb_extract_hints_v1';
@@ -950,6 +951,16 @@ function normalizeForDup(raw) {
   }
 }
 
+function coerceItemUrl(raw) {
+  const str = String(raw || '').trim().replace(/[.,)]+$/, '');
+  if (!str) return '';
+  if (/^https?:\/\//i.test(str)) return str;
+  if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}([/:?#].*)?$/i.test(str)) {
+    return 'https://' + str.replace(/^\/+/, '');
+  }
+  return '';
+}
+
 function parseBulkPaste(text) {
   const raw = String(text || '').trim();
   if (!raw) return [];
@@ -968,12 +979,30 @@ function parseBulkPaste(text) {
         }));
     } catch (e) { /* JSON이 아니면 아래 URL 스캔으로 */ }
   }
-  const urls = raw.match(/https?:\/\/[^\s"'<>)]+/gi) || [];
+  const http = (raw.match(/https?:\/\/[^\s"'<>)]+/gi) || [])
+    .flatMap((u) => u.split(/,(?=https?:\/\/)/i))
+    .map((u) => u.replace(/[.,)]+$/, ''));
+  const fromLines = raw.split(/\r?\n/).flatMap((line) => {
+    const t = line.trim();
+    if (!t || /^https?:\/\//i.test(t)) return [];
+    return t.split(/[,\s]+/).map(coerceItemUrl).filter(Boolean);
+  });
   const seen = new Set();
-  return urls
-    .map((u) => u.replace(/[.,)]+$/, ''))
+  return [...http, ...fromLines]
     .filter((u) => { const k = u.split('#')[0]; if (seen.has(k)) return false; seen.add(k); return true; })
     .map((u) => ({ url: u, name: '', store: '', price: '', purchasedAt: '' }));
+}
+
+function bulkRowMeta(b) {
+  let host = b.url;
+  try { host = new URL(b.url).hostname.replace(/^www\./, ''); } catch (e) { /* keep raw */ }
+  const title = b.name || host;
+  const bits = [];
+  if (b.name) bits.push(host);
+  if (b.store && b.store !== host && b.store !== b.name) bits.push(b.store);
+  if (b.price) bits.push(b.price);
+  if (b.purchasedAt) bits.push(b.purchasedAt);
+  return { title, subtitle: bits.join(' · ') };
 }
 
 function AddSheet({ ctx }) {
@@ -1007,6 +1036,8 @@ function AddSheet({ ctx }) {
   const [busy, setBusy] = useS(false);
   const [err, setErr] = useS('');
   const fileInput = useR(null);
+  const ordersFileRef = useR(null);
+  const [cmdCopied, setCmdCopied] = useS(false);
   const previewUrlRef = useR('');
   const tryOnFileRef = useR(null);
   const [tryOnLocal, setTryOnLocal] = useS('');
@@ -1054,6 +1085,7 @@ function AddSheet({ ctx }) {
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
     setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
+    setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -1125,6 +1157,9 @@ function AddSheet({ ctx }) {
         discardDraftIds(ids);
         draftIdsRef.current = [];
         return;
+      }
+      if (data && data.duplicate) {
+        throw new Error(data.reason || '이미 옷장에 있는 상품이에요');
       }
       if (!list.length) throw new Error('사진에서 옷을 찾지 못했어요');
       // AI 추출이 지연/실패해 임시 이미지로 저장된 경우 안내
@@ -1263,6 +1298,27 @@ function AddSheet({ ctx }) {
     const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
     if (takeBulk(text)) e.preventDefault();
   };
+  const onOrdersFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      if (!takeBulk(text)) setErr('상품 목록을 읽지 못했어요. JSON이나 주소 여러 줄을 올려 주세요.');
+    };
+    reader.onerror = () => setErr('파일을 읽지 못했어요.');
+    reader.readAsText(f);
+    e.target.value = '';
+  };
+  const copyCollectCmd = async () => {
+    try {
+      await navigator.clipboard.writeText(ORDER_COLLECT_CMD);
+      setCmdCopied(true);
+      setTimeout(() => setCmdCopied(false), 1600);
+    } catch (err) {
+      setErr('복사가 막혀 있어요. 명령을 직접 드래그해 복사해 주세요.');
+    }
+  };
   const bulkPicked = (bulk || []).filter((b) => b.pick);
   const runBulk = async () => {
     if (!importOrders || !bulkPicked.length) return;
@@ -1294,7 +1350,9 @@ function AddSheet({ ctx }) {
     setBulkResult(null);
     setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
-  const canSubmit = tab === 'photo' ? !!file : tab === 'url' ? (bulk ? !!bulkPicked.length : !!url.trim()) : false;
+  const canSubmit = tab === 'photo' ? !!file
+    : (tab === 'url' || tab === 'orders') ? (bulk ? !!bulkPicked.length : !!url.trim())
+    : false;
   const onSubmitAdd = async () => {
     setErr('');
     if (tab === 'tryon') return;
@@ -1305,6 +1363,7 @@ function AddSheet({ ctx }) {
       await runDetect({ sourceType: 'photo', file, extractHint: hint });
       return;
     }
+    if (tab !== 'url' && tab !== 'orders') return;
     const raw = url.trim();
     if (!raw) { setErr('상품 URL을 입력해 주세요'); return; }
     const blocked = urlImportBlockedHint(raw);
@@ -1448,7 +1507,14 @@ function AddSheet({ ctx }) {
       ? `"${replaceItem.name || '이 옷'}"의 이름·색상은 그대로 두고 제품 컷만 바꿔요.`
       : '이름·색상은 그대로 두고 제품 컷만 바꿔요.';
   }
-  else { header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가'; sub = anchor ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.' : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.'; }
+  else {
+    header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가';
+    sub = anchor
+      ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'
+      : (tab === 'orders'
+        ? (wide ? '컴퓨터에서 주문내역을 가져와 고른 옷만 담아요.' : '이 기능은 컴퓨터에서 사용할 수 있어요.')
+        : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.');
+  }
 
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready' || stage === 'reextract-confirm';
 
@@ -1489,28 +1555,29 @@ function AddSheet({ ctx }) {
             <div style={{ display: 'flex', gap: 4, background: 'var(--ivory)', borderRadius: 'var(--r-pill)', padding: 4, marginTop: 'var(--s5)' }}>
               {(anchor
                 ? [['photo', '사진', 'camera'], ['url', 'URL', 'link'], ['tryon', '바로 보기', 'cutout']]
-                : [['photo', '사진', 'camera'], ['url', 'URL', 'link']]
+                : [['photo', '사진', 'camera'], ['url', 'URL', 'link'], ['orders', '구매내역', 'bag']]
               ).map(([id, label, ic]) => {
                 // 옷장에 맞춰 볼 옷이 없으면 사진·URL로 고민 중인 옷을 올려도 할 게 없다.
                 // 눌렀을 때 아무 일도 안 일어나는 것보다, 아직 못 쓴다는 걸 보여주고 잠근다.
-                const locked = anchor && !comboReady && id !== 'tryon';
+                const comboLocked = anchor && !comboReady && id !== 'tryon';
+                const ordersOff = id === 'orders' && !wide;
                 return (
-                  <button key={id} disabled={locked} aria-disabled={locked} onClick={() => {
-                    if (locked) return;
+                  <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
+                    if (comboLocked) return;
                     setTab(id); setErr(''); setTryOnErr('');
-                    if (id === 'tryon') setShowHint(false);
+                    if (id === 'tryon' || id === 'orders') setShowHint(false);
                   }} style={{
                     flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 14, fontWeight: 600,
+                    padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 13, fontWeight: 600,
                     background: tab === id ? 'var(--surface-2)' : 'transparent',
                     color: tab === id ? 'var(--ink)' : 'var(--ink-3)',
                     boxShadow: tab === id ? '0 1px 3px rgba(40,36,28,0.10)' : 'none',
                     transition: 'all var(--dur) var(--ease)',
                     whiteSpace: 'nowrap',
-                    opacity: locked ? 0.4 : 1,
-                    cursor: locked ? 'default' : 'pointer',
+                    opacity: (comboLocked || (ordersOff && tab !== id)) ? 0.45 : 1,
+                    cursor: comboLocked ? 'default' : 'pointer',
                   }}>
-                    {locked ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
+                    {comboLocked || ordersOff ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
                   </button>
                 );
               })}
@@ -1633,6 +1700,21 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </>
+                    ) : tab === 'orders' && !wide && !bulk && !bulkResult ? (
+                      <div style={{
+                        ...stagePanel, height: 'auto', minHeight: panelH,
+                        background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: 'var(--s5) var(--s4)', textAlign: 'center',
+                      }}>
+                        <Icon name="lock" size={22} stroke={1.7} />
+                        <div style={{ marginTop: 'var(--s3)', fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
+                          구매내역 가져오기는 컴퓨터에서만 쓸 수 있어요
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
+                          PC에서 아이템 추가 → 구매내역을 열면, 쇼핑몰 주문내역에서 옷을 골라 한 번에 담을 수 있어요.
+                        </div>
+                      </div>
                     ) : bulkResult ? (
                       /* 다 담고 난 뒤 요약. 중복으로 건너뛴 것과 실패한 것을 이유까지 보여준다. */
                       <div style={{
@@ -1686,93 +1768,179 @@ function AddSheet({ ctx }) {
                          이미 옷장에 있는 것은 미리 체크를 풀어 둔다(주소·상품코드·이름·사진). */
                       <div style={{
                         borderRadius: 'var(--r-md)', background: 'var(--ivory)',
-                        boxShadow: 'inset 0 0 0 1px var(--line)', padding: 10,
+                        boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden',
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px 8px' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700 }}>
-                            {bulk.length}개 중 <span className="tnum">{bulkPicked.length}</span>개 선택
-                          </span>
-                          {bulkChecking && <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>중복 확인 중…</span>}
-                          <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: b.state !== 'ok' })))}
-                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '2px 4px' }}>전체 선택</button>
-                          <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: false })))}
-                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '2px 4px' }}>해제</button>
-                          <span style={{ flex: 1 }} />
-                          <button type="button" onClick={() => { setBulk(null); setBulkRun(null); }}
-                            style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', padding: '2px 4px' }}>지우기</button>
+                        <div style={{ padding: 'var(--s4) var(--s4) var(--s3)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)' }}>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700 }}>
+                              <span className="tnum">{bulkPicked.length}</span>개 선택
+                            </span>
+                            <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: b.state !== 'ok' })))}
+                              style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: 0 }}>전체</button>
+                            <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: false })))}
+                              style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: 0 }}>해제</button>
+                            <button type="button" onClick={() => { setBulk(null); setBulkRun(null); }}
+                              style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', padding: 0 }}>지우기</button>
+                          </div>
+                          {bulkChecking && (
+                            <div style={{ marginTop: 'var(--s2)', fontSize: 12, color: 'var(--ink-3)' }}>중복 확인 중…</div>
+                          )}
                         </div>
-                        <div className="lb-scrollable" style={{ maxHeight: 236, overflowY: 'auto' }}>
+                        <div className="lb-scrollable" style={{ maxHeight: 280, overflowY: 'auto' }}>
                           {bulk.map((b) => {
-                            const host = (() => { try { return new URL(b.url).hostname.replace(/^www\./, ''); } catch (e) { return b.url; } })();
+                            const { title, subtitle } = bulkRowMeta(b);
                             const busy = b.state === 'run' || b.state === 'wait';
+                            const status = b.state === 'run' ? '등록 중…'
+                              : b.state === 'ok' ? '담았어요'
+                              : b.state === 'dup' ? (b.dupReason || '이미 있음')
+                              : b.state === 'fail' ? (b.error || '실패')
+                              : b.dup ? (b.dupReason || '이미 있음') : '';
                             return (
                               <label key={b.url} style={{
-                                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
+                                display: 'flex', alignItems: 'center', gap: 'var(--s3)',
+                                padding: 'var(--s3) var(--s4)',
                                 borderTop: '1px solid var(--line)', cursor: busy ? 'default' : 'pointer',
                                 opacity: b.state === 'ok' ? 0.55 : 1,
                               }}>
-                                <input
-                                  type="checkbox"
-                                  checked={!!b.pick}
-                                  disabled={busy || b.state === 'ok'}
-                                  onChange={() => setBulk((arr) => arr.map((x) => (x.url === b.url ? { ...x, pick: !x.pick } : x)))}
-                                  style={{ flex: 'none', width: 16, height: 16, accentColor: 'var(--ink)' }}
-                                />
+                                <span style={{ position: 'relative', width: 18, height: 18, flex: 'none' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!b.pick}
+                                    disabled={busy || b.state === 'ok'}
+                                    onChange={() => setBulk((arr) => arr.map((x) => (x.url === b.url ? { ...x, pick: !x.pick } : x)))}
+                                    style={{ position: 'absolute', inset: 0, opacity: 0, margin: 0, cursor: 'inherit' }}
+                                  />
+                                  <span aria-hidden style={{
+                                    width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center',
+                                    background: b.pick ? 'var(--ink)' : 'transparent',
+                                    boxShadow: b.pick ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
+                                    color: 'var(--surface)',
+                                  }}>
+                                    {b.pick ? <Icon name="check" size={11} stroke={2.6} /> : null}
+                                  </span>
+                                </span>
                                 <span style={{ flex: 1, minWidth: 0 }}>
-                                  <span style={{ display: 'block', fontSize: 13, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {b.name || host}
+                                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {title}
                                   </span>
-                                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {[b.store || host, b.price, b.purchasedAt].filter(Boolean).join(' · ')}
+                                  {subtitle ? (
+                                    <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {subtitle}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                {status ? (
+                                  <span style={{
+                                    flex: 'none', maxWidth: '38%', fontSize: 11.5, fontWeight: 600,
+                                    color: b.state === 'fail' ? '#B0573C' : 'var(--ink-3)',
+                                    textAlign: 'right',
+                                  }}>
+                                    {status}
                                   </span>
-                                </span>
-                                <span style={{ flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)' }}>
-                                  {b.state === 'run' ? '등록 중…'
-                                    : b.state === 'ok' ? '담았어요'
-                                    : b.state === 'dup' ? (b.dupReason || '이미 있음')
-                                    : b.state === 'fail' ? (b.error || '실패')
-                                    : b.dup ? (b.dupReason || '이미 있음') : ''}
-                                </span>
+                                ) : null}
                               </label>
                             );
                           })}
                         </div>
                         {bulkRun ? (
-                          <div style={{ padding: '10px 6px 2px' }}>
+                          <div style={{ padding: 'var(--s3) var(--s4) var(--s4)' }}>
                             <div style={{ height: 4, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
                               <div style={{
                                 width: `${Math.round(((bulkRun.index + 1) / Math.max(1, bulkRun.total)) * 100)}%`,
                                 height: '100%', background: 'var(--accent)', transition: 'width var(--dur) var(--ease)',
                               }} />
                             </div>
-                            <div className="tnum" style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-2)' }}>
+                            <div className="tnum" style={{ marginTop: 'var(--s2)', fontSize: 12, color: 'var(--ink-2)' }}>
                               {bulkRun.index + 1} / {bulkRun.total} · {String(bulkRun.label || '').slice(0, 28)}
                             </div>
                           </div>
                         ) : null}
                       </div>
-                    ) : (
-                      <div style={{
-                        ...dropBase, cursor: 'default', padding: '0 18px',
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%' }}>
-                          <input
-                            value={url}
-                            onChange={onUrlChange}
-                            onPaste={onUrlPaste}
-                            placeholder="https://…"
-                            className="lb-input"
-                            style={{
-                              width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
-                              background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)',
-                              outline: 'none', boxSizing: 'border-box',
-                            }}
-                          />
-                          <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
-                            상품 주소 하나, 또는 여러 개를 한 번에 붙여넣어도 돼요
-                          </span>
+                    ) : tab === 'orders' ? (
+                      <div>
+                        <input ref={ordersFileRef} type="file" accept="application/json,.json,text/plain" onChange={onOrdersFile} style={{ display: 'none' }} />
+                        <ol style={{
+                          margin: 0, padding: '0 0 0 18px', fontSize: 13, color: 'var(--ink-2)',
+                          lineHeight: 1.55, wordBreak: 'keep-all',
+                        }}>
+                          <li>이 컴퓨터 터미널에 아래 명령을 붙여넣으면 크롬이 열립니다.</li>
+                          <li>열린 창에서 쇼핑몰에 로그인하고 주문내역 화면으로 갑니다.</li>
+                          <li>목록이 복사되면 아래 칸에 붙이거나 orders.json을 올립니다.</li>
+                          <li>담을 옷을 고르면 하나씩 옷장에 등록됩니다.</li>
+                        </ol>
+                        <div style={{
+                          marginTop: 'var(--s3)', display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 12px', borderRadius: 'var(--r-sm)',
+                          background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                        }}>
+                          <code style={{
+                            flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.4,
+                            color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>{ORDER_COLLECT_CMD}</code>
+                          <button type="button" onClick={copyCollectCmd} style={{
+                            flex: 'none', fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', padding: '2px 0',
+                          }}>{cmdCopied ? '복사됨' : '복사'}</button>
                         </div>
+                        <textarea
+                          value={url}
+                          onChange={onUrlChange}
+                          onPaste={onUrlPaste}
+                          onDragOver={(e) => { e.preventDefault(); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                            if (!f) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const text = String(reader.result || '');
+                              if (!takeBulk(text)) setErr('상품 목록을 읽지 못했어요. JSON이나 주소 여러 줄을 올려 주세요.');
+                            };
+                            reader.readAsText(f);
+                          }}
+                          placeholder={'목록을 붙여넣거나 orders.json을 여기에 놓으세요'}
+                          className="lb-input"
+                          style={{
+                            marginTop: 'var(--s3)',
+                            width: '100%', minHeight: 88, padding: 'var(--s4)',
+                            resize: 'none', boxSizing: 'border-box',
+                            background: 'var(--ivory)',
+                            border: '1.5px dashed var(--line-2)',
+                            borderRadius: 'var(--r-md)',
+                            color: 'var(--ink)',
+                            fontSize: 14,
+                            lineHeight: 1.5,
+                            outline: 'none',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => ordersFileRef.current && ordersFileRef.current.click()}
+                          style={{
+                            marginTop: 'var(--s2)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 0',
+                          }}
+                        >
+                          파일에서 불러오기
+                        </button>
                       </div>
+                    ) : (
+                      <textarea
+                        value={url}
+                        onChange={onUrlChange}
+                        onPaste={onUrlPaste}
+                        placeholder={'https://…\n한 줄에 주소 하나'}
+                        className="lb-input"
+                        style={{
+                          ...stagePanel,
+                          padding: 'var(--s4)',
+                          resize: 'none',
+                          background: 'var(--ivory)',
+                          border: '1.5px dashed var(--line-2)',
+                          color: 'var(--ink)',
+                          fontSize: 14,
+                          lineHeight: 1.5,
+                          outline: 'none',
+                        }}
+                      />
                     )}
 
                     <div style={{ minHeight: tabErr ? undefined : 0 }}>
@@ -1811,14 +1979,14 @@ function AddSheet({ ctx }) {
 
                     <div style={{
                       marginTop: 'var(--s4)', minHeight: tabLocked ? 0 : 28, display: 'flex', alignItems: 'center',
-                      visibility: (tab === 'tryon' || tabLocked) ? 'hidden' : 'visible',
-                      pointerEvents: (tab === 'tryon' || tabLocked) ? 'none' : 'auto',
-                      height: tabLocked ? 0 : undefined, overflow: tabLocked ? 'hidden' : undefined,
-                    }} aria-hidden={tab === 'tryon' || tabLocked}>
+                      visibility: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'hidden' : 'visible',
+                      pointerEvents: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'none' : 'auto',
+                      height: (tabLocked || tab === 'orders') ? 0 : undefined, overflow: (tabLocked || tab === 'orders') ? 'hidden' : undefined,
+                    }} aria-hidden={tab === 'tryon' || tab === 'orders' || tabLocked}>
                       <button
                         type="button"
                         onClick={() => setShowHint((v) => !v)}
-                        tabIndex={tab === 'tryon' ? -1 : undefined}
+                        tabIndex={tab === 'tryon' || tab === 'orders' ? -1 : undefined}
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
                           fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
@@ -1831,7 +1999,7 @@ function AddSheet({ ctx }) {
                         </span>
                       </button>
                     </div>
-                    {showHint && tab !== 'tryon' && (
+                    {showHint && tab !== 'tryon' && tab !== 'orders' && (
                       <div style={{ marginTop: 'var(--s4)' }}>
                         {hintHistory.length > 0 && (
                           <div style={{ marginBottom: 'var(--s5)' }}>
@@ -1900,7 +2068,7 @@ function AddSheet({ ctx }) {
                             )}
                             <Btn icon="check" onClick={closeAdd} style={{ flex: 1 }}>확인</Btn>
                           </div>
-                      ) : (
+                      ) : tab === 'orders' && !wide && !bulk ? null : (
                         <Btn
                           full size="lg" icon="sparkle"
                           onClick={bulk ? runBulk : onSubmitAdd}
@@ -1909,7 +2077,8 @@ function AddSheet({ ctx }) {
                           {bulkRun ? '담는 중…'
                             : bulk ? `${bulkPicked.length}개 옷장에 담기`
                             : busy ? '인식 중…'
-                            : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
+                            : (tab === 'orders' ? '목록을 붙여넣으세요'
+                              : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
                     </div>
@@ -1921,6 +2090,10 @@ function AddSheet({ ctx }) {
             {reextract ? (
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
+              </div>
+            ) : (!anchor && tab === 'orders') ? (
+              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
+                <Icon name="bag" size={15} /> {wide ? '고른 옷만 순서대로 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요'}
               </div>
             ) : (!anchor && tab !== 'tryon') ? (
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
