@@ -319,7 +319,8 @@ function normalizeProductUrl(raw) {
     const u = new URL(/^https?:\/\//i.test(str) ? str : 'https://' + str);
     const keep = [];
     u.searchParams.forEach((v, k) => {
-      if (/^(goodsno|productno|itemid|prdno|goods_no|product_id|id|no)$/i.test(k)) keep.push(`${k.toLowerCase()}=${v}`);
+      const nk = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (/^(goodsno|productno|itemid|prdno|productid)$/.test(nk)) keep.push(`${nk}=${v}`);
     });
     const path = u.pathname.replace(/\/+$/, '').toLowerCase();
     return u.hostname.replace(/^www\./, '').toLowerCase() + path + (keep.length ? '?' + keep.sort().join('&') : '');

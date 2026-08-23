@@ -954,9 +954,8 @@ function useImportProgress(active) {
   return { step, pct, report };
 }
 
-/* 붙여넣기 한 덩어리에서 상품 목록을 뽑는다.
-   ① 수집기(tools/order-collector)가 만든 JSON  ② 그냥 여러 줄의 상품 URL
-   둘 다 받는다. 하나짜리 URL은 기존 단건 등록 흐름을 그대로 쓴다. */
+/* 구매내역 탭에서 모은 후보의 중복 판정용 URL 정규화.
+   카페24 product_no 처럼 밑줄이 있는 쿼리도 상품 식별자로 남긴다. */
 function normalizeForDup(raw) {
   const str = String(raw || '').trim();
   if (!str) return '';
@@ -964,7 +963,8 @@ function normalizeForDup(raw) {
     const u = new URL(/^https?:\/\//i.test(str) ? str : 'https://' + str);
     const keep = [];
     u.searchParams.forEach((v, k) => {
-      if (/^(goodsno|productno|itemid|prdno|goods_no|product_id|id|no)$/i.test(k)) keep.push(`${k.toLowerCase()}=${v}`);
+      const nk = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (/^(goodsno|productno|itemid|prdno|productid)$/.test(nk)) keep.push(`${nk}=${v}`);
     });
     return u.hostname.replace(/^www\./, '').toLowerCase()
       + u.pathname.replace(/\/+$/, '').toLowerCase()
@@ -972,48 +972,6 @@ function normalizeForDup(raw) {
   } catch (e) {
     return str.toLowerCase();
   }
-}
-
-function coerceItemUrl(raw) {
-  const str = String(raw || '').trim().replace(/[.,)]+$/, '');
-  if (!str) return '';
-  if (/^https?:\/\//i.test(str)) return str;
-  if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}([/:?#].*)?$/i.test(str)) {
-    return 'https://' + str.replace(/^\/+/, '');
-  }
-  return '';
-}
-
-function parseBulkPaste(text) {
-  const raw = String(text || '').trim();
-  if (!raw) return [];
-  if (raw.startsWith('{') || raw.startsWith('[')) {
-    try {
-      const data = JSON.parse(raw);
-      const list = Array.isArray(data) ? data : (data.items || []);
-      return list
-        .filter((it) => it && it.url)
-        .map((it) => ({
-          url: String(it.url),
-          name: String(it.name || '').trim(),
-          store: String(it.platform || it.store || '').trim(),
-          price: String(it.price || '').trim(),
-          purchasedAt: String(it.purchasedAt || '').trim(),
-        }));
-    } catch (e) { /* JSON이 아니면 아래 URL 스캔으로 */ }
-  }
-  const http = (raw.match(/https?:\/\/[^\s"'<>)]+/gi) || [])
-    .flatMap((u) => u.split(/,(?=https?:\/\/)/i))
-    .map((u) => u.replace(/[.,)]+$/, ''));
-  const fromLines = raw.split(/\r?\n/).flatMap((line) => {
-    const t = line.trim();
-    if (!t || /^https?:\/\//i.test(t)) return [];
-    return t.split(/[,\s]+/).map(coerceItemUrl).filter(Boolean);
-  });
-  const seen = new Set();
-  return [...http, ...fromLines]
-    .filter((u) => { const k = u.split('#')[0]; if (seen.has(k)) return false; seen.add(k); return true; })
-    .map((u) => ({ url: u, name: '', store: '', price: '', purchasedAt: '' }));
 }
 
 function bulkRowMeta(b) {
@@ -1046,7 +1004,7 @@ function AddSheet({ ctx }) {
   const [tab, setTab] = useS('photo');
   const [picked, setPicked] = useS(false);
   const [url, setUrl] = useS('');
-  // 여러 개 붙여넣었을 때(구매내역 수집기 JSON 또는 URL 여러 줄)의 후보 목록
+  // 구매내역에서 가져온 후보 목록. URL 탭은 단건만 다룬다.
   const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
   const [bulkResult, setBulkResult] = useS(null); // {ok, dup, fail, failed[], skipped[]}
@@ -1314,11 +1272,6 @@ function AddSheet({ ctx }) {
     }
     return true;
   };
-  const takeBulk = (text) => {
-    const found = parseBulkPaste(text);
-    if (found.length < 2) return false;
-    return applyCollectedRows(found);
-  };
   const startOrderCollect = async () => {
     setErr('');
     setOrderNeedExt(false);
@@ -1389,14 +1342,8 @@ function AddSheet({ ctx }) {
     }
   };
   const onUrlChange = (e) => {
-    const v = e.target.value;
-    if (takeBulk(v)) return;
-    setUrl(v);
+    setUrl(e.target.value);
     setErr('');
-  };
-  const onUrlPaste = (e) => {
-    const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
-    if (takeBulk(text)) e.preventDefault();
   };
   const bulkPicked = (bulk || []).filter((b) => b.pick);
   const runBulk = async () => {
@@ -1430,7 +1377,7 @@ function AddSheet({ ctx }) {
     setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
   const canSubmit = tab === 'photo' ? !!file
-    : tab === 'url' ? (bulk ? !!bulkPicked.length : !!url.trim())
+    : tab === 'url' ? !!url.trim()
     : tab === 'orders' ? (bulk ? !!bulkPicked.length : !orderBusy)
     : false;
   const onSubmitAdd = async () => {
@@ -1621,8 +1568,10 @@ function AddSheet({ ctx }) {
               <div>
                 <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{header}</h2>
                 {sub ? (
-                  <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>{sub}</p>
-                ) : null}
+                  <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.45, minHeight: '1.45em', whiteSpace: 'nowrap' }}>{sub}</p>
+                ) : (
+                  <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.45, minHeight: '1.45em', visibility: 'hidden' }} aria-hidden>&nbsp;</p>
+                )}
               </div>
             )}
           </div>
@@ -1645,7 +1594,8 @@ function AddSheet({ ctx }) {
                   <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
                     if (comboLocked) return;
                     setTab(id); setErr(''); setTryOnErr('');
-                    if (id === 'tryon' || id === 'orders') setShowHint(false);
+                    if (id === 'tryon') setShowHint(false);
+                    if (id !== 'orders') { setBulk(null); setBulkResult(null); }
                   }} style={{
                     flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 13, fontWeight: 600,
@@ -1782,7 +1732,7 @@ function AddSheet({ ctx }) {
                       </>
                     ) : tab === 'orders' && !wide && !bulk && !bulkResult ? (
                       <div style={{
-                        ...stagePanel, height: 'auto', minHeight: panelH,
+                        ...stagePanel,
                         background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         padding: 'var(--s5) var(--s4)', textAlign: 'center',
@@ -1795,7 +1745,7 @@ function AddSheet({ ctx }) {
                           PC에서 아이템 추가 → 구매내역을 열면, 쇼핑몰 주문내역에서 옷을 골라 한 번에 담을 수 있어요.
                         </div>
                       </div>
-                    ) : bulkResult ? (
+                    ) : tab === 'orders' && bulkResult ? (
                       /* 다 담고 난 뒤 요약. 중복으로 건너뛴 것과 실패한 것을 이유까지 보여준다. */
                       <div style={{
                         borderRadius: 'var(--r-md)', background: 'var(--ivory)',
@@ -1843,7 +1793,7 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </div>
-                    ) : bulk ? (
+                    ) : tab === 'orders' && bulk ? (
                       /* 여러 개를 붙여넣었을 때: 후보를 고르고 한 번에 담는다.
                          이미 옷장에 있는 것은 미리 체크를 풀어 둔다(주소·상품코드·이름·사진). */
                       <div style={{
@@ -1937,18 +1887,22 @@ function AddSheet({ ctx }) {
                         ) : null}
                       </div>
                     ) : tab === 'orders' ? (
-                      <div>
+                      <div style={{
+                        ...stagePanel,
+                        background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
+                        padding: 'var(--s4)', display: 'flex', flexDirection: 'column',
+                      }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
                           어디서 산 옷을 가져올까요?
                         </div>
-                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
+                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {orderNeedLogin
-                            ? '열린 크롬 창에서 로그인한 뒤, 아래 버튼을 다시 눌러 주세요.'
+                            ? '크롬에서 로그인한 뒤 다시 눌러 주세요.'
                             : orderBusy
-                              ? '크롬이 열렸어요. 로그인되어 있으면 곧 목록이 뜨고, 아니면 그 창에서 로그인하면 자동으로 가져와요.'
-                              : '쇼핑몰을 고르고 버튼을 누르면 크롬이 열려 주문내역을 읽어요. 담을 옷은 그다음에 고르면 돼요.'}
+                              ? '크롬에서 주문내역을 읽고 있어요.'
+                              : '쇼핑몰을 고르고 가져오면, 담을 옷은 다음에 고르면 돼요.'}
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s4)' }}>
+                        <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                           {ORDER_PLATFORMS.map((p) => (
                             <button
                               key={p.id}
@@ -1977,24 +1931,28 @@ function AddSheet({ ctx }) {
                         ) : null}
                       </div>
                     ) : (
-                      <textarea
-                        value={url}
-                        onChange={onUrlChange}
-                        onPaste={onUrlPaste}
-                        placeholder={'https://…\n한 줄에 주소 하나'}
-                        className="lb-input"
-                        style={{
-                          ...stagePanel,
-                          padding: 'var(--s4)',
-                          resize: 'none',
-                          background: 'var(--ivory)',
-                          border: '1.5px dashed var(--line-2)',
-                          color: 'var(--ink)',
-                          fontSize: 14,
-                          lineHeight: 1.5,
-                          outline: 'none',
-                        }}
-                      />
+                      <div style={{ ...stagePanel, display: 'flex', flexDirection: 'column' }}>
+                        <input
+                          type="url"
+                          value={url}
+                          onChange={onUrlChange}
+                          placeholder="https://…"
+                          inputMode="url"
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          className="lb-input"
+                          style={{
+                            width: '100%', height: 48, flex: 'none',
+                            padding: '0 var(--s4)',
+                            background: 'var(--ivory)',
+                            border: '1.5px dashed var(--line-2)',
+                            borderRadius: 'var(--r-md)',
+                            color: 'var(--ink)', fontSize: 14, lineHeight: '48px',
+                            outline: 'none', boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
                     )}
 
                     <div style={{ minHeight: tabErr ? undefined : 0 }}>
@@ -2032,10 +1990,9 @@ function AddSheet({ ctx }) {
                     )}
 
                     <div style={{
-                      marginTop: 'var(--s4)', minHeight: tabLocked ? 0 : 28, display: 'flex', alignItems: 'center',
+                      marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
                       visibility: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'hidden' : 'visible',
                       pointerEvents: (tab === 'tryon' || tab === 'orders' || tabLocked) ? 'none' : 'auto',
-                      height: (tabLocked || tab === 'orders') ? 0 : undefined, overflow: (tabLocked || tab === 'orders') ? 'hidden' : undefined,
                     }} aria-hidden={tab === 'tryon' || tab === 'orders' || tabLocked}>
                       <button
                         type="button"
@@ -2053,8 +2010,12 @@ function AddSheet({ ctx }) {
                         </span>
                       </button>
                     </div>
-                    {showHint && tab !== 'tryon' && tab !== 'orders' && (
-                      <div style={{ marginTop: 'var(--s4)' }}>
+                    {showHint && tab !== 'tryon' && (
+                      <div style={{
+                        marginTop: 'var(--s4)',
+                        visibility: tab === 'orders' ? 'hidden' : 'visible',
+                        pointerEvents: tab === 'orders' ? 'none' : 'auto',
+                      }} aria-hidden={tab === 'orders'}>
                         {hintHistory.length > 0 && (
                           <div style={{ marginBottom: 'var(--s5)' }}>
                             <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>최근에 쓴 힌트</div>
@@ -2102,7 +2063,7 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
-                    <div style={{ marginTop: 'var(--s5)' }}>
+                    <div style={{ marginTop: 'var(--s5)', minHeight: 52 }}>
                       {tab === 'tryon' ? (
                         <Btn
                           full
@@ -2113,7 +2074,7 @@ function AddSheet({ ctx }) {
                         >
                           바로 보기
                         </Btn>
-                      ) : bulkResult ? (
+                      ) : tab === 'orders' && bulkResult ? (
                           <div style={{ display: 'flex', gap: 10, width: '100%' }}>
                             {bulkResult.fail > 0 && (
                               <Btn variant="soft" icon="sparkle" onClick={retryFailed} style={{ flex: 1 }}>
@@ -2125,7 +2086,7 @@ function AddSheet({ ctx }) {
                       ) : tab === 'orders' && !wide && !bulk ? null : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={bulk ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
+                          onClick={(tab === 'orders' && bulk) ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
                           disabled={tab === 'orders'
                             ? (orderBusy || busy || !!bulkRun || (bulk && !bulkPicked.length))
                             : (!canSubmit || busy || !!bulkRun)}
@@ -2146,18 +2107,19 @@ function AddSheet({ ctx }) {
             </div>
 
             {reextract ? (
-              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
+              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            ) : (!anchor && tab === 'orders') ? (
-              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
-                <Icon name="bag" size={15} /> {wide ? '고른 옷만 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요'}
-              </div>
             ) : (!anchor && tab !== 'tryon') ? (
-              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
-                <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
+              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
+                <Icon name={tab === 'orders' ? 'bag' : 'sparkle'} size={15} />
+                {tab === 'orders'
+                  ? (wide ? '내역 확인 후 고른 옷만 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요')
+                  : '사진 속 상의·하의·신발까지 따로따로 찾아드려요'}
               </div>
-            ) : null}
+            ) : (
+              <div style={{ marginTop: 'var(--s4)', minHeight: 18 }} aria-hidden />
+            )}
           </>
         )}
 

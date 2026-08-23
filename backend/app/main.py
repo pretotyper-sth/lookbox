@@ -390,8 +390,123 @@ def save_product_image_set(user_id: str, product_bytes: bytes) -> tuple[str, str
     return path, url, thumb_url
 
 
+def _pick_hero_panel(img: Image.Image) -> Image.Image:
+    """카페24식 세로 상세컷에서 정면 전신 한 장만 남긴다.
+
+    앞·뒤·넥·프린트·원단·스펙이 흰 간격으로 이어진 한 장으로 들어오는 경우가 많다.
+    통째로 누끼하면 카드에 영수증처럼 길쭉한 조각이 올라간다. 밝은(또는 검은)
+    가로 거터로 칸을 나누고, 전신 실루엣에 가깝고 가슴 쪽 정보가 많은 칸을 고른다.
+    거터가 없거나 칸이 하나면 원본을 그대로 둔다.
+    """
+    w, h = img.size
+    if w < 40 or h < 80 or h < w * 1.85:
+        return img
+    rgb = img.convert("RGB")
+    px = rgb.load()
+    step = max(1, w // 80)
+    gutter = []
+    for y in range(h):
+        s = s2 = n = 0
+        for x in range(0, w, step):
+            r, g, b = px[x, y]
+            v = (r + g + b) / 3
+            s += v
+            s2 += v * v
+            n += 1
+        mean = s / n
+        std = (max(0.0, s2 / n - mean * mean)) ** 0.5
+        gutter.append((std < 5.5 and mean > 250) or (std < 5.5 and mean < 14))
+    min_gap = max(3, int(h * 0.004))
+    i = 0
+    while i < h:
+        if not gutter[i]:
+            i += 1
+            continue
+        j = i
+        while j < h and gutter[j]:
+            j += 1
+        if j - i < min_gap:
+            for k in range(i, j):
+                gutter[k] = False
+        i = j
+    panels: list[tuple[int, int]] = []
+    y = 0
+    while y < h:
+        if gutter[y]:
+            y += 1
+            continue
+        start = y
+        while y < h and not gutter[y]:
+            y += 1
+        if y - start >= max(24, int(w * 0.4)):
+            panels.append((start, y))
+    if len(panels) < 2:
+        return img
+
+    def score(bounds: tuple[int, int], index: int) -> float:
+        y0, y1 = bounds
+        ph = y1 - y0
+        crop = rgb.crop((0, y0, w, y1))
+        cp = crop.load()
+        border: list[tuple[int, int, int]] = []
+        for x in range(0, w, max(1, w // 40)):
+            border.append(cp[x, 0])
+            border.append(cp[x, ph - 1])
+        for yy in range(0, ph, max(1, ph // 40)):
+            border.append(cp[0, yy])
+            border.append(cp[w - 1, yy])
+        br = sum(c[0] for c in border) / len(border)
+        bg = sum(c[1] for c in border) / len(border)
+        bb = sum(c[2] for c in border) / len(border)
+        samp = max(1, w // 36)
+        fg = tot = ink = 0
+        luma_sum = luma_sq = inner_n = 0
+        ix0, ix1 = int(w * 0.28), int(w * 0.72)
+        iy0, iy1 = int(ph * 0.22), int(ph * 0.72)
+        for yy in range(0, ph, samp):
+            for x in range(0, w, samp):
+                r, g, b = cp[x, yy]
+                tot += 1
+                luma = (r + g + b) / 3
+                if abs(r - br) + abs(g - bg) + abs(b - bb) > 48:
+                    fg += 1
+                if luma < 48:
+                    ink += 1
+                if ix0 <= x < ix1 and iy0 <= yy < iy1:
+                    luma_sum += luma
+                    luma_sq += luma * luma
+                    inner_n += 1
+        fill = fg / tot if tot else 0.0
+        aspect = ph / max(w, 1)
+        inner_std = 0.0
+        if inner_n:
+            mu = luma_sum / inner_n
+            inner_std = (max(0.0, luma_sq / inner_n - mu * mu)) ** 0.5
+        if fill > 0.58:
+            return -8.0 + fill
+        if fill < 0.08:
+            return -6.0
+        if ink / tot > 0.09 and fill < 0.38:
+            return -5.0  # 스펙·케어라벨 텍스트 칸
+        fill_s = 1.0 - min(abs(fill - 0.28) / 0.28, 1.0)
+        aspect_s = 1.0 - min(abs(aspect - 1.0) / 0.55, 1.0)
+        struct_s = min(inner_std, 40.0) / 40.0
+        early = 1.0 / (1.0 + index * 0.12)
+        return (3.0 * fill_s + 2.2 * struct_s + aspect_s) * early
+
+    ranked = sorted(((score(p, i), p) for i, p in enumerate(panels)), reverse=True)
+    _best, (y0, y1) = ranked[0]
+    if (y1 - y0) >= h * 0.88:
+        return img
+    pad = max(2, w // 80)
+    y0 = max(0, y0 - pad)
+    y1 = min(h, y1 + pad)
+    print(f"[hero] stacked detail → panel y={y0}:{y1} of {h} ({len(panels)} cells)", flush=True)
+    return img.crop((0, y0, w, y1))
+
+
 def read_image_as_png_bytes(path: str, max_side: int = 1024) -> bytes:
-    image = Image.open(path).convert("RGBA")
+    image = _pick_hero_panel(Image.open(path).convert("RGBA"))
     if max(image.size) > max_side:
         image.thumbnail((max_side, max_side))
     out = io.BytesIO()
@@ -401,7 +516,7 @@ def read_image_as_png_bytes(path: str, max_side: int = 1024) -> bytes:
 
 def image_to_data_url(path: str, max_side: int = 768) -> str:
     # 분류(비전)용: 작은 JPEG로 보내 업로드·처리를 빠르게. (분류엔 고해상도 불필요)
-    image = Image.open(path).convert("RGB")
+    image = _pick_hero_panel(Image.open(path).convert("RGB"))
     if max(image.size) > max_side:
         image.thumbnail((max_side, max_side))
     out = io.BytesIO()
@@ -2016,7 +2131,7 @@ def _studio_cutout_from_image(img: Image.Image, tol_boost: int = 0) -> bytes | N
 def _source_is_whiteish(path: str) -> bool:
     """원본 중앙부(옷이 있을 자리)가 대체로 밝고 채도 낮은지 — 흰 옷 판정 휴리스틱."""
     try:
-        rgb = Image.open(path).convert("RGB")
+        rgb = _pick_hero_panel(Image.open(path).convert("RGB"))
     except Exception:
         return False
     rgb.thumbnail((160, 160))
@@ -3507,17 +3622,25 @@ _DUP_STOPWORDS = {
 _SIZE_TOKEN = re.compile(r"^(xxs|xs|s|m|l|xl|xxl|2xl|3xl|free|\d{2,3}(cm|mm)?)$", re.I)
 
 
+def _query_key(name: str) -> str:
+    """goods_no / productNo → goodsno / productno. 쇼핑몰마다  punct를 다르게 쓴다."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+_PRODUCT_CODE_KEYS = frozenset({"goodsno", "productno", "itemid", "prdno", "productid"})
+
+
 def _product_code(url: str) -> str:
-    """상품 식별자. 쿼리(goodsNo=…)나 경로 끝의 긴 숫자."""
+    """상품 식별자. 쿼리(product_no=…, goodsNo=…)나 경로 끝의 긴 숫자."""
     try:
         u = urlparse(url)
     except Exception:  # noqa: BLE001
         return ""
     q = parse_qs(u.query or "")
-    for key in ("goodsno", "productno", "itemid", "prdno", "goods_no", "product_id", "productid"):
-        for k, vals in q.items():
-            if k.lower() == key and vals and vals[0].strip():
-                return f"{key}:{vals[0].strip()}"
+    for k, vals in q.items():
+        nk = _query_key(k)
+        if nk in _PRODUCT_CODE_KEYS and vals and str(vals[0]).strip():
+            return f"{nk}:{str(vals[0]).strip()}"
     tail = [seg for seg in (u.path or "").split("/") if seg]
     for seg in reversed(tail):
         if re.fullmatch(r"\d{5,}", seg):
@@ -3653,12 +3776,15 @@ def _wardrobe_dupe_index(user_id: str, with_hashes: bool = True) -> list[dict[st
 
     지운 아이템은 넣지 않는다 — 사용자가 지웠으면 다시 담을 수 있어야 한다.
     보관(archived)은 넣는다 — 옷장에 있는 옷이다.
+    pending(등록 확인 전 초안)은 빼 둔다. 실패·취소를 새로고침한 뒤에도
+    '같은 주소'로 막히면 빈 옷장처럼 보이는데 다시 담지를 못한다.
     """
     rows = (
         supabase_admin.table("wardrobe_items")
         .select("id,name,color,image_url,metadata,status")
         .eq("user_id", user_id)
         .neq("status", "deleted")
+        .neq("status", "pending")
         .limit(1000)
         .execute()
         .data
@@ -4378,6 +4504,9 @@ def _abs_page_url(page_url: str, src: str) -> str:
         return ""
     if raw.startswith("//"):
         raw = "https:" + raw
+    # 카페24 스크립트는 가끔 'web/product/big/…'처럼 루트 슬래시 없이 넣는다.
+    if re.match(r"web/product/", raw, re.I):
+        raw = "/" + raw
     return urljoin(page_url, raw)
 
 
@@ -4423,10 +4552,42 @@ def _product_image_candidates(html: str, page_url: str) -> list[str]:
     ):
         add(m.group(1))
     for m in re.finditer(
-        r"""["'](/web/product/(?:extra|big|medium)/[^"']+)["']""",
+        r"""["'](/?web/product/(?:extra|big|medium)/[^"']+)["']""",
         html,
         re.I,
     ):
+        add(m.group(1))
+    # 카페24 상품 페이지는 따옴표 없이 web/product/big/… 를 넣거나
+    # product_image_tiny = '202608/hash.jpg' 만 남기는 경우가 있다.
+    for m in re.finditer(
+        r"(?:https?:)?//[^\s\"'<>]*web/product/(?:extra|big|medium)/[^\s\"'<>]+",
+        html,
+        re.I,
+    ):
+        add(m.group(0).rstrip(".,);"))
+    for m in re.finditer(
+        r"/?web/product/(?:extra|big|medium)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)",
+        html,
+        re.I,
+    ):
+        add(m.group(0))
+    for m in re.finditer(
+        r"""product_image_(tiny|small|medium|big|extra)\s*=\s*['"]([^'"]+\.(?:jpe?g|png|webp))['"]""",
+        html,
+        re.I,
+    ):
+        size = m.group(1).lower()
+        file = m.group(2).lstrip("/")
+        folder = {"tiny": "tiny", "small": "small", "medium": "medium", "big": "big", "extra": "extra"}.get(size, "big")
+        if file.startswith("web/product/"):
+            add("/" + file)
+        else:
+            add(f"/web/product/{folder}/{file}")
+            if folder not in ("big", "extra"):
+                add(f"/web/product/big/{file}")
+    for m in re.finditer(r'"image"\s*:\s*"([^"]+)"', html):
+        add(m.group(1))
+    for m in re.finditer(r'"image"\s*:\s*\[\s*"([^"]+)"', html):
         add(m.group(1))
     for m in re.finditer(
         r"""<img[^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']""",

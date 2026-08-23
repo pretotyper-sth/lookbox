@@ -18,13 +18,13 @@ from PIL import Image, ImageChops, ImageDraw
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_norm_color_token", "_is_color_tail", "_split_color_from_title",
-    "_product_code", "_url_key", "_name_tokens", "_name_similarity",
+    "_query_key", "_product_code", "_url_key", "_name_tokens", "_name_similarity",
     "_content_crop", "_image_fingerprint", "_hamming", "_color_distance",
     "_fp_usable", "_fp_match", "_match_duplicate",
 )
 CONSTS = (
     "COLOR_WORDS", "NON_COLOR_TAILS", "_COLOR_CANONICAL_RAW", "_COLOR_CANONICAL", "_COLOR_NORM", "_DUP_STOPWORDS",
-    "_SIZE_TOKEN", "_FP_VERSION", "_FP_GRID", "_FP_COLOR", "_DUP_REASON_KO",
+    "_SIZE_TOKEN", "_FP_VERSION", "_FP_GRID", "_FP_COLOR", "_DUP_REASON_KO", "_PRODUCT_CODE_KEYS",
 )
 
 
@@ -80,6 +80,17 @@ class KeysTest(unittest.TestCase):
         self.assertEqual(code("https://x.co/p?goodsNo=3312991"), "goodsno:3312991")
         self.assertEqual(code("https://y.co/goods/3312991"), "path:3312991")
         self.assertEqual(code("https://y.co/goods/shirt-blue"), "")
+
+    def test_cafe24_product_no_distinguishes_items(self):
+        key = self.ns["_url_key"]
+        a = "https://www.ptry.co.kr/product/detail.html?product_no=4844&cate_no=753&display_group=1"
+        b = "https://www.ptry.co.kr/product/detail.html?product_no=9999&cate_no=753&display_group=1"
+        self.assertEqual(self.ns["_product_code"](a), "productno:4844")
+        self.assertNotEqual(key(a), key(b))
+        self.assertEqual(
+            key(a),
+            key("https://ptry.co.kr/product/detail.html?product_no=4844&utm_source=ad"),
+        )
 
     def test_name_tokens_ignore_noise(self):
         tokens = self.ns["_name_tokens"]

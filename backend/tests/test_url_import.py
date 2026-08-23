@@ -77,3 +77,21 @@ class UrlImportPickTest(unittest.TestCase):
         raw = b"\xff\xd8\xff" + b"\x00" * 2000
         self.assertTrue(self.ns["_looks_like_image"](raw, "image/jpeg"))
         self.assertFalse(self.ns["_looks_like_image"](b"<html>nope</html>", "text/html"))
+
+    def test_cafe24_js_var_and_unquoted_path(self):
+        html = """
+        <img src="/online/careguide/drycle.jpg" />
+        var product_image_tiny = '202608/abc.jpg';
+        web/product/big/202608/hero.jpg
+        """
+        urls = self.ns["_product_image_candidates"](html, "https://www.ptry.co.kr/product/detail.html")
+        self.assertTrue(any("/web/product/big/" in u for u in urls))
+        self.assertIn("hero.jpg", urls[0])
+        self.assertFalse(any("careguide" in u for u in urls))
+
+    def test_pottery_og_image_is_picked(self):
+        html = '''<meta property="og:image" content="https://www.ptry.co.kr/web/product/big/202608/9bb2ef892d5201e0236abd4b69177574.jpg" />
+        <img src="https://ptry.co.kr/online/careguide/drycle.jpg" />'''
+        urls = self.ns["_product_image_candidates"](html, "https://www.ptry.co.kr/product/detail.html?product_no=4844")
+        self.assertTrue(urls)
+        self.assertIn("9bb2ef892d5201e0236abd4b69177574.jpg", urls[0])
