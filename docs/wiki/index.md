@@ -19,7 +19,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 _(empty)_
 
 ## Operations
-_(empty)_
+- [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
 
 ## Gotchas
 - [recent-tag-field-scroll](recent-tag-field-scroll.md) — 구매처 칩 토글이 입력칸을 붙였다 떼며 시트 높이를 바꾼다; scrollTop/gap을 잡아 `useLayoutEffect`에서 되돌림

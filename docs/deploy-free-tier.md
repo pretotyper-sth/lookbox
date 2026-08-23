@@ -75,6 +75,8 @@ Build Command: npm run build
 Output Directory: dist
 ```
 
+`frontend/vercel.json`의 `github.silent`은 Vercel 봇이 커밋·PR에 댓글을 달지 않게 한다. 푸시마다 GitHub 메일이 오지 않게 하려는 설정이다.
+
 Environment variables:
 
 ```txt

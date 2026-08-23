@@ -38,3 +38,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 블록코어·바디핏·비즈니스 캐주얼 + 여성 전용 걸리시·글램·페미닌.
 카드 WebP와 `_STYLE_IDS`를 맞춤([[mood-groups]]).
 
+## [2026-08-23] ingest | Vercel 푸시 메일
+푸시 메일은 vercel[bot] GitHub 댓글. `frontend/vercel.json` `github.silent`
+([[vercel-github-silent]]).
+
