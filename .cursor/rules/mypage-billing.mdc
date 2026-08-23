@@ -9,6 +9,6 @@ alwaysApply: false
 - 사용량: PC는 **계정 및 지원** 안 `UsageBlock variant=inline`. 모바일은 분리 카드 `variant=card`. 동작별 차감 목록은 그리지 않는다.
 - 무료 월 크레딧은 **50**. `PLANS["free"]["credits"]`와 화면 `granted`가 어긋나면 `billing_state`가 grant 행을 맞춘다. 계정마다 원장이 다르니, 계정 바꿨으면 마이페이지를 한 번 열어 지급분이 잡히게 한다.
 - 버전 줄: `LOOKBOX v1.0.0 · {날짜}`만. 커밋 해시 금지 (`__BUILD_DATE__`).
-- 키/몸무게: 표시는 `InfoRow` 두 줄, 입력은 `NumberSlider` 두 개. 착장·바로 보기 **이미지 프롬프트에는 넣지 않는다**. 코디 설명 기장·핏만 `_profile_block`.
+- 키/몸무게: 표시는 `InfoRow` 두 줄, 입력은 `NumberSlider` 두 개. 착장·바로 보기·추천 `_profile_block`에 체형 문장을 넣지 않는다.
 
 위키: [[mypage-usage-in-account]] [[profile-height-weight]] `docs/pricing.md`

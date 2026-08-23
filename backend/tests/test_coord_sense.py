@@ -72,6 +72,13 @@ class StyleAttrTest(unittest.TestCase):
         self.assertIn("오버사이즈", block)
         self.assertEqual(self.ns["_profile_block"](None), "")
 
+    def test_profile_block_skips_height_weight(self):
+        block = self.ns["_profile_block"]({"height": "170", "weight": "60", "fit": "슬림"})
+        self.assertNotIn("체형", block)
+        self.assertNotIn("170", block)
+        self.assertNotIn("60", block)
+        self.assertIn("슬림", block)
+
 
 class PairScoreTest(unittest.TestCase):
     def setUp(self):

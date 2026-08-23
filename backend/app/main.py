@@ -2379,15 +2379,6 @@ def _profile_block(profile: dict[str, Any] | None) -> str:
     fit = str(p.get("fit") or "").strip()
     if fit:
         lines.append(f"선호 실루엣: {fit}")
-    body = [x for x in (
-        f"{str(p.get('height')).strip()}cm" if str(p.get("height") or "").strip() else "",
-        f"{str(p.get('weight')).strip()}kg" if str(p.get("weight") or "").strip() else "",
-    ) if x]
-    if body:
-        lines.append(
-            "체형: " + " · ".join(body)
-            + " — 기장·핏이 이 체형에서 어떻게 떨어지는지 감안해 고른다(예: 크롭·와이드의 비율)."
-        )
     palettes = [str(x).strip() for x in (p.get("palettes") or []) if str(x).strip()][:5]
     if palettes:
         lines.append("선호 색 계열: " + ", ".join(palettes))
@@ -3334,7 +3325,6 @@ class LiveCoordinate(BaseModel):
     palettes: list[str] = []
     gender: str | None = None
     age: str | None = None
-    # 선택 입력. 있으면 코디 설명(기장·핏)을 체형에 맞춘다.
     height: str | None = None
     weight: str | None = None
 

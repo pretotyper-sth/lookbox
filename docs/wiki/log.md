@@ -30,3 +30,7 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 ([[profile-height-weight]]). 같은 사실을 `.cursor/skills/lookbox-mypage`와
 `.cursor/rules/mypage-billing.mdc`에 심음(로컬 에이전트용).
 
+## [2026-08-23] ingest | 추천 프롬프트에서도 체형 제거
+`_profile_block`의 키·몸무게 문장을 뺀다. 그림뿐 아니라 코디 설명에도 체형을
+넣지 않는다. [[profile-height-weight]]
+
