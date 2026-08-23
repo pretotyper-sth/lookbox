@@ -3997,6 +3997,8 @@ def _store_uploaded_item(
     source_url: str | None = None,
     brand: str | None = None,
     store: str | None = None,
+    price: str | None = None,
+    material: str | None = None,
     color_override: str | None = None,
     extract_hint: str | None = None,
     report: Callable[[str], None] | None = None,
@@ -4106,6 +4108,10 @@ def _store_uploaded_item(
             item_metadata["brand"] = brand.strip()
         if (store or "").strip():
             item_metadata["store"] = store.strip()
+        if (price or "").strip():
+            item_metadata["price"] = price.strip()[:40]
+        if (material or "").strip():
+            item_metadata["material"] = material.strip()[:80]
         if (source_url or "").strip():
             item_metadata["source_url"] = source_url.strip()
         row = (
@@ -4433,6 +4439,217 @@ def _extract_brand(html: str, page_url: str) -> str:
     return ""
 
 
+def _jsonld_nodes(html: str) -> list:
+    nodes: list = []
+    for block in re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.I | re.S,
+    ):
+        raw = html_lib.unescape((block or "").strip())
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        stack = [data]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, list):
+                stack.extend(node)
+            elif isinstance(node, dict):
+                if "@graph" in node:
+                    graph = node["@graph"]
+                    stack.extend(graph if isinstance(graph, list) else [graph])
+                nodes.append(node)
+    return nodes
+
+
+def _plain_html(frag: str) -> str:
+    text = html_lib.unescape(frag or "")
+    text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.I)
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _format_krw(val) -> str:
+    """상품가 숫자를 '89,000' 형태로. 배송비·0원·비정상 값은 버린다."""
+    if val is None or isinstance(val, bool):
+        return ""
+    if isinstance(val, (int, float)):
+        n = int(round(float(val)))
+    else:
+        raw = html_lib.unescape(str(val)).strip()
+        raw = re.sub(r"(?i)(?:₩|원|krw)", "", raw)
+        raw = raw.replace(",", "").replace(" ", "")
+        raw = re.sub(r"[^\d.]", "", raw)
+        if not raw:
+            return ""
+        try:
+            n = int(round(float(raw)))
+        except ValueError:
+            return ""
+    if n < 100 or n > 99_999_999:
+        return ""
+    return f"{n:,}"
+
+
+def _price_from_offers(offers) -> str:
+    if isinstance(offers, list):
+        for offer in offers:
+            price = _price_from_offers(offer)
+            if price:
+                return price
+        return ""
+    if not isinstance(offers, dict):
+        return ""
+    for key in ("price", "lowPrice"):
+        price = _format_krw(offers.get(key))
+        if price:
+            return price
+    spec = offers.get("priceSpecification")
+    if isinstance(spec, dict):
+        return _format_krw(spec.get("price"))
+    if isinstance(spec, list):
+        for row in spec:
+            if isinstance(row, dict):
+                price = _format_krw(row.get("price"))
+                if price:
+                    return price
+    return ""
+
+
+def _spec_cell(html: str, labels: tuple[str, ...]) -> str:
+    """상품 정보 표의 th/td, dt/dd에서 라벨에 맞는 값을 읽는다."""
+    for label in labels:
+        inner = (
+            rf"(?:<(?:span|strong|b|em|font)[^>]*>\s*)*{re.escape(label)}"
+            rf"\s*(?:</(?:span|strong|b|em|font)>\s*)*"
+        )
+        pats = (
+            rf"<th[^>]*>\s*{inner}</th>\s*<td[^>]*>(.*?)</td>",
+            rf"<dt[^>]*>\s*{inner}</dt>\s*<dd[^>]*>(.*?)</dd>",
+        )
+        for pat in pats:
+            m = re.search(pat, html, re.I | re.S)
+            if not m:
+                continue
+            text = _plain_html(m.group(1))
+            if text:
+                return text
+    return ""
+
+
+def _extract_price(html: str) -> str:
+    """판매가: JSON-LD offers → product:price meta → 카페24 가격 칸 → 판매가 표."""
+    for node in _jsonld_nodes(html):
+        price = _price_from_offers(node.get("offers"))
+        if price:
+            return price
+        price = _format_krw(node.get("price"))
+        if price:
+            return price
+    for key, attr in (
+        ("product:price:amount", "property"),
+        ("og:price:amount", "property"),
+        ("product:price:amount", "name"),
+        ("price", "itemprop"),
+    ):
+        price = _format_krw(_meta_content(html, key, attr))
+        if price:
+            return price
+    m = re.search(
+        r"""<(?:meta|span)[^>]+itemprop=["']price["'][^>]+content=["']([^"']+)["']""",
+        html,
+        re.I,
+    )
+    if m:
+        price = _format_krw(m.group(1))
+        if price:
+            return price
+    m = re.search(
+        r'id=["\']span_product_price_text["\'][^>]*>(.{0,160}?)</(?:strong|span|div|em|b)',
+        html,
+        re.I | re.S,
+    )
+    if m:
+        price = _format_krw(_plain_html(m.group(1)))
+        if price:
+            return price
+    labeled = _spec_cell(html, ("할인판매가", "판매가", "가격"))
+    if labeled:
+        nums = re.findall(r"(?:\d{1,3}(?:,\d{3})+|\d{4,8})", labeled.replace(" ", ""))
+        if nums:
+            price = _format_krw(nums[-1])
+            if price:
+                return price
+    m = re.search(
+        r"""(?:product_price|item_price)\s*[=:]\s*['"]([^'"]+)['"]""",
+        html,
+        re.I,
+    )
+    if m:
+        return _format_krw(m.group(1))
+    return ""
+
+
+def _clean_material(val) -> str:
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        parts = [_clean_material(x) for x in val]
+        return ", ".join(p for p in parts if p)[:80]
+    if isinstance(val, dict):
+        return _clean_material(val.get("name") or val.get("value") or "")
+    raw = str(val)
+    text = _plain_html(raw) if "<" in raw else html_lib.unescape(raw).strip()
+    text = re.sub(r"\s+", " ", text).strip(" |·-–—,/")
+    if len(text) < 2 or len(text) > 80:
+        return ""
+    if re.fullmatch(r"[\d,.]+원?", text):
+        return ""
+    return text[:80]
+
+
+def _as_prop_list(val) -> list:
+    if isinstance(val, list):
+        return val
+    if isinstance(val, dict):
+        return [val]
+    return []
+
+
+def _extract_material(html: str) -> str:
+    """소재/재질: JSON-LD material → additionalProperty → 상품정보 표."""
+    labels = ("소재", "재질", "원단", "혼용률", "혼용율", "겉감", "Material", "Fabric")
+    for node in _jsonld_nodes(html):
+        material = _clean_material(node.get("material"))
+        if material:
+            return material
+        for prop in _as_prop_list(node.get("additionalProperty")) + _as_prop_list(
+            node.get("additionalProperties")
+        ):
+            if not isinstance(prop, dict):
+                continue
+            name = str(prop.get("name") or prop.get("propertyID") or "")
+            if not any(label.lower() in name.lower() for label in labels):
+                continue
+            material = _clean_material(prop.get("value") or prop.get("unitText"))
+            if material:
+                return material
+    for key, attr in (
+        ("product:material", "property"),
+        ("material", "itemprop"),
+        ("material", "name"),
+    ):
+        material = _clean_material(_meta_content(html, key, attr))
+        if material:
+            return material
+    return _clean_material(_spec_cell(html, labels))
+
+
 def _detect_store(page_url: str, brand: str = "") -> str:
     """구매처는 URL(도메인) 기준으로 판별.
 
@@ -4651,6 +4868,8 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
 
     brand = _extract_brand(html, page_url)
     store = _detect_store(page_url, brand)
+    price = _extract_price(html)
+    material = _extract_material(html)
     title = _meta_content(html, "og:title") or _meta_content(html, "twitter:title", "name")
     tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
     doc_title = tm.group(1).strip() if tm else ""
@@ -4688,7 +4907,14 @@ def _fetch_product_meta(page_url: str) -> tuple[bytes, str, dict[str, str]]:
                 continue
             if not _looks_like_image(resp.content, resp.headers.get("content-type", "")):
                 continue
-            meta = {"brand": brand, "store": store, "title": (title or "")[:120], "color": color}
+            meta = {
+                "brand": brand,
+                "store": store,
+                "title": (title or "")[:120],
+                "color": color,
+                "price": price,
+                "material": material,
+            }
             return resp.content, resp.headers.get("content-type", "image/jpeg"), meta
         except requests.RequestException as exc:
             last_exc = exc
@@ -5621,6 +5847,8 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
             source_url=url,
             brand=meta.get("brand") or None,
             store=meta.get("store") or None,
+            price=meta.get("price") or None,
+            material=meta.get("material") or None,
             color_override=meta.get("color") or None,
             extract_hint=body.extract_hint,
             report=report,

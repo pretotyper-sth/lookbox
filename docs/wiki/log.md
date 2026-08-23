@@ -106,3 +106,6 @@ sticky는 시트 안에서 묻혔다. 「담고 완료」·상세 「저장」�
 ## [2026-08-23] ingest | CTA 고정을 되돌림
 상세 「저장」과 추가 「담고 완료」를 다시 상세 정보 아래(본문 스크롤 안)로 되돌렸다. 독·sticky 없음 ([[add-item-bulk]]).
 
+## [2026-08-23] ingest | URL 가격·재질 프리필
+URL 담기는 브랜드처럼 상품 HTML에서 가격·재질을 읽어 등록 칸에 넣는다. JSON-LD·메타·카페24 표. 없으면 빈 칸 ([[item-optional-fields]] [[url-import-fetch]]).
+
