@@ -111,9 +111,6 @@ function PlanSheet({ open, onClose, billing }) {
                   </li>
                 ))}
               </ul>
-              <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
-                바로 보기 이미지는 크레딧을 쓰지 않아요.
-              </p>
             </div>
           );
         })()}
