@@ -1,23 +1,31 @@
 /* @prototype-ported */
 const React = window.React;
-const { BottomSheet, Btn, Chip, Icon, LB_DATA, LabeledField, PALETTE, PERSONAL_COLORS, STYLES } = window;
+const { BottomSheet, Btn, Chip, Icon, LB_DATA, LabeledField, NumberSlider, PALETTE, PERSONAL_COLORS, STYLES } = window;
 
 /* global React, Btn, Icon, Chip, BottomSheet, LabeledField, LB_DATA */
 // LOOKBOX — 마이페이지: 개인 정보(계정) + 내 스타일(취향) 허브. 실서비스 IA 기준.
 
 const { useState: useMp, useEffect: useMe } = React;
 
-// 빌드 식별자 — 이 기기가 어떤 배포를 보고 있는지 확인용 (vite define)
-const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
+// 버전·배포일 — 커밋 해시는 빼고, 사용자가 최신인지 가늠할 날짜만.
+const BUILD_DATE = typeof __BUILD_DATE__ === 'string' ? __BUILD_DATE__ : '';
+
+function VersionLine() {
+  return (
+    <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
+      LOOKBOX v1.0.0{BUILD_DATE ? ` · ${BUILD_DATE}` : ''}
+    </div>
+  );
+}
 
 /* ---- 사용량 · 요금제 ---------------------------------------------------------
    AI를 쓰는 작업(등록·추천·착장 이미지)은 실제로 돈이 나간다. 남은 크레딧은
-   계정 카드 안에 짧게 두고, 요금제는 시트로 연다. 버전 문자열은 페이지 맨 아래에만. */
+   PC에선 계정 카드 안에, 모바일에선 제 카드로. 버전은 페이지 맨 아래에만. */
 function CreditBar({ remaining, granted }) {
   const pct = granted > 0 ? Math.max(0, Math.min(100, (remaining / granted) * 100)) : 0;
   const low = pct <= 15;
   return (
-    <div style={{ height: 6, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
+    <div style={{ height: 8, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
       <div style={{
         width: `${pct}%`, height: '100%', borderRadius: 999,
         background: low ? '#B0573C' : 'var(--accent)',
@@ -84,10 +92,17 @@ function PlanSheet({ open, onClose, billing }) {
   );
 }
 
-function UsageBlock({ billing, onOpenPlans }) {
+/* card: 계정 카드와 분리된 제 카드로(모바일). inline: 계정 카드 안에 얹혀서(PC).
+   숫·막대·날짜가 한 덩어리로 붙지 않게 여백을 넉넉히 둔다. */
+function UsageBlock({ billing, onOpenPlans, variant = 'inline' }) {
+  const card = variant === 'card';
+  const wrap = card
+    ? { background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '20px 20px 22px', height: '100%', boxSizing: 'border-box' }
+    : { padding: '18px 16px 22px' };
   if (!billing) {
     return (
-      <div style={{ padding: '8px 12px 12px' }}>
+      <div style={wrap}>
+        {card ? <div style={{ fontSize: 14.5, fontWeight: 800, marginBottom: 10 }}>사용량</div> : null}
         <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>불러오는 중…</div>
       </div>
     );
@@ -96,10 +111,10 @@ function UsageBlock({ billing, onOpenPlans }) {
   const reset = resetsAt ? new Date(resetsAt) : null;
   const low = remaining <= Math.max(3, Math.round(granted * 0.1));
   return (
-    <div style={{ padding: '8px 12px 12px' }}>
+    <div style={wrap}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700 }}>사용량</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--ivory)', padding: '2px 8px', borderRadius: 999 }}>
+        <span style={{ fontSize: 14.5, fontWeight: 800 }}>사용량</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--ivory)', padding: '3px 9px', borderRadius: 999 }}>
           {planName}
         </span>
         <span style={{ flex: 1 }} />
@@ -107,12 +122,12 @@ function UsageBlock({ billing, onOpenPlans }) {
           요금제 보기
         </button>
       </div>
-      <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span className="tnum" style={{ fontSize: 18, fontWeight: 800, lineHeight: 1 }}>{remaining}</span>
-        <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧</span>
+      <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span className="tnum" style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{remaining}</span>
+        <span className="tnum" style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧</span>
       </div>
-      <div style={{ marginTop: 8 }}><CreditBar remaining={remaining} granted={granted} /></div>
-      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)' }}>
+      <div style={{ marginTop: 'var(--s3)' }}><CreditBar remaining={remaining} granted={granted} /></div>
+      <div style={{ marginTop: 'var(--s3)', fontSize: 12, color: 'var(--ink-3)' }}>
         {reset ? `${reset.getMonth() + 1}월 ${reset.getDate()}일 초기화` : ''}
         {used > 0 ? ` · ${used}개 사용` : ''}
         {low ? ' · 얼마 안 남았어요' : ''}
@@ -400,14 +415,9 @@ function MyPageScreen({ ctx }) {
       <InfoRow label="이메일" value={prefs.email} />
       <InfoRow label="비밀번호" value={prefs.email ? '••••••••' : ''} />
       <InfoRow label="성별" value={prefs.gender} />
-      <InfoRow label="연령대" value={prefs.age} last={!(prefs.height || prefs.weight)} />
-      {(prefs.height || prefs.weight) && (
-        <InfoRow
-          label="키 · 몸무게"
-          value={[prefs.height && `${prefs.height}cm`, prefs.weight && `${prefs.weight}kg`].filter(Boolean).join(' · ')}
-          last
-        />
-      )}
+      <InfoRow label="연령대" value={prefs.age} />
+      <InfoRow label="키" value={prefs.height ? `${prefs.height}cm` : ''} />
+      <InfoRow label="몸무게" value={prefs.weight ? `${prefs.weight}kg` : ''} last />
     </>
   );
 
@@ -488,13 +498,15 @@ function MyPageScreen({ ctx }) {
     </div>
   );
 
-  const usageBlock = <UsageBlock billing={billing} onOpenPlans={() => setPlanSheet(true)} />;
+  // PC: 사용량을 계정 카드 안에 넉넉한 여백으로. 모바일: 계정 카드에서 분리한 제 카드로(아래).
+  const usageInline = <UsageBlock billing={billing} onOpenPlans={() => setPlanSheet(true)} variant="inline" />;
+  const usageCardEl = <UsageBlock billing={billing} onOpenPlans={() => setPlanSheet(true)} variant="card" />;
 
   const accountCard = (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
-      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>계정 및 지원</div>
-      {usageBlock}
-      <div style={{ height: 1, background: 'var(--line)', margin: '2px 12px 4px' }} />
+      <div style={{ padding: '12px 16px 2px', fontSize: 14.5, fontWeight: 800 }}>계정 및 지원</div>
+      {usageInline}
+      <div style={{ height: 1, background: 'var(--line)', margin: '6px 16px 4px' }} />
       <ActionRow icon="help" label="고객센터" onClick={() => {}} />
       <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
       <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
@@ -555,9 +567,7 @@ function MyPageScreen({ ctx }) {
               {accountCard}
             </div>
 
-            <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
-          LOOKBOX v1.0.0 <span style={{ opacity: 0.7 }}>· {BUILD_ID}</span>
-        </div>
+            <VersionLine />
             {sheets}
           </div>
         </div>
@@ -579,6 +589,7 @@ function MyPageScreen({ ctx }) {
         </div>
         <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>{personalBody}</Section>
         <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>{styleBody}</Section>
+        <div style={{ marginBottom: 14 }}>{usageCardEl}</div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
           <ActionRow
             icon="sparkle"
@@ -591,17 +602,13 @@ function MyPageScreen({ ctx }) {
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
-          {usageBlock}
-          <div style={{ height: 1, background: 'var(--line)', margin: '2px 12px 4px' }} />
           <ActionRow icon="help" label="고객센터" onClick={() => {}} />
           <ActionRow icon="shield" label="약관 및 개인정보 처리방침" onClick={() => {}} />
           <ActionRow icon="logout" label="로그아웃" onClick={() => setConfirmOut(true)} />
           <ActionRow icon="trash" label="회원탈퇴" danger onClick={() => setConfirmDel(true)} />
         </div>
         {sheets}
-        <div style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-3)', paddingBottom: 8 }}>
-          LOOKBOX v1.0.0 <span style={{ opacity: 0.7 }}>· {BUILD_ID}</span>
-        </div>
+        <VersionLine />
       </div>
     </div>
   );
@@ -735,38 +742,10 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>연령대</div>
             <AccountChips options={LB_DATA.AGES} value={d.age} onPick={set('age')} />
           </div>
-          {/* 체형은 넣으면 코디 그림이 실제 몸에 가까워지지만, 굳이 밝히고 싶지 않을 수 있다.
-              선택 입력으로 두고 비워도 아무 일도 없다는 걸 문구로 분명히 한다. */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 9 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>키 · 몸무게</span>
-              <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>선택 · 비워둬도 돼요</span>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[['height', 'cm', 100, 230], ['weight', 'kg', 25, 200]].map(([key, unit, lo, hi]) => (
-                <div key={key} style={{ flex: 1, position: 'relative' }}>
-                  <input
-                    className="lb-input"
-                    inputMode="numeric"
-                    value={d[key]}
-                    placeholder={unit === 'cm' ? '키' : '몸무게'}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
-                      set(key)(v && (Number(v) < lo || Number(v) > hi) && v.length >= 3 ? d[key] : v);
-                    }}
-                    style={{
-                      width: '100%', padding: '12px 34px 12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
-                      background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
-                      outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
-                  <span style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--ink-3)' }}>{unit}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 7, fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-              넣으면 코디를 내 체형에 가깝게 그려요.
-            </div>
+          {/* 보여주기(개인 정보 행)와 달리, 여기서는 하나씩 고른다. 비워도 된다. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <NumberSlider label="키" hint="선택 · 비워둬도 돼요" value={d.height} onChange={set('height')} min={140} max={200} unit="cm" defaultValue={165} />
+            <NumberSlider label="몸무게" hint="선택 · 비워둬도 돼요" value={d.weight} onChange={set('weight')} min={30} max={150} unit="kg" defaultValue={60} />
           </div>
         </div>
 

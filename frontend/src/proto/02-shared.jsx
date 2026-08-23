@@ -715,6 +715,31 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
   );
 }
 
+/* 숫자 하나를 고르는 입력 — 키·몸무게처럼 범위가 뻔한 값은 텍스트 입력보다
+   슬라이더가 더 편하다. 건드리기 전엔 "선택 안 함"으로 비어 있는 채 둔다. */
+function NumberSlider({ label, hint, value, onChange, min, max, step = 1, unit = '', defaultValue }) {
+  const touched = value !== '' && value != null;
+  const num = touched ? Number(value) : defaultValue;
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+          {hint ? <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{hint}</span> : null}
+        </span>
+        <span className="tnum" style={{ fontSize: 13.5, fontWeight: 700, color: touched ? 'var(--ink)' : 'var(--ink-3)' }}>
+          {touched ? `${num}${unit}` : '선택 안 함'}
+        </span>
+      </div>
+      <input
+        type="range" className="lb-range"
+        min={min} max={max} step={step} value={num}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
 /* 최근 입력값 기억 — 구매처처럼 같은 값을 반복 입력하는 항목용.
    목록은 아이템에 딸린 값이 아니라 전역 이력이다: 어느 아이템에서 새 구매처를
    넣어도 모든 아이템의 칩에 똑같이, 맨 앞에 나타난다. */
@@ -1196,4 +1221,4 @@ function PullRefresh({ onRefresh, disabled, children, style, className, scrollRe
   );
 }
 
-Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, SmartImg, PullRefresh });
+Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, NumberSlider, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, SmartImg, PullRefresh });

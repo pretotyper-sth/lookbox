@@ -255,6 +255,22 @@ img { display: block; max-width: 100%; }
 .lb-rail-card:hover { opacity: 0.85; transform: translateY(-2px); }
 .lb-rail-card[aria-current='true']:hover { opacity: 1; }
 .lb-input:focus { border-color: var(--ink-2); }
+
+/* ---- number slider (키·몸무게 등 숫자 입력) ---- */
+.lb-range {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+  border-radius: 999px; background: var(--line-2); outline: none; margin: 0;
+}
+.lb-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--accent-ink);
+  box-shadow: 0 0 0 1px var(--line); cursor: pointer;
+}
+.lb-range::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+  border: 3px solid var(--accent-ink); box-shadow: 0 0 0 1px var(--line); cursor: pointer;
+}
+.lb-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--line-2); }
 .lb-itembtn { transition: transform var(--dur) var(--ease); }
 .lb-itembtn:active { transform: scale(0.97); }
 .lb-itembtn:hover .lb-thumb-hint { opacity: 1; }

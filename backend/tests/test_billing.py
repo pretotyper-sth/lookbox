@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = ("_period_key", "_period_end", "_plan_of", "plan_perks")
+FNS = ("_period_key", "_period_end", "plan_perks")
 CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS")
 
 
@@ -54,9 +54,9 @@ class PlanShapeTest(unittest.TestCase):
 
     def test_perks_translate_credits_into_real_actions(self):
         perks = self.ns["plan_perks"](self.ns["PLANS"]["free"])
-        self.assertTrue(any("60크레딧" in x for x in perks))
-        self.assertTrue(any("30벌" in x for x in perks))        # 사진 등록 2크레딧 → 30벌
-        self.assertTrue(any("60번" in x for x in perks))        # 코디 추천 1크레딧 → 60번
+        self.assertTrue(any("50크레딧" in x for x in perks))
+        self.assertTrue(any("25벌" in x for x in perks))        # 사진 등록 2크레딧 → 25벌
+        self.assertTrue(any("50번" in x for x in perks))        # 코디 추천 1크레딧 → 50번
         self.assertTrue(any("광고 포함" in x for x in perks))
         # 카드에서 한 줄이 넘어가면 비교가 안 된다 — 짧게 유지
         self.assertTrue(all(len(x) <= 20 for x in perks), perks)
@@ -81,9 +81,9 @@ class PlanShapeTest(unittest.TestCase):
 
     def test_free_plan_covers_a_real_first_month(self):
         # 무료로도 '옷장을 만들고 코디를 받아보는' 경험은 끝까지 가야 한다:
-        # URL로 30벌 담고(30) 추천 15회(15) = 45 ≤ 60
+        # URL로 25벌 담고(25) 추천 15회(15) = 40 ≤ 50
         c, free = self.ns["CREDIT_COSTS"], self.ns["PLANS"]["free"]["credits"]
-        self.assertLessEqual(30 * c["import_url"] + 15 * c["coordinate"], free)
+        self.assertLessEqual(25 * c["import_url"] + 15 * c["coordinate"], free)
 
 
 class PeriodTest(unittest.TestCase):
@@ -95,16 +95,3 @@ class PeriodTest(unittest.TestCase):
         self.assertEqual(key, "2026-08")
         self.assertTrue(self.ns["_period_end"]("2026-08").startswith("2026-09-01"))
         self.assertTrue(self.ns["_period_end"]("2026-12").startswith("2027-01-01"))
-
-    def test_plan_is_the_latest_plan_row(self):
-        rows = [
-            {"reason": "grant", "metadata": {"period": "2026-08"}},
-            {"reason": "plan", "metadata": {"plan": "basic"}},
-            {"reason": "plan", "metadata": {"plan": "pro"}},
-            {"reason": "coordinate", "metadata": {}},
-        ]
-        self.assertEqual(self.ns["_plan_of"](rows), "pro")
-        self.assertEqual(self.ns["_plan_of"]([]), "free")
-        # 없는 요금제 이름은 무시하고 마지막 유효값을 쓴다
-        rows.append({"reason": "plan", "metadata": {"plan": "unicorn"}})
-        self.assertEqual(self.ns["_plan_of"](rows), "pro")

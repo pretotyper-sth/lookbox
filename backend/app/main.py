@@ -449,7 +449,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "id": "free",
         "name": "무료",
         "price_krw": 0,
-        "credits": 60,
+        "credits": 50,
         "model_look": False,
         "blurb": "가볍게 시작",
     },
@@ -506,39 +506,50 @@ def _period_end(period: str) -> str:
     return nxt.isoformat()
 
 
-def _ledger_rows(user_id: str) -> list[dict[str, Any]]:
+def _period_start(period: str) -> str:
+    year, month = (int(x) for x in period.split("-"))
+    return datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
+
+
+def _ledger_rows(user_id: str, period: str | None = None) -> list[dict[str, Any]]:
+    """이번 달 것만 필요하면 period를 넘겨 서버 쪽에서 걸러 받는다(원장이 쌓일수록 빨라진다)."""
     try:
-        return (
-            supabase_admin.table("credit_ledger")
-            .select("delta,reason,metadata,created_at")
-            .eq("user_id", user_id)
-            .order("created_at", desc=False)
-            .limit(5000)
-            .execute()
-            .data
-            or []
-        )
+        q = supabase_admin.table("credit_ledger").select("id,delta,reason,metadata,created_at").eq("user_id", user_id)
+        if period:
+            q = q.gte("created_at", _period_start(period))
+        return q.order("created_at", desc=False).limit(5000).execute().data or []
     except Exception as exc:  # noqa: BLE001
         print(f"[billing] ledger read failed: {exc}", flush=True)
         return []
 
 
-def _plan_of(rows: list[dict[str, Any]]) -> str:
-    plan = DEFAULT_PLAN
-    for row in rows:
-        if row.get("reason") == "plan":
-            candidate = str((row.get("metadata") or {}).get("plan") or "")
-            if candidate in PLANS:
-                plan = candidate
-    return plan
+def _current_plan(user_id: str) -> str:
+    """가장 최근 'plan' 기록 하나만 조회한다 — 전체 원장을 훑지 않는다."""
+    try:
+        rows = (
+            supabase_admin.table("credit_ledger")
+            .select("metadata")
+            .eq("user_id", user_id)
+            .eq("reason", "plan")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        candidate = str((rows[0].get("metadata") or {}).get("plan") or "") if rows else ""
+        return candidate if candidate in PLANS else DEFAULT_PLAN
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] plan read failed: {exc}", flush=True)
+        return DEFAULT_PLAN
 
 
 def billing_state(user_id: str) -> dict[str, Any]:
     """이번 달 크레딧 상태. 달이 바뀌면 첫 조회 때 자동으로 새 크레딧을 넣는다."""
-    rows = _ledger_rows(user_id)
-    plan_id = _plan_of(rows)
-    plan = PLANS[plan_id]
     period = _period_key()
+    plan_id = _current_plan(user_id)
+    plan = PLANS[plan_id]
+    rows = _ledger_rows(user_id, period)
 
     granted = sum(
         int(r.get("delta") or 0)
@@ -560,6 +571,22 @@ def billing_state(user_id: str) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001
             print(f"[billing] grant failed: {exc}", flush=True)
             granted = plan["credits"]
+    elif granted != plan["credits"]:
+        # 요금제 크레딧이 바뀌면 이번 달 지급분을 맞춘다. 안 맞추면 화면이 예전
+        # 숫자(60 등)를 붙잡고 다음 달까지 기다린다.
+        grant_row = next(
+            (r for r in rows
+             if r.get("reason") == "grant" and (r.get("metadata") or {}).get("period") == period),
+            None,
+        )
+        if grant_row and grant_row.get("id"):
+            try:
+                supabase_admin.table("credit_ledger").update(
+                    {"delta": plan["credits"]}
+                ).eq("id", grant_row["id"]).eq("user_id", user_id).execute()
+                granted = plan["credits"]
+            except Exception as exc:  # noqa: BLE001
+                print(f"[billing] grant adjust failed: {exc}", flush=True)
 
     used_rows = [
         r for r in rows
@@ -593,7 +620,7 @@ def monthly_count(user_id: str, action: str) -> int:
     """이번 달에 이 작업을 몇 번 했는지(크레딧이 0인 작업도 원장에 기록해 둔다)."""
     period = _period_key()
     return sum(
-        1 for r in _ledger_rows(user_id)
+        1 for r in _ledger_rows(user_id, period)
         if r.get("reason") == action and (r.get("metadata") or {}).get("period") == period
     )
 
@@ -2971,20 +2998,8 @@ _MODEL_LOOK_PROMPT = """왼쪽 위 인물 사진의 얼굴을 그대로 유지�
 """
 
 
-def _body_note(profile: dict[str, Any] | None) -> str:
-    """키·몸무게가 있으면 그림에 반영할 한 줄. 없으면 빈 문자열(아무 말도 하지 않는다)."""
-    p = profile or {}
-    h = str(p.get("height") or "").strip()
-    w = str(p.get("weight") or "").strip()
-    if not h and not w:
-        return ""
-    bits = " ".join(x for x in (f"키 {h}cm" if h else "", f"몸무게 {w}kg" if w else "") if x)
-    return f"- 인물의 체형은 {bits} 정도로. 실제와 비슷한 비율로 그리고, 과장하지 마세요\n"
-
-
 def generate_model_look_image(
     user_id: str, item_ids: list[str], items: list[dict[str, Any]], face_bytes: bytes,
-    profile: dict[str, Any] | None = None,
 ) -> str | None:
     """프로필 사진 얼굴을 쓴 모델이 이 코디를 입은 전신 컷.
 
@@ -2993,9 +3008,7 @@ def generate_model_look_image(
     조합이어도 다시 만든다(예전 얼굴이 남아 있으면 더 이상하다).
     """
     face_sig = hashlib.sha256(face_bytes).hexdigest()[:8]
-    body_note = _body_note(profile)
-    body_sig = hashlib.sha256(body_note.encode()).hexdigest()[:4] if body_note else "0000"
-    key = f"model-{look_cache_key(item_ids)}-{face_sig}-{body_sig}"
+    key = f"model-{look_cache_key(item_ids)}-{face_sig}"
     cached = (
         supabase_admin.table("generated_images")
         .select("*")
@@ -3023,7 +3036,7 @@ def generate_model_look_image(
             result = openai_client.images.edit(
                 model=OPENAI_IMAGE_MODEL,
                 image=source,
-                prompt=_MODEL_LOOK_PROMPT + body_note,
+                prompt=_MODEL_LOOK_PROMPT,
                 size="1024x1536",
                 quality=OPENAI_IMAGE_QUALITY,
             )
@@ -3321,7 +3334,7 @@ class LiveCoordinate(BaseModel):
     palettes: list[str] = []
     gender: str | None = None
     age: str | None = None
-    # 선택 입력. 있으면 착장 이미지와 코디 설명을 체형에 맞춘다.
+    # 선택 입력. 있으면 코디 설명(기장·핏)을 체형에 맞춘다.
     height: str | None = None
     weight: str | None = None
 
@@ -4955,8 +4968,6 @@ _TRYON_BODY_PROMPT = """이 사진 속 인물의 얼굴을 그대로 유지한 �
 
 class TryOnBody(BaseModel):
     face_data_url: str
-    height: str | None = None
-    weight: str | None = None
 
 
 @app.post("/api/live/tryon/body")
@@ -4973,9 +4984,8 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
     ensure_within_limit(user.id, "tryon_body")
 
-    note = _body_note({"height": body.height, "weight": body.weight})
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon-{sig}-{hashlib.sha256(note.encode()).hexdigest()[:4]}"
+    key = f"tryon-{sig}"
     cached = (
         supabase_admin.table("generated_images")
         .select("image_url")
@@ -4987,7 +4997,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         or []
     )
     if cached:
-        # 같은 얼굴·같은 체형이면 다시 만들지 않는다(크레딧도 받지 않는다).
+        # 같은 얼굴이면 다시 만들지 않는다(크레딧도 받지 않는다).
         return {"imageUrl": cached[0]["image_url"], "cached": True}
 
     if not openai_client:
@@ -4998,7 +5008,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
             model=OPENAI_IMAGE_MODEL,
             image=source,
-            prompt=_TRYON_BODY_PROMPT + note,
+            prompt=_TRYON_BODY_PROMPT,
             size="1024x1536",
             quality=OPENAI_IMAGE_QUALITY,
             input_fidelity="high",
@@ -5310,7 +5320,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         if face_bytes and targets:
             def _one(outfit: dict[str, Any]) -> str | None:
                 members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
-                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes, profile)
+                return generate_model_look_image(user.id, outfit["itemIds"], members, face_bytes)
 
             with ThreadPoolExecutor(max_workers=4) as pool_ex:
                 for outfit, url in zip(targets, pool_ex.map(_one, targets)):

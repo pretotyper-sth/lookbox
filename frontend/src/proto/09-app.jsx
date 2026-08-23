@@ -733,7 +733,7 @@ function App() {
     try {
       const res = await liveJSON('/api/live/tryon/body', {
         method: 'POST',
-        body: JSON.stringify({ face_data_url: prefs.avatar, height: prefs.height || '', weight: prefs.weight || '' }),
+        body: JSON.stringify({ face_data_url: prefs.avatar }),
       });
       const url = res && res.imageUrl;
       if (!url) throw new Error('바로 보기 이미지를 만들지 못했어요');
@@ -999,6 +999,9 @@ function App() {
   const refreshLive = useCallback(async () => {
     if (isShowcase || !authUid) return;
     const mutAtStart = outfitMutRef.current;
+    // 사용량도 옷장과 동시에 요청한다 — 옷장 응답을 기다렸다가 뒤이어 부르면
+    // 마이페이지 사용량이 그만큼 늦게 뜬다(직렬 대기 → 병렬 요청).
+    reloadBilling();
     try {
       const [ownedData, archData, outfitData] = await Promise.all([
         liveJSON('/api/live/wardrobe'),
@@ -1015,7 +1018,6 @@ function App() {
       if (LB_DATA.DAILY.length) setDailyAllowed(true);
       else if (removed) setDailyAllowed(false);
       bumpDaily();
-      reloadBilling();
     } catch (e) {
       showToast(e.message || '옷장을 불러오지 못했어요');
     }

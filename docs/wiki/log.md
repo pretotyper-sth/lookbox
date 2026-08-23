@@ -24,3 +24,9 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 사용량을 계정 카드에 합침([[mypage-usage-in-account]]). 선택 모드 GNB 폭 고정
 ([[wardrobe-select-header]]). 추가 시트 CTA `옷 대보기` → `바로 보기`.
 
+## [2026-08-23] ingest | 사용량 반응형 + 크레딧 50 + 키/몸무게
+사용량 PC 인라인/모바일 카드 분리, 무료 50크레딧([[mypage-usage-in-account]]).
+버전은 날짜만. 키·몸무게 행 분리, 착장 프롬프트에서 체형 문구 제거
+([[profile-height-weight]]). 같은 사실을 `.cursor/skills/lookbox-mypage`와
+`.cursor/rules/mypage-billing.mdc`에 심음(로컬 에이전트용).
+
