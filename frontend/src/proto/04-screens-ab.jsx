@@ -1141,7 +1141,6 @@ function AddSheet({ ctx }) {
   const [tryOnLocal, setTryOnLocal] = useS('');
   const [tryOnErr, setTryOnErr] = useS('');
   const [tryOnChecking, setTryOnChecking] = useS(false);
-  const [tryOnCleared, setTryOnCleared] = useS(false);
 
   const setPreviewFromFile = (f) => {
     if (previewUrlRef.current) {
@@ -1182,7 +1181,7 @@ function AddSheet({ ctx }) {
     setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrls(['']); setFile(null); setHint(''); setShowHint(false);
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
-    setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
+    setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false);
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null); setConnectOpen(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
@@ -1334,7 +1333,6 @@ function AddSheet({ ctx }) {
         return;
       }
       setTryOnLocal(dataUrl);
-      setTryOnCleared(false);
     } catch (err) {
       setTryOnErr((err && err.message) || '사진을 확인하지 못했어요.');
     } finally {
@@ -1344,9 +1342,10 @@ function AddSheet({ ctx }) {
   const clearTryOn = () => {
     setTryOnLocal('');
     setTryOnErr('');
-    setTryOnCleared(true);
   };
-  const tryOnPreview = tryOnLocal || (!tryOnCleared && prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '';
+  // 저장된 전신 사진이 있어도 이 칸은 비운다. 올리지 않았는데 예시처럼 채워져 있으면
+  // 이미 고른 사진으로 보인다. 카메라가 쓸 전신은 제출할 때 startTryOn이 저장한다.
+  const tryOnPreview = tryOnLocal || '';
   const canTryOn = !!tryOnPreview;
   const onTryOnSubmit = () => {
     if (wide || tryOnChecking || !canTryOn) return;
@@ -1698,8 +1697,8 @@ function AddSheet({ ctx }) {
 
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
-    <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'}>
-      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
+    <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'} tightBottom={stage === 'input'}>
+      <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: stage === 'input' ? '10px 24px 12px' : '10px 24px 26px' }}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {showBack && <IconBtn name="chevL" label="뒤로" onClick={goBack} style={{ marginLeft: -8, marginTop: -4, flex: 'none' }} />}
@@ -2174,17 +2173,14 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
-                    {tab !== 'orders' && (
+                    {tab !== 'orders' && tab !== 'tryon' && !tabLocked && (
                     <>
                     <div style={{
                       marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
-                      visibility: (tab === 'tryon' || tabLocked) ? 'hidden' : 'visible',
-                      pointerEvents: (tab === 'tryon' || tabLocked) ? 'none' : 'auto',
-                    }} aria-hidden={tab === 'tryon' || tabLocked}>
+                    }}>
                       <button
                         type="button"
                         onClick={() => setShowHint((v) => !v)}
-                        tabIndex={tab === 'tryon' ? -1 : undefined}
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6,
                           fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
@@ -2302,9 +2298,7 @@ function AddSheet({ ctx }) {
                   ? (wide ? '내역 확인 후 고른 옷만 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요')
                   : '사진 속 상의·하의·신발까지 따로따로 찾아드려요'}
               </div>
-            ) : (
-              <div style={{ marginTop: 'var(--s4)', minHeight: 18 }} aria-hidden />
-            )}
+            ) : null}
           </>
         )}
 
