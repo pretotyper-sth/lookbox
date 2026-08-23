@@ -58,7 +58,19 @@ URL은 한 줄에 하나. 호스트 중복 표시를 없앰. 주문내역 크롬
 bin·bag·실사이트·알려진 상표/앱 제외 후 shortlist 30. KIPRIS 공식 전수 아님.
 [[rename-candidates-2026-08]].
 
+## [2026-08-23] query | 리네임 2라운드(warm)
+cube/rack이 안 와닿아 pocket·drawer·daily·feel 계열 30 추가. 동일 페이지.
+[[rename-candidates-2026-08]].
+
+## [2026-08-23] query | 리네임 3라운드(concept)
+Look 고정 해제. Softcloset·Moodpocket·Wardhabit 등 페르소나형 30.
+[[rename-candidates-2026-08]].
+
 ## [2026-08-23] ingest | 상품컷 흰 테두리
 어두운 폴로 실루엣에 JPEG 링잉이 불투명 판색으로 남음. 고대비만 혼합대 흡수,
 상품컷은 side여도 누끼 ([[studio-cutout-fringe]]).
+
+## [2026-08-23] ingest | 구매내역 원클릭
+명령 복사 대신 쇼핑몰 칩 + 버튼. 확장은 로그인될 때까지 기다리고, 로컬 API는
+수집기 크롬을 띄운다 ([[add-item-bulk]]).
 

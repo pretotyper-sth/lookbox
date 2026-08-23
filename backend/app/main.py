@@ -6,6 +6,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import tempfile
 import threading
 import time
@@ -3458,6 +3459,10 @@ class LiveImportUrl(BaseModel):
     skip_duplicate: bool = True
 
 
+class LiveOrderCollect(BaseModel):
+    platform: str = "musinsa"
+
+
 class LiveCoordinate(BaseModel):
     max_combos: int = 4
     style: str = "dandy"
@@ -5439,6 +5444,66 @@ def live_import_url(body: LiveImportUrl, user: UserContext = Depends(current_use
         _record_extraction_timing(uid, "url", len(items), (time.perf_counter() - t0) * 1000, timing)
         spend_credits(uid, "import_url", {"items": len(items)})
         return {"items": items, "primary_idx": 0}
+
+    return stream_with_keepalive(work)
+
+
+@app.post("/api/live/orders/collect")
+def live_orders_collect(
+    body: LiveOrderCollect, request: Request, user: UserContext = Depends(current_user)
+) -> StreamingResponse:
+    """이 컴퓨터에서 크롬을 띄워 쇼핑몰 주문내역을 읽는다. Render에서는 막는다."""
+    host = (request.client.host if request.client else "") or ""
+    if host not in ("127.0.0.1", "::1"):
+        raise HTTPException(
+            status_code=403,
+            detail="이 컴퓨터에서 실행 중인 LOOKBOX에서만 크롬을 열 수 있어요.",
+        )
+    platform = re.sub(r"[^a-z0-9]", "", (body.platform or "musinsa").lower()) or "musinsa"
+    collector = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "tools", "order-collector")
+    )
+    script = os.path.join(collector, "collect.mjs")
+    playwright = os.path.join(collector, "node_modules", "playwright")
+
+    def work(report: Callable[[str], None]) -> dict[str, Any]:
+        report("open")
+        if not os.path.isfile(script):
+            raise HTTPException(status_code=422, detail="NEED_SETUP")
+        if not os.path.isdir(playwright):
+            raise HTTPException(status_code=422, detail="NEED_SETUP")
+        try:
+            proc = subprocess.run(
+                [
+                    "node",
+                    script,
+                    "--stdout",
+                    f"--platform={platform}",
+                    "--login-wait=180000",
+                ],
+                cwd=collector,
+                capture_output=True,
+                text=True,
+                timeout=210,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=422, detail="NEED_SETUP") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="시간이 너무 오래 걸렸어요. 크롬에서 로그인한 뒤 다시 눌러 주세요.",
+            ) from exc
+        if proc.returncode == 2:
+            raise HTTPException(status_code=422, detail="NEED_LOGIN")
+        if proc.returncode != 0:
+            print(f"[orders] collect failed: {proc.stderr[-500:]}", flush=True)
+            raise HTTPException(status_code=422, detail="주문 내역을 읽지 못했어요.")
+        try:
+            data = json.loads(proc.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail="주문 내역을 읽지 못했어요.") from exc
+        items = data.get("items") if isinstance(data, dict) else []
+        return {"items": items or []}
 
     return stream_with_keepalive(work)
 

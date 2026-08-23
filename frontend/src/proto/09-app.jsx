@@ -517,6 +517,15 @@ async function liveImportSource({ sourceType, file, url, status, extractHint, on
   return liveJSON('/api/live/import/photo', { method: 'POST', body: fd, onProgress });
 }
 
+async function liveCollectOrders({ platform, onProgress }) {
+  return liveJSON('/api/live/orders/collect', {
+    method: 'POST',
+    body: JSON.stringify({ platform }),
+    onProgress,
+    timeoutMs: 210000,
+  });
+}
+
 let _newId = 100;
 
 function App() {
@@ -1908,7 +1917,7 @@ function App() {
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
     billing, reloadBilling, refreshLive,
-    requestPickedOutfits, importOrders, checkDuplicates,
+    requestPickedOutfits, importOrders, checkDuplicates, liveCollectOrders,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
       .filter(Boolean),

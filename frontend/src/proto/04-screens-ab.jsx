@@ -1,4 +1,5 @@
 /* @prototype-ported */
+import { ORDER_PLATFORMS } from './order-platforms.js';
 const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
@@ -843,9 +844,31 @@ function DetectRow({ item, on, onToggle }) {
 
 const URL_IMPORT_BLOCKED_MSG = '이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요.';
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
-const ORDER_COLLECT_CMD = 'cd tools/order-collector && npm i && npm run collect';
 
-// 추출 힌트 — 배달의민족 '사장님께'처럼 최근 문구를 골라 넣는다.
+function onThisComputer() {
+  return /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+}
+
+function extCall(payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const id = Math.random().toString(36).slice(2);
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', onMsg);
+      reject(new Error('NO_EXT'));
+    }, timeoutMs);
+    function onMsg(e) {
+      if (e.source !== window || !e.data || e.data.source !== 'lookbox-ext') return;
+      if (e.data.replyTo !== id) return;
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      if (e.data.lastError) reject(new Error(e.data.lastError));
+      else resolve(e.data.result);
+    }
+    window.addEventListener('message', onMsg);
+    window.postMessage({ source: 'lookbox-app', id, ...payload }, '*');
+  });
+}
+
 const EXTRACT_HINT_KEY = 'lb_extract_hints_v1';
 const EXTRACT_HINT_MAX = 8;
 function readExtractHints() {
@@ -1009,7 +1032,7 @@ function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
-    importOrders, checkDuplicates, knownSourceUrls = [],
+    importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     openTryOn, openTryOnSetup, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
   } = ctx;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1036,8 +1059,11 @@ function AddSheet({ ctx }) {
   const [busy, setBusy] = useS(false);
   const [err, setErr] = useS('');
   const fileInput = useR(null);
-  const ordersFileRef = useR(null);
-  const [cmdCopied, setCmdCopied] = useS(false);
+  const [orderShop, setOrderShop] = useS('musinsa');
+  const [orderBusy, setOrderBusy] = useS(false);
+  const [orderNeedLogin, setOrderNeedLogin] = useS(false);
+  const [orderNeedExt, setOrderNeedExt] = useS(false);
+  const [orderTabId, setOrderTabId] = useS(null);
   const previewUrlRef = useR('');
   const tryOnFileRef = useR(null);
   const [tryOnLocal, setTryOnLocal] = useS('');
@@ -1086,6 +1112,7 @@ function AddSheet({ ctx }) {
     setBusy(false); setErr('');
     setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false); setTryOnCleared(false);
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
+    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -1260,9 +1287,8 @@ function AddSheet({ ctx }) {
     openTryOn && openTryOn();
   };
   // 붙여넣기·입력에서 상품이 2개 이상 잡히면 단건 입력을 후보 목록으로 바꾼다.
-  const takeBulk = (text) => {
-    const found = parseBulkPaste(text);
-    if (found.length < 2) return false;
+  const applyCollectedRows = (found) => {
+    if (!found.length) return false;
     const known = new Set(knownSourceUrls);
     const rows = found.map((it) => {
       const dup = known.has(normalizeForDup(it.url));
@@ -1272,8 +1298,8 @@ function AddSheet({ ctx }) {
     setUrl('');
     setErr('');
     setBulkResult(null);
-    // 주소만으로는 같은 상품을 다른 경로로 담은 경우를 놓친다. 서버가 상품코드·이름·
-    // 사진 지문까지 보고 알려준다(AI 아님, 비용 없음).
+    setOrderNeedLogin(false);
+    setOrderNeedExt(false);
     if (checkDuplicates) {
       setBulkChecking(true);
       checkDuplicates(rows)
@@ -1288,6 +1314,80 @@ function AddSheet({ ctx }) {
     }
     return true;
   };
+  const takeBulk = (text) => {
+    const found = parseBulkPaste(text);
+    if (found.length < 2) return false;
+    return applyCollectedRows(found);
+  };
+  const startOrderCollect = async () => {
+    setErr('');
+    setOrderNeedExt(false);
+    setOrderBusy(true);
+    try {
+      let usedExt = false;
+      try {
+        await extCall({ type: 'PING' }, 700);
+        usedExt = true;
+      } catch (e) {
+        usedExt = false;
+      }
+      if (usedExt) {
+        const res = await extCall({ type: 'COLLECT', platform: orderShop, tabId: orderTabId }, 210000);
+        if (res && res.tabId) setOrderTabId(res.tabId);
+        if (res && res.status === 'need_login') {
+          setOrderNeedLogin(true);
+          setErr('열린 크롬에서 로그인한 뒤 다시 눌러 주세요.');
+          return;
+        }
+        const items = (res && res.items) || [];
+        if (!items.length) {
+          setErr('이 화면에서 상품을 찾지 못했어요. 주문내역 페이지인지 확인해 주세요.');
+          return;
+        }
+        applyCollectedRows(items.map((it) => ({
+          url: it.url,
+          name: it.name || '',
+          store: it.platform || it.store || '',
+          price: it.price || '',
+          purchasedAt: it.purchasedAt || '',
+        })));
+        return;
+      }
+      if (!onThisComputer() || typeof liveCollectOrders !== 'function') {
+        setOrderNeedExt(true);
+        setErr('크롬에서 한 번만 연결하면, 로그인된 쇼핑몰에서 주문 목록을 가져와요.');
+        return;
+      }
+      const data = await liveCollectOrders({ platform: orderShop });
+      const items = (data && data.items) || [];
+      if (!items.length) {
+        setErr('주문 목록이 비어 있어요. 로그인한 뒤 다시 눌러 주세요.');
+        return;
+      }
+      applyCollectedRows(items.map((it) => ({
+        url: it.url,
+        name: it.name || '',
+        store: it.platform || it.store || '',
+        price: it.price || '',
+        purchasedAt: it.purchasedAt || '',
+      })));
+    } catch (err) {
+      const msg = String((err && err.message) || '');
+      if (msg === 'NEED_LOGIN') {
+        setOrderNeedLogin(true);
+        setErr('열린 크롬에서 로그인한 뒤 다시 눌러 주세요.');
+        return;
+      }
+      if (msg === 'NEED_SETUP' || msg === 'NO_EXT') {
+        setOrderNeedExt(true);
+        setErr('크롬에서 한 번만 연결하면, 로그인된 쇼핑몰에서 주문 목록을 가져와요.');
+        return;
+      }
+      setErr(msg || '주문 내역을 가져오지 못했어요.');
+    } finally {
+      setOrderBusy(false);
+    }
+  };
   const onUrlChange = (e) => {
     const v = e.target.value;
     if (takeBulk(v)) return;
@@ -1297,27 +1397,6 @@ function AddSheet({ ctx }) {
   const onUrlPaste = (e) => {
     const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
     if (takeBulk(text)) e.preventDefault();
-  };
-  const onOrdersFile = (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result || '');
-      if (!takeBulk(text)) setErr('상품 목록을 읽지 못했어요. JSON이나 주소 여러 줄을 올려 주세요.');
-    };
-    reader.onerror = () => setErr('파일을 읽지 못했어요.');
-    reader.readAsText(f);
-    e.target.value = '';
-  };
-  const copyCollectCmd = async () => {
-    try {
-      await navigator.clipboard.writeText(ORDER_COLLECT_CMD);
-      setCmdCopied(true);
-      setTimeout(() => setCmdCopied(false), 1600);
-    } catch (err) {
-      setErr('복사가 막혀 있어요. 명령을 직접 드래그해 복사해 주세요.');
-    }
   };
   const bulkPicked = (bulk || []).filter((b) => b.pick);
   const runBulk = async () => {
@@ -1351,7 +1430,8 @@ function AddSheet({ ctx }) {
     setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
   const canSubmit = tab === 'photo' ? !!file
-    : (tab === 'url' || tab === 'orders') ? (bulk ? !!bulkPicked.length : !!url.trim())
+    : tab === 'url' ? (bulk ? !!bulkPicked.length : !!url.trim())
+    : tab === 'orders' ? (bulk ? !!bulkPicked.length : !orderBusy)
     : false;
   const onSubmitAdd = async () => {
     setErr('');
@@ -1512,7 +1592,7 @@ function AddSheet({ ctx }) {
     sub = anchor
       ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'
       : (tab === 'orders'
-        ? (wide ? '컴퓨터에서 주문내역을 가져와 고른 옷만 담아요.' : '이 기능은 컴퓨터에서 사용할 수 있어요.')
+        ? (wide ? '산 옷을 골라 한 번에 담아요.' : '이 기능은 컴퓨터에서 사용할 수 있어요.')
         : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.');
   }
 
@@ -1858,69 +1938,43 @@ function AddSheet({ ctx }) {
                       </div>
                     ) : tab === 'orders' ? (
                       <div>
-                        <input ref={ordersFileRef} type="file" accept="application/json,.json,text/plain" onChange={onOrdersFile} style={{ display: 'none' }} />
-                        <ol style={{
-                          margin: 0, padding: '0 0 0 18px', fontSize: 13, color: 'var(--ink-2)',
-                          lineHeight: 1.55, wordBreak: 'keep-all',
-                        }}>
-                          <li>이 컴퓨터 터미널에 아래 명령을 붙여넣으면 크롬이 열립니다.</li>
-                          <li>열린 창에서 쇼핑몰에 로그인하고 주문내역 화면으로 갑니다.</li>
-                          <li>목록이 복사되면 아래 칸에 붙이거나 orders.json을 올립니다.</li>
-                          <li>담을 옷을 고르면 하나씩 옷장에 등록됩니다.</li>
-                        </ol>
-                        <div style={{
-                          marginTop: 'var(--s3)', display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '10px 12px', borderRadius: 'var(--r-sm)',
-                          background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                        }}>
-                          <code style={{
-                            flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.4,
-                            color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>{ORDER_COLLECT_CMD}</code>
-                          <button type="button" onClick={copyCollectCmd} style={{
-                            flex: 'none', fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', padding: '2px 0',
-                          }}>{cmdCopied ? '복사됨' : '복사'}</button>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
+                          어디서 산 옷을 가져올까요?
                         </div>
-                        <textarea
-                          value={url}
-                          onChange={onUrlChange}
-                          onPaste={onUrlPaste}
-                          onDragOver={(e) => { e.preventDefault(); }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-                            if (!f) return;
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              const text = String(reader.result || '');
-                              if (!takeBulk(text)) setErr('상품 목록을 읽지 못했어요. JSON이나 주소 여러 줄을 올려 주세요.');
-                            };
-                            reader.readAsText(f);
-                          }}
-                          placeholder={'목록을 붙여넣거나 orders.json을 여기에 놓으세요'}
-                          className="lb-input"
-                          style={{
-                            marginTop: 'var(--s3)',
-                            width: '100%', minHeight: 88, padding: 'var(--s4)',
-                            resize: 'none', boxSizing: 'border-box',
-                            background: 'var(--ivory)',
-                            border: '1.5px dashed var(--line-2)',
-                            borderRadius: 'var(--r-md)',
-                            color: 'var(--ink)',
-                            fontSize: 14,
-                            lineHeight: 1.5,
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => ordersFileRef.current && ordersFileRef.current.click()}
-                          style={{
-                            marginTop: 'var(--s2)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 0',
-                          }}
-                        >
-                          파일에서 불러오기
-                        </button>
+                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
+                          {orderNeedLogin
+                            ? '열린 크롬 창에서 로그인한 뒤, 아래 버튼을 다시 눌러 주세요.'
+                            : orderBusy
+                              ? '크롬이 열렸어요. 로그인되어 있으면 곧 목록이 뜨고, 아니면 그 창에서 로그인하면 자동으로 가져와요.'
+                              : '쇼핑몰을 고르고 버튼을 누르면 크롬이 열려 주문내역을 읽어요. 담을 옷은 그다음에 고르면 돼요.'}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s4)' }}>
+                          {ORDER_PLATFORMS.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => { setOrderShop(p.id); setErr(''); setOrderNeedLogin(false); }}
+                              style={{
+                                padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
+                                background: orderShop === p.id ? 'var(--surface-2)' : 'var(--ivory)',
+                                color: orderShop === p.id ? 'var(--ink)' : 'var(--ink-2)',
+                                boxShadow: orderShop === p.id ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--line)',
+                              }}
+                            >
+                              {p.name}
+                            </button>
+                          ))}
+                        </div>
+                        {orderNeedExt ? (
+                          <ol style={{
+                            margin: 'var(--s4) 0 0', padding: '0 0 0 18px', fontSize: 12.5, color: 'var(--ink-2)',
+                            lineHeight: 1.55, wordBreak: 'keep-all',
+                          }}>
+                            <li>크롬 주소창에 chrome://extensions 를 엽니다.</li>
+                            <li>오른쪽 위 개발자 모드를 켭니다.</li>
+                            <li>압축해제된 확장 프로그램 로드에서 extensions/lookbox-orders 폴더를 고릅니다.</li>
+                          </ol>
+                        ) : null}
                       </div>
                     ) : (
                       <textarea
@@ -2071,13 +2125,17 @@ function AddSheet({ ctx }) {
                       ) : tab === 'orders' && !wide && !bulk ? null : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={bulk ? runBulk : onSubmitAdd}
-                          disabled={!canSubmit || busy || !!bulkRun}
+                          onClick={bulk ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
+                          disabled={tab === 'orders'
+                            ? (orderBusy || busy || !!bulkRun || (bulk && !bulkPicked.length))
+                            : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
                             : bulk ? `${bulkPicked.length}개 옷장에 담기`
+                            : orderBusy ? '크롬에서 가져오는 중…'
                             : busy ? '인식 중…'
-                            : (tab === 'orders' ? '목록을 붙여넣으세요'
+                            : (tab === 'orders'
+                              ? (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')
                               : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
@@ -2093,7 +2151,7 @@ function AddSheet({ ctx }) {
               </div>
             ) : (!anchor && tab === 'orders') ? (
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>
-                <Icon name="bag" size={15} /> {wide ? '고른 옷만 순서대로 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요'}
+                <Icon name="bag" size={15} /> {wide ? '고른 옷만 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요'}
               </div>
             ) : (!anchor && tab !== 'tryon') ? (
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5 }}>

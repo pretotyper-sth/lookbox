@@ -14,12 +14,12 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 버전은 날짜만
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음
-- [add-item-bulk](add-item-bulk.md) — URL은 한 줄에 하나. 구매내역 탭은 모바일 잠금, PC에서 수집기 JSON을 붙임
+- [add-item-bulk](add-item-bulk.md) — URL은 한 줄에 하나. 구매내역은 쇼핑몰 고르고 버튼 한 번. 모바일 잠금
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷을 고른다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼
 
 ## Decisions
-- [rename-candidates-2026-08](rename-candidates-2026-08.md) — Lookbox 대체 30후보(2026-08-23). bin·bag·실사이트·알려진 상표 제외. KIPRIS 미클리어
+- [rename-candidates-2026-08](rename-candidates-2026-08.md) — Lookbox 대체 후보. R3는 Look 고정 해제·컨셉/페르소나형. KIPRIS 미클리어
 
 
 ## Operations
