@@ -1767,8 +1767,9 @@ function AddSheet({ ctx }) {
               {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
               {(() => {
                 const STAGE_H = 168;
-                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역은 이 칸까지 박스를 키운다
-                const panelH = tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
+                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다
+                // 사진·URL은 168 + 힌트 줄. 바로 보기는 힌트 줄이 없으니 박스를 그 높이까지 키워 탭을 바꿔도 시트가 안 흔들린다.
+                const panelH = (tab === 'orders' || tab === 'tryon') ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',

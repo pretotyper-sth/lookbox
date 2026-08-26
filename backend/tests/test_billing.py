@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = ("_period_key", "_period_end", "plan_perks")
-CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS")
+FNS = ("_period_key", "_period_end", "plan_perks", "_grant_window", "_is_admin_credit_email")
+CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS", "ADMIN_CREDIT_EMAILS")
 
 
 def load():
@@ -95,3 +95,41 @@ class PeriodTest(unittest.TestCase):
         self.assertEqual(key, "2026-08")
         self.assertTrue(self.ns["_period_end"]("2026-08").startswith("2026-09-01"))
         self.assertTrue(self.ns["_period_end"]("2026-12").startswith("2027-01-01"))
+
+
+class GrantWindowTest(unittest.TestCase):
+    def setUp(self):
+        self.ns = load()
+
+    def test_admin_topup_email_is_only_the_dev_account(self):
+        self.assertEqual(self.ns["ADMIN_CREDIT_EMAILS"], frozenset({"jsharrykim@gmail.com"}))
+        self.assertTrue(self.ns["_is_admin_credit_email"]("Jsharrykim@gmail.com"))
+        self.assertFalse(self.ns["_is_admin_credit_email"]("other@gmail.com"))
+
+    def test_latest_grant_starts_a_new_used_window(self):
+        period = "2026-08"
+        rows = [
+            {"reason": "grant", "delta": 50, "created_at": "2026-08-01T00:00:00+00:00",
+             "metadata": {"period": period}},
+            {"reason": "coordinate", "delta": -1, "created_at": "2026-08-10T00:00:00+00:00",
+             "metadata": {"period": period}},
+            {"reason": "grant", "delta": 50, "created_at": "2026-08-20T00:00:00+00:00",
+             "metadata": {"period": period, "admin_topup": True}},
+        ]
+        granted, used_rows = self.ns["_grant_window"](rows, period)
+        self.assertEqual(granted, 50)
+        self.assertEqual(used_rows, [])
+
+    def test_spends_after_latest_grant_count(self):
+        period = "2026-08"
+        rows = [
+            {"reason": "grant", "delta": 50, "created_at": "2026-08-01T00:00:00+00:00",
+             "metadata": {"period": period}},
+            {"reason": "coordinate", "delta": -5, "created_at": "2026-08-21T00:00:00+00:00",
+             "metadata": {"period": period}},
+        ]
+        granted, used_rows = self.ns["_grant_window"](rows, period)
+        self.assertEqual(granted, 50)
+        self.assertEqual(len(used_rows), 1)
+        self.assertEqual(used_rows[0]["delta"], -5)
+

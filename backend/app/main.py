@@ -591,6 +591,10 @@ PLANS: dict[str, dict[str, Any]] = {
 }
 DEFAULT_PLAN = "free"
 
+# 테스트용 어드민. 이 계정만 잔액이 0이 되면 이번 달 지급분(50)을 다시 넣는다.
+# 차감은 그대로 보여 주고, 막혀서 실험을 못 하는 일만 막는다.
+ADMIN_CREDIT_EMAILS = frozenset({"jsharrykim@gmail.com"})
+
 
 def plan_perks(plan: dict[str, Any]) -> list[str]:
     """요금제 카드에 쓸 문장. '크레딧 N개'만으로는 얼마인지 감이 안 오니,
@@ -661,55 +665,131 @@ def _current_plan(user_id: str) -> str:
         return DEFAULT_PLAN
 
 
-def billing_state(user_id: str) -> dict[str, Any]:
+def _is_admin_credit_email(email: str | None) -> bool:
+    return (email or "").strip().lower() in ADMIN_CREDIT_EMAILS
+
+
+def _profile_email(user_id: str) -> str:
+    try:
+        rows = (
+            supabase_admin.table("profiles")
+            .select("email")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        return ((rows[0].get("email") if rows else None) or "").strip().lower()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] profile email failed: {exc}", flush=True)
+        return ""
+
+
+def _grant_window(rows: list[dict[str, Any]], period: str) -> tuple[int, list[dict[str, Any]]]:
+    """가장 최근 grant 이후만 이번 잔액으로 본다. 어드민 재지급이 예전에 쓴 양을 분모에 쌓지 않게."""
+    grants = [
+        r for r in rows
+        if r.get("reason") == "grant" and (r.get("metadata") or {}).get("period") == period
+    ]
+    if not grants:
+        return 0, []
+    latest = max(
+        enumerate(grants),
+        key=lambda ir: (str(ir[1].get("created_at") or ""), ir[0]),
+    )[1]
+    since = str(latest.get("created_at") or "")
+    granted = int(latest.get("delta") or 0)
+    used_rows = [
+        r for r in rows
+        if int(r.get("delta") or 0) < 0
+        and (r.get("metadata") or {}).get("period") == period
+        and (not since or str(r.get("created_at") or "") >= since)
+    ]
+    return granted, used_rows
+
+
+def _insert_admin_topup(user_id: str, plan_id: str, period: str) -> dict[str, Any]:
+    row = {
+        "user_id": user_id,
+        "delta": PLANS[plan_id]["credits"],
+        "reason": "grant",
+        "metadata": {"period": period, "plan": plan_id, "admin_topup": True},
+        "created_at": now_iso(),
+    }
+    supabase_admin.table("credit_ledger").insert({
+        "user_id": row["user_id"],
+        "delta": row["delta"],
+        "reason": row["reason"],
+        "metadata": row["metadata"],
+    }).execute()
+    return row
+
+
+def billing_state(user_id: str, email: str | None = None) -> dict[str, Any]:
     """이번 달 크레딧 상태. 달이 바뀌면 첫 조회 때 자동으로 새 크레딧을 넣는다."""
     period = _period_key()
     plan_id = _current_plan(user_id)
     plan = PLANS[plan_id]
     rows = _ledger_rows(user_id, period)
 
-    granted = sum(
-        int(r.get("delta") or 0)
-        for r in rows
+    grants = [
+        r for r in rows
         if r.get("reason") == "grant" and (r.get("metadata") or {}).get("period") == period
-    )
-    if granted <= 0:
+    ]
+    granted_sum = sum(int(r.get("delta") or 0) for r in grants)
+    if granted_sum <= 0:
         # 이번 달 지급분이 없다 → 지금 넣는다(월초 배치 없이도 정확히 동작한다).
         try:
+            stamp = now_iso()
             supabase_admin.table("credit_ledger").insert({
                 "user_id": user_id,
                 "delta": plan["credits"],
                 "reason": "grant",
                 "metadata": {"period": period, "plan": plan_id},
             }).execute()
-            granted = plan["credits"]
-            rows.append({"delta": plan["credits"], "reason": "grant",
-                         "metadata": {"period": period, "plan": plan_id}})
+            rows.append({
+                "delta": plan["credits"], "reason": "grant",
+                "metadata": {"period": period, "plan": plan_id},
+                "created_at": stamp,
+            })
         except Exception as exc:  # noqa: BLE001
             print(f"[billing] grant failed: {exc}", flush=True)
-            granted = plan["credits"]
-    elif granted != plan["credits"]:
-        # 요금제 크레딧이 바뀌면 이번 달 지급분을 맞춘다. 안 맞추면 화면이 예전
-        # 숫자(60 등)를 붙잡고 다음 달까지 기다린다.
-        grant_row = next(
-            (r for r in rows
-             if r.get("reason") == "grant" and (r.get("metadata") or {}).get("period") == period),
-            None,
-        )
-        if grant_row and grant_row.get("id"):
+            rows.append({
+                "delta": plan["credits"], "reason": "grant",
+                "metadata": {"period": period, "plan": plan_id},
+                "created_at": now_iso(),
+            })
+    else:
+        # 요금제 크레딧이 바뀌면 이번 달(재지급이 아닌) 지급분을 맞춘다.
+        # 어드민 재지급이 있으면 합이 50이 아니어도 예전 행을 건드리지 않는다.
+        plain = [r for r in grants if not (r.get("metadata") or {}).get("admin_topup")]
+        plain_sum = sum(int(r.get("delta") or 0) for r in plain)
+        if len(plain) == 1 and plain_sum != plan["credits"] and plain[0].get("id"):
             try:
                 supabase_admin.table("credit_ledger").update(
                     {"delta": plan["credits"]}
-                ).eq("id", grant_row["id"]).eq("user_id", user_id).execute()
-                granted = plan["credits"]
+                ).eq("id", plain[0]["id"]).eq("user_id", user_id).execute()
+                plain[0]["delta"] = plan["credits"]
             except Exception as exc:  # noqa: BLE001
                 print(f"[billing] grant adjust failed: {exc}", flush=True)
 
-    used_rows = [
-        r for r in rows
-        if int(r.get("delta") or 0) < 0 and (r.get("metadata") or {}).get("period") == period
-    ]  # delta 0(무료 작업)은 사용 내역에 넣지 않는다 — 크레딧을 쓴 것만 보여준다
+    granted, used_rows = _grant_window(rows, period)
+    if granted <= 0:
+        granted = plan["credits"]
     used = -sum(int(r.get("delta") or 0) for r in used_rows)
+    remaining = max(0, granted - used)
+    if remaining <= 0 and used > 0:
+        em = (email or "").strip().lower() or _profile_email(user_id)
+        if _is_admin_credit_email(em):
+            try:
+                rows.append(_insert_admin_topup(user_id, plan_id, period))
+                granted, used_rows = _grant_window(rows, period)
+                used = -sum(int(r.get("delta") or 0) for r in used_rows)
+                remaining = max(0, granted - used)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[billing] admin topup failed: {exc}", flush=True)
+
     by_action: dict[str, dict[str, int]] = {}
     for r in used_rows:
         key = r.get("reason") or "etc"
@@ -723,7 +803,7 @@ def billing_state(user_id: str) -> dict[str, Any]:
         "modelLook": plan["model_look"],
         "granted": granted,
         "used": used,
-        "remaining": max(0, granted - used),
+        "remaining": remaining,
         "period": period,
         "resetsAt": _period_end(period),
         "byAction": [
@@ -791,12 +871,20 @@ class CreditError(HTTPException):
         self.state = state
 
 
-def ensure_credits(user_id: str, action: str) -> dict[str, Any]:
+def ensure_credits(user_id: str, action: str, email: str | None = None) -> dict[str, Any]:
     """작업 전에 잔액을 확인한다. 모자라면 402로 막는다(돈이 나가기 전에)."""
     need = CREDIT_COSTS.get(action, 1)
-    state = billing_state(user_id)
+    state = billing_state(user_id, email=email)
     if state["remaining"] < need:
-        raise CreditError(action, state, need)
+        em = (email or "").strip().lower() or _profile_email(user_id)
+        if _is_admin_credit_email(em):
+            try:
+                _insert_admin_topup(user_id, state["plan"], state["period"])
+                state = billing_state(user_id, email=em)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[billing] admin topup failed: {exc}", flush=True)
+        if state["remaining"] < need:
+            raise CreditError(action, state, need)
     return state
 
 
@@ -5794,7 +5882,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
 def live_billing(user: UserContext = Depends(current_user)) -> dict[str, Any]:
     """마이페이지 '사용량'. 이번 달 크레딧과 요금제, 작업별 사용 내역을 그대로 준다."""
     require_supabase()
-    state = billing_state(user.id)
+    state = billing_state(user.id, email=user.email)
     return {
         **state,
         "plans": [

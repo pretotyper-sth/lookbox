@@ -375,7 +375,7 @@ function Switch({ on, onToggle }) {
 function MyPageScreen({ ctx }) {
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
-    modelLook, setModelLook, showToast, openTryOnTab, tryOnMaking,
+    modelLook, setModelLook, showToast,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
   } = ctx;
@@ -426,21 +426,7 @@ function MyPageScreen({ ctx }) {
     <ActionRow
       icon="user"
       label="AI 캐릭터 착장 이미지로 보기"
-      hint="무신사 룩북 모델 · 장당 5크레딧"
       right={<Switch on={!!modelLook} onToggle={toggleModelLook} />}
-    />
-  );
-
-  // 설정에서는 상의·하의를 지우는 시트를 열지 않는다. 바로 보기 탭을 연다.
-  // 미리보기는 비운다. 저장된 전신이 있어도 예시처럼 채워 두지 않는다.
-  const tryOnRow = (
-    <ActionRow
-      icon="cutout"
-      label="바로 보기 이미지"
-      onClick={() => {
-        if (tryOnMaking) return;
-        if (openTryOnTab) openTryOnTab();
-      }}
     />
   );
 
@@ -471,7 +457,6 @@ function MyPageScreen({ ctx }) {
       />
       {countRows}
       {modelLookRow}
-      {tryOnRow}
       <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
     </div>
   );
@@ -567,7 +552,6 @@ function MyPageScreen({ ctx }) {
           />
           {countRows}
           {modelLookRow}
-          {tryOnRow}
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>

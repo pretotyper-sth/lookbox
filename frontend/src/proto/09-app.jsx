@@ -84,6 +84,26 @@ function writeWardrobeCache(uid, owned, archived) {
   } catch (e) { /* noop */ }
 }
 
+// 사용량은 옷장과 같이 계정별 캐시를 먼저 그린다. 서버가 정본이라 받은 뒤에
+// 덮어쓰고, 크레딧을 쓴 뒤에도 다시 읽어 숫자를 맞춘다.
+const BILLING_CACHE_KEY = 'lb_billing_v1';
+function billingCacheKey(uid) {
+  return BILLING_CACHE_KEY + ':' + (uid || (() => {
+    try { return localStorage.getItem(LAST_UID_KEY) || 'anon'; } catch (e) { return 'anon'; }
+  })());
+}
+function readBillingCache(uid) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(billingCacheKey(uid)) || 'null');
+    if (!parsed || typeof parsed.remaining !== 'number' || typeof parsed.granted !== 'number') return null;
+    return parsed;
+  } catch (e) { return null; }
+}
+function writeBillingCache(uid, data) {
+  if (!uid || !data || typeof data.remaining !== 'number') return;
+  try { localStorage.setItem(billingCacheKey(uid), JSON.stringify(data)); } catch (e) { /* noop */ }
+}
+
 // 당일 추천 코디 캐시 — v3: owned-only 스냅샷(삭제·보관 아이템 재유입 방지)
 // 옷장 캐시와 같은 이유로 계정별로 나눈다. 호출부가 많아 uid를 인자로 돌리지 않고
 // 로그인 시점에 스코프를 한 번 세팅한다.
@@ -784,6 +804,7 @@ function App() {
     try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ }
     setAuthUid(null);
     setItems([]); setArchived([]);
+    setBilling(null);
     setOnboarded(false); setPhase('landing'); setTab('wardrobe');
   };
 
@@ -1010,16 +1031,22 @@ function App() {
     }
   }, []);
 
-  // 요금제·크레딧 — 서버가 정본이다(기기에 저장하지 않는다). 마이페이지 사용량과
-  // 크레딧 부족 안내에 쓰고, AI를 쓰는 작업 뒤에 다시 읽어 숫자를 맞춘다.
-  const [billing, setBilling] = useState(null);
+  // 요금제·크레딧 — 서버가 정본이다. 마이페이지가 서버를 기다리지 않게
+  // 마지막 값을 먼저 그리고, 받은 뒤에 덮는다.
+  const [billing, setBilling] = useState(() => readBillingCache());
   const [billingTick, setBillingTick] = useState(0);
   const reloadBilling = useCallback(() => setBillingTick((n) => n + 1), []);
   useEffect(() => {
     if (isShowcase || !authUid) return;
+    const cached = readBillingCache(authUid);
+    if (cached) setBilling(cached);
     let dead = false;
     liveJSON('/api/live/billing')
-      .then((data) => { if (!dead) setBilling(data); })
+      .then((data) => {
+        if (dead) return;
+        setBilling(data);
+        writeBillingCache(authUid, data);
+      })
       .catch(() => { /* 요금제를 못 읽어도 앱은 그대로 돈다 */ });
     return () => { dead = true; };
   }, [isShowcase, authUid, billingTick]);
