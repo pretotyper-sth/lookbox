@@ -729,10 +729,10 @@ function NumberSlider({ label, hint, value, onChange, min, max, step = 1, unit =
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>{label}</span>
           {hint ? <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{hint}</span> : null}
         </span>
-        <span className="tnum" style={{ fontSize: 13.5, fontWeight: 700, color: touched ? 'var(--ink)' : 'var(--ink-3)' }}>
+        <span className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: touched ? 'var(--ink)' : 'var(--ink-3)' }}>
           {touched ? `${num}${unit}` : '선택 안 함'}
         </span>
       </div>

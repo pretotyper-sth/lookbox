@@ -13,7 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림(장당 5크레딧). 프로필 얼굴이 아니라 성별만 맞춘 룩북 모델. 설정 행에 비용 문구는 없음
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 설정에 바로 보기 행 없음. 추가 시트 탭에서만 사진을 올림. 구멍은 카메라에서 뚫림
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. PC는 원형만, 모바일은 프사 있으면 카메라. 시트 높이는 탭과 같음
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음
 - [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래

@@ -729,7 +729,14 @@ function App() {
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
   const setAvatar = (dataUrl) => {
-    const np = { ...prefs, avatar: dataUrl || '' };
+    const np = {
+      ...prefs,
+      avatar: dataUrl || '',
+      // 얼굴이 바뀌면 예전에 만든 전신 컷은 버린다. 다음 바로 보기에서 다시 만든다.
+      tryOnBody: '',
+      tryOnFrame: '',
+      tryOnCut: '',
+    };
     setPrefs(np);
     persistPrefs(np);
     showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');

@@ -710,4 +710,4 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
   );
 }
 
-Object.assign(window, { MyPageScreen, AccountEditSheet, DeleteAccountSheet });
+Object.assign(window, { MyPageScreen, AccountEditSheet, DeleteAccountSheet, ProfileAvatar });

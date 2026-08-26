@@ -127,3 +127,9 @@ URL 담기는 브랜드처럼 상품 HTML에서 가격·재질을 읽어 등록 
 ## [2026-08-26] ingest | 사용량 캐시 + 어드민 재지급
 사용량은 계정 캐시를 먼저 보여 주고 서버 값으로 덮는다. `jsharrykim@gmail.com`만 잔액 0이면 50을 다시 넣는다 ([[mypage-usage-in-account]]).
 
+## [2026-08-26] ingest | 키·몸무게 라벨 굵기
+계정 수정 시트에서 키·몸무게만 700이었다. `NumberSlider`를 성별·연령대와 같은 12/600으로 맞춘다 (`02-shared.jsx`). ([[profile-height-weight]])
+
+## [2026-08-26] ingest | 바로 보기는 계정 프사
+조합 추천받기 바로 보기 탭은 `prefs.avatar` 원형. PC는 모바일 전용 안내만, 모바일은 프사 있으면 카메라를 연다. 없으면 올리기. 시트 높이는 탭과 같다 ([[tryon-setup-from-mypage]] [[add-item-bulk]]).
+

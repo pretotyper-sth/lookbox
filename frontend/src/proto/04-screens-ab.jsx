@@ -1103,8 +1103,9 @@ function AddSheet({ ctx }) {
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking,
+    tryOnMaking, makeTryOnBody, setAvatar,
   } = ctx;
+  const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
   const reextract = mode === 'reextract';
@@ -1137,10 +1138,8 @@ function AddSheet({ ctx }) {
   const [orderNeedExt, setOrderNeedExt] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
   const previewUrlRef = useR('');
-  const tryOnFileRef = useR(null);
-  const [tryOnLocal, setTryOnLocal] = useS('');
   const [tryOnErr, setTryOnErr] = useS('');
-  const [tryOnChecking, setTryOnChecking] = useS(false);
+  const tryOnLaunchGen = useR(0);
 
   const setPreviewFromFile = (f) => {
     if (previewUrlRef.current) {
@@ -1181,7 +1180,7 @@ function AddSheet({ ctx }) {
     setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrls(['']); setFile(null); setHint(''); setShowHint(false);
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
-    setTryOnLocal(''); setTryOnErr(''); setTryOnChecking(false);
+    setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null); setConnectOpen(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
@@ -1305,56 +1304,35 @@ function AddSheet({ ctx }) {
     setPreviewFromFile(null);
     setErr('');
   };
-  const onTryOnPick = async (e) => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
+  // 바로 보기는 계정 프사를 쓴다. 탭에서 따로 올리는 장은 두지 않는다.
+  const tryOnAvatar = (prefs && prefs.avatar) || '';
+  const canTryOn = !!tryOnAvatar;
+  const launchTryOnFromSheet = async () => {
+    if (wide || !tryOnAvatar || tryOnMaking) return;
+    const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    setTryOnChecking(true);
-    try {
-      const read = window.readBodyFile;
-      if (typeof read !== 'function') throw new Error('사진을 준비하지 못했어요.');
-      const dataUrl = await read(f);
-      const faces = window.countFacesInImage
-        ? await window.countFacesInImage(dataUrl)
-        : -1;
-      if (faces === 0) {
-        setTryOnErr('얼굴이 잘 나온 사진으로 올려주세요.');
-        return;
-      }
-      if (faces > 1) {
-        setTryOnErr('한 명만 나온 사진을 선택해주세요.');
-        return;
-      }
-      if (faces !== 1) {
-        setTryOnErr(window.faceCountError
-          ? window.faceCountError(faces)
-          : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
-        return;
-      }
-      setTryOnLocal(dataUrl);
-    } catch (err) {
-      setTryOnErr((err && err.message) || '사진을 확인하지 못했어요.');
-    } finally {
-      setTryOnChecking(false);
+    let body = (prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '';
+    if (!body && typeof makeTryOnBody === 'function') {
+      body = await makeTryOnBody({ silent: true });
     }
-  };
-  const clearTryOn = () => {
-    setTryOnLocal('');
-    setTryOnErr('');
-  };
-  // 저장된 전신 사진이 있어도 이 칸은 비운다. 올리지 않았는데 예시처럼 채워져 있으면
-  // 이미 고른 사진으로 보인다. 카메라가 쓸 전신은 제출할 때 startTryOn이 저장한다.
-  const tryOnPreview = tryOnLocal || '';
-  const canTryOn = !!tryOnPreview;
-  const onTryOnSubmit = () => {
-    if (wide || tryOnChecking || !canTryOn) return;
-    closeAdd();
+    if (gen !== tryOnLaunchGen.current) return;
+    if (!body) {
+      setTryOnErr('바로 보기 이미지를 만들지 못했어요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
     if (typeof startTryOn === 'function') {
-      startTryOn({ body: tryOnPreview, frame: tryOnPreview, cut: 'auto' });
+      startTryOn({ body, frame: body, cut: 'auto' });
       return;
     }
     openTryOn && openTryOn();
+  };
+  const onTryOnSubmit = () => {
+    if (wide || tryOnMaking || !canTryOn) return;
+    launchTryOnFromSheet();
+  };
+  const onTryOnAvatar = (dataUrl) => {
+    setTryOnErr('');
+    if (typeof setAvatar === 'function') setAvatar(dataUrl);
   };
   // 붙여넣기·입력에서 상품이 2개 이상 잡히면 단건 입력을 후보 목록으로 바꾼다.
   const applyCollectedRows = (found) => {
@@ -1743,9 +1721,13 @@ function AddSheet({ ctx }) {
                 return (
                   <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
                     if (comboLocked) return;
+                    const switched = tab !== id;
                     setTab(id); setErr(''); setTryOnErr('');
                     if (id === 'tryon') setShowHint(false);
                     if (id !== 'orders') { setBulk(null); setBulkResult(null); }
+                    // 모바일에서 바로 보기 탭을 누르면 프사가 있을 때만 카메라를 연다.
+                    // 이미 그 탭에 있는 채 다시 누르면 시트가 유지된다(카메라에서 돌아와 사진을 바꿀 때).
+                    if (id === 'tryon' && switched && !wide && tryOnAvatar) launchTryOnFromSheet();
                   }} style={{
                     flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 13, fontWeight: 600,
@@ -1821,41 +1803,64 @@ function AddSheet({ ctx }) {
                     </button>
                   </div>
                 );
-                const tabErr = tab === 'tryon' ? tryOnErr : err;
+                const tabErr = tab === 'tryon' ? '' : err;
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
                 return (
                   <>
                     {tabLocked ? null : tab === 'tryon' ? (
-                      <>
-                        <input ref={tryOnFileRef} type="file" accept="image/*" onChange={onTryOnPick} style={{ display: 'none' }} />
-                        {tryOnPreview ? previewBox(tryOnPreview, clearTryOn, '사진 지우기') : (
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => { if (!tryOnChecking && !tryOnMaking && tryOnFileRef.current) tryOnFileRef.current.click(); }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                if (!tryOnChecking && !tryOnMaking && tryOnFileRef.current) tryOnFileRef.current.click();
-                              }
-                            }}
-                            className="lb-drop"
-                            style={{ ...dropBase, cursor: (tryOnChecking || tryOnMaking) ? 'wait' : 'pointer' }}
-                          >
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, pointerEvents: 'none', padding: '0 16px' }}>
-                              <Icon name={(tryOnChecking || tryOnMaking) ? 'sparkle' : 'camera'} size={30} stroke={1.5} />
-                              <span style={{ fontSize: 14, fontWeight: 600 }}>
-                                {tryOnMaking ? '바로 보기 이미지를 만들고 있어요…' : tryOnChecking ? '사진 확인 중…' : '프로필 사진 올리기'}
-                              </span>
-                              <span style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', wordBreak: 'keep-all' }}>
-                                얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)
-                              </span>
-                            </div>
+                      <div
+                        className="lb-drop"
+                        onClick={(e) => {
+                          if (e.target.closest('[aria-label="프로필 사진 변경"]')) return;
+                          if (tryOnAvatar) {
+                            if (!wide) launchTryOnFromSheet();
+                            return;
+                          }
+                          const btn = e.currentTarget.querySelector('[aria-label="프로필 사진 변경"]');
+                          if (btn) btn.click();
+                        }}
+                        style={{
+                          ...dropBase,
+                          cursor: tryOnMaking ? 'wait' : 'pointer',
+                          border: tryOnAvatar ? '1.5px solid var(--line)' : dropBase.border,
+                          background: 'var(--ivory)',
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                          padding: '0 16px', pointerEvents: 'none',
+                        }}>
+                          <div style={{ pointerEvents: 'auto' }}>
+                            {ProfileAvatar ? (
+                              <ProfileAvatar
+                                src={tryOnAvatar}
+                                size={80}
+                                onChange={onTryOnAvatar}
+                                onInvalid={(msg) => setTryOnErr(msg)}
+                              />
+                            ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
-                        )}
-                      </>
+                          <span style={{ fontSize: 14, fontWeight: 600, textAlign: 'center', wordBreak: 'keep-all' }}>
+                            {tryOnMaking
+                              ? '바로 보기 이미지를 만들고 있어요…'
+                              : tryOnAvatar
+                                ? '이 사진으로 옷을 바로 비춰 볼 수 있어요'
+                                : '프로필 사진 올리기'}
+                          </span>
+                          <span style={{
+                            fontSize: tryOnErr ? 12.5 : 12,
+                            fontWeight: tryOnErr ? 600 : 400,
+                            color: tryOnErr ? '#9D472F' : 'var(--ink-3)',
+                            textAlign: 'center', wordBreak: 'keep-all',
+                          }}>
+                            {tryOnErr
+                              ? tryOnErr
+                              : tryOnAvatar ? '모바일 전용' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
+                          </span>
+                        </div>
+                      </div>
                     ) : tab === 'photo' ? (
                       <>
                         <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />
@@ -2252,7 +2257,7 @@ function AddSheet({ ctx }) {
                           size="lg"
                           icon="cutout"
                           onClick={onTryOnSubmit}
-                          disabled={wide || tryOnChecking || !canTryOn}
+                          disabled={wide || tryOnMaking || !canTryOn}
                         >
                           바로 보기
                         </Btn>
