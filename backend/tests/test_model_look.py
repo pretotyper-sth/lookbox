@@ -1,4 +1,4 @@
-"""AI 착장은 프로필 얼굴이 아니라 성별만 맞춘 룩북 모델 + 상품 카드와 같은 회색 판."""
+"""AI 착장은 프로필 얼굴이 아니라 성별만 맞춘 룩북 모델 + mood 룩북 배경."""
 
 import ast
 import io
@@ -12,12 +12,14 @@ from PIL import Image
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     '_look_gender_key',
+    '_category_display',
     '_model_look_subject',
     '_model_identity_prompt',
     '_model_look_prompt',
+    '_model_look_garment_lines',
     '_flatten_look_plate',
 )
-CONSTS = ('_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB')
+CONSTS = ('_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', '_LEGACY_CATEGORY_KO')
 
 
 def load():
@@ -28,21 +30,25 @@ def load():
         or (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in CONSTS)
         or (isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") in CONSTS)
     ]
-    ns = {"Image": Image, "io": io, "deque": deque}
+    ns = {"Image": Image, "io": io, "deque": deque, "Any": object}
     exec(compile(ast.Module(body=body, type_ignores=[]), "<model-look>", "exec"), ns)
     return ns
 
 
+def _wrong_plate() -> tuple[int, int, int]:
+    return (200, 196, 192)
+
+
 def two_tone_look() -> bytes:
-    """인물 주변만 베이지, 양옆은 차가운 회색 — 첨부처럼 판이 두 장 겹친 상태."""
-    cool = (214, 216, 218)
-    beige = (236, 230, 218)
+    """인물 주변만 다른 톤, 양옆은 AI가 깔아 둔 잘못된 판색."""
+    wrong = _wrong_plate()
+    plate = (172, 167, 164)
     navy = (28, 42, 72)
-    im = Image.new("RGB", (80, 120), cool)
+    im = Image.new("RGB", (80, 120), wrong)
     px = im.load()
     for y in range(120):
         for x in range(22, 58):
-            px[x, y] = beige
+            px[x, y] = plate
     for y in range(28, 100):
         for x in range(30, 50):
             px[x, y] = navy
@@ -53,36 +59,36 @@ def two_tone_look() -> bytes:
 
 def interior_plate_patch() -> bytes:
     """테두리와 끊긴 밝은 판 조각 — 인물 옆 왼쪽 아래 아티팩트."""
-    cool = (214, 216, 218)
-    beige = (236, 230, 218)
+    wrong = _wrong_plate()
+    plate = (172, 167, 164)
     navy = (28, 42, 72)
-    im = Image.new("RGB", (80, 120), cool)
+    im = Image.new("RGB", (80, 120), wrong)
     px = im.load()
     for y in range(120):
         for x in range(22, 58):
-            px[x, y] = beige
+            px[x, y] = plate
     for y in range(28, 100):
         for x in range(30, 50):
             px[x, y] = navy
     for y in range(72, 96):
         for x in range(8, 20):
-            px[x, y] = beige
+            px[x, y] = plate
     buf = io.BytesIO()
     im.save(buf, format="PNG")
     return buf.getvalue()
 
 
 def island_behind_ring() -> bytes:
-    """어두운 링으로 테두리와 끊긴 베이지 섬 — 격자 잔상."""
-    cool = (214, 216, 218)
-    beige = (236, 230, 218)
+    """어두운 링으로 테두리와 끊긴 판 섬 — 격자 잔상."""
+    wrong = _wrong_plate()
+    plate = (172, 167, 164)
     navy = (28, 42, 72)
     dark = (40, 40, 38)
-    im = Image.new("RGB", (80, 120), cool)
+    im = Image.new("RGB", (80, 120), wrong)
     px = im.load()
     for y in range(120):
         for x in range(22, 58):
-            px[x, y] = beige
+            px[x, y] = plate
     for y in range(28, 100):
         for x in range(30, 50):
             px[x, y] = navy
@@ -91,7 +97,7 @@ def island_behind_ring() -> bytes:
             px[x, y] = dark
     for y in range(74, 94):
         for x in range(10, 18):
-            px[x, y] = beige
+            px[x, y] = plate
     buf = io.BytesIO()
     im.save(buf, format="PNG")
     return buf.getvalue()
@@ -111,11 +117,21 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("왼쪽 위", prompt)
         self.assertNotIn("얼굴을 그대로", prompt)
 
-    def test_look_prompt_locks_identity_photo(self):
+    def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
-        self.assertIn("첫 번째 이미지는 기준 모델", src)
-        self.assertIn("model-id-v2-", src)
-        self.assertIn("model-id2-", src)
+        self.assertIn("소스 이미지와 동일한 모델", src)
+        self.assertIn("model-id-v3-", src)
+        self.assertIn("model-id3-", src)
+        self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
+        self.assertIn('_png_named(identity, "identity.png")', src)
+
+    def test_garment_lines_from_items(self):
+        lines = self.ns['_model_look_garment_lines']([
+            {"category": "top", "name": "그레이 티", "color": "그레이"},
+            {"category": "bottom", "name": "데님", "color": "블루"},
+        ])
+        self.assertIn("그레이", lines)
+        self.assertIn("데님", lines)
 
     def test_gender_only_changes_the_model(self):
         man = self.ns['_model_look_subject']("남성")
@@ -169,7 +185,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id2-", src)
+        self.assertIn("model-id3-", src)
+        self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
         end = looks_src.index("\ndef ", start + 1)

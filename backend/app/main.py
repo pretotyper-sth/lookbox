@@ -55,6 +55,10 @@ OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 상품컷이면 애초에 다시 그리지 않고 배경만 지우니(studio cutout) 이 경로는 재생성이
 # 꼭 필요한 사진에만 쓰인다.
 OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
+# 착장·기준 인물 전용. ChatGPT처럼 무드 룩북 1장에 옷만 갈아입히려면 gpt-image-2 + 단일 edit.
+OPENAI_IMAGE_MODEL_LOOK = (
+    os.environ.get("OPENAI_IMAGE_MODEL_LOOK") or OPENAI_IMAGE_MODEL_TEXT or "gpt-image-2"
+)
 # 투명 배경을 지원하지 않는 모델. 이 모델을 쓰면 불투명 결과를 받아 우리 컷아웃을 돌린다.
 _NO_TRANSPARENT_MODELS = ("gpt-image-2",)
 
@@ -539,7 +543,7 @@ def image_to_data_url(path: str, max_side: int = 768) -> str:
 #   사진 등록            분류 $0.0055 + AI 추출 $0.07~0.25    → 2
 #   이미지 다시 만들기    위와 동일                            → 2
 #   코디 추천 1회        gpt-4o $0.010 (여러 벌 한 번에)       → 1
-#   AI 착장 이미지        이미지 생성 $0.25                    → 5
+#   AI 착장 이미지        gpt-image-2 high ~$0.35              → 10
 #
 # 크레딧당 원가는 가벼운 작업 $0.006, 무거운 작업 $0.05 수준이다. 요금은 '평균 사용'을
 # 기준으로 잡았고(등록은 초반에 몰리고 그 뒤엔 추천 위주), 크레딧 상한이 손실의 뚜껑 역할을 한다.
@@ -548,7 +552,7 @@ CREDIT_COSTS = {
     "import_photo": 2,
     "replace_image": 2,
     "coordinate": 1,
-    "model_look": 5,
+    "model_look": 10,
 }
 # 크레딧을 받지 않는 작업 중 원가가 있는 것(바로 보기 전신 이미지)은 횟수만 막는다.
 # 요금제에 넣으면 '카메라로 대보는 기능이 유료'처럼 보이는데, 실제로 그 기능은 기기에서
@@ -3332,10 +3336,10 @@ def _decode_data_url(data_url: str | None) -> bytes | None:
         return None
 
 
-# 상품 카드 `--thumb-bg`와 같은 회색. 착장 컷 배경을 여기로 맞추면
-# 4:5 카드에 2:3 이미지를 contain 해도 옆 여백이 다른 색으로 안 보인다.
-_LOOK_PLATE_HEX = "#E5E3DE"
-_LOOK_PLATE_RGB = (229, 227, 222)
+# `assets/mood/` 룩북 배경 평균(#ACA7A4). 밝은 #E5E3DE보다 흰 옷·아이템 대비가 낫다.
+# 상품 카드 `--thumb-bg`와 맞춰 contain 시 옆 여백이 다른 색으로 안 보인다.
+_LOOK_PLATE_HEX = "#ACA7A4"
+_LOOK_PLATE_RGB = (172, 167, 164)
 
 
 def _look_gender_key(gender: str | None) -> str:
@@ -3381,26 +3385,49 @@ def _model_identity_prompt(gender: str | None) -> str:
 """
 
 
-def _model_look_prompt_with_reference(gender: str | None, wish: dict[str, Any] | None = None) -> str:
-    wish_line = ""
+def _model_look_garment_lines(
+    items: list[dict[str, Any]], wish: dict[str, Any] | None = None,
+) -> str:
+    lines: list[str] = []
+    for item in items:
+        cat = _category_display(item.get("category"))
+        name = (item.get("name") or item.get("brand") or "").strip()
+        color = (item.get("color") or "").strip()
+        bits = [b for b in (color, name, cat) if b]
+        lines.append("- " + " ".join(bits))
     if wish:
-        bits = [wish.get("name") or "", wish.get("color") or "", wish.get("category") or ""]
+        bits = [
+            wish.get("color") or "",
+            wish.get("name") or "",
+            _category_display(wish.get("category")) if wish.get("category") else "",
+        ]
         desc = " ".join(b for b in bits if b).strip()
         if desc:
-            wish_line = f"\n- 사진에 없는 제안 아이템도 자연스럽게 더해 입힌다: {desc}"
-    return f"""첫 번째 이미지는 기준 모델(아이덴티티 락)입니다. 그 사람과 동일한 얼굴·헤어·피부·키·체형·포즈를 유지하세요. 사람을 바꾸지 마세요.
-두 번째 이미지는 옷 참고입니다. 상단 작은 컷의 옷을 그 모델에게 입히세요. 참고 격자를 출력에 남기지 마세요.
-모델: {_model_look_subject(gender)}. 선명한 이목구비, 상업 화보 화질. 사용자 얼굴·프로필 사진을 쓰지 마세요.
-- 포즈 고정: 왼손 주머니, 오른팔 옆구리, 정면 응시, 발 어깨너비
-- 머리 위와 발 아래에 각각 프레임의 약 12% 여백
-- 참고 옷의 색·형태·프린트·디테일을 바꾸지 말 것{wish_line}
-- 배경은 {_LOOK_PLATE_HEX} 단색 스튜디오 한 장만. 썸네일·격자·다른 색 판·콜라주 잔상 금지
-- 텍스트, 로고, 워터마크, 프레임, 다른 사람 추가 금지
+            lines.append(f"- (제안 아이템) {desc}")
+    return "\n".join(lines) if lines else "- 옷장 코디 조합"
+
+
+def _model_look_prompt_with_reference(
+    gender: str | None,
+    items: list[dict[str, Any]],
+    wish: dict[str, Any] | None = None,
+) -> str:
+    garment_lines = _model_look_garment_lines(items, wish)
+    return f"""소스 이미지와 동일한 모델을 유지하세요. 얼굴·헤어·피부톤·체형·키·포즈·카메라 각도·프레이밍을 절대 바꾸지 마세요.
+이 사람에게 아래 옷만 입히세요. 사람은 그대로, 의상만 교체합니다.
+
+{garment_lines}
+
+- 포즈 고정: 왼손 바지 왼쪽 주머니, 오른팔 옆구리, 정면 응시, 발 어깨너비
+- 머리 위·발 아래 각각 프레임의 약 12% 여백
+- 옷 색·실루엣·프린트·디테일을 설명과 일치. 옷감 노이즈·깨짐·격자 잔상 금지
+- 배경은 {_LOOK_PLATE_HEX} 단색 스튜디오(무드 룩북과 같은 웜 그레이지). 그라데이션·콜라주·썸네일 금지
+- 텍스트·로고·워터마크·다른 사람 추가 금지
 """
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v2-{_look_gender_key(gender)}"
+    return f"model-id-v3-{_look_gender_key(gender)}"
 
 
 def _png_named(data: bytes, name: str) -> io.BytesIO:
@@ -3488,7 +3515,7 @@ def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | No
             return None
         else:
             result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate(
-                model=OPENAI_IMAGE_MODEL,
+                model=OPENAI_IMAGE_MODEL_LOOK,
                 prompt=_model_identity_prompt(gender),
                 size="1024x1536",
                 quality=quality,
@@ -3498,7 +3525,7 @@ def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | No
                 out = _flatten_look_plate(out)
             except Exception as flat_exc:  # noqa: BLE001
                 print(f"[model-look] identity flatten skip: {flat_exc}", flush=True)
-            log_ai_usage(user_id, "model_identity", OPENAI_IMAGE_MODEL, {"quality": quality})
+            log_ai_usage(user_id, "model_identity", OPENAI_IMAGE_MODEL_LOOK, {"quality": quality})
         _save_model_identity_png(user_id, gender, out)
         ms = int((time.perf_counter() - t0) * 1000)
         print(f"[timing] model-identity cache=0 duration_ms={ms}", flush=True)
@@ -3545,14 +3572,15 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
     jumps = ((1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (0, 2), (0, -2))
 
     def is_plate(r: int, g: int, b: int) -> bool:
-        if max(r, g, b) - min(r, g, b) > 36:
+        if max(r, g, b) - min(r, g, b) > 28:
             return False
         luma = 0.299 * r + 0.587 * g + 0.114 * b
-        if luma < 165:
+        plate_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
+        if luma < plate_luma - 30:
             return False
-        if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 110:
+        if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 44:
             return True
-        return any(abs(r - cr) + abs(g - cg) + abs(b - cb) <= 56 for cr, cg, cb in corners)
+        return any(abs(r - cr) + abs(g - cg) + abs(b - cb) <= 40 for cr, cg, cb in corners)
 
     def seed(x: int, y: int) -> None:
         i = y * w + x
@@ -3643,7 +3671,7 @@ def generate_model_look_image(
     기준 인물(identity) 한 장을 고정한 뒤, ChatGPT처럼 그 사진에 옷만 입힌다.
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
-    key = f"model-id2-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
+    key = f"model-id3-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -3664,38 +3692,34 @@ def generate_model_look_image(
     ):
         return None
     try:
-        board = _model_look_board(items)
         identity = reference_png or _ensure_model_identity_png(user_id, gender)
-        prompt = _model_look_prompt_with_reference(gender, wish)
+        prompt = _model_look_prompt_with_reference(gender, items, wish)
+        look_model = OPENAI_IMAGE_MODEL_LOOK
         if AI_TEST_MODE:
-            print("[model-look] TEST MODE — 참고 보드만, AI 미호출 ($0)", flush=True)
-            out = identity or board
+            print("[model-look] TEST MODE — 기준 인물만, AI 미호출 ($0)", flush=True)
+            out = identity or _model_look_board(items)
         elif identity:
             kwargs: dict[str, Any] = {
-                "model": OPENAI_IMAGE_MODEL,
-                "image": [_png_named(identity, "identity.png"), _png_named(board, "clothes.png")],
+                "model": look_model,
+                "image": [_png_named(identity, "identity.png")],
                 "prompt": prompt,
                 "size": "1024x1536",
                 "quality": quality,
             }
-            if "gpt-image-2" not in OPENAI_IMAGE_MODEL:
+            if "gpt-image-2" not in look_model:
                 kwargs["input_fidelity"] = "high"
             result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
             out = base64.b64decode(result.data[0].b64_json)
         else:
-            source = _png_named(board, "clothes.png")
+            board = _model_look_board(items)
             result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
-                model=OPENAI_IMAGE_MODEL,
-                image=source,
+                model=look_model,
+                image=_png_named(board, "clothes.png"),
                 prompt=_model_look_prompt(gender),
                 size="1024x1536",
                 quality=quality,
             )
             out = base64.b64decode(result.data[0].b64_json)
-        try:
-            out = _flatten_look_plate(out)
-        except Exception as flat_exc:  # noqa: BLE001
-            print(f"[model-look] plate flatten skip: {flat_exc}", flush=True)
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")
         supabase_admin.table("generated_images").insert(
@@ -3703,7 +3727,7 @@ def generate_model_look_image(
         ).execute()
         ms = int((time.perf_counter() - t0) * 1000)
         if not AI_TEST_MODE:
-            log_ai_usage(user_id, "model_look", OPENAI_IMAGE_MODEL, {"quality": quality})
+            log_ai_usage(user_id, "model_look", look_model, {"quality": quality})
         print(
             f"[timing] model-look cache=0 quality={quality} identity={bool(identity)} duration_ms={ms} ({ms / 1000:.1f}s)",
             flush=True,
@@ -6430,19 +6454,10 @@ def _apply_model_looks(
 
     t0 = time.perf_counter()
     identity = _ensure_model_identity_png(user_id, gender)
-    # 4장을 한 번에 돌리면 OpenAI 연결을 잡아 추가 추천이 몇 분이 된다. 2장씩.
-    workers = min(2, len(targets))
-    if workers == 1:
-        outfit, url = one(targets[0], identity)
+    for outfit in targets:
+        outfit, url = one(outfit, identity)
         if url:
             persist(outfit, url)
-    else:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(one, o, identity) for o in targets]
-            for fut in as_completed(futs):
-                outfit, url = fut.result()
-                if url:
-                    persist(outfit, url)
     ms = int((time.perf_counter() - t0) * 1000)
     done = sum(1 for o in targets if o.get("lookImg"))
     print(

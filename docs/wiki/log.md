@@ -175,3 +175,8 @@ Render가 착장 JSON을 ~100초에 끊어서 서버엔 이미지가 있는데 �
 ## [2026-08-30] fix | 착장 URL이 화면 객체에 안 붙던 점
 서버 `look_image_url`은 생겼는데 hydrate가 DAILY를 새 객체로 바꿔 컷아웃만 남았다. id로 붙이고, 만드는 중 오버레이 ([[model-look-toggle]]).
 
+## [2026-08-30] fix | 착장 품질 — gpt-image-2 단일 edit, mood 배경
+옷 보드 2장 입력이 격자·깨짐을 유발했다. ChatGPT 무드 룩북처럼 기준 인물 1장만 edit하고
+옷은 텍스트로 기술. `OPENAI_IMAGE_MODEL_LOOK` 기본 gpt-image-2, 배경 `#ACA7A4`(mood 평균),
+캐시 `model-id3-`/`model-id-v3-`, 장당 10크레딧 ([[model-look-toggle]]).
+
