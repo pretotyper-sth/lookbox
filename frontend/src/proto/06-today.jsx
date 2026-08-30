@@ -123,7 +123,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
-          {moodBasis ? `${moodBasis} · ` : ''}{items.length}개 조합
+          {moodBasis ? `${moodBasis} · ` : ''}{items.length}개 조합{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
         </div>
         {outfit.note ? (
           <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{outfit.note}</div>

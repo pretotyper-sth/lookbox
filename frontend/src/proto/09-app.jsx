@@ -272,7 +272,7 @@ function hydrateDailyHistoryFromServer(data, ownedItems) {
     if (!o.forDate) return;
     (byDate[o.forDate] = byDate[o.forDate] || []).push({
       id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-      itemIds: o.itemIds, lookImg: o.lookImg,
+      itemIds: o.itemIds, lookImg: o.lookImg, wish: o.wish,
     });
   });
   Object.entries(byDate).forEach(([day, outfits]) => {
@@ -320,7 +320,7 @@ function outfitHasTopAndBottom(outfit, ownedItems) {
     const it = byId[String(id)] || LB_DATA.ALL[id];
     const cat = ((it && it.category) || '').toLowerCase();
     if (cat === '상의' || cat === '아우터' || cat === 'top' || cat === 'outer') return 'top';
-    if (cat === '하의' || cat === 'bottom') return 'bottom';
+    if (cat === '하의' || cat === 'bottom' || cat === 'skirt') return 'bottom';
     if (cat === '원피스' || cat === 'dress') return 'dress';
     return 'other';
   });
@@ -493,7 +493,7 @@ function liveAppendOutfits(payload) {
 function liveAppendDaily(payload, ownedItems) {
   const owned = ownedIdSet(ownedItems);
   (payload.items || []).forEach((it) => {
-    if (it && owned.has(String(it.id || it.serverId))) liveRememberItem(it);
+    if (it && (owned.has(String(it.id || it.serverId)) || isWishId(it.id))) liveRememberItem(it);
   });
   const seen = new Set(
     LB_DATA.DAILY.map((o) => [...(o.itemIds || [])].map(String).sort().join('|'))
@@ -1091,7 +1091,7 @@ function App() {
     list.forEach((o) => {
       LB_DATA.OUTFIT_BY_ID[o.id] = {
         id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-        itemIds: o.itemIds, lookImg: o.lookImg, manual: !!o.manual,
+        itemIds: o.itemIds, lookImg: o.lookImg, manual: !!o.manual, wish: o.wish,
       };
     });
     // 요청을 보낸 뒤에 사용자가 저장·해제를 눌렀다면 그 결과가 최신이다. 덮지 않는다.
@@ -1398,7 +1398,12 @@ function App() {
       method: 'POST',
       body: JSON.stringify({
         gender: prefs.gender || '',
-        outfits: targets.map((o) => ({ id: o.id, item_ids: o.itemIds || [], label: o.label || '' })),
+        outfits: targets.map((o) => ({
+          id: o.id,
+          item_ids: o.itemIds || [],
+          label: o.label || '',
+          wish: o.wish || null,
+        })),
       }),
     });
     const byId = {};
@@ -1445,15 +1450,15 @@ function App() {
     if (on) {
       const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
       if (pending.length) {
-        showToast('착장 이미지를 만들고 있어요. 조금 걸려요.');
+        showToast('AI 착장 이미지를 만들고 있어요. 조금 걸려요.');
         applyModelLooks(pending).then((n) => {
-          showToast(n ? '착장 이미지로 바꿔 보여드려요' : '다음 추천부터 착장 이미지로 보여드려요');
-        }).catch((e) => showToast(e.message || '착장 이미지를 만들지 못했어요'));
+          showToast(n ? 'AI 착장으로 바꿔 보여드려요' : '다음 추천부터 AI 착장으로 보여드려요');
+        }).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
       } else {
-        showToast('다음 추천부터 착장 이미지로 보여드려요');
+        showToast('다음 추천부터 AI 착장으로 보여드려요');
       }
     } else {
-      showToast('착장 이미지를 껐어요');
+      showToast('AI 착장 이미지를 껐어요');
     }
     return true;
   };
@@ -1573,6 +1578,7 @@ function App() {
         }),
       });
       stampOutfitStyle(payload.outfits);
+      (payload.items || []).forEach(liveRememberItem);
       // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가)
       const outfits = filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount);
       liveApplyPayload({ outfits, items: dailyCacheItemsFromOwned(items, outfits) }, 'daily');
@@ -1581,6 +1587,7 @@ function App() {
       while (LB_DATA.DAILY.length < baseCount && topUpGuard < 3) {
         topUpGuard += 1;
         const need = baseCount - LB_DATA.DAILY.length;
+        const wishLeft = Math.max(0, Math.min(wishCount, baseCount) - LB_DATA.DAILY.filter((o) => (o.itemIds || []).some(isWishId)).length);
         const extra = await liveJSON('/api/live/coordinate', {
           method: 'POST',
           body: JSON.stringify({
@@ -1589,14 +1596,42 @@ function App() {
             styles: preferredStyles,
             for_date: localYmd(),
             exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+            wish_combos: Math.min(wishLeft, need),
             ...styleProfile,
             ...modelLook,
           }),
         });
         stampOutfitStyle(extra.outfits);
+        (extra.items || []).forEach(liveRememberItem);
         const added = liveAppendDaily(extra, items);
         pruneDailyAgainstOwned(items);
         if (!added.length) break;
+      }
+      const wishNeed = Math.min(wishCount, baseCount);
+      const haveWish = LB_DATA.DAILY.filter((o) => (o.itemIds || []).some(isWishId)).length;
+      if (wishNeed > haveWish) {
+        const extra = await liveJSON('/api/live/coordinate', {
+          method: 'POST',
+          body: JSON.stringify({
+            max_combos: wishNeed - haveWish,
+            style,
+            styles: preferredStyles,
+            for_date: localYmd(),
+            exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+            wish_combos: wishNeed - haveWish,
+            ...styleProfile,
+            ...modelLook,
+          }),
+        });
+        stampOutfitStyle(extra.outfits);
+        (extra.items || []).forEach(liveRememberItem);
+        liveAppendDaily(extra, items);
+        pruneDailyAgainstOwned(items);
+        while (LB_DATA.DAILY.length > baseCount) {
+          const drop = [...LB_DATA.DAILY].map((o, i) => i).reverse().find((i) => !(LB_DATA.DAILY[i].itemIds || []).some(isWishId));
+          if (drop == null) break;
+          LB_DATA.DAILY.splice(drop, 1);
+        }
       }
       writeDailyCache({
         style,

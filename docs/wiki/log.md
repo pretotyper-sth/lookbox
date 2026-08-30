@@ -160,3 +160,9 @@ URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+�
 ## [2026-08-30] fix | 서버에 오늘 코디가 없으면 로컬 캐시를 비운다
 `hydrateOutfits`가 오늘 목록이 있을 때만 캐시를 써서, 서버에서 오늘 코디를 지워도 `lb_daily_outfits_v3`와 history merge가 착장을 다시 그렸다. 없으면 DAILY·캐시·그날 히스토리를 덮어쓴다.
 
+## [2026-08-30] fix | AI 착장 토글 켜도 옷 컷아웃만 보이던 점
+`refreshLive` 후 `dailyAllowed`가 true면 오늘 탭이 `applyModelLooks`를 스킵했다. `dailyTick` effect로 looks API를 탄다 ([[model-look-toggle]]). 마이페이지 추천 코디 하위 설정은 ㄴ 들여쓰기로 묶음.
+
+## [2026-08-30] fix | 착장 동일 인물·설정 그룹·제안 코디
+착장은 기준 모델 한 장을 만든 뒤 옷만 입힌다. 크레딧 잔액으로 장 수를 자르지 않아 4장 중 2장만 나오던 걸 막는다. 설정 하위는 iOS식 안쪽 그룹. 제안 아이템은 필터 전에 ALL에 넣고 모자라면 한 장 더 받는다 ([[model-look-toggle]]).
+

@@ -13,6 +13,7 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     '_look_gender_key',
     '_model_look_subject',
+    '_model_identity_prompt',
     '_model_look_prompt',
     '_flatten_look_plate',
 )
@@ -107,9 +108,14 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("12%", prompt)
         self.assertIn("무신사", prompt)
         self.assertIn("쓰지 마세요", prompt)
-        self.assertIn("썸네일", prompt)
         self.assertNotIn("왼쪽 위", prompt)
         self.assertNotIn("얼굴을 그대로", prompt)
+
+    def test_look_prompt_locks_identity_photo(self):
+        src = MAIN_PATH.read_text()
+        self.assertIn("첫 번째 이미지는 기준 모델", src)
+        self.assertIn("model-id-v2-", src)
+        self.assertIn("model-id2-", src)
 
     def test_gender_only_changes_the_model(self):
         man = self.ns['_model_look_subject']("남성")
@@ -162,7 +168,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-h-", src)
+        self.assertIn("model-id2-", src)
 
 
 if __name__ == "__main__":
