@@ -71,6 +71,31 @@ def interior_plate_patch() -> bytes:
     return buf.getvalue()
 
 
+def island_behind_ring() -> bytes:
+    """어두운 링으로 테두리와 끊긴 베이지 섬 — 격자 잔상."""
+    cool = (214, 216, 218)
+    beige = (236, 230, 218)
+    navy = (28, 42, 72)
+    dark = (40, 40, 38)
+    im = Image.new("RGB", (80, 120), cool)
+    px = im.load()
+    for y in range(120):
+        for x in range(22, 58):
+            px[x, y] = beige
+    for y in range(28, 100):
+        for x in range(30, 50):
+            px[x, y] = navy
+    for y in range(70, 98):
+        for x in range(6, 22):
+            px[x, y] = dark
+    for y in range(74, 94):
+        for x in range(10, 18):
+            px[x, y] = beige
+    buf = io.BytesIO()
+    im.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 class ModelLookPromptTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -82,6 +107,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("12%", prompt)
         self.assertIn("무신사", prompt)
         self.assertIn("쓰지 마세요", prompt)
+        self.assertIn("썸네일", prompt)
         self.assertNotIn("왼쪽 위", prompt)
         self.assertNotIn("얼굴을 그대로", prompt)
 
@@ -110,6 +136,14 @@ class ModelLookPromptTest(unittest.TestCase):
         plate = self.ns['_LOOK_PLATE_RGB']
         self.assertEqual(img.getpixel((12, 84)), plate)
 
+    def test_flatten_fills_island_behind_dark_ring(self):
+        out = self.ns['_flatten_look_plate'](island_behind_ring())
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        plate = self.ns['_LOOK_PLATE_RGB']
+        self.assertEqual(img.getpixel((14, 88)), plate)
+        r, g, b = img.getpixel((40, 60))
+        self.assertLess(r + g + b, 180)
+
     def test_generate_signature_has_gender_not_face(self):
         tree = ast.parse(MAIN_PATH.read_text())
         fn = next(
@@ -127,6 +161,8 @@ class ModelLookPromptTest(unittest.TestCase):
         src = ast.get_source_segment(MAIN_PATH.read_text(), fn) or ""
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
+        self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
+        self.assertIn("model-h-", src)
 
 
 if __name__ == "__main__":

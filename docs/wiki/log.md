@@ -151,3 +151,6 @@ URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+�
 ## [2026-08-30] fix | 지난 날짜 코디 히스토리 계정 동기화
 히스토리 정본을 서버 `outfits.metadata.for_date`(없으면 `created_at` 보정)로 두고, 로그인 시 `/api/live/outfits`로 날짜별 기록을 채운다. localStorage는 캐시·`wornIds`용. `06-today`는 `dailyTick`으로 서버 동기화 후 캘린더가 갱신된다.
 
+## [2026-08-30] fix | 착장 high 품질·조합 먼저·격자 잔상
+착장은 추출 착용컷과 같은 high. 조합 API는 목록만 반환하고 looks를 이어서 병렬 생성. 옷 참고는 상단 스트립, 끊긴 판 조각 평탄화, `[timing] recommend`/`model-look` 로그 ([[model-look-toggle]]).
+

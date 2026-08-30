@@ -1517,6 +1517,9 @@ function App() {
         bumpDaily();
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 만들 조합이 없어요');
+        if (prefs.modelLook) {
+          applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg));
+        }
         return { added: added.length, wardrobeGrew };
       }
       // force여도 당일 이력이 있으면 전체 리셋 대신 추가만 (위에서 처리). 여기 도달 = 오늘 첫 추천.
@@ -1572,6 +1575,9 @@ function App() {
       bumpDaily();
       reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
+      if (prefs.modelLook) {
+        applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg));
+      }
       return { added: LB_DATA.DAILY.length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
@@ -1957,6 +1963,14 @@ function App() {
       setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
       reloadBilling();
       if (append && !fresh.length) showToast('더 만들 조합이 없어요');
+      if (prefs.modelLook && fresh.some((o) => !o.lookImg)) {
+        applyModelLooks(fresh).then(() => {
+          setPickSheet((cur) => {
+            if (!cur || cur.ids !== picked) return cur;
+            return { ...cur, outfits: cur.outfits.map((o) => LB_DATA.OUTFIT_BY_ID[o.id] || o) };
+          });
+        });
+      }
     } catch (e) {
       if (append) {
         setPickSheet({ ids: picked, loading: false, outfits: prev, error: '' });
