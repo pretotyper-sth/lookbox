@@ -9,7 +9,8 @@
 요금제는 같은 블록의 `요금제 보기` → `PlanSheet`.
 
 무료 월 크레딧은 50 (`backend/app/main.py` `PLANS["free"]["credits"]`). 이미 그 달
-지급분이 다른 숫자면 `billing_state`가 grant 행을 맞춘다.
+지급분이 다른 숫자면 `billing_state`가 grant 행을 맞춘다. 잔액을 「코디 추천 약 N회」로
+풀어 쓰지 않는다(2026-08-30).
 
 사용량은 계정별 `lb_billing_v1` 캐시를 먼저 그리고 `/api/live/billing`이 오면 덮는다.
 `jsharrykim@gmail.com`만 잔액이 0이면 지급분 50을 다시 넣는다(차감은 그대로 보임).

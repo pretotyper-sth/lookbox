@@ -21,11 +21,11 @@ function VersionLine() {
 /* ---- 사용량 · 요금제 ---------------------------------------------------------
    AI를 쓰는 작업(등록·추천·착장 이미지)은 실제로 돈이 나간다. 남은 크레딧은
    PC에선 계정 카드 안에, 모바일에선 제 카드로. 버전은 페이지 맨 아래에만. */
-function CreditBar({ remaining, granted }) {
+function CreditBar({ remaining, granted, tall }) {
   const pct = granted > 0 ? Math.max(0, Math.min(100, (remaining / granted) * 100)) : 0;
   const low = pct <= 15;
   return (
-    <div style={{ height: 8, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
+    <div style={{ height: tall ? 10 : 8, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
       <div style={{
         width: `${pct}%`, height: '100%', borderRadius: 999,
         background: low ? '#B0573C' : 'var(--accent)',
@@ -36,6 +36,7 @@ function CreditBar({ remaining, granted }) {
 }
 
 function PlanSheet({ open, onClose, billing }) {
+  const [costsOpen, setCostsOpen] = useMp(false);
   const plans = ((billing && billing.plans) || []).filter((p) => p.id === 'free');
   const box = {
     borderRadius: 'var(--r-md)',
@@ -95,22 +96,43 @@ function PlanSheet({ open, onClose, billing }) {
                 { action: 'import_photo', label: '사진으로 옷 등록', credits: 2 },
                 { action: 'replace_image', label: '옷 사진 다시 만들기', credits: 2 },
                 { action: 'coordinate', label: '코디 추천', credits: 1 },
-                { action: 'model_look', label: 'AI 착장 이미지', credits: 5 },
+                { action: 'model_look', label: 'AI 착장 이미지', credits: 10 },
               ];
           return (
             <div style={{ marginTop: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>작업별 크레딧</div>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
-                {costs.map((c) => (
-                  <li key={c.action} style={{
-                    display: 'flex', justifyContent: 'space-between', gap: 12,
-                    fontSize: 13, color: 'var(--ink-2)', wordBreak: 'keep-all',
-                  }}>
-                    <span>{c.label}</span>
-                    <span className="tnum" style={{ fontWeight: 800, color: 'var(--ink)', flex: 'none' }}>{c.credits}</span>
-                  </li>
-                ))}
-              </ul>
+              <button
+                type="button"
+                onClick={() => setCostsOpen((v) => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 0', fontSize: 13, fontWeight: 800, color: 'var(--ink)',
+                }}
+              >
+                작업별 크레딧
+                <span style={{
+                  color: 'var(--ink-3)', display: 'inline-flex',
+                  transform: costsOpen ? 'rotate(180deg)' : 'none',
+                }}>
+                  <Icon name="chevD" size={14} />
+                </span>
+              </button>
+              {costsOpen ? (
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+                  {costs.map((c) => (
+                    <li key={c.action} style={{
+                      display: 'flex', justifyContent: 'space-between', gap: 12,
+                      fontSize: 13, color: 'var(--ink-2)', wordBreak: 'keep-all',
+                    }}>
+                      <span>{c.label}</span>
+                      <span className="tnum" style={{ fontWeight: 800, color: 'var(--ink)', flex: 'none' }}>{c.credits}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+                  펼치면 등록·추천·착장마다 쓰는 크레딧을 볼 수 있어요.
+                </p>
+              )}
             </div>
           );
         })()}
@@ -139,11 +161,19 @@ function UsageBlock({ billing, onOpenPlans, variant = 'inline' }) {
   const reset = resetsAt ? new Date(resetsAt) : null;
   const low = remaining <= Math.max(3, Math.round(granted * 0.1));
   return (
-    <div style={wrap}>
+    <div style={{
+      ...wrap,
+      ...(card && low ? { boxShadow: 'inset 0 0 0 1.5px color-mix(in srgb, #B0573C 35%, var(--line))' } : {}),
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 14.5, fontWeight: 800 }}>사용량</span>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-2)', background: 'var(--ivory)', padding: '3px 9px', borderRadius: 999 }}>
-          {planName}
+        <span style={{
+          fontSize: 11.5, fontWeight: 700,
+          color: low ? '#B0573C' : 'var(--accent-ink)',
+          background: low ? 'color-mix(in srgb, #B0573C 12%, var(--surface))' : 'var(--accent)',
+          padding: '3px 9px', borderRadius: 999,
+        }}>
+          {planName} · 사용 중
         </span>
         <span style={{ flex: 1 }} />
         <button type="button" onClick={onOpenPlans} style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', padding: '4px 2px' }}>
@@ -151,13 +181,13 @@ function UsageBlock({ billing, onOpenPlans, variant = 'inline' }) {
         </button>
       </div>
       <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span className="tnum" style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{remaining}</span>
-        <span className="tnum" style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧</span>
+        <span className="tnum" style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: low ? '#B0573C' : 'var(--ink)' }}>{remaining}</span>
+        <span className="tnum" style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>/ {granted} 크레딧 남음</span>
       </div>
-      <div style={{ marginTop: 'var(--s3)' }}><CreditBar remaining={remaining} granted={granted} /></div>
-      <div style={{ marginTop: 'var(--s3)', fontSize: 12, color: 'var(--ink-3)' }}>
+      <div style={{ marginTop: 'var(--s3)' }}><CreditBar remaining={remaining} granted={granted} tall /></div>
+      <div style={{ marginTop: 'var(--s3)', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
         {reset ? `${reset.getMonth() + 1}월 ${reset.getDate()}일 초기화` : ''}
-        {used > 0 ? ` · ${used}개 사용` : ''}
+        {used > 0 ? `${reset ? ' · ' : ''}${used}개 사용` : ''}
         {low ? ' · 얼마 안 남았어요' : ''}
       </div>
     </div>
