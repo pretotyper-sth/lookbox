@@ -50,6 +50,27 @@ def two_tone_look() -> bytes:
     return buf.getvalue()
 
 
+def interior_plate_patch() -> bytes:
+    """테두리와 끊긴 밝은 판 조각 — 인물 옆 왼쪽 아래 아티팩트."""
+    cool = (214, 216, 218)
+    beige = (236, 230, 218)
+    navy = (28, 42, 72)
+    im = Image.new("RGB", (80, 120), cool)
+    px = im.load()
+    for y in range(120):
+        for x in range(22, 58):
+            px[x, y] = beige
+    for y in range(28, 100):
+        for x in range(30, 50):
+            px[x, y] = navy
+    for y in range(72, 96):
+        for x in range(8, 20):
+            px[x, y] = beige
+    buf = io.BytesIO()
+    im.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 class ModelLookPromptTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -82,6 +103,12 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertEqual(img.getpixel((24, 60)), plate)
         r, g, b = img.getpixel((40, 60))
         self.assertLess(r + g + b, 180)
+
+    def test_flatten_fills_interior_plate_patch(self):
+        out = self.ns['_flatten_look_plate'](interior_plate_patch())
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        plate = self.ns['_LOOK_PLATE_RGB']
+        self.assertEqual(img.getpixel((12, 84)), plate)
 
     def test_generate_signature_has_gender_not_face(self):
         tree = ast.parse(MAIN_PATH.read_text())

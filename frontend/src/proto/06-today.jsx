@@ -356,7 +356,7 @@ function TodayScreen({ ctx }) {
   // 지난 날짜는 그날 실제로 추천했던 기록만 보여준다. 기록이 없으면 새로 만들지 않는다.
   const pastRecord = React.useMemo(
     () => (isToday || !getDayRecord ? null : getDayRecord(dayKey(selected))),
-    [isToday, selected, getDayRecord],
+    [isToday, selected, getDayRecord, dailyTick],
   );
   const pastItemsById = React.useMemo(() => {
     const map = {};
@@ -377,25 +377,11 @@ function TodayScreen({ ctx }) {
     return () => { alive = false; };
   }, [dailyEnabled, ready, isToday, dailyAllowed, dailyLoading, preferredDailyStyle, requestDailyOutfits]);
 
-  // owned에 없는 아이템·상의/하의 미달 코디는 화면에서도 제외
-  const ownedIds = React.useMemo(
-    () => new Set((items || []).map((it) => String(it.id))),
-    [items],
-  );
-  const picks = uniqueDailyOutfits(pool).filter((o) => {
-    const ids = o.itemIds || [];
-    if (ids.length < 2 || !ids.every((id) => ownedIds.has(String(id)))) return false;
-    const buckets = ids.map((id) => {
-      const it = LB_DATA.ALL[id] || items.find((x) => String(x.id) === String(id));
-      const cat = ((it && it.category) || '').toLowerCase();
-      if (cat === '상의' || cat === '아우터' || cat === 'top' || cat === 'outer') return 'top';
-      if (cat === '하의' || cat === '스커트' || cat === 'bottom' || cat === 'skirt') return 'bottom';
-      if (cat === '원피스' || cat === 'dress') return 'dress';
-      return 'other';
-    });
-    if (buckets.includes('dress')) return true;
-    return buckets.includes('top') && buckets.includes('bottom');
-  });
+  // wish-* 제안 아이템이 섞인 코디도 09-app과 같이 보여준다(여기서만 걸러지면 4칸 중 1칸이 비는 버그).
+  const filterDaily = window.filterDailyOutfitsByOwned;
+  const picks = filterDaily
+    ? filterDaily(uniqueDailyOutfits(pool), items)
+    : uniqueDailyOutfits(pool);
   void dailyTick; // prune/append 후 리렌더 트리거
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
   const emptySlots = isToday && picks.length < COLS ? COLS - picks.length : 0;

@@ -145,3 +145,9 @@ URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+�
 ## [2026-08-30] ingest | URL 여러 개는 확인 담기가 기본
 후보에서 고른 뒤 기본은 pending 추출 → 사진과 같은 하나씩 확인. 「확인 없이 바로 담기」체크(기본 off)일 때만 일괄 owned. URL 탭 전역 붙여넣기 ([[add-item-bulk]]).
 
+## [2026-08-30] fix | 오늘 코디 4칸·착장 일관성
+`06-today.jsx`가 `wish-*` 코디를 옷장 미보유로 걸러 3칸만 보이던 버그 → `filterDailyOutfitsByOwned` 공유. 첫 추천 후 4칸 미만이면 같은 날 top-up. 착장은 참조 모델 캐시·판 평탄화 확장 ([[model-look-toggle]]).
+
+## [2026-08-30] fix | 지난 날짜 코디 히스토리 계정 동기화
+히스토리 정본을 서버 `outfits.metadata.for_date`(없으면 `created_at` 보정)로 두고, 로그인 시 `/api/live/outfits`로 날짜별 기록을 채운다. localStorage는 캐시·`wornIds`용. `06-today`는 `dailyTick`으로 서버 동기화 후 캘린더가 갱신된다.
+

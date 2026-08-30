@@ -182,25 +182,97 @@ function clearDailyCache() {
 }
 
 // 날짜별 추천 기록 — 당일 캐시는 하루가 지나면 무효가 되므로, 그날 실제로 보여준
-// 코디를 따로 남겨 캘린더에서 되짚어볼 수 있게 한다. 기록이 없는 날은 없는 대로 둔다.
+// 코디를 따로 남겨 캘린더에서 되짚어볼 수 있게 한다. 정본은 서버 outfits(forDate)이고
+// localStorage는 오프라인·즉시 페인트용이다.
 const DAILY_HISTORY_BASE = 'lb_daily_history_v1';
-function dailyHistoryKey() { return DAILY_HISTORY_BASE + ':' + dailyScope(); }
+function dailyHistoryKey(uid) { return DAILY_HISTORY_BASE + ':' + (uid || dailyScope()); }
 const DAILY_HISTORY_MAX_DAYS = 120;
-function readDailyHistory() {
-  try { return JSON.parse(localStorage.getItem(dailyHistoryKey()) || 'null') || {}; } catch (e) { return {}; }
+const serverDailyHistory = {};
+function mergeDailyRecord(local, remote) {
+  if (!local && !remote) return null;
+  if (!local) return remote;
+  if (!remote) return local;
+  const byId = {};
+  (local.outfits || []).forEach((o) => { if (o && o.id) byId[o.id] = o; });
+  (remote.outfits || []).forEach((o) => { if (o && o.id) byId[o.id] = o; });
+  const itemsById = {};
+  [...(local.items || []), ...(remote.items || [])].forEach((it) => {
+    if (it && it.id != null) itemsById[it.id] = it;
+  });
+  return {
+    style: remote.style || local.style || '',
+    outfits: Object.values(byId),
+    items: Object.values(itemsById),
+    wornIds: remote.wornIds || local.wornIds || [],
+  };
+}
+function readDailyHistory(uid) {
+  try { return JSON.parse(localStorage.getItem(dailyHistoryKey(uid)) || 'null') || {}; } catch (e) { return {}; }
 }
 function readDailyRecord(dateKey) {
-  const rec = readDailyHistory()[dateKey];
+  const local = readDailyHistory()[dateKey];
+  const remote = serverDailyHistory[dateKey];
+  const rec = mergeDailyRecord(local, remote);
   return rec && rec.outfits && rec.outfits.length ? rec : null;
 }
 function writeDailyRecord(dateKey, patch) {
   try {
-    const all = readDailyHistory();
-    all[dateKey] = { ...(all[dateKey] || {}), ...patch };
+    const scope = dailyScope();
+    const all = readDailyHistory(scope);
+    const merged = mergeDailyRecord(all[dateKey], patch);
+    all[dateKey] = merged || { ...(all[dateKey] || {}), ...patch };
+    serverDailyHistory[dateKey] = all[dateKey];
     const keys = Object.keys(all).sort();
     keys.slice(0, Math.max(0, keys.length - DAILY_HISTORY_MAX_DAYS)).forEach((k) => delete all[k]);
-    localStorage.setItem(dailyHistoryKey(), JSON.stringify(all));
+    localStorage.setItem(dailyHistoryKey(scope), JSON.stringify(all));
   } catch (e) { /* noop */ }
+}
+function migrateDailyHistory(fromScope, toScope) {
+  if (!fromScope || !toScope || fromScope === toScope) return;
+  try {
+    const from = JSON.parse(localStorage.getItem(dailyHistoryKey(fromScope)) || '{}');
+    const to = JSON.parse(localStorage.getItem(dailyHistoryKey(toScope)) || '{}');
+    if (!Object.keys(from).length) return;
+    const merged = { ...to };
+    Object.keys(from).forEach((day) => {
+      merged[day] = mergeDailyRecord(from[day], merged[day]) || from[day];
+    });
+    localStorage.setItem(dailyHistoryKey(toScope), JSON.stringify(merged));
+    Object.entries(merged).forEach(([day, rec]) => {
+      if (rec && rec.outfits && rec.outfits.length) serverDailyHistory[day] = rec;
+    });
+  } catch (e) { /* noop */ }
+}
+function snapshotItemsForOutfits(outfits, payloadItems, ownedItems) {
+  const byId = {};
+  (ownedItems || []).forEach((it) => { if (it && it.id != null) byId[String(it.id)] = it; });
+  (payloadItems || []).forEach((it) => { if (it && it.id != null) byId[String(it.id)] = it; });
+  const used = new Set();
+  (outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
+  const out = [];
+  used.forEach((id) => {
+    const it = byId[id] || LB_DATA.ALL[id];
+    if (it) out.push(it);
+  });
+  return out;
+}
+function hydrateDailyHistoryFromServer(data, ownedItems) {
+  const list = data.outfits || [];
+  const byDate = {};
+  list.slice().reverse().forEach((o) => {
+    if (!o.forDate) return;
+    (byDate[o.forDate] = byDate[o.forDate] || []).push({
+      id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
+      itemIds: o.itemIds, lookImg: o.lookImg,
+    });
+  });
+  Object.entries(byDate).forEach(([day, outfits]) => {
+    writeDailyRecord(day, {
+      outfits,
+      items: snapshotItemsForOutfits(outfits, data.items || [], ownedItems),
+    });
+  });
+  return byDate;
 }
 function dailyWardrobeGrewSinceCache(ownedItems) {
   const cached = readDailyCache();
@@ -255,6 +327,7 @@ function filterDailyOutfitsByOwned(outfits, ownedItems) {
   });
   return out;
 }
+if (typeof window !== 'undefined') window.filterDailyOutfitsByOwned = filterDailyOutfitsByOwned;
 function dailyCacheItemsFromOwned(ownedItems, outfits) {
   const used = new Set();
   (outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
@@ -647,6 +720,17 @@ function App() {
   // 계정 설정이 도착하기 전에 사용자가 바꾼 값은 계정 값으로 되돌리지 않는다.
   const prefsAtBoot = useRef(null);
   setDailyScope(authUid); // 코디 캐시 키를 현재 계정으로 고정 — 렌더 중 읽는 곳이 있어 effect보다 먼저 세팅한다
+  const prevAuthUid = useRef('');
+  useEffect(() => {
+    Object.keys(serverDailyHistory).forEach((k) => { delete serverDailyHistory[k]; });
+    if (!authUid) return;
+    migrateDailyHistory('anon', authUid);
+    if (prevAuthUid.current && prevAuthUid.current !== authUid) {
+      migrateDailyHistory(prevAuthUid.current, authUid);
+    }
+    prevAuthUid.current = authUid;
+    try { localStorage.setItem(LAST_UID_KEY, authUid); } catch (e) { /* noop */ }
+  }, [authUid]);
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
@@ -1009,17 +1093,7 @@ function App() {
       })));
     }
     // 서버는 최신순으로 준다. 오늘 코디는 만든 순서대로 보여야 해서 되돌린다.
-    const byDate = {};
-    list.slice().reverse().forEach((o) => {
-      if (!o.forDate) return;
-      (byDate[o.forDate] = byDate[o.forDate] || []).push({
-        id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-        itemIds: o.itemIds, lookImg: o.lookImg,
-      });
-    });
-    Object.entries(byDate).forEach(([day, outfits]) => {
-      writeDailyRecord(day, { outfits, items: dailyCacheItemsFromOwned(ownedItems, outfits) });
-    });
+    const byDate = hydrateDailyHistoryFromServer(data, ownedItems);
     const today = byDate[localYmd()];
     if (today && today.length) {
       const kept = filterDailyOutfitsByOwned(today, ownedItems);
@@ -1033,7 +1107,7 @@ function App() {
           wardrobeSig: (cached && cached.wardrobeSig) || wardrobeSigOf(ownedItems),
           wardrobeCount: cached && cached.wardrobeCount != null ? cached.wardrobeCount : (ownedItems || []).length,
         });
-        LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+        LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...kept);
       }
     }
   }, []);
@@ -1466,6 +1540,28 @@ function App() {
       // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가)
       const outfits = filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount);
       liveApplyPayload({ outfits, items: dailyCacheItemsFromOwned(items, outfits) }, 'daily');
+      // wish 코디 등으로 줄어들었거나 조합이 부족하면 같은 날 안에서 한 번 더 채운다.
+      let topUpGuard = 0;
+      while (LB_DATA.DAILY.length < baseCount && topUpGuard < 3) {
+        topUpGuard += 1;
+        const need = baseCount - LB_DATA.DAILY.length;
+        const extra = await liveJSON('/api/live/coordinate', {
+          method: 'POST',
+          body: JSON.stringify({
+            max_combos: need,
+            style,
+            styles: preferredStyles,
+            for_date: localYmd(),
+            exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
+            ...styleProfile,
+            ...modelLook,
+          }),
+        });
+        stampOutfitStyle(extra.outfits);
+        const added = liveAppendDaily(extra, items);
+        pruneDailyAgainstOwned(items);
+        if (!added.length) break;
+      }
       writeDailyCache({
         style,
         outfits: LB_DATA.DAILY.slice(),
@@ -1476,7 +1572,7 @@ function App() {
       bumpDaily();
       reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
-      return { added: outfits.length, wardrobeGrew: false };
+      return { added: LB_DATA.DAILY.length, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '코디를 만들지 못했어요');
