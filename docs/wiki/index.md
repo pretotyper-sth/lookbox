@@ -13,7 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img를 flex 자식으로 두면 1024px min-width 때문에 줌에 안 줄어든다. 절대배치·max 100%
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림. 룩북 모델. 착장은 SSE로 한 장씩, 화면은 DAILY id에 붙임. 설정 행에 비용 문구는 없음
+- [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림. 무드 인물+`#E5E3DE` 한 장 배경. SSE로 한 장씩, 화면은 DAILY id에 붙임
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. 구멍은 옷 픽셀, 양옆은 막음. 후면 카메라만
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋
@@ -31,6 +31,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 
 ## Operations
+- [ai-usage-cost](ai-usage-cost.md) — 원가는 `ai_usage_logs.metadata.cost_usd`. 착장·기준인물은 usage 미기록. 관리자 `/api/live/admin/ai-cost`
 - [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
 
 ## Gotchas

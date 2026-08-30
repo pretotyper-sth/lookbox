@@ -23,10 +23,11 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 `paintLook`은 `LB_DATA.DAILY`를 id로 찾아 쓰고, hydrate는 로컬 lookImg를 보존한다
 (2026-08-30). 설정 `modelLook`은 계정 prefs에 있고 리셋은 코디 행만 지운다.
 
-배경은 `assets/mood/` 평균 `#ACA7A4` — 상품 카드 `--thumb-bg`와 동일(2026-08-30).
-ChatGPT 무드 룩북과 같이 **기준 인물 1장**만 `images.edit`에 넣고, 옷은 텍스트로
-기술한다(옷 보드 2장 입력 제거). 기준 인물 `model-id-v3-{m|f}`는 `gpt-image-2`로
-한 장 생성. 착장 캐시 `model-id3-`. 착장 출력에는 plate flatten을 하지 않는다.
+배경은 옷장·코디 카드와 같은 `--thumb-bg` `#E5E3DE` 한 장이다. 카드 안 패딩으로
+더 작은 회색 사각형이 생기면 안 된다(2026-08-30). ChatGPT 무드 룩북과 같이
+**무드 인물 사진 1장**(`backend/assets/look-identity/{m,f}.jpg`)을 `images.edit`에
+넣고, 옷은 텍스트로 기술한다. 기준 인물 `model-id-v4-{m|f}`는 그 사진을 순한 인상·
+전면 스튜디오로 고정. 착장 캐시 `model-id4-`. 출력은 plate flatten으로 판을 맞춘다.
 크레딧 잔액으로 장 수를 자르지 않는다.
 
 근거: `backend/app/main.py` `_model_look_garment_lines`, `_model_look_prompt_with_reference`,

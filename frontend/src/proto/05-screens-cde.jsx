@@ -142,7 +142,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
             objectFit: 'contain', objectPosition: 'center',
-            padding: '8% 6%', boxSizing: 'border-box',
+            boxSizing: 'border-box',
           }}
         />
       </div>

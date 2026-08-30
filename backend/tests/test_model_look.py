@@ -1,4 +1,4 @@
-"""AI 착장은 프로필 얼굴이 아니라 성별만 맞춘 룩북 모델 + mood 룩북 배경."""
+"""AI 착장은 무드 룩북 인물 + 옷장·코디와 같은 #E5E3DE 판."""
 
 import ast
 import io
@@ -36,13 +36,13 @@ def load():
 
 
 def _wrong_plate() -> tuple[int, int, int]:
-    return (200, 196, 192)
+    return (210, 207, 202)
 
 
 def two_tone_look() -> bytes:
     """인물 주변만 다른 톤, 양옆은 AI가 깔아 둔 잘못된 판색."""
     wrong = _wrong_plate()
-    plate = (172, 167, 164)
+    plate = (229, 227, 222)
     navy = (28, 42, 72)
     im = Image.new("RGB", (80, 120), wrong)
     px = im.load()
@@ -60,7 +60,7 @@ def two_tone_look() -> bytes:
 def interior_plate_patch() -> bytes:
     """테두리와 끊긴 밝은 판 조각 — 인물 옆 왼쪽 아래 아티팩트."""
     wrong = _wrong_plate()
-    plate = (172, 167, 164)
+    plate = (229, 227, 222)
     navy = (28, 42, 72)
     im = Image.new("RGB", (80, 120), wrong)
     px = im.load()
@@ -81,7 +81,7 @@ def interior_plate_patch() -> bytes:
 def island_behind_ring() -> bytes:
     """어두운 링으로 테두리와 끊긴 판 섬 — 격자 잔상."""
     wrong = _wrong_plate()
-    plate = (172, 167, 164)
+    plate = (229, 227, 222)
     navy = (28, 42, 72)
     dark = (40, 40, 38)
     im = Image.new("RGB", (80, 120), wrong)
@@ -111,19 +111,22 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn(self.ns['_LOOK_PLATE_HEX'], prompt)
-        self.assertIn("12%", prompt)
-        self.assertIn("무신사", prompt)
+        self.assertIn("순하", prompt)
         self.assertIn("쓰지 마세요", prompt)
-        self.assertNotIn("왼쪽 위", prompt)
+        self.assertNotIn("선명한 이목구비", prompt)
         self.assertNotIn("얼굴을 그대로", prompt)
+        self.assertEqual(self.ns['_LOOK_PLATE_HEX'], "#E5E3DE")
+        self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
         self.assertIn("소스 이미지와 동일한 모델", src)
-        self.assertIn("model-id-v3-", src)
-        self.assertIn("model-id3-", src)
+        self.assertIn("model-id-v4-", src)
+        self.assertIn("model-id4-", src)
+        self.assertIn("look-identity", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn('_png_named(identity, "identity.png")', src)
+        self.assertIn("쨍", src)
 
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([
@@ -132,6 +135,21 @@ class ModelLookPromptTest(unittest.TestCase):
         ])
         self.assertIn("그레이", lines)
         self.assertIn("데님", lines)
+
+    def test_garment_lines_include_style(self):
+        lines = self.ns['_model_look_garment_lines']([
+            {
+                "category": "top", "name": "옥스퍼드", "color": "화이트",
+                "metadata": {"style": {"subtype": "셔츠", "material": "cotton", "fit": "regular"}},
+            },
+        ])
+        self.assertIn("셔츠", lines)
+        self.assertIn("cotton", lines)
+
+    def test_mood_identity_files_exist(self):
+        root = Path(__file__).parents[1] / "assets" / "look-identity"
+        self.assertTrue((root / "m.jpg").is_file(), "male mood identity")
+        self.assertTrue((root / "f.jpg").is_file(), "female mood identity")
 
     def test_gender_only_changes_the_model(self):
         man = self.ns['_model_look_subject']("남성")
@@ -185,8 +203,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id3-", src)
+        self.assertIn("model-id4-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
+        self.assertIn("_flatten_look_plate(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
         end = looks_src.index("\ndef ", start + 1)

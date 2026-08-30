@@ -184,8 +184,22 @@ Render가 착장 JSON을 ~100초에 끊어서 서버엔 이미지가 있는데 �
 data URL을 metadata에서 빼서 올린 기기에만 보였다. 스토리지에 올리고 `prefs.avatar`에
 URL만 붙인다. 기기에 남은 data URL은 로그인 시 한 번 올린다 ([[profile-avatar]]).
 
+## [2026-08-30] query | 바로 보기 원가 구간
+비용은 `POST /api/live/tryon/body` `images.edit` 한 번뿐. 오늘 실측 $0.108
+(gpt-image-1 medium). 카메라·punchBody $0. 캐시 `tryon2-`·월 5회 ([[tryon-setup-from-mypage]]).
+
+## [2026-08-30] query | 오늘 OpenAI 원가
+`ai_usage_logs` 35회(jsharrykim, KST). 실측 $0.26(분류 3·추천 7·바로보기 1).
+착장 22+기준인물 2는 usage 없음 → 과거 gpt-image-1 실측으로 추정 $6.07.
+합계 약 $6.32. 사진 AI 추출 0건 ([[ai-usage-cost]]).
+
 ## [2026-08-30] fix | 모바일 확대·빈 화면 가운데·바로 보기 구멍
 iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-page-zoom]]). EmptyState는
 가짜 상단바 패딩을 빼 콘텐츠 칸 가운데 ([[empty-state-center]]). 바로 보기 구멍은
 옷 픽셀에 맞추고 양옆은 막으며 카메라 전환은 뺀다 ([[tryon-setup-from-mypage]]).
+
+## [2026-08-30] fix | 착장 배경 한 장·무드 인물
+옷장·코디 `--thumb-bg`를 `#E5E3DE`로 되돌리고 착장 카드 패딩을 빼 상자 안 상자를
+없앤다. 기준 인물은 무드 사진(`backend/assets/look-identity`) edit, 순한 인상·흰 옷
+과노출 금지, 캐시 `model-id4-`/`model-id-v4-` ([[model-look-toggle]]).
 

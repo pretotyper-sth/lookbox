@@ -383,7 +383,6 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
     outfit.lookImg ? (
       <div style={{
         width: '100%', height: '100%', minWidth: 0, minHeight: 0,
-        padding: '6% 5%', boxSizing: 'border-box',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <img

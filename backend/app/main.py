@@ -15,6 +15,7 @@ import zipfile
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, urljoin, urlparse
 
@@ -3363,10 +3364,11 @@ def _face_image_bytes(src: str | None) -> bytes | None:
     return None
 
 
-# `assets/mood/` 룩북 배경 평균(#ACA7A4). 밝은 #E5E3DE보다 흰 옷·아이템 대비가 낫다.
-# 상품 카드 `--thumb-bg`와 맞춰 contain 시 옆 여백이 다른 색으로 안 보인다.
-_LOOK_PLATE_HEX = "#ACA7A4"
-_LOOK_PLATE_RGB = (172, 167, 164)
+# 옷장·코디 카드 `--thumb-bg`와 같은 색. 생성 이미지가 이 판을 프레임 끝까지 채우면
+# contain 옆 여백이 두 번째 배경처럼 안 보인다.
+_LOOK_PLATE_HEX = "#E5E3DE"
+_LOOK_PLATE_RGB = (229, 227, 222)
+_LOOK_IDENTITY_DIR = Path(__file__).resolve().parent.parent / "assets" / "look-identity"
 
 
 def _look_gender_key(gender: str | None) -> str:
@@ -3383,16 +3385,16 @@ def _model_look_subject(gender: str | None) -> str:
     g = (gender or "").strip()
     if g.startswith("남"):
         return (
-            "20대 한국인 남성 패션 모델. 무신사 룩북처럼 잘생기고 이목구비가 또렷하며 "
-            "피부는 깨끗하고 헤어는 정돈된, 키 크고 비율 좋은 카탈로그 모델"
+            "20대 한국인 남성 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
+            "깨끗한 피부, 정돈된 헤어, 키 크고 비율 좋은 카탈로그 모델"
         )
     if g.startswith("여"):
         return (
-            "20대 한국인 여성 패션 모델. 무신사 룩북처럼 예쁘고 이목구비가 또렷하며 "
-            "피부는 깨끗하고 헤어는 정돈된, 키 크고 비율 좋은 카탈로그 모델"
+            "20대 한국인 여성 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
+            "깨끗한 피부, 정돈된 헤어, 키 크고 비율 좋은 카탈로그 모델"
         )
     return (
-        "20대 한국인 패션 모델. 무신사 룩북처럼 매력적이고 이목구비가 또렷하며 "
+        "20대 한국인 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
         "옷의 성별에 맞는, 키 크고 비율 좋은 카탈로그 모델"
     )
 
@@ -3402,13 +3404,15 @@ def _model_look_prompt(gender: str | None) -> str:
 
 
 def _model_identity_prompt(gender: str | None) -> str:
-    return f"""무신사 룩북 기준 모델 전신 컷 한 장만 만드세요. 이후 모든 착장이 이 사람과 동일한 얼굴·헤어·키·체형·포즈를 씁니다.
-모델: {_model_look_subject(gender)}. 선명한 이목구비, 깨끗한 피부, 상업 화보 화질. 사용자 얼굴·프로필 사진·체형을 쓰지 마세요. 실존 인물 모사 금지.
-- 인물 한 명, 정면 전신. 포즈는 이후에도 동일: 왼손은 바지 왼쪽 주머니에, 오른팔은 옆구리에 자연스럽게, 발은 어깨너비, 시선은 카메라 정면, 무표정
-- 옷은 흰 티셔츠와 검정 슬랙스만. 로고·패턴 없음
-- 머리 위와 발 아래에 각각 프레임의 약 12% 여백. 인물이 프레임을 가득 채우지 말 것
-- 배경은 {_LOOK_PLATE_HEX} 단색 스튜디오 한 장만. 벽과 바닥이 같은 색. 그라데이션·비네트·다른 색 판·인물 주변 후광 금지
-- 텍스트, 로고, 워터마크, 프레임, 다른 사람, 콜라주·썸네일 추가 금지
+    return f"""소스 사진 속 바로 이 사람을 기준 모델로 고정하세요. 얼굴·헤어·체형은 그대로, 인상만 더 순하고 부드럽게: 부드러운 이목구비, 힘주지 않은 눈, 가벼운 중립 표정. 날카롭거나 차가운 인상 금지.
+이후 모든 착장이 이 사람과 동일한 얼굴·헤어·키·체형·포즈·조명을 씁니다.
+모델: {_model_look_subject(gender)}. 사용자 얼굴·프로필 사진·체형을 쓰지 마세요. 실존 유명인 모사 금지.
+- 인물 한 명, 정면 전신 룩북. 포즈: 한 손은 바지 주머니, 다른 팔은 옆구리, 발은 어깨너비, 시선은 카메라
+- 출력 프레임의 모든 픽셀을 {_LOOK_PLATE_HEX} 단색 스튜디오로 채우세요. 벽과 바닥이 같은 색. 인물 뒤에 더 작은 회색 사각형·두 번째 배경·레터박스·액자 금지
+- 머리 위·발 아래 약간의 여백은 두되 배경은 가장자리까지 한 장
+- 옷은 심플한 기본 상의·하의. 로고·패턴 없음
+- 소프트 스튜디오 조명. 흰 옷·밝은 옷도 하이라이트가 날아가지 않게, 옷감 결이 보이게. 쨍한 과노출·포스터화 금지
+- 텍스트, 로고, 워터마크, 다른 사람, 콜라주·썸네일 금지
 """
 
 
@@ -3421,6 +3425,14 @@ def _model_look_garment_lines(
         name = (item.get("name") or item.get("brand") or "").strip()
         color = (item.get("color") or "").strip()
         bits = [b for b in (color, name, cat) if b]
+        meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        st = meta.get("style") if isinstance(meta.get("style"), dict) else {}
+        if st.get("subtype"):
+            bits.append(st["subtype"])
+        if st.get("material"):
+            bits.append(st["material"])
+        if st.get("fit"):
+            bits.append(st["fit"])
         lines.append("- " + " ".join(bits))
     if wish:
         bits = [
@@ -3440,21 +3452,32 @@ def _model_look_prompt_with_reference(
     wish: dict[str, Any] | None = None,
 ) -> str:
     garment_lines = _model_look_garment_lines(items, wish)
-    return f"""소스 이미지와 동일한 모델을 유지하세요. 얼굴·헤어·피부톤·체형·키·포즈·카메라 각도·프레이밍을 절대 바꾸지 마세요.
-이 사람에게 아래 옷만 입히세요. 사람은 그대로, 의상만 교체합니다.
+    return f"""소스 이미지와 동일한 모델을 유지하세요. 얼굴·헤어·피부톤·체형·키·포즈·카메라 각도·조명·화질을 절대 바꾸지 마세요.
+인상은 순하고 부드럽게. 이 사람에게 아래 옷만 입히세요. 사람은 그대로, 의상만 교체합니다.
 
 {garment_lines}
 
-- 포즈 고정: 왼손 바지 왼쪽 주머니, 오른팔 옆구리, 정면 응시, 발 어깨너비
-- 머리 위·발 아래 각각 프레임의 약 12% 여백
-- 옷 색·실루엣·프린트·디테일을 설명과 일치. 옷감 노이즈·깨짐·격자 잔상 금지
-- 배경은 {_LOOK_PLATE_HEX} 단색 스튜디오(무드 룩북과 같은 웜 그레이지). 그라데이션·콜라주·썸네일 금지
+- 포즈 고정: 한 손 바지 주머니, 다른 팔 옆구리, 정면 응시, 발 어깨너비
+- 배경은 프레임 전체를 {_LOOK_PLATE_HEX} 단색 한 장으로. 인물 뒤 작은 사각형·두 번째 판·레터박스 금지
+- 흰 옷·밝은 셔츠: 플래시처럼 쨍하게 날리지 말 것. 단추·칼라·주름·옷감 결이 보이게. 과노출·포스터화·얼룩 하이라이트·격자 잔상 금지
+- 옷 색·실루엣·프린트는 설명과 일치. 매트한 원단, 상업 룩북 화질
 - 텍스트·로고·워터마크·다른 사람 추가 금지
 """
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v3-{_look_gender_key(gender)}"
+    return f"model-id-v4-{_look_gender_key(gender)}"
+
+
+def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
+    key = _look_gender_key(gender)
+    if key not in ("m", "f"):
+        return None
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        path = _LOOK_IDENTITY_DIR / f"{key}.{ext}"
+        if path.is_file():
+            return path.read_bytes(), f"mood.{ext}"
+    return None
 
 
 def _png_named(data: bytes, name: str) -> io.BytesIO:
@@ -3541,12 +3564,26 @@ def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | No
         elif not openai_client:
             return None
         else:
-            result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate(
-                model=OPENAI_IMAGE_MODEL_LOOK,
-                prompt=_model_identity_prompt(gender),
-                size="1024x1536",
-                quality=quality,
-            )
+            seed = _mood_identity_seed(gender)
+            if seed:
+                data, fname = seed
+                kwargs: dict[str, Any] = {
+                    "model": OPENAI_IMAGE_MODEL_LOOK,
+                    "image": [_png_named(data, fname)],
+                    "prompt": _model_identity_prompt(gender),
+                    "size": "1024x1536",
+                    "quality": quality,
+                }
+                if "gpt-image-2" not in OPENAI_IMAGE_MODEL_LOOK:
+                    kwargs["input_fidelity"] = "high"
+                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
+            else:
+                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate(
+                    model=OPENAI_IMAGE_MODEL_LOOK,
+                    prompt=_model_identity_prompt(gender),
+                    size="1024x1536",
+                    quality=quality,
+                )
             out = base64.b64decode(result.data[0].b64_json)
             try:
                 out = _flatten_look_plate(out)
@@ -3698,7 +3735,7 @@ def generate_model_look_image(
     기준 인물(identity) 한 장을 고정한 뒤, ChatGPT처럼 그 사진에 옷만 입힌다.
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
-    key = f"model-id3-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
+    key = f"model-id4-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -3747,6 +3784,10 @@ def generate_model_look_image(
                 quality=quality,
             )
             out = base64.b64decode(result.data[0].b64_json)
+        try:
+            out = _flatten_look_plate(out)
+        except Exception as flat_exc:  # noqa: BLE001
+            print(f"[model-look] flatten skip: {flat_exc}", flush=True)
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")
         supabase_admin.table("generated_images").insert(

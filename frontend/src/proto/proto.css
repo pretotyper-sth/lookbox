@@ -79,7 +79,7 @@ http://scripts.sil.org/OFL
 :root {
   /* ---- Color ---- */
   --ivory:      #EFEDE8;   /* page — garments float above this */
-  --thumb-bg:   #ACA7A4;   /* mood 룩북 배경 — 흰 옷·착장 컷 대비 */
+  --thumb-bg:   #E5E3DE;   /* product plate — 옷장·코디 카드. 흰 옷이 읽히게 */
   --surface:    #F7F5F0;   /* cards / sheets, a touch lighter than page */
   --surface-2:  #FBFAF7;
   --ink:        #1A1A1A;   /* primary text */
