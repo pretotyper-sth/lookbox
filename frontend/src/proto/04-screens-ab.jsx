@@ -1124,6 +1124,7 @@ function AddSheet({ ctx }) {
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
   const [bulkResult, setBulkResult] = useS(null); // {ok, dup, fail, failed[], skipped[]}
   const [bulkChecking, setBulkChecking] = useS(false);
+  const [bulkAuto, setBulkAuto] = useS(false); // 확인 없이 바로 담기 (기본 off)
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
   const [hint, setHint] = useS('');
@@ -1181,7 +1182,7 @@ function AddSheet({ ctx }) {
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
     setTryOnErr(''); tryOnLaunchGen.current += 1;
-    setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false);
+    setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null); setConnectOpen(false);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
@@ -1460,7 +1461,23 @@ function AddSheet({ ctx }) {
   };
   const filledUrls = urls.map((u) => toHttpsUrl(u)).filter(Boolean);
   const bulkPicked = (bulk || []).filter((b) => b.pick);
-  const runBulk = async () => {
+  const absorbPastedUrls = (text) => {
+    const parts = splitProductUrls(text).map(toHttpsUrl).filter(Boolean);
+    if (!parts.length) return false;
+    setUrls((prev) => {
+      const next = prev.slice();
+      let pi = 0;
+      for (let i = 0; i < next.length && pi < parts.length; i++) {
+        if (!String(next[i] || '').trim()) next[i] = parts[pi++];
+      }
+      while (pi < parts.length && next.length < URL_ROW_MAX) next.push(parts[pi++]);
+      return next.length ? next : [''];
+    });
+    setErr('');
+    return true;
+  };
+  // 확인 없이 바로 owned로 담기 (자동 등록 체크 시)
+  const runBulkAuto = async () => {
     if (!importOrders || !bulkPicked.length) return;
     setErr('');
     const targets = bulkPicked.slice();
@@ -1483,6 +1500,85 @@ function AddSheet({ ctx }) {
       failed,
       skipped: [...skipped, ...preSkipped.map((b) => ({ ...b, reason: b.dupReason || '이미 옷장에 있어요' }))],
     });
+  };
+  // 기본: 추출만 pending으로 한 뒤 사진과 같이 하나씩 확인·담기
+  const runBulkReview = async () => {
+    if (!liveImportSource || !bulkPicked.length) return;
+    cancelledRef.current = false;
+    setErr('');
+    const targets = bulkPicked.slice();
+    const preSkipped = (bulk || []).filter((b) => b.dup && !b.pick);
+    setBulkRun({ index: 0, total: targets.length });
+    setBulk((arr) => arr.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
+    const mark = (url2, patch) => setBulk((arr) => arr.map((b) => (b.url === url2 ? { ...b, ...patch } : b)));
+    const collected = [];
+    const failed = [];
+    const skipped = preSkipped.map((b) => ({ ...b, reason: b.dupReason || '이미 옷장에 있어요' }));
+    draftIdsRef.current = [];
+    for (let i = 0; i < targets.length; i++) {
+      if (cancelledRef.current) {
+        discardDraftIds(draftIdsRef.current);
+        draftIdsRef.current = [];
+        setBulkRun(null);
+        return;
+      }
+      const it = targets[i];
+      setBulkRun({ index: i, total: targets.length, label: it.name || it.url });
+      mark(it.url, { state: 'run' });
+      try {
+        const res = await liveImportSource({ sourceType: 'url', url: it.url, status: 'pending' });
+        if (cancelledRef.current) {
+          const ids = ((res && res.items) || []).map((d) => d && d.id).filter(Boolean);
+          discardDraftIds([...draftIdsRef.current, ...ids]);
+          draftIdsRef.current = [];
+          setBulkRun(null);
+          return;
+        }
+        if (res && res.duplicate) {
+          skipped.push({ ...it, reason: res.reason || '이미 옷장에 있어요', matchedName: res.matchedName || '' });
+          mark(it.url, { state: 'dup', pick: false, dup: true, dupReason: res.reason || '이미 옷장에 있어요' });
+          continue;
+        }
+        const list = ((res && res.items) || []).map((d, j) => ({
+          ...d,
+          id: d.id || (`bulk${i}_${j}`),
+          cat: d.category,
+          conf: d.conf || 0.95,
+        }));
+        if (!list.length) throw new Error('이 주소에서 옷을 찾지 못했어요');
+        collected.push(...list);
+        draftIdsRef.current = [...draftIdsRef.current, ...list.map((d) => d.id).filter(Boolean)];
+        mark(it.url, { state: 'ok', pick: false });
+      } catch (e) {
+        failed.push({ ...it, error: (e && e.message) || '등록하지 못했어요' });
+        mark(it.url, { state: 'fail', error: (e && e.message) || '실패' });
+      }
+    }
+    setBulkRun(null);
+    if (!collected.length) {
+      setBulkResult({
+        ok: 0,
+        dup: skipped.length,
+        fail: failed.length,
+        failed,
+        skipped,
+      });
+      return;
+    }
+    if ((failed.length || skipped.length) && typeof showToast === 'function') {
+      showToast(`${collected.length}개 확인 대기 · 건너뛴 ${failed.length + skipped.length}건`);
+    }
+    setDetected(collected);
+    setSel(collected.map((d) => d.id));
+    setSteps(collected.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
+    setStepIdx(0);
+    setBulk(null);
+    setBulkResult(null);
+    setStage('register');
+  };
+  const runBulk = async () => {
+    if (bulkAuto) await runBulkAuto();
+    else await runBulkReview();
   };
   const retryFailed = () => {
     const again = (bulkResult && bulkResult.failed) || [];
@@ -1535,6 +1631,12 @@ function AddSheet({ ctx }) {
   // runDetect가 매 렌더 새로 만들어지므로 최신 참조를 ref로 유지한다.
   const runDetectRef = useR(runDetect);
   runDetectRef.current = runDetect;
+  const tabRef = useR(tab);
+  tabRef.current = tab;
+  const bulkRef = useR(bulk);
+  bulkRef.current = bulk;
+  const bulkResultRef = useR(bulkResult);
+  bulkResultRef.current = bulkResult;
   const handlePasteImage = (e) => {
     const items = (e.clipboardData && e.clipboardData.items) || [];
     for (let i = 0; i < items.length; i++) {
@@ -1555,9 +1657,20 @@ function AddSheet({ ctx }) {
     return false;
   };
   // 시트가 열려 input 단계일 때만 문서 전역 붙여넣기를 가로챈다.
+  // URL 탭에서는 입력칸 포커스가 없어도 주소를 칸에 넣는다.
   useE(() => {
     if (!addSheet.open || stage !== 'input') return undefined;
-    const onDocPaste = (e) => { handlePasteImage(e); };
+    const onDocPaste = (e) => {
+      if (handlePasteImage(e)) return;
+      if (tabRef.current !== 'url') return;
+      if (bulkRef.current || bulkResultRef.current) return;
+      const el = e.target;
+      const tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return;
+      const text = e.clipboardData && e.clipboardData.getData('text');
+      if (!text || !absorbPastedUrls(text)) return;
+      e.preventDefault();
+    };
     document.addEventListener('paste', onDocPaste);
     return () => document.removeEventListener('paste', onDocPaste);
   }, [addSheet.open, stage]);
@@ -1615,9 +1728,15 @@ function AddSheet({ ctx }) {
     if (stage === 'select' || stage === 'anchor-ready') {
       discardDraftIds(detected.map((d) => d && d.id));
       draftIdsRef.current = [];
-      setStage('input'); setDetected([]); setSel([]);
+      setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
     } else if (stage === 'register') {
-      if (stepIdx > 0) setStepIdx(stepIdx - 1); else setStage('select');
+      if (stepIdx > 0) setStepIdx(stepIdx - 1);
+      else if (detected.length > 1) setStage('select');
+      else {
+        discardDraftIds(detected.map((d) => d && d.id));
+        draftIdsRef.current = [];
+        setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
+      }
     } else if (stage === 'reextract-confirm') {
       setPendingReplace(null);
       setStage('input');
@@ -1979,8 +2098,8 @@ function AddSheet({ ctx }) {
                           {bulk.map((b) => {
                             const { title, subtitle } = bulkRowMeta(b);
                             const busy = b.state === 'run' || b.state === 'wait';
-                            const status = b.state === 'run' ? '등록 중…'
-                              : b.state === 'ok' ? '담았어요'
+                            const status = b.state === 'run' ? (bulkAuto ? '등록 중…' : '추출 중…')
+                              : b.state === 'ok' ? (bulkAuto ? '담았어요' : '확인 대기')
                               : b.state === 'dup' ? (b.dupReason || '이미 있음')
                               : b.state === 'fail' ? (b.error || '실패')
                               : b.dup ? (b.dupReason || '이미 있음') : '';
@@ -2043,7 +2162,28 @@ function AddSheet({ ctx }) {
                               {bulkRun.index + 1} / {bulkRun.total} · {String(bulkRun.label || '').slice(0, 28)}
                             </div>
                           </div>
-                        ) : null}
+                        ) : (
+                          <label style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10,
+                            padding: '12px var(--s4) var(--s4)', borderTop: '1px solid var(--line)',
+                            cursor: 'pointer',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={bulkAuto}
+                              onChange={(e) => setBulkAuto(e.target.checked)}
+                              style={{ marginTop: 2, width: 16, height: 16, flex: 'none' }}
+                            />
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', lineHeight: 1.35 }}>
+                                확인 없이 바로 담기
+                              </span>
+                              <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
+                                기본은 사진처럼 하나씩 확인한 뒤 담아요.
+                              </span>
+                            </span>
+                          </label>
+                        )}
                       </div>
                     ) : tab === 'orders' ? (
                       <div style={{
@@ -2282,7 +2422,10 @@ function AddSheet({ ctx }) {
                               : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
-                            : bulk ? `${bulkPicked.length}개 옷장에 담기`
+                            : bulk
+                              ? (bulkAuto
+                                ? `${bulkPicked.length}개 옷장에 담기`
+                                : `${bulkPicked.length}개 확인하고 담기`)
                             : orderBusy ? '크롬에서 가져오는 중…'
                             : busy ? '인식 중…'
                             : (tab === 'orders'
@@ -2439,7 +2582,7 @@ function AddSheet({ ctx }) {
               <Btn full size="lg" icon="check" disabled={sel.length === 0} onClick={startRegister}>
                 {sel.length > 0 ? `선택한 ${sel.length}개 담기` : '담을 아이템을 선택하세요'}
               </Btn>
-              <Btn full variant="ghost" onClick={goBack}>다른 사진 올리기</Btn>
+              <Btn full variant="ghost" onClick={goBack}>처음으로</Btn>
             </div>
           </>
         )}
