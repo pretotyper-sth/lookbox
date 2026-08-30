@@ -10,6 +10,10 @@
 `POST /api/live/coordinate/looks`가 이어서 채운다(2026-08-30). 품질은 추출의
 착용컷·재시도와 같은 `OPENAI_IMAGE_QUALITY_LOOK`(기본 high).
 
+2026-08-30: `refreshLive`가 오늘 코디를 채우면 `dailyAllowed=true`라 오늘 탭이
+`requestDailyOutfits`를 건너뛰고 `applyModelLooks`가 안 탔다. `dailyTick` 감시
+effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
+
 배경은 상품 카드 `--thumb-bg`와 같은 `#E5E3DE`. 옷 참고는 상단 작은 스트립만
 두고, 생성 후 테두리 flood·끊긴 판 조각을 평탄화한다. 첫 착장을
 `model-ref-h-{m|f}`로 저장한 뒤 나머지는 그 참조로 병렬 생성한다.

@@ -1391,7 +1391,7 @@ function App() {
     }
   };
 
-  const applyModelLooks = async (list) => {
+  const applyModelLooks = useCallback(async (list) => {
     const targets = (list || LB_DATA.DAILY || []).filter((o) => o && (o.itemIds || []).length && !o.lookImg);
     if (!targets.length) return 0;
     const payload = await liveJSON('/api/live/coordinate/looks', {
@@ -1407,7 +1407,11 @@ function App() {
     });
     let n = 0;
     (list || LB_DATA.DAILY).forEach((o) => {
-      if (byId[o.id]) { o.lookImg = byId[o.id]; n += 1; }
+      if (!byId[o.id]) return;
+      o.lookImg = byId[o.id];
+      const cached = LB_DATA.OUTFIT_BY_ID[o.id];
+      if (cached) cached.lookImg = byId[o.id];
+      n += 1;
     });
     writeDailyCache({
       style: dailyStyle,
@@ -1419,7 +1423,20 @@ function App() {
     bumpDaily();
     reloadBilling();
     return n;
-  };
+  }, [prefs.gender, dailyStyle, items, bumpDaily, reloadBilling]);
+
+  const modelLookBusy = useRef(false);
+  // refreshLive로 코디만 채워지면 dailyAllowed=true라 오늘 탭이 request를 스킵한다.
+  // 그때 applyModelLooks가 안 타서 착장 토글이 켜져 있어도 옷 컷아웃만 보였다.
+  useEffect(() => {
+    if (isShowcase || !authUid || !wardrobeLoaded || !prefs.modelLook || !prefs.dailyEnabled) return;
+    const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
+    if (!pending.length || modelLookBusy.current) return;
+    modelLookBusy.current = true;
+    applyModelLooks(pending)
+      .catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'))
+      .finally(() => { modelLookBusy.current = false; });
+  }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
   const setModelLook = (on) => {
     const np = { ...prefs, modelLook: !!on };

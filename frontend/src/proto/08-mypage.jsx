@@ -303,16 +303,24 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
 
 /* ---- action row ---- */
 // hint — 켜기 전에 알아야 할 게 있는 항목(비용·조건)에만 한 줄 덧붙인다.
-function ActionRow({ icon, label, onClick, danger, last, right, hint }) {
+function ActionRow({ icon, label, onClick, danger, last, right, hint, nested }) {
   // 스위치는 자체 버튼이므로 바깥을 또 button으로 감싸지 않는다.
   const Row = right ? 'div' : 'button';
   return (
     <Row onClick={right ? undefined : onClick} className="lb-navitem" style={{
       display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-      padding: '13px 12px', borderRadius: 'var(--r-md)', background: 'transparent',
-      color: danger ? '#B0573C' : 'var(--ink)', fontSize: 14, fontWeight: 600,
+      padding: nested ? '11px 12px 11px 34px' : '13px 12px',
+      borderRadius: 'var(--r-md)', background: 'transparent',
+      color: danger ? '#B0573C' : 'var(--ink)', fontSize: nested ? 13.5 : 14, fontWeight: nested ? 600 : 600,
     }}>
-      <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />
+      {nested ? (
+        <span aria-hidden style={{
+          flex: 'none', width: 19, textAlign: 'center', color: 'var(--ink-3)',
+          fontSize: 13, fontWeight: 700, lineHeight: 1,
+        }}>ㄴ</span>
+      ) : (
+        <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />
+      )}
       <span style={{ flex: 1, minWidth: 0 }}>
         {label}
         {hint && <span style={{ display: 'block', marginTop: 3, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)', lineHeight: 1.45 }}>{hint}</span>}
@@ -430,32 +438,41 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  // 개수 설정은 추천을 켰을 때만 의미가 있다. 설명은 한 줄을 넘기지 않게 짧게.
-  const countRows = dailyEnabled ? (
-    <>
+  // 개수 설정은 추천을 켰을 때만 의미가 있다. 부모 스위치 아래 들여쓰기로 묶는다.
+  const dailyChildRows = dailyEnabled ? (
+    <div style={{
+      margin: '0 8px 4px', paddingLeft: 10,
+      borderLeft: '2px solid var(--line-2)',
+    }}>
       <ActionRow
-        icon="sparkle"
+        nested
         label="한 번에 받을 코디 수"
         right={<Stepper value={dailyCount} min={2} max={8} onChange={(n) => setDailyCount && setDailyCount(n)} />}
       />
       <ActionRow
-        icon="plus"
+        nested
         label="새 아이템 포함 코디"
         hint="옷장에 없는 아이템 제안"
         right={<Stepper value={wishCount} min={0} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
       />
-    </>
+    </div>
   ) : null;
 
-  const settingsCard = (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
-      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
+  const dailySettingsRows = (
+    <>
       <ActionRow
         icon="sparkle"
         label="오늘의 추천 코디"
         right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
       />
-      {countRows}
+      {dailyChildRows}
+    </>
+  );
+
+  const settingsCard = (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
+      {dailySettingsRows}
       {modelLookRow}
       <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
     </div>
@@ -545,12 +562,7 @@ function MyPageScreen({ ctx }) {
         <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>{styleBody}</Section>
         <div style={{ marginBottom: 14 }}>{usageCardEl}</div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
-          <ActionRow
-            icon="sparkle"
-            label="오늘의 추천 코디"
-            right={<Switch on={!!dailyEnabled} onToggle={() => setDailyEnabled && setDailyEnabled(!dailyEnabled)} />}
-          />
-          {countRows}
+          {dailySettingsRows}
           {modelLookRow}
           <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
