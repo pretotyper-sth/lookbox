@@ -154,3 +154,9 @@ URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+�
 ## [2026-08-30] fix | 착장 high 품질·조합 먼저·격자 잔상
 착장은 추출 착용컷과 같은 high. 조합 API는 목록만 반환하고 looks를 이어서 병렬 생성. 옷 참고는 상단 스트립, 끊긴 판 조각 평탄화, `[timing] recommend`/`model-look` 로그 ([[model-look-toggle]]).
 
+## [2026-08-30] fix | 착장 카드가 줌에 안 줄어들던 점
+`lookImg`를 flex 자식으로 두면 1024px `min-width: auto`가 카드·뷰어 줌을 무시한다. 절대배치 + max 100% ([[look-img-flex-min]]).
+
+## [2026-08-30] fix | 서버에 오늘 코디가 없으면 로컬 캐시를 비운다
+`hydrateOutfits`가 오늘 목록이 있을 때만 캐시를 써서, 서버에서 오늘 코디를 지워도 `lb_daily_outfits_v3`와 history merge가 착장을 다시 그렸다. 없으면 DAILY·캐시·그날 히스토리를 덮어쓴다.
+

@@ -227,6 +227,15 @@ function writeDailyRecord(dateKey, patch) {
     localStorage.setItem(dailyHistoryKey(scope), JSON.stringify(all));
   } catch (e) { /* noop */ }
 }
+function overwriteDailyRecord(dateKey, rec) {
+  try {
+    const scope = dailyScope();
+    const all = readDailyHistory(scope);
+    all[dateKey] = rec;
+    serverDailyHistory[dateKey] = rec;
+    localStorage.setItem(dailyHistoryKey(scope), JSON.stringify(all));
+  } catch (e) { /* noop */ }
+}
 function migrateDailyHistory(fromScope, toScope) {
   if (!fromScope || !toScope || fromScope === toScope) return;
   try {
@@ -1094,7 +1103,8 @@ function App() {
     }
     // 서버는 최신순으로 준다. 오늘 코디는 만든 순서대로 보여야 해서 되돌린다.
     const byDate = hydrateDailyHistoryFromServer(data, ownedItems);
-    const today = byDate[localYmd()];
+    const todayKey = localYmd();
+    const today = byDate[todayKey];
     if (today && today.length) {
       const kept = filterDailyOutfitsByOwned(today, ownedItems);
       if (kept.length) {
@@ -1109,6 +1119,12 @@ function App() {
         });
         LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...kept);
       }
+    } else {
+      // 서버에 오늘 코디가 없으면 로컬 캐시·히스토리를 비운다. 안 그러면 리셋 후에도
+      // lb_daily_outfits_v3 / history merge가 지운 착장을 다시 그린다.
+      LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      clearDailyCache();
+      overwriteDailyRecord(todayKey, { outfits: [], items: [], wornIds: [] });
     }
   }, []);
 
