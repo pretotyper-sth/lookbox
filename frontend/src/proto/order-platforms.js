@@ -1,3 +1,8 @@
+/** 몰 선택 안내 — 해야 할 일만. 이름은 몰마다 다르고 문장은 같다. */
+export function orderLoginGuide(name) {
+  return `${name} 로그인이 필요해요. 로그인하면 주문내역이 열려요.`;
+}
+
 export const ORDER_PLATFORMS = [
   { id: 'musinsa', name: '무신사' },
   { id: '29cm', name: '29CM' },
