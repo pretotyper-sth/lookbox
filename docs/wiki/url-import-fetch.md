@@ -6,4 +6,6 @@
 
 이미 옷장에 **확정된** 주소를 다시 넣으면 빈 결과 대신 '이미 있는 상품'으로 말한다. (`frontend/src/proto/04-screens-ab.jsx` `runDetect`)
 
+중복 판정은 주소·상품코드·같은 사진만 쓴다. 이름·브랜드 유사도로 막지 않는다 — 같은 이름에 색만 다른 별개 상품이 흔하고, 애매한 중복은 사용자가 정리한다. (`backend/app/main.py` `_match_duplicate`, 2026-08-30)
+
 앞·뒤·디테일이 한 장에 쌓인 상세컷은 정면 전신만 잘라 등록한다. ([[stacked-product-hero]])

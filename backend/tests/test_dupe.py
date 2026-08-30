@@ -168,19 +168,17 @@ class MatchTest(unittest.TestCase):
         )
         self.assertEqual(hit[1], "same_photo")
 
-    def test_same_name_other_colour_is_not_a_duplicate(self):
-        # 같은 옷의 다른 색을 일부러 둘 다 담아 둔 사람이 있다. 이름만 같은 건 중복이 아니다.
+    def test_same_name_is_not_a_duplicate(self):
+        # 이름만 같거나 비슷한 건 막지 않는다. 색 변형·별개 상품이 흔하고, 정리는 사용자 몫.
         hit = self.match(self.index(), url="https://another.shop/p/zzz", name="원워시드 와이드 데님_블랙")
         self.assertIsNone(hit)
-
-    def test_same_name_same_colour_is_a_duplicate(self):
-        hit = self.match(self.index(), url="https://another.shop/p/zzz", name="원워시드 와이드 데님_인디고")
-        self.assertEqual(hit[1], "same_name")
+        hit = self.match(self.index(), url="https://another.shop/p/yyy", name="원워시드 와이드 데님_인디고")
+        self.assertIsNone(hit)
 
     def test_unrelated_item_is_clean(self):
         hit = self.match(self.index(), url="https://another.shop/p/aaa", name="아미스 레드 캡")
         self.assertIsNone(hit)
 
     def test_every_reason_has_korean_copy(self):
-        for code in ("same_url", "same_code", "same_photo", "same_photo_name", "same_name", "same_name_brand"):
+        for code in ("same_url", "same_code", "same_photo"):
             self.assertIn(code, self.ns["_DUP_REASON_KO"])

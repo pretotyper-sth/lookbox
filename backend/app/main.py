@@ -4044,53 +4044,35 @@ def _match_duplicate(
     color: str = "",
     fp: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str] | None:
-    """후보 하나가 옷장의 어떤 아이템과 같은지 본다. (아이템, 이유) 또는 None."""
+    """후보 하나가 옷장의 어떤 아이템과 같은지 본다. (아이템, 이유) 또는 None.
+
+    주소·상품코드·같은 사진만 본다. 이름/브랜드 유사도는 쓰지 않는다 —
+    같은 이름에 색만 다른 별개 상품이 흔하고, 애매한 중복은 사용자가 정리한다.
+    brand/store/color는 호출부 호환용으로만 받는다.
+    """
+    _ = (brand, store, color)
     url_key = _url_key(url) if url else ""
     code = _product_code(url) if url else ""
     tokens = _name_tokens(name)
-    brand_l = str(brand or "").strip().lower()
-    store_l = str(store or "").strip().lower()
-    # 이름에 색이 붙어 오는 경우가 많다(…셔츠_블루). 색까지 알면 '같은 상품 다른 색'을 가른다.
-    cand_color = _norm_color_token(_split_color_from_title(name or "")[1] or color or "")
-
-    def color_conflict(row: dict[str, Any]) -> bool:
-        return bool(cand_color and row.get("color") and cand_color != row["color"])
-    best: tuple[dict[str, Any], str] | None = None
     for row in index:
         if url_key and row["url_key"] and url_key == row["url_key"]:
             return row, "same_url"
         if code and row["code"] and code == row["code"]:
             return row, "same_code"
         photo = _fp_match(fp, row.get("fp")) if fp else ""
-        # 사진이 같아 보여도 이름이 완전히 다르면(공통 토큰 0) 단정하지 않는다 —
+        # 사진이 같아 보여도 이름이 완전히 다르면(공통 토큰 거의 없음) 단정하지 않는다 —
         # 흰 배경 상품컷끼리는 형태가 우연히 닮을 수 있다.
         if photo == "same" and len(tokens) >= 2 and row["tokens"] and _name_similarity(tokens, row["tokens"]) < 0.34:
             photo = "near"
         if photo == "same":
             return row, "same_photo"
-        if photo == "near" and _name_similarity(tokens, row["tokens"]) >= 0.6 and not color_conflict(row):
-            best = best or (row, "same_photo_name")
-        # 이름만 같은 경우는 색이 다르면 다른 상품으로 둔다 — 같은 옷의 다른 색을
-        # 일부러 둘 다 담아 둔 사람이 있다(주소·상품코드·사진이 같으면 위에서 이미 잡힌다).
-        sim = _name_similarity(tokens, row["tokens"])
-        if color_conflict(row):
-            continue
-        if sim >= 0.9 and len(tokens) >= 2:
-            best = best or (row, "same_name")
-        elif sim >= 0.75 and len(tokens) >= 2 and (
-            (brand_l and brand_l == row["brand"]) or (store_l and store_l == row["store"])
-        ):
-            best = best or (row, "same_name_brand")
-    return best
+    return None
 
 
 _DUP_REASON_KO = {
     "same_url": "같은 상품 주소예요",
     "same_code": "같은 상품이에요",
     "same_photo": "사진이 같아요",
-    "same_photo_name": "사진과 이름이 거의 같아요",
-    "same_name": "이름이 거의 같아요",
-    "same_name_brand": "같은 브랜드의 같은 이름이에요",
 }
 
 
