@@ -524,14 +524,15 @@ function streamPayload(line) {
 function lastResultLine(text) {
   const lines = String(text || '').split('\n').map(streamPayload).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    if (lines[i].indexOf('"_step"') === -1) return lines[i];
+    // 진행(_step)·착장 한 장(_look)은 결과가 아니다.
+    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1) return lines[i];
   }
   return '';
 }
 
-// 스트림을 읽으면서 _step 이벤트가 도착할 때마다 onProgress로 넘긴다. 전체 본문은
+// 스트림을 읽으면서 _step / _look 이벤트가 도착할 때마다 콜백. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
-async function readProgressStream(res, onProgress) {
+async function readProgressStream(res, onProgress, onLook) {
   if (!res.body || !res.body.getReader) return res.text();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -547,10 +548,14 @@ async function readProgressStream(res, onProgress) {
     while ((nl = buf.indexOf('\n')) !== -1) {
       const payload = streamPayload(buf.slice(0, nl));
       buf = buf.slice(nl + 1);
-      if (!payload || payload.indexOf('"_step"') === -1) continue;
+      if (!payload) continue;
+      const isStep = payload.indexOf('"_step"') !== -1;
+      const isLook = payload.indexOf('"_look"') !== -1;
+      if (!isStep && !isLook) continue;
       try {
-        const step = JSON.parse(payload)._step;
-        if (step) onProgress(step);
+        const row = JSON.parse(payload);
+        if (row._step && onProgress) onProgress(row._step);
+        if (row._look && onLook) onLook(row._look);
       } catch (e) { /* 부분 수신 줄은 무시 */ }
     }
   }
@@ -583,8 +588,8 @@ async function liveJSON(url, options = {}) {
   // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = options.onProgress
-      ? await readProgressStream(res, options.onProgress)
+    text = (options.onProgress || options.onLook)
+      ? await readProgressStream(res, options.onProgress, options.onLook)
       : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
@@ -1391,56 +1396,68 @@ function App() {
     }
   };
 
+  const lookInflight = useRef(new Set());
   const applyModelLooks = useCallback(async (list) => {
-    const targets = (list || LB_DATA.DAILY || []).filter((o) => o && (o.itemIds || []).length && !o.lookImg);
+    const targets = (list || LB_DATA.DAILY || []).filter((o) => (
+      o && (o.itemIds || []).length && !o.lookImg && o.id && !lookInflight.current.has(o.id)
+    ));
     if (!targets.length) return 0;
-    const payload = await liveJSON('/api/live/coordinate/looks', {
-      method: 'POST',
-      body: JSON.stringify({
-        gender: prefs.gender || '',
-        outfits: targets.map((o) => ({
-          id: o.id,
-          item_ids: o.itemIds || [],
-          label: o.label || '',
-          wish: o.wish || null,
-        })),
-      }),
-    });
-    const byId = {};
-    (payload.outfits || []).forEach((row) => {
-      if (row && row.id && row.lookImg) byId[row.id] = row.lookImg;
-    });
-    let n = 0;
-    (list || LB_DATA.DAILY).forEach((o) => {
-      if (!byId[o.id]) return;
-      o.lookImg = byId[o.id];
-      const cached = LB_DATA.OUTFIT_BY_ID[o.id];
-      if (cached) cached.lookImg = byId[o.id];
-      n += 1;
-    });
-    writeDailyCache({
-      style: dailyStyle,
-      outfits: LB_DATA.DAILY.slice(),
-      items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
-      wardrobeSig: wardrobeSigOf(items),
-      wardrobeCount: items.length,
-    });
-    bumpDaily();
-    reloadBilling();
-    return n;
+    targets.forEach((o) => lookInflight.current.add(o.id));
+    const paintLook = (id, url) => {
+      if (!id || !url) return;
+      (list || LB_DATA.DAILY).forEach((o) => {
+        if (o.id !== id) return;
+        o.lookImg = url;
+        const cached = LB_DATA.OUTFIT_BY_ID[o.id];
+        if (cached) cached.lookImg = url;
+      });
+      writeDailyCache({
+        style: dailyStyle,
+        outfits: LB_DATA.DAILY.slice(),
+        items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
+        wardrobeSig: wardrobeSigOf(items),
+        wardrobeCount: items.length,
+      });
+      bumpDaily();
+    };
+    try {
+      const payload = await liveJSON('/api/live/coordinate/looks', {
+        method: 'POST',
+        timeoutMs: 420000,
+        onLook: (row) => paintLook(row && row.id, row && row.lookImg),
+        body: JSON.stringify({
+          gender: prefs.gender || '',
+          outfits: targets.map((o) => ({
+            id: o.id,
+            item_ids: o.itemIds || [],
+            label: o.label || '',
+            wish: o.wish || null,
+          })),
+        }),
+      });
+      let n = 0;
+      (payload.outfits || []).forEach((row) => {
+        if (row && row.id && row.lookImg) {
+          paintLook(row.id, row.lookImg);
+          n += 1;
+        }
+      });
+      reloadBilling();
+      return n;
+    } finally {
+      targets.forEach((o) => lookInflight.current.delete(o.id));
+    }
   }, [prefs.gender, dailyStyle, items, bumpDaily, reloadBilling]);
 
-  const modelLookBusy = useRef(false);
   // refreshLive로 코디만 채워지면 dailyAllowed=true라 오늘 탭이 request를 스킵한다.
   // 그때 applyModelLooks가 안 타서 착장 토글이 켜져 있어도 옷 컷아웃만 보였다.
   useEffect(() => {
     if (isShowcase || !authUid || !wardrobeLoaded || !prefs.modelLook || !prefs.dailyEnabled) return;
-    const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
-    if (!pending.length || modelLookBusy.current) return;
-    modelLookBusy.current = true;
-    applyModelLooks(pending)
-      .catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'))
-      .finally(() => { modelLookBusy.current = false; });
+    const pending = (LB_DATA.DAILY || []).filter((o) => (
+      o && !o.lookImg && (o.itemIds || []).length && o.id && !lookInflight.current.has(o.id)
+    ));
+    if (!pending.length) return;
+    applyModelLooks(pending).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
   }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
   const setModelLook = (on) => {

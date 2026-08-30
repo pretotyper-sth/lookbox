@@ -164,11 +164,17 @@ class ModelLookPromptTest(unittest.TestCase):
             if isinstance(n, ast.FunctionDef) and n.name == "_apply_model_looks"
         )
         self.assertNotIn("face_bytes", [a.arg for a in apply.args.args])
+        self.assertIn("report", [a.arg for a in apply.args.args])
         src = ast.get_source_segment(MAIN_PATH.read_text(), fn) or ""
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
         self.assertIn("model-id2-", src)
+        looks_src = MAIN_PATH.read_text()
+        start = looks_src.index("def live_coordinate_looks")
+        end = looks_src.index("\ndef ", start + 1)
+        self.assertIn("stream_with_keepalive", looks_src[start:end])
+        self.assertIn('"_look"', looks_src[looks_src.index("def _apply_model_looks"):start])
 
 
 if __name__ == "__main__":

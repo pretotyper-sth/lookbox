@@ -15,6 +15,10 @@
 `requestDailyOutfits`를 건너뛰고 `applyModelLooks`가 안 탔다. `dailyTick` 감시
 effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 
+착장 API는 keepalive SSE다. Render는 응답이 안 오면 ~100초에 끊어서, 서버에
+`look_image_url`이 있어도 화면은 옷 컷아웃만 남았다. 한 장이 끝나는 즉시
+`_look` 이벤트로 카드를 바꾸고, 동시에 최대 2장만 돌린다(2026-08-30).
+
 배경은 상품 카드 `--thumb-bg`와 같은 `#E5E3DE`. 옷 참고는 별도 이미지로 넘긴다.
 기준 인물 `model-id-v2-{m|f}`를 `images.generate`로 한 장 만든 뒤, 착장은
 그 사진+옷 보드 두 장으로 `images.edit`(identity lock). 캐시 키 `model-id2-`.

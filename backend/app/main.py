@@ -13,7 +13,7 @@ import time
 import uuid
 import zipfile
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, urljoin, urlparse
@@ -148,6 +148,7 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     # 이 단계에서 옷장에 확정되는 게 아니다 — 사용자가 확인 화면에서 담기로
     # 결정해야 반영된다. 이미지 변경은 commit=false라 아예 저장하지 않는다.
     "save": ("결과를 정리하고 있어요", 95, 99, 3),
+    "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
 }
 
 
@@ -192,6 +193,9 @@ def stream_with_keepalive(work) -> StreamingResponse:
         def drain() -> Iterator[str]:
             while steps:
                 key = steps.popleft()
+                if isinstance(key, dict):
+                    yield event(key)
+                    continue
                 spec = _IMPORT_STEPS.get(key)
                 if not spec:
                     continue
@@ -3456,11 +3460,22 @@ def _save_model_identity_png(user_id: str, gender: str | None, png_bytes: bytes)
     ).execute()
 
 
+_MODEL_IDENTITY_LOCK = threading.Lock()
+
+
 def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
     """모든 착장이 공유할 기준 인물. 옷만 갈아입히기 전에 한 장 고정한다."""
     cached = _get_model_identity_png(user_id, gender)
     if cached:
         return cached
+    with _MODEL_IDENTITY_LOCK:
+        cached = _get_model_identity_png(user_id, gender)
+        if cached:
+            return cached
+        return _generate_model_identity_png(user_id, gender)
+
+
+def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
     quality = OPENAI_IMAGE_QUALITY_LOOK
     t0 = time.perf_counter()
     try:
@@ -6371,8 +6386,13 @@ def _apply_model_looks(
     outfits: list[dict[str, Any]],
     by_id: dict[str, Any],
     gender: str | None = None,
+    report: Callable[[Any], None] | None = None,
 ) -> None:
-    """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다."""
+    """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
+
+    한 장이 끝나는 즉시 persist·report 한다. 전부 끝날 때까지 응답을 붙잡으면
+    Render가 ~100초에 끊어서, 서버엔 착장이 있는데 화면은 옷 컷아웃만 남았다.
+    """
     if not outfits:
         return
     targets = [o for o in outfits if not o.get("lookImg")]
@@ -6382,6 +6402,8 @@ def _apply_model_looks(
     need = CREDIT_COSTS["model_look"] * len(targets)
     if remaining < need:
         print(f"[billing] model_look remaining={remaining} need={need} — still filling all", flush=True)
+    if report:
+        report("look")
 
     def persist(outfit: dict[str, Any], url: str) -> None:
         outfit["lookImg"] = url
@@ -6394,6 +6416,8 @@ def _apply_model_looks(
                 ).eq("id", oid).eq("user_id", user_id).execute()
             except Exception as exc:  # noqa: BLE001
                 print(f"[model-look] persist skip: {exc}", flush=True)
+        if report:
+            report({"_look": {"id": oid, "lookImg": url}})
 
     def one(outfit: dict[str, Any], identity: bytes | None) -> tuple[dict[str, Any], str | None]:
         members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
@@ -6406,7 +6430,8 @@ def _apply_model_looks(
 
     t0 = time.perf_counter()
     identity = _ensure_model_identity_png(user_id, gender)
-    workers = min(4, len(targets))
+    # 4장을 한 번에 돌리면 OpenAI 연결을 잡아 추가 추천이 몇 분이 된다. 2장씩.
+    workers = min(2, len(targets))
     if workers == 1:
         outfit, url = one(targets[0], identity)
         if url:
@@ -6414,7 +6439,7 @@ def _apply_model_looks(
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futs = [pool.submit(one, o, identity) for o in targets]
-            for fut in futs:
+            for fut in as_completed(futs):
                 outfit, url = fut.result()
                 if url:
                     persist(outfit, url)
@@ -6566,8 +6591,11 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
 
 
 @app.post("/api/live/coordinate/looks")
-def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_user)) -> dict[str, Any]:
-    """이미 받아 둔 코디에 착장 이미지만 채운다. 추천을 다시 돌리지 않는다."""
+def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_user)):
+    """이미 받아 둔 코디에 착장 이미지만 채운다. 추천을 다시 돌리지 않는다.
+
+    응답이 시작되기 전에 몇 분을 붙잡지 않는다. keepalive 스트림으로 한 장씩 보낸다.
+    """
     require_supabase()
     owned = (
         supabase_admin.table("wardrobe_items")
@@ -6590,8 +6618,12 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
         for row in (body.outfits or [])
         if row.item_ids
     ]
-    _apply_model_looks(user.id, outfits, by_id, body.gender)
-    return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
+
+    def work(report) -> dict[str, Any]:
+        _apply_model_looks(user.id, outfits, by_id, body.gender, report=report)
+        return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
+
+    return stream_with_keepalive(work)
 
 
 def _outfit_for_date(row: dict[str, Any]) -> str | None:

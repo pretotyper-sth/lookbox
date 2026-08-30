@@ -13,7 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img를 flex 자식으로 두면 1024px min-width 때문에 줌에 안 줄어든다. 절대배치·max 100%
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림(장당 5크레딧). 프로필 얼굴이 아니라 성별만 맞춘 룩북 모델. 설정 행에 비용 문구는 없음
+- [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림(장당 5크레딧). 룩북 모델. 착장은 SSE로 한 장씩. 설정 행에 비용 문구는 없음
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. PC는 원형만, 모바일은 프사 있으면 카메라. 시트 높이는 탭과 같음
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음

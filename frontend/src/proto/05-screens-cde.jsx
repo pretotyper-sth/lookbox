@@ -80,17 +80,24 @@ const LOOK_ROLE = {
 
 /** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
 function lookPlacement(items) {
-  const hasOuter = items.some((it) => LOOK_ROLE[it.category] === 'outer');
+  const owned = [];
+  const wishes = [];
+  (items || []).forEach((it) => {
+    if (!it) return;
+    if (it.wish) wishes.push(it);
+    else owned.push(it);
+  });
+  const hasOuter = owned.some((it) => LOOK_ROLE[it.category] === 'outer');
   // 상·하의만 있는 코디는 아래 절반이 통째로 비어 위로 쏠려 보인다. 그럴 때만 내려 앉힌다.
-  const hasLower = items.some((it) => {
+  const hasLower = owned.some((it) => {
     const role = LOOK_ROLE[it.category];
     return role === 'shoes' || role === 'acc';
-  });
+  }) || wishes.length > 0;
   const dy = hasLower ? 0 : 12;
   const taken = {};
   const out = {};
   let accIdx = 0;
-  items.forEach((it) => {
+  owned.forEach((it) => {
     const role = LOOK_ROLE[it.category] || 'top';
     if (role === 'acc') {
       const base = LOOK_ACC_SPOTS[accIdx % LOOK_ACC_SPOTS.length];
@@ -108,6 +115,11 @@ function lookPlacement(items) {
     const n = taken[spot] || 0;
     taken[spot] = n + 1;
     out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4 + dy, z: base.z + n };
+  });
+  // 제안 아이템은 같은 자리(상의 등)에 점선 박스로 겹치지 않게 우하 칸에 둔다.
+  wishes.forEach((it, i) => {
+    const base = LOOK_ACC_SPOTS[(accIdx + i) % LOOK_ACC_SPOTS.length];
+    out[it.id] = { cx: base.cx, cy: base.cy, z: 8 + i };
   });
   return out;
 }
