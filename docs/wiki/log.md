@@ -139,3 +139,6 @@ URL 담기는 브랜드처럼 상품 HTML에서 가격·재질을 읽어 등록 
 ## [2026-08-30] ingest | URL 재질은 숨은 상세·혼용률도
 표/JSON에 없어도 본문·상세 팝업 HTML·스크립트에 `Outshell: Cotton 100%` / `면 60%`가 있으면 채운다. AJAX-only 상세는 한계 ([[item-optional-fields]] [[url-import-fetch]]).
 
+## [2026-08-30] ingest | URL 여러 개 후보 목록 복구
+URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+비활성 「N개 담기」로 멈춘 것처럼 보였다. 후보 UI를 URL 탭에도 그리고, 담기 버튼이 `runBulk`를 치게 했다 ([[add-item-bulk]]).
+

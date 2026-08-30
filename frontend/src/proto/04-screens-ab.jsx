@@ -1343,7 +1343,7 @@ function AddSheet({ ctx }) {
       return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '' };
     });
     setBulk(rows);
-    setUrls(['']);
+    // URL 입력칸은 비우지 않는다. 후보를 지웠을 때 주소를 다시 볼 수 있게.
     setErr('');
     setBulkResult(null);
     setOrderNeedLogin(false);
@@ -1491,7 +1491,7 @@ function AddSheet({ ctx }) {
     setBulk((arr) => (arr || []).map((b) => (again.some((f) => f.url === b.url) ? { ...b, pick: true, state: 'idle', error: '' } : b)));
   };
   const canSubmit = tab === 'photo' ? !!file
-    : tab === 'url' ? filledUrls.length > 0
+    : tab === 'url' ? (bulk ? !!bulkPicked.length : filledUrls.length > 0)
     : tab === 'orders' ? (bulk ? !!bulkPicked.length : !orderBusy)
     : false;
   const onSubmitAdd = async () => {
@@ -1724,7 +1724,8 @@ function AddSheet({ ctx }) {
                     const switched = tab !== id;
                     setTab(id); setErr(''); setTryOnErr('');
                     if (id === 'tryon') setShowHint(false);
-                    if (id !== 'orders') { setBulk(null); setBulkResult(null); }
+                    // 후보 목록은 URL·구매내역이 같이 쓴다. 사진/바로 보기로 나갈 때만 비운다.
+                    if (id === 'photo' || id === 'tryon') { setBulk(null); setBulkResult(null); }
                     // 모바일에서 바로 보기 탭을 누르면 프사가 있을 때만 카메라를 연다.
                     // 이미 그 탭에 있는 채 다시 누르면 시트가 유지된다(카메라에서 돌아와 사진을 바꿀 때).
                     if (id === 'tryon' && switched && !wide && tryOnAvatar) launchTryOnFromSheet();
@@ -1903,7 +1904,7 @@ function AddSheet({ ctx }) {
                           PC에서 아이템 추가 → 구매내역을 열면, 쇼핑몰 주문내역에서 옷을 골라 한 번에 담을 수 있어요.
                         </div>
                       </div>
-                    ) : tab === 'orders' && bulkResult ? (
+                    ) : (tab === 'orders' || tab === 'url') && bulkResult ? (
                       /* 다 담고 난 뒤 요약. 중복으로 건너뛴 것과 실패한 것을 이유까지 보여준다. */
                       <div style={{
                         borderRadius: 'var(--r-md)', background: 'var(--ivory)',
@@ -1951,9 +1952,9 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </div>
-                    ) : tab === 'orders' && bulk ? (
-                      /* 여러 개를 붙여넣었을 때: 후보를 고르고 한 번에 담는다.
-                         이미 옷장에 있는 것은 미리 체크를 풀어 둔다(주소·상품코드·이름·사진). */
+                    ) : (tab === 'orders' || tab === 'url') && bulk ? (
+                      /* URL 여러 개·구매내역: 후보를 고르고 한 번에 담는다.
+                         이미 옷장에 있는 것은 미리 체크를 풀어 둔다(주소·상품코드·사진). */
                       <div style={{
                         borderRadius: 'var(--r-md)', background: 'var(--ivory)',
                         boxShadow: 'inset 0 0 0 1px var(--line)', overflow: 'hidden',
@@ -2179,7 +2180,7 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
-                    {tab !== 'orders' && tab !== 'tryon' && !tabLocked && (
+                    {tab !== 'orders' && tab !== 'tryon' && !bulk && !bulkResult && !tabLocked && (
                     <>
                     <div style={{
                       marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
@@ -2261,7 +2262,7 @@ function AddSheet({ ctx }) {
                         >
                           바로 보기
                         </Btn>
-                      ) : tab === 'orders' && bulkResult ? (
+                      ) : (tab === 'orders' || tab === 'url') && bulkResult ? (
                           <div style={{ display: 'flex', gap: 10, width: '100%' }}>
                             {bulkResult.fail > 0 && (
                               <Btn variant="soft" icon="sparkle" onClick={retryFailed} style={{ flex: 1 }}>
@@ -2273,10 +2274,12 @@ function AddSheet({ ctx }) {
                       ) : tab === 'orders' && !wide && !bulk ? null : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={(tab === 'orders' && bulk) ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
-                          disabled={tab === 'orders'
-                            ? (orderBusy || busy || !!bulkRun || (bulk && !bulkPicked.length))
-                            : (!canSubmit || busy || !!bulkRun)}
+                          onClick={bulk ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
+                          disabled={bulk
+                            ? (busy || !!bulkRun || !bulkPicked.length)
+                            : tab === 'orders'
+                              ? (orderBusy || busy || !!bulkRun)
+                              : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
                             : bulk ? `${bulkPicked.length}개 옷장에 담기`
