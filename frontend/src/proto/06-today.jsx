@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // RealCloset — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
@@ -337,6 +337,7 @@ function TodayScreen({ ctx }) {
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
     getDayRecord, openDetail, refreshLive,
+    comboNeed, comboProgress,
     modelLook,
   } = ctx;
   const pool = LB_DATA.DAILY;
@@ -432,15 +433,27 @@ function TodayScreen({ ctx }) {
   /* ---- 잠금 상태 (상의·하의 미달) ---- */
   if (!ready) {
     return (
-      <EmptyState
-        icon="sparkle"
-        title="오늘의 코디를 받아보세요"
-        wide={wide}
-        action={<Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>}
-        hint={<><Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요</>}
-      >
-        옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.
-      </EmptyState>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ padding: wide ? '28px 32px 0' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 0', maxWidth: wide ? 1080 : undefined, margin: wide ? '0 auto' : undefined, width: wide ? '100%' : undefined, boxSizing: 'border-box' }}>
+          <WardrobeMilestoneBanner
+            progress={comboProgress}
+            need={comboNeed}
+            itemCount={items.length}
+            onAdd={() => (openAdd ? openAdd('wardrobe') : startComboOrWardrobe())}
+            style={{ marginBottom: 0 }}
+          />
+        </div>
+        <EmptyState
+          icon="sparkle"
+          title="오늘의 코디를 받아보세요"
+          wide={wide}
+          padTop={false}
+          action={<Btn full size="lg" icon="plus" onClick={startComboOrWardrobe}>옷장 채우러 가기</Btn>}
+          hint={<><Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요</>}
+        >
+          옷장에 옷이 모이면,<br />가진 옷으로 매일 코디를 추천해요.
+        </EmptyState>
+      </div>
     );
   }
 

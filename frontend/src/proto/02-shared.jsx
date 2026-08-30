@@ -1075,6 +1075,51 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
   );
 }
 
+/* 코디 추천 잠금 해제까지 상의·하의 마일스톤(최대 4칸). 옷장·오늘·튜토리얼에서 같이 쓴다. */
+function WardrobeMilestoneBanner({ progress = 0, total = 4, need = '', itemCount, onAdd, style }) {
+  const done = progress >= total;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)',
+      background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)',
+      boxShadow: 'inset 0 0 0 1px var(--line)',
+      ...style,
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: '50%', flex: 'none',
+        background: done ? 'var(--accent)' : 'var(--ivory)',
+        color: done ? 'var(--accent-ink)' : 'var(--ink-2)',
+        display: 'grid', placeItems: 'center',
+      }}>
+        <Icon name={done ? 'sparkle' : 'lock'} size={18} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35, wordBreak: 'keep-all' }}>
+          {done ? '코디 추천을 받을 수 있어요' : (
+            <>코디 추천까지 <span className="tnum">{progress}</span>/{total}</>
+          )}
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.4, wordBreak: 'keep-all' }}>
+          {done
+            ? (typeof itemCount === 'number' ? `옷장 ${itemCount}개로 조합·오늘 코디를 만들어 보세요.` : '조합 추천과 오늘 코디가 열렸어요.')
+            : (need ? `${need} 더 담으면 열려요.` : '상의·하의를 조금 더 담아 주세요.')}
+        </div>
+        <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
+          {Array.from({ length: total }).map((_, i) => (
+            <div key={i} style={{
+              flex: 1, height: 4, borderRadius: 999,
+              background: i < progress ? 'var(--accent)' : 'var(--line-2)',
+            }} />
+          ))}
+        </div>
+      </div>
+      {onAdd && !done ? (
+        <Btn size="sm" variant="soft" icon="plus" onClick={onAdd} style={{ flex: 'none' }}>추가</Btn>
+      ) : null}
+    </div>
+  );
+}
+
 /* ============================================================
    EmptyState — shared chrome for tab empty / gate screens.
    콘텐츠 영역(하단 탭·상단바를 뺀 칸)의 세로 가운데. 가짜 상단바 패딩을 넣으면
@@ -1238,4 +1283,4 @@ function PullRefresh({ onRefresh, disabled, children, style, className, scrollRe
   );
 }
 
-Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, NumberSlider, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, SmartImg, PullRefresh });
+Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, NumberSlider, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, WardrobeMilestoneBanner, SmartImg, PullRefresh });
