@@ -6,6 +6,8 @@
 탭 미리보기는 계정 `prefs.avatar`다. 별도 업로드 칸(`tryOnLocal`)은 없다.
 원형 `ProfileAvatar`를 누르면 마이페이지 프사와 같이 바뀐다. 얼굴을 바꾸면
 `tryOnBody`/`tryOnFrame`을 비워 다음 바로 보기에서 전신을 다시 만든다.
+프사는 기기 localStorage data URL이 아니라 스토리지 URL을 `prefs.avatar`에
+붙여 계정에 따라다닌다([[profile-avatar]], 2026-08-30).
 
 - **PC (`wide`)**: 원형 프사 + 「이 사진으로 옷을 바로 비춰 볼 수 있어요 · 모바일 전용」.
   카메라는 열지 않는다.

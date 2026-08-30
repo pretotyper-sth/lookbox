@@ -331,6 +331,20 @@ def upsert_profile(user_id: str, email: str | None) -> None:
     ).execute()
 
 
+def _patch_user_prefs(user_id: str, patch: dict[str, Any]) -> None:
+    """user_metadata.prefs에 키만 얹는다. 통째로 갈아끼우면 다른 기기 설정이 지워진다."""
+    try:
+        res = supabase_admin.auth.admin.get_user_by_id(user_id)
+        user = getattr(res, "user", None) or res
+        meta = dict(getattr(user, "user_metadata", None) or {})
+        prefs = dict(meta.get("prefs") or {})
+        prefs.update(patch)
+        meta["prefs"] = prefs
+        supabase_admin.auth.admin.update_user_by_id(user_id, {"user_metadata": meta})
+    except Exception as exc:  # noqa: BLE001
+        print(f"[profile] prefs patch skip: {exc}", flush=True)
+
+
 def public_url(path: str) -> str:
     return supabase_admin.storage.from_(SUPABASE_BUCKET).get_public_url(path)
 
@@ -3327,13 +3341,25 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
 
 
 def _decode_data_url(data_url: str | None) -> bytes | None:
-    """마이페이지 프로필 사진은 data URL로 넘어온다(서버에 따로 저장하지 않음)."""
+    """data URL → bytes. 예전 기기는 프사를 이렇게만 들고 있었다."""
     if not data_url or "," not in data_url:
         return None
     try:
         return base64.b64decode(data_url.split(",", 1)[1])
     except Exception:
         return None
+
+
+def _face_image_bytes(src: str | None) -> bytes | None:
+    """프사 — 계정에 올린 URL이거나, 아직 안 올린 기기의 data URL."""
+    if not src:
+        return None
+    s = src.strip()
+    if s.startswith("data:"):
+        return _decode_data_url(s)
+    if s.startswith("http://") or s.startswith("https://"):
+        return _fetch_bytes(s)
+    return None
 
 
 # `assets/mood/` 룩북 배경 평균(#ACA7A4). 밝은 #E5E3DE보다 흰 옷·아이템 대비가 낫다.
@@ -6087,6 +6113,32 @@ class TryOnBody(BaseModel):
     face_data_url: str
 
 
+class ProfileAvatarIn(BaseModel):
+    image_data_url: str
+
+
+@app.post("/api/live/profile/avatar")
+def live_profile_avatar(body: ProfileAvatarIn, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """프로필 사진을 스토리지에 올리고 계정 prefs.avatar에 URL을 붙인다.
+
+    data URL은 user_metadata에 넣기엔 크다. 그래서 기기에만 남고 모바일에서
+    안 보였다. URL만 계정에 두면 같은 계정은 어디서 열어도 같다.
+    """
+    require_supabase()
+    raw = _decode_data_url(body.image_data_url)
+    if not raw:
+        raise HTTPException(status_code=400, detail="프로필 사진을 읽지 못했어요.")
+    try:
+        webp = to_webp(raw, max_side=512, quality=85)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="프로필 사진을 읽지 못했어요.") from exc
+    sig = hashlib.sha256(webp).hexdigest()[:12]
+    path = f"{user.id}/profile/avatar-{sig}.webp"
+    url = upload_bytes(path, webp, "image/webp")
+    _patch_user_prefs(user.id, {"avatar": url})
+    return {"avatarUrl": url}
+
+
 @app.post("/api/live/tryon/body")
 def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) -> dict[str, Any]:
     """프로필 사진으로 '바로 보기'용 전신 이미지를 만든다.
@@ -6096,7 +6148,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     하나로 만들어 준다. 이미지 생성이라 크레딧을 받는다(원가 $0.25).
     """
     require_supabase()
-    face = _decode_data_url(body.face_data_url)
+    face = _face_image_bytes(body.face_data_url)
     if not face:
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
     ensure_within_limit(user.id, "tryon_body")

@@ -160,7 +160,7 @@ const DEFAULT_PREFS = {
   email: '', gender: '', age: '', styles: [], fit: '', palettes: [], personalColor: '', pcDiagnosed: false,
   height: '', weight: '',
   tutorialDone: false,      // 처음 안내 팝업을 봤는지 (계정 단위, 기기 아님)
-  avatar: '', // 마이페이지 프로필 사진 (data URL)
+  avatar: '', // 마이페이지 프로필 사진 (계정 스토리지 URL, 예전 기기는 data URL)
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
   dailyCount: 4,       // 처음 추천받을 때 만드는 코디 수 (2~8)
   wishCount: 0,        // 그 중 '옷장에 없는 아이템'을 하나 더한 코디 수 (0~3)

@@ -180,3 +180,7 @@ Render가 착장 JSON을 ~100초에 끊어서 서버엔 이미지가 있는데 �
 옷은 텍스트로 기술. `OPENAI_IMAGE_MODEL_LOOK` 기본 gpt-image-2, 배경 `#ACA7A4`(mood 평균),
 캐시 `model-id3-`/`model-id-v3-`, 장당 10크레딧 ([[model-look-toggle]]).
 
+## [2026-08-30] fix | 프사는 계정 스토리지로 동기화
+data URL을 metadata에서 빼서 올린 기기에만 보였다. 스토리지에 올리고 `prefs.avatar`에
+URL만 붙인다. 기기에 남은 data URL은 로그인 시 한 번 올린다 ([[profile-avatar]]).
+

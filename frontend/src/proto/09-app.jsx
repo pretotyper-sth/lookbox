@@ -27,7 +27,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 })();
 
 const TONES = {
-  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--thumb-bg': '#E5E3DE', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
+  ivory: { '--ivory': '#EFEDE8', '--surface': '#F7F5F0', '--surface-2': '#FBFAF7', '--thumb-bg': '#ACA7A4', '--line': '#E0DCD2', '--line-2': '#D3CEC2', '--badge-bg': '#E6E2D9' },
   paper: { '--ivory': '#F2F1EE', '--surface': '#FBFAF8', '--surface-2': '#FFFFFF', '--thumb-bg': '#E6E4DF', '--line': '#E7E5DF', '--line-2': '#DAD7CF', '--badge-bg': '#ECEAE3' },
 };
 
@@ -443,14 +443,23 @@ function prefsFilled(v) {
  * - 계정에 값이 있으면 계정이 정본이다 (다른 기기에서 바꾼 게 반영돼야 하니까).
  * - 계정에 비어 있는 값만 이 기기 값으로 채운다 — 예전에 기기가 계정을 기본값으로
  *   덮어써 버린 적이 있어서, 값이 남아 있는 기기가 계정을 되살릴 수 있어야 한다.
+ * - 프사는 data URL이 metadata에 안 들어가 기기마다 달랐다. 계정에 http URL이 있으면
+ *   그걸 쓰고, 이 기기에만 data URL이 있으면 나중에 올려 계정을 채운다.
  */
 function mergePrefs(local, account) {
   const base = { ...LB_DATA.DEFAULT_PREFS, ...(local || {}) };
   const acc = account || {};
   const out = { ...base };
   Object.keys(acc).forEach((k) => {
+    if (k === 'avatar') return;
     if (prefsFilled(acc[k])) out[k] = acc[k];
   });
+  if (Object.prototype.hasOwnProperty.call(acc, 'avatar')) {
+    const accAv = String(acc.avatar || '');
+    const locAv = String(out.avatar || '');
+    if (/^https?:\/\//i.test(accAv)) out.avatar = accAv;
+    else if (!accAv && !locAv.startsWith('data:')) out.avatar = '';
+  }
   return out;
 }
 
@@ -606,6 +615,14 @@ async function liveJSON(url, options = {}) {
   if (parsed && data && data.error) throw new Error(data.error);
   if (!parsed) throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
   return data;
+}
+
+async function uploadAvatarToAccount(dataUrl) {
+  const res = await liveJSON('/api/live/profile/avatar', {
+    method: 'POST',
+    body: JSON.stringify({ image_data_url: dataUrl }),
+  });
+  return (res && res.avatarUrl) || '';
 }
 
 async function liveImportSource({ sourceType, file, url, status, extractHint, onProgress }) {
@@ -786,18 +803,39 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const persistPrefs = (p) => {
+  const persistPrefs = (p, opts) => {
     try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
     // 계정 설정을 아직 못 읽은 상태에서 계정에 쓰면, 이 기기의 기본값이 계정에 저장된
     // 진짜 설정을 지운다(다른 기기에서 스타일·퍼스널 컬러가 사라지던 원인). 한 번
     // 읽어 온 뒤에만 계정에 쓴다. 로컬 저장은 항상 한다.
     if (!prefsSynced.current) return;
-    // email/avatar는 제외 — email은 세션에서 오고, avatar(data URL)는 metadata에 담기 너무 크다.
+    // email은 세션에서 온다. 프사 data URL은 metadata 한도를 넘기니 URL만 올린다.
     if (window.LB_AUTH && window.LB_AUTH.savePrefs) {
       const { email, avatar, ...rest } = p;
+      if (typeof avatar === 'string' && /^https?:\/\//i.test(avatar)) rest.avatar = avatar;
+      else if (opts && opts.clearAvatar) rest.avatar = '';
       window.LB_AUTH.savePrefs(rest);
     }
   };
+  useEffect(() => {
+    if (!authUid || !prefsSynced.current) return;
+    const pending = prefs.avatar;
+    if (!pending || !pending.startsWith('data:')) return;
+    let alive = true;
+    uploadAvatarToAccount(pending)
+      .then((url) => {
+        if (!alive || !url) return;
+        setPrefs((prev) => {
+          if (prev.avatar !== pending) return prev;
+          const np = { ...prev, avatar: url };
+          persistPrefs(np);
+          return np;
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUid, prefs.avatar]);
   const completeOnboarding = (p) => { prefsSynced.current = true; setPrefs(p); persistPrefs(p); setOnboarded(true); };
   // 가입 — 계정 단계를 넘어갈 때 실제 Supabase 계정을 만든다. 에러 문구를 돌려주면
   // 온보딩이 그 단계에 머문다. 여기서 계정을 만들어야 다음 방문에 같은 옷장이 열린다.
@@ -837,7 +875,7 @@ function App() {
       tryOnCut: '',
     };
     setPrefs(np);
-    persistPrefs(np);
+    persistPrefs(np, { clearAvatar: !dataUrl });
     showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');
   };
   const setTryOnFrame = ({ body, frame, cut }) => {
