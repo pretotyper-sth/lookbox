@@ -14,7 +14,9 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [model-look-toggle](model-look-toggle.md) — 착장 토글은 무료에서도 열림. 룩북 모델. 착장은 SSE로 한 장씩, 화면은 DAILY id에 붙임. 설정 행에 비용 문구는 없음
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. PC는 원형만, 모바일은 프사 있으면 카메라. 시트 높이는 탭과 같음
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. 구멍은 옷 픽셀, 양옆은 막음. 후면 카메라만
+- [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
+- [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용(걸리시·글램·페미닌). 분류 id는 `_STYLE_IDS`와 같음

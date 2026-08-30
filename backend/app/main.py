@@ -100,6 +100,7 @@ supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 SHOW_ERROR_CODES = os.environ.get("APP_ENV", "dev").strip().lower() not in ("production", "prod", "live")
 OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "120"))
 OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "60"))
+OPENAI_IMAGE_TIMEOUT_TRYON = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_TRYON", "90"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
 # OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
 OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
@@ -6101,10 +6102,10 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
-_TRYON_BODY_PROMPT = """이 사진 속 인물의 얼굴을 그대로 유지한 채, 정면 전신 사진을 만드세요.
-- 인물 한 명, 정면, 머리끝부터 발끝까지 잘리지 않게, 팔은 몸 옆에 자연스럽게
-- 몸에 붙는 무채색 기본 이너(반팔 티 + 레깅스/슬랙스)만 착용. 무늬·로고 없이
-- 배경은 #F2F1EE 단색, 그림자 최소, 자연스러운 실내 조명
+_TRYON_BODY_PROMPT = """입력 사진과 동일한 얼굴을 유지하세요. 이목구비·피부톤·헤어를 바꾸거나 미화하지 마세요.
+- 인물 한 명, 정면 전신. 머리끝부터 발끝까지 잘리지 않게, 팔은 몸 옆에 자연스럽게
+- 몸에 붙는 검정 반팔 티와 검정 슬랙스만. 무늬·로고 없이
+- 배경은 #F2F1EE 단색, 그림자 최소
 - 텍스트·로고·워터마크·프레임·다른 사람 추가 금지
 """
 
@@ -6154,7 +6155,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     ensure_within_limit(user.id, "tryon_body")
 
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon-{sig}"
+    key = f"tryon2-{sig}"
     cached = (
         supabase_admin.table("generated_images")
         .select("image_url")
@@ -6174,7 +6175,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     try:
         source = io.BytesIO(face)
         source.name = "face.png"
-        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
+        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
             model=OPENAI_IMAGE_MODEL,
             image=source,
             prompt=_TRYON_BODY_PROMPT,

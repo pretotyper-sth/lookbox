@@ -907,6 +907,7 @@ function App() {
       const res = await liveJSON('/api/live/tryon/body', {
         method: 'POST',
         body: JSON.stringify({ face_data_url: prefs.avatar }),
+        timeoutMs: 100000,
       });
       const url = res && res.imageUrl;
       if (!url) throw new Error('바로 보기 이미지를 만들지 못했어요');

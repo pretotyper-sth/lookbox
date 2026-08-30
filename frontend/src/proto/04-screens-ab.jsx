@@ -319,7 +319,7 @@ function WardrobeScreen({ ctx }) {
         aria-label="옷장 검색"
         style={{
           flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'transparent',
-          fontSize: wide ? 13.5 : 13, fontWeight: 500, color: 'var(--ink)', outline: 'none',
+          fontSize: wide ? 13.5 : 16, fontWeight: 500, color: 'var(--ink)', outline: 'none',
         }}
       />
       {query && (

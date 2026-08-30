@@ -1077,8 +1077,8 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
 
 /* ============================================================
    EmptyState — shared chrome for tab empty / gate screens.
-   Top-anchored (not flex-center) + fixed title/body/footer slots so
-   icon → CTA stay on the same Y across wardrobe / lookbook / today.
+   콘텐츠 영역(하단 탭·상단바를 뺀 칸)의 세로 가운데. 가짜 상단바 패딩을 넣으면
+   오늘·룩북처럼 상단바가 없는 탭에서 문구가 아래로 내려간다.
    ============================================================ */
 function EmptyState({
   icon,
@@ -1091,12 +1091,6 @@ function EmptyState({
   wide = false,
   padTop = true,
 }) {
-  // Same optical start on every tab. flex-center shifts when copy length differs.
-  // 모바일의 오늘/룩북 탭에는 상단바가 없다. 옷장 탭 TopBar 높이(안전영역 + 73px)만큼
-  // 내려서 세 탭의 아이콘·타이틀·CTA가 같은 Y에 오게 맞춘다. 데스크탑(wide)은 그대로.
-  const boxPad = (!padTop || wide)
-    ? 'min(18vh, 168px) 40px 80px'
-    : 'calc(env(safe-area-inset-top, 0px) + 73px + min(18vh, 168px)) 40px 80px';
   const footer = hint ?? (
     <>
       <Icon name="lock" size={14} /> 상의·하의를 담으면 조합 추천이 열려요
@@ -1105,9 +1099,9 @@ function EmptyState({
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         textAlign: 'center',
-        padding: boxPad,
+        padding: wide ? '40px 40px 48px' : '24px 40px 32px',
         boxSizing: 'border-box',
       }}>
         <div style={{

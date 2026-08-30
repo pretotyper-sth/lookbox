@@ -18,6 +18,20 @@ window.__resources = protoManifest.resources
 // the background so we don't delay first paint on a network round trip.
 initLiveBridge()
 
+// iOS는 작은 글자 input 포커스·더블탭으로 페이지를 확대한 뒤 그 배율을 기억한다.
+// 로드·bfcache 복원 때 initial-scale을 한 번 다시 심어 1배로 되돌린다.
+function resetMobilePageZoom() {
+  const meta = document.querySelector('meta[name="viewport"]')
+  if (!meta) return
+  const base = 'width=device-width, initial-scale=1.0, viewport-fit=cover'
+  meta.setAttribute('content', `${base}, maximum-scale=1.0`)
+  requestAnimationFrame(() => {
+    meta.setAttribute('content', base)
+  })
+}
+resetMobilePageZoom()
+window.addEventListener('pageshow', resetMobilePageZoom)
+
 // 옷 사진 전용 캐시(서비스 워커). 스토리지가 no-cache로 내려줘 매번 다시 받던 것을 막는다.
 // 앱 셸은 캐시하지 않으므로 배포는 평소처럼 즉시 반영된다.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

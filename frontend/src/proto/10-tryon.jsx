@@ -6,7 +6,7 @@ const { BottomSheet, Btn, Chip, Icon, useEscapeClose } = window;
 // RealCloset — 바로 보기: 전신 사진에서 옷을 비우고, 카메라로 실제 옷에 겹쳐 본다.
 // 설정은 바텀시트(서비스 안). 사진 없으면 프로필처럼 바로 앨범을 연다.
 
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useLayoutEffect, useRef } = React;
 
 function loadImage(src, cors = false) {
   return new Promise((resolve, reject) => {
@@ -59,61 +59,105 @@ function punchPreset(ctx, w, h, cut) {
   ctx.restore();
 }
 
+function lumaOf(r, g, b) {
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function isPlatePixel(r, g, b) {
+  const L = lumaOf(r, g, b);
+  return L > 188 && (Math.max(r, g, b) - Math.min(r, g, b)) < 36;
+}
+
+function isSkinPixel(r, g, b) {
+  const L = lumaOf(r, g, b);
+  return r > 88 && r > b + 8 && r >= g - 8 && L > 72 && L < 210;
+}
+
+function isGarmentPixel(r, g, b) {
+  if (isPlatePixel(r, g, b) || isSkinPixel(r, g, b)) return false;
+  return lumaOf(r, g, b) < 168;
+}
+
+function garmentBand(mode) {
+  if (mode === 'top') return { y0: 0.22, y1: 0.56, x0: 0.16, x1: 0.84 };
+  if (mode === 'bottom') return { y0: 0.48, y1: 0.94, x0: 0.18, x1: 0.82 };
+  return { y0: 0.22, y1: 0.94, x0: 0.16, x1: 0.84 };
+}
+
+function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode) {
+  const band = garmentBand(mode);
+  const x0 = Math.max(0, Math.floor(dx + dw * band.x0));
+  const x1 = Math.min(W, Math.ceil(dx + dw * band.x1));
+  const y0 = Math.max(0, Math.floor(dy + dh * band.y0));
+  const y1 = Math.min(H, Math.ceil(dy + dh * band.y1));
+  const punch = new Uint8Array(W * H);
+  const src = srcData.data;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * W + x) * 4;
+      if (isGarmentPixel(src[i], src[i + 1], src[i + 2])) punch[y * W + x] = 1;
+    }
+  }
+  const dilate = 3;
+  const grown = new Uint8Array(W * H);
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      if (!punch[y * W + x]) continue;
+      for (let oy = -dilate; oy <= dilate; oy += 1) {
+        for (let ox = -dilate; ox <= dilate; ox += 1) {
+          const nx = x + ox;
+          const ny = y + oy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          grown[ny * W + nx] = 1;
+        }
+      }
+    }
+  }
+  return grown;
+}
+
+async function punchBody(src, mode, stageW, stageH) {
+  const img = await loadImage(src, !src.startsWith('data:'));
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const sw = Math.max(2, Math.round(stageW || iw));
+  const sh = Math.max(2, Math.round(stageH || ih));
+  const scale = Math.min(sw / iw, sh / ih);
+  const dw = Math.max(1, Math.round(iw * scale));
+  const dh = Math.max(1, Math.round(ih * scale));
+  const dx = Math.round((sw - dw) / 2);
+  const dy = Math.round((sh - dh) / 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#F2F1EE';
+  ctx.fillRect(0, 0, sw, sh);
+  ctx.drawImage(img, dx, dy, dw, dh);
+
+  const sampled = ctx.getImageData(0, 0, sw, sh);
+  const punch = punchGarmentMask(sampled, sw, sh, dx, dy, dw, dh, mode);
+  const out = ctx.createImageData(sw, sh);
+  for (let i = 0; i < punch.length; i += 1) {
+    if (punch[i]) out.data[i * 4 + 3] = 255;
+  }
+  const mask = document.createElement('canvas');
+  mask.width = sw;
+  mask.height = sh;
+  mask.getContext('2d').putImageData(out, 0, 0);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(mask, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  return canvas.toDataURL('image/png');
+}
+
 // 카메라에서 부위를 바꿀 때마다 새로 뚫는다. 캔버스 한 번이면 되니 전환이 즉시다.
 const TRYON_MODES = [
   { id: 'top', label: '상의' },
   { id: 'bottom', label: '하의' },
   { id: 'full', label: '전체' },
 ];
-
-function punchShirt(ctx, w, h) {
-  const x = (n) => n * w;
-  const y = (n) => n * h;
-  ctx.beginPath();
-  ctx.moveTo(x(0.28), y(0.30));
-  ctx.quadraticCurveTo(x(0.50), y(0.18), x(0.72), y(0.30));
-  ctx.lineTo(x(0.92), y(0.34));
-  ctx.lineTo(x(0.86), y(0.44));
-  ctx.lineTo(x(0.70), y(0.40));
-  ctx.lineTo(x(0.72), y(0.54));
-  ctx.lineTo(x(0.28), y(0.54));
-  ctx.lineTo(x(0.30), y(0.40));
-  ctx.lineTo(x(0.14), y(0.44));
-  ctx.lineTo(x(0.08), y(0.34));
-  ctx.closePath();
-  ctx.fill();
-}
-
-function punchPants(ctx, w, h) {
-  const x = (n) => n * w;
-  const y = (n) => n * h;
-  ctx.beginPath();
-  ctx.moveTo(x(0.30), y(0.52));
-  ctx.lineTo(x(0.70), y(0.52));
-  ctx.lineTo(x(0.72), y(0.84));
-  ctx.lineTo(x(0.56), y(0.84));
-  ctx.lineTo(x(0.50), y(0.62));
-  ctx.lineTo(x(0.44), y(0.84));
-  ctx.lineTo(x(0.28), y(0.84));
-  ctx.closePath();
-  ctx.fill();
-}
-
-async function punchBody(src, mode) {
-  const img = await loadImage(src, !src.startsWith('data:'));
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  // 종이에서 옷을 오려 낸 자리. 카메라가 그 구멍으로 비친다.
-  if (mode === 'top' || mode === 'full') punchShirt(ctx, canvas.width, canvas.height);
-  if (mode === 'bottom' || mode === 'full') punchPants(ctx, canvas.width, canvas.height);
-  ctx.restore();
-  return canvas.toDataURL('image/png');
-}
 
 function MobileOnlyNote() {
   return (
@@ -428,27 +472,40 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
    ============================================================ */
 function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) {
   const videoRef = useRef(null);
+  const stageRef = useRef(null);
   const streamRef = useRef(null);
   const [err, setErr] = useState('');
-  const [facing, setFacing] = useState('environment');
   const [ready, setReady] = useState(false);
-  // 어느 부위를 비출지 — 카메라 모드처럼 좌우로 넘기거나 눌러서 바꾼다.
   const [mode, setMode] = useState('top');
   const [overlay, setOverlay] = useState('');
+  const [stage, setStage] = useState({ w: 0, h: 0 });
   const swipeX = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const el = stageRef.current;
+    if (!el) return undefined;
+    const measure = () => setStage({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) ro.observe(el);
+    return () => { if (ro) ro.disconnect(); };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
     let dead = false;
     const src = bodySrc || frameSrc;
     if (!src) { setOverlay(''); return undefined; }
-    // 전신 사진이 있으면 부위별로 새로 뚫고, 없으면 예전에 저장해 둔 프레임을 그대로 쓴다.
     if (!bodySrc) { setOverlay(frameSrc || ''); return undefined; }
-    punchBody(bodySrc, mode)
+    const w = stage.w || (typeof window !== 'undefined' ? window.innerWidth : 0);
+    const h = stage.h || (typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.62) : 0);
+    if (!w || !h) return undefined;
+    punchBody(bodySrc, mode, w, h)
       .then((url) => { if (!dead) setOverlay(url); })
       .catch(() => { if (!dead) setOverlay(frameSrc || ''); });
     return () => { dead = true; };
-  }, [open, bodySrc, frameSrc, mode]);
+  }, [open, bodySrc, frameSrc, mode, stage.w, stage.h]);
 
   const shiftMode = (dir) => {
     const i = TRYON_MODES.findIndex((m) => m.id === mode);
@@ -466,7 +523,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
     setReady(false);
   };
 
-  const start = async (face) => {
+  const start = async () => {
     stop();
     setErr('');
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -477,7 +534,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
-          facingMode: { ideal: face },
+          facingMode: { ideal: 'environment' },
           width: { ideal: 1280 },
           height: { ideal: 1920 },
         },
@@ -497,7 +554,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
   useEffect(() => {
     if (!open) { stop(); return undefined; }
     if (wide) return undefined;
-    start(facing);
+    start();
     return () => stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, wide]);
@@ -559,7 +616,8 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
       </div>
 
       <div
-        style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden', touchAction: 'pan-y' }}
+        ref={stageRef}
+        style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden', touchAction: 'pan-y', background: '#F2F1EE' }}
         onPointerDown={(e) => { swipeX.current = e.clientX; }}
         onPointerUp={(e) => {
           if (swipeX.current == null) return;
@@ -575,7 +633,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
           autoPlay
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', transform: facing === 'user' ? 'scaleX(-1)' : 'none',
+            objectFit: 'cover',
           }}
         />
         {overlay && (
@@ -585,7 +643,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
             draggable={false}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'contain', pointerEvents: 'none',
+              objectFit: 'fill', pointerEvents: 'none',
             }}
           />
         )}
@@ -637,34 +695,17 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
         <p style={{ margin: 0, fontSize: 12.5, textAlign: 'center', lineHeight: 1.45, opacity: 0.85, wordBreak: 'keep-all' }}>
           {bodySrc ? '좌우로 넘기거나 눌러서 비출 부위를 바꿔요.' : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
         </p>
-        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-          <button
-            type="button"
-            onClick={() => {
-              const next = facing === 'environment' ? 'user' : 'environment';
-              setFacing(next);
-              start(next);
-            }}
-            style={{
-              flex: 1, padding: '14px 12px', borderRadius: 'var(--r-pill)',
-              background: 'rgba(255,255,255,0.14)', color: '#fff',
-              fontSize: 14, fontWeight: 700,
-            }}
-          >
-            카메라 전환
-          </button>
-          <button
+        <button
             type="button"
             onClick={onEdit}
             style={{
-              flex: 1, padding: '14px 12px', borderRadius: 'var(--r-pill)',
+              width: '100%', padding: '14px 12px', borderRadius: 'var(--r-pill)',
               background: '#fff', color: '#1a1814',
               fontSize: 14, fontWeight: 700,
             }}
           >
             사진 다시 고르기
           </button>
-        </div>
       </div>
     </div>
   );

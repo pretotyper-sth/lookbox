@@ -184,3 +184,8 @@ Render가 착장 JSON을 ~100초에 끊어서 서버엔 이미지가 있는데 �
 data URL을 metadata에서 빼서 올린 기기에만 보였다. 스토리지에 올리고 `prefs.avatar`에
 URL만 붙인다. 기기에 남은 data URL은 로그인 시 한 번 올린다 ([[profile-avatar]]).
 
+## [2026-08-30] fix | 모바일 확대·빈 화면 가운데·바로 보기 구멍
+iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-page-zoom]]). EmptyState는
+가짜 상단바 패딩을 빼 콘텐츠 칸 가운데 ([[empty-state-center]]). 바로 보기 구멍은
+옷 픽셀에 맞추고 양옆은 막으며 카메라 전환은 뺀다 ([[tryon-setup-from-mypage]]).
+
