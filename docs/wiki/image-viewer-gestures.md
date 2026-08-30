@@ -9,4 +9,7 @@
 핀치는 두 손가락 거리 비율로 1~4배. 더블탭(280ms)과 휠(1.08배씩)도 같은 `commitZoom`.
 힌트 문구: `핀치 · 더블탭 · 휠로 확대할 수 있어요`.
 
-관련: [[chiprow-sheet-scroll]]
+2026-08-30: 착장 `lookImg`는 원본이 커서 flex `min-width: auto`에 막혔다.
+뷰어 미디어는 `max-width/height: 100%`로 스테이지에 맞춘다. [[look-img-flex-min]]
+
+관련: [[chiprow-sheet-scroll]] [[look-img-flex-min]]

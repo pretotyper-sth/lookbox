@@ -374,30 +374,43 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
     setDragging(false);
   };
 
+  const mediaFit = {
+    maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto',
+    minWidth: 0, minHeight: 0, objectFit: 'contain', objectPosition: 'center',
+    display: 'block', userSelect: 'none',
+  };
   const media = isOutfit ? (
     outfit.lookImg ? (
-      <img
-        src={outfit.lookImg}
-        alt={title}
-        draggable={false}
-        style={{
-          width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-          borderRadius: 'var(--r-lg)', background: 'var(--thumb-bg)', userSelect: 'none',
-          padding: '6% 5%', boxSizing: 'border-box',
-        }}
-      />
+      <div style={{
+        width: '100%', height: '100%', minWidth: 0, minHeight: 0,
+        padding: '6% 5%', boxSizing: 'border-box',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <img
+          src={outfit.lookImg}
+          alt={title}
+          draggable={false}
+          style={mediaFit}
+        />
+      </div>
     ) : (Composite ? (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
         <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" />
       </div>
     ) : null)
   ) : (
-    <img
-      src={item.img}
-      alt={item.name || ''}
-      draggable={false}
-      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', padding: '4%', userSelect: 'none' }}
-    />
+    <div style={{
+      width: '100%', height: '100%', minWidth: 0, minHeight: 0,
+      padding: '4%', boxSizing: 'border-box',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <img
+        src={item.img}
+        alt={item.name || ''}
+        draggable={false}
+        style={mediaFit}
+      />
+    </div>
   );
 
   const pct = Math.round(zoom * 100);
@@ -482,7 +495,8 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
             else applyZoom(2);
           }}
           style={{
-            width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '100%', height: '100%', minWidth: 0, minHeight: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
             transformOrigin: 'center center',
             transition: (dragging || pinching) ? 'none' : 'transform 120ms var(--ease)',

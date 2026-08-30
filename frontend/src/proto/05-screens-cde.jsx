@@ -115,14 +115,24 @@ function lookPlacement(items) {
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE }) {
   const cleanItems = (items || []).filter(Boolean);
   // AI 착장 이미지는 세로로 길어(2:3) 카드 비율에 맞춰 자르면 머리나 신발이 날아간다. 통째로 넣는다.
+  // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
+  // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
     return (
       <div style={{
+        position: 'relative', minWidth: 0, minHeight: 0,
         background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '8% 6%', boxSizing: 'border-box',
       }}>
-        <img src={outfit.lookImg} alt={cleanItems.map((i) => i.name).join(' · ')} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <img
+          src={outfit.lookImg}
+          alt={cleanItems.map((i) => i.name).join(' · ')}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
+            objectFit: 'contain', objectPosition: 'center',
+            padding: '8% 6%', boxSizing: 'border-box',
+          }}
+        />
       </div>
     );
   }
