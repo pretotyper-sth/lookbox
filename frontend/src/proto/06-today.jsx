@@ -91,7 +91,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById, looking }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
@@ -107,7 +107,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
             cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" looking={looking} />
         </button>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -337,6 +337,7 @@ function TodayScreen({ ctx }) {
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
     getDayRecord, openDetail, refreshLive,
+    modelLook,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -553,6 +554,7 @@ function TodayScreen({ ctx }) {
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
+                  looking={isToday && !!modelLook && !o.lookImg}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

@@ -570,8 +570,9 @@ async function liveJSON(url, options = {}) {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
   try {
+    const { timeoutMs: _t, onProgress: _p, onLook: _l, ...fetchOpts } = options;
     res = await fetch(url, {
-      ...options,
+      ...fetchOpts,
       signal: ctrl.signal,
       headers: options.body instanceof FormData ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
     });
@@ -1113,6 +1114,11 @@ function App() {
     if (today && today.length) {
       const kept = filterDailyOutfitsByOwned(today, ownedItems);
       if (kept.length) {
+        // 서버 목록은 새 객체라, 지금 화면에 이미 붙은 lookImg를 지우면 착장이
+        // 서버에 있어도 컷아웃만 남는다. 둘 중 있는 쪽을 쓴다.
+        const localLook = {};
+        (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id && o.lookImg) localLook[o.id] = o.lookImg; });
+        kept.forEach((o) => { if (o && !o.lookImg && localLook[o.id]) o.lookImg = localLook[o.id]; });
         const cached = readDailyCache();
         writeDailyCache({
           style: (cached && cached.style) || '',
@@ -1405,12 +1411,10 @@ function App() {
     targets.forEach((o) => lookInflight.current.add(o.id));
     const paintLook = (id, url) => {
       if (!id || !url) return;
-      (list || LB_DATA.DAILY).forEach((o) => {
-        if (o.id !== id) return;
-        o.lookImg = url;
-        const cached = LB_DATA.OUTFIT_BY_ID[o.id];
-        if (cached) cached.lookImg = url;
-      });
+      // hydrate가 DAILY를 새 객체로 갈아끼워도 id로 찾아 붙인다.
+      (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
+      (list || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
+      if (LB_DATA.OUTFIT_BY_ID[id]) LB_DATA.OUTFIT_BY_ID[id].lookImg = url;
       writeDailyCache({
         style: dailyStyle,
         outfits: LB_DATA.DAILY.slice(),
@@ -1446,6 +1450,7 @@ function App() {
       return n;
     } finally {
       targets.forEach((o) => lookInflight.current.delete(o.id));
+      bumpDaily();
     }
   }, [prefs.gender, dailyStyle, items, bumpDaily, reloadBilling]);
 

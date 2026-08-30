@@ -124,7 +124,7 @@ function lookPlacement(items) {
   return out;
 }
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
   const cleanItems = (items || []).filter(Boolean);
   // AI 착장 이미지는 세로로 길어(2:3) 카드 비율에 맞춰 자르면 머리나 신발이 날아간다. 통째로 넣는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
@@ -186,6 +186,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         }
         return <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
       })}
+      {looking ? (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 8,
+          background: 'color-mix(in srgb, var(--thumb-bg) 42%, transparent)',
+          display: 'grid', placeItems: 'center',
+          fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)',
+        }}>AI 착장 만드는 중</div>
+      ) : null}
     </div>
   );
 }

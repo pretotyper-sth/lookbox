@@ -172,3 +172,6 @@ URL 2개 이상 제출 시 `bulk`만 세우고 입력칸을 비워 빈 URL 탭+�
 ## [2026-08-30] fix | 착장은 한 장씩 스트림, 점선 박스는 옷 위에 안 겹침
 Render가 착장 JSON을 ~100초에 끊어서 서버엔 이미지가 있는데 화면은 컷아웃만 남았다. keepalive SSE로 한 장씩 그린다. 제안 아이템 점선은 우하 칸 ([[model-look-toggle]]).
 
+## [2026-08-30] fix | 착장 URL이 화면 객체에 안 붙던 점
+서버 `look_image_url`은 생겼는데 hydrate가 DAILY를 새 객체로 바꿔 컷아웃만 남았다. id로 붙이고, 만드는 중 오버레이 ([[model-look-toggle]]).
+
