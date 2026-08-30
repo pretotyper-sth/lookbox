@@ -136,3 +136,6 @@ URL 담기는 브랜드처럼 상품 HTML에서 가격·재질을 읽어 등록 
 ## [2026-08-30] ingest | URL 중복은 주소·코드·사진만
 이름/브랜드 유사(`same_name` 등)로 등록을 막던 분기를 제거. '이름이 거의 같아요'로 색 변형·별개 상품이 막히던 케이스. 중복은 주소·상품코드·동일 사진만 ([[url-import-fetch]]).
 
+## [2026-08-30] ingest | URL 재질은 숨은 상세·혼용률도
+표/JSON에 없어도 본문·상세 팝업 HTML·스크립트에 `Outshell: Cotton 100%` / `면 60%`가 있으면 채운다. AJAX-only 상세는 한계 ([[item-optional-fields]] [[url-import-fetch]]).
+

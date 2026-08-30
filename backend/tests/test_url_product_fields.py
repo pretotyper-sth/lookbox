@@ -22,6 +22,8 @@ FNS = (
     "_extract_price",
     "_clean_material",
     "_as_prop_list",
+    "_html_as_search_text",
+    "_material_from_body",
     "_extract_material",
 )
 
@@ -91,3 +93,31 @@ class UrlProductFieldsTest(unittest.TestCase):
         self.assertEqual(self.ns["_extract_price"](html), "")
         self.assertEqual(self.ns["_format_krw"]("50"), "")
         self.assertEqual(self.ns["_format_krw"](89000), "89,000")
+
+    def test_hidden_detail_popup_outshell(self):
+        # '+ 상품 상세 정보 보기' 팝업이 display:none으로 HTML에 이미 있을 때
+        html = """
+        <h1>원워시드 스트레이트 데님</h1>
+        <p>Cotton High Density Denim Cloth Washer Finish</p>
+        <div class="modal" style="display:none">
+          <h2>상품 상세 정보 보기</h2>
+          <p>Outshell: Cotton 100%</p>
+        </div>
+        """
+        self.assertEqual(self.ns["_extract_material"](html), "Cotton 100%")
+
+    def test_inline_composition_list(self):
+        html = "<ul><li>소재 : 면 60% / 린넨 40%</li><li>색상 : 인디고</li></ul>"
+        self.assertEqual(self.ns["_extract_material"](html), "면 60% / 린넨 40%")
+
+    def test_spa_script_payload_has_composition(self):
+        html = r"""
+        <script>
+        window.__DETAIL__ = {"tabs":[{"title":"상세 정보","body":"Outshell: Cotton 100%\n정밀한 직조"}]};
+        </script>
+        """
+        self.assertEqual(self.ns["_extract_material"](html), "Cotton 100%")
+
+    def test_marketing_cotton_line_without_percent_is_ignored(self):
+        html = "<p>Cotton High Density Denim Cloth Washer Finish</p>"
+        self.assertEqual(self.ns["_extract_material"](html), "")

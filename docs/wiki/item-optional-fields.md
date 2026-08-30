@@ -4,4 +4,4 @@
 
 가격·재질은 문자열이고 비워도 된다. 스키마 없이 `wardrobe_items.metadata.price` / `metadata.material`에 둔다. 추천용 `metadata.style.material`(cotton|denim|…)과는 다른 칸이다. (`backend/app/main.py` `live_item_payload`, `LiveItemUpdate`)
 
-URL로 담을 때는 브랜드와 같이 상품 HTML에서 미리 채운다. JSON-LD `offers.price`·`material`, `product:price:amount` 메타, 카페24 판매가/소재 표. 페이지에 없으면 빈 칸으로 둔다. (`backend/app/main.py` `_extract_price`, `_extract_material`)
+URL로 담을 때는 브랜드와 같이 상품 HTML에서 미리 채운다. JSON-LD `offers.price`·`material`, `product:price:amount` 메타, 카페24 판매가/소재 표, 그리고 본문·숨은 상세 팝업·스크립트에 있는 `Outshell: Cotton 100%` / `면 60%` 같은 혼용률. 페이지(또는 초기 JS 페이로드)에 없으면 빈 칸. 클릭 뒤 AJAX로만 오는 상세는 서버에서 못 본다. (`backend/app/main.py` `_extract_price`, `_extract_material`, `_material_from_body`)

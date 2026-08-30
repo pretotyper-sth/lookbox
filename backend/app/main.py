@@ -4786,9 +4786,57 @@ def _as_prop_list(val) -> list:
     return []
 
 
+def _html_as_search_text(html: str) -> str:
+    """태그·스타일은 버리고, 스크립트 본문은 남긴다(SPA 상세 팝업 문자열용)."""
+    text = html_lib.unescape(html or "")
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+    text = re.sub(r"</?script[^>]*>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = text.replace("\\n", " ").replace("\\t", " ").replace('\\"', " ")
+    return re.sub(r"\s+", " ", text)
+
+
+def _material_from_body(html: str) -> str:
+    """표/JSON에 없을 때 본문·숨은 상세·스크립트 문자열에서 혼용률을 찾는다.
+
+    클릭해야 열리는 팝업도 초기 HTML/JS 페이로드에 들어 있으면 잡는다.
+    JS로만 늦게 받아 오는 내용은 서버 파싱으로는 못 본다.
+    """
+    text = _html_as_search_text(html)
+    if not text:
+        return ""
+    fiber = (
+        r"(?:Cotton|코튼|면직?|Wool|울|Cashmere|캐시미어|Linen|린넨|마|"
+        r"Nylon|나일론|Polyester|폴리\s*에스터|폴리\s*에스테르|폴리|"
+        r"Polyamide|폴리아미드|Rayon|레이온|Viscose|비스코스|Silk|실크|"
+        r"Acrylic|아크릴|Elastane|엘라스테인|Spandex|스판(?:덱스)?|"
+        r"Polyurethane|폴리우레탄|PU|Tencel|텐셀|Modal|모달|Hemp|헴프|"
+        r"Leather|가죽|양모|견)"
+    )
+    pct = (
+        rf"(?:{fiber}\s*\d{{1,3}}\s*%|\d{{1,3}}\s*%\s*{fiber})"
+        rf"(?:\s*[/·,＋+&]\s*"
+        rf"(?:{fiber}\s*\d{{1,3}}\s*%|\d{{1,3}}\s*%\s*{fiber}))*"
+    )
+    label = (
+        r"(?:Out\s*shell|In\s*shell|Shell|Lining|겉감|안감|소재|재질|원단|"
+        r"혼용[률율]|Material|Fabric|Composition)"
+    )
+    m = re.search(rf"(?i){label}\s*[:：]\s*({pct})", text)
+    if m:
+        return _clean_material(m.group(1))
+    m = re.search(rf"(?i)({pct})", text)
+    if m:
+        return _clean_material(m.group(1))
+    return ""
+
+
 def _extract_material(html: str) -> str:
-    """소재/재질: JSON-LD material → additionalProperty → 상품정보 표."""
-    labels = ("소재", "재질", "원단", "혼용률", "혼용율", "겉감", "Material", "Fabric")
+    """소재/재질: JSON-LD → meta → 상품정보 표 → 본문/숨은 상세 혼용률."""
+    labels = (
+        "소재", "재질", "원단", "혼용률", "혼용율", "겉감", "안감",
+        "Outshell", "Inshell", "Material", "Fabric", "Composition",
+    )
     for node in _jsonld_nodes(html):
         material = _clean_material(node.get("material"))
         if material:
@@ -4812,7 +4860,10 @@ def _extract_material(html: str) -> str:
         material = _clean_material(_meta_content(html, key, attr))
         if material:
             return material
-    return _clean_material(_spec_cell(html, labels))
+    material = _clean_material(_spec_cell(html, labels))
+    if material:
+        return material
+    return _material_from_body(html)
 
 
 def _detect_store(page_url: str, brand: str = "") -> str:
