@@ -308,12 +308,19 @@ function ActionRow({ icon, label, onClick, danger, last, right, hint, nested }) 
   const Row = right ? 'div' : 'button';
   return (
     <Row onClick={right ? undefined : onClick} className="lb-navitem" style={{
-      display: 'flex', alignItems: nested ? 'flex-start' : 'center', gap: 12, width: '100%', textAlign: 'left',
-      padding: nested ? '11px 14px' : '13px 12px',
+      display: 'flex', alignItems: nested ? 'flex-start' : 'center', gap: nested ? 8 : 12, width: '100%', textAlign: 'left',
+      padding: nested ? '11px 12px 11px 24px' : '13px 12px',
       borderRadius: 'var(--r-md)', background: 'transparent',
       color: danger ? '#B0573C' : 'var(--ink)', fontSize: nested ? 13.5 : 14, fontWeight: 600,
     }}>
-      {nested ? null : <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />}
+      {nested ? (
+        <span aria-hidden style={{
+          flex: 'none', width: 14, color: 'var(--ink-3)',
+          fontSize: 13, fontWeight: 600, lineHeight: 1.3,
+        }}>ㄴ</span>
+      ) : (
+        <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />
+      )}
       <span style={{ flex: 1, minWidth: 0, paddingTop: nested && hint ? 1 : 0 }}>
         {label}
         {hint && <span style={{ display: 'block', marginTop: 3, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)', lineHeight: 1.45 }}>{hint}</span>}
@@ -431,14 +438,9 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  // 개수 설정은 추천을 켰을 때만. iOS 설정처럼 부모 스위치 아래 안쪽 그룹으로 묶는다.
+  // 개수 설정은 추천을 켰을 때만. 박스는 없이 ㄴ + 살짝 들여쓰기만.
   const dailyChildRows = dailyEnabled ? (
-    <div style={{
-      margin: '0 8px 8px',
-      background: 'var(--ivory)',
-      borderRadius: 'var(--r-md)',
-      overflow: 'hidden',
-    }}>
+    <>
       <ActionRow
         nested
         label="한 번에 받을 코디 수"
@@ -450,7 +452,7 @@ function MyPageScreen({ ctx }) {
         hint="옷장에 없는 아이템 제안"
         right={<Stepper value={wishCount} min={0} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
       />
-    </div>
+    </>
   ) : null;
 
   const dailySettingsRows = (
