@@ -13,7 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img를 flex 자식으로 두면 1024px min-width 때문에 줌에 안 줄어든다. 절대배치·max 100%
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장은 canonical 원본+옷 실물 edit. 인물/스튜디오 고정, 옷만 교체. `#E5E3DE` 한 장. SSE 한 장씩
+- [model-look-toggle](model-look-toggle.md) — 착장은 canonical+옷 실물. 첫 추천 즉시 카드, 전신은 장당 SSE. 추가 coordinate 없음
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. 구멍은 옷 픽셀, 양옆은 막음. 후면 카메라만
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋

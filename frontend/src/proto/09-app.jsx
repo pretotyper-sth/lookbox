@@ -1642,60 +1642,11 @@ function App() {
       });
       stampOutfitStyle(payload.outfits);
       (payload.items || []).forEach(liveRememberItem);
-      // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가)
+      // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가).
+      // 조합이 오면 바로 컷아웃 카드를 그리고, 착장은 기다리지 않고 시작한다.
+      // 서버가 wish 쿼타를 채우므로 개수가 모자랄 때 coordinate를 다시 돌리지 않는다.
       const outfits = filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount);
       liveApplyPayload({ outfits, items: dailyCacheItemsFromOwned(items, outfits) }, 'daily');
-      // wish 코디 등으로 줄어들었거나 조합이 부족하면 같은 날 안에서 한 번 더 채운다.
-      let topUpGuard = 0;
-      while (LB_DATA.DAILY.length < baseCount && topUpGuard < 3) {
-        topUpGuard += 1;
-        const need = baseCount - LB_DATA.DAILY.length;
-        const wishLeft = Math.max(0, Math.min(wishCount, baseCount) - LB_DATA.DAILY.filter((o) => (o.itemIds || []).some(isWishId)).length);
-        const extra = await liveJSON('/api/live/coordinate', {
-          method: 'POST',
-          body: JSON.stringify({
-            max_combos: need,
-            style,
-            styles: preferredStyles,
-            for_date: localYmd(),
-            exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
-            wish_combos: Math.min(wishLeft, need),
-            ...styleProfile,
-            ...modelLook,
-          }),
-        });
-        stampOutfitStyle(extra.outfits);
-        (extra.items || []).forEach(liveRememberItem);
-        const added = liveAppendDaily(extra, items);
-        pruneDailyAgainstOwned(items);
-        if (!added.length) break;
-      }
-      const wishNeed = Math.min(wishCount, baseCount);
-      const haveWish = LB_DATA.DAILY.filter((o) => (o.itemIds || []).some(isWishId)).length;
-      if (wishNeed > haveWish) {
-        const extra = await liveJSON('/api/live/coordinate', {
-          method: 'POST',
-          body: JSON.stringify({
-            max_combos: wishNeed - haveWish,
-            style,
-            styles: preferredStyles,
-            for_date: localYmd(),
-            exclude_item_ids: LB_DATA.DAILY.map((o) => o.itemIds || []),
-            wish_combos: wishNeed - haveWish,
-            ...styleProfile,
-            ...modelLook,
-          }),
-        });
-        stampOutfitStyle(extra.outfits);
-        (extra.items || []).forEach(liveRememberItem);
-        liveAppendDaily(extra, items);
-        pruneDailyAgainstOwned(items);
-        while (LB_DATA.DAILY.length > baseCount) {
-          const drop = [...LB_DATA.DAILY].map((o, i) => i).reverse().find((i) => !(LB_DATA.DAILY[i].itemIds || []).some(isWishId));
-          if (drop == null) break;
-          LB_DATA.DAILY.splice(drop, 1);
-        }
-      }
       writeDailyCache({
         style,
         outfits: LB_DATA.DAILY.slice(),
@@ -1703,6 +1654,7 @@ function App() {
         wardrobeSig: ownedSig,
         wardrobeCount: items.length,
       });
+      setDailyLoading(false);
       bumpDaily();
       reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');

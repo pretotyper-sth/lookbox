@@ -11,6 +11,11 @@
 `POST /api/live/coordinate/looks`가 이어서 채운다(2026-08-30). 품질은
 `OPENAI_IMAGE_MODEL_LOOK`(기본 `gpt-image-2`) + `OPENAI_IMAGE_QUALITY_LOOK`(기본 high).
 
+2026-08-31: 첫 추천 응답이 오면 컷아웃 카드를 바로 그리고 착장을 시작한다.
+개수가 모자라도 coordinate를 추가로 돌리지 않는다. wish는 첫 요청의
+`wish_combos` + 서버 `_fill_wish_quota`. 전신은 SSE로 장당 카드에 붙는다
+(`09-app.jsx` `requestDailyOutfits`).
+
 2026-08-30: `refreshLive`가 오늘 코디를 채우면 `dailyAllowed=true`라 오늘 탭이
 `requestDailyOutfits`를 건너뛰고 `applyModelLooks`가 안 탔다. `dailyTick` 감시
 effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).

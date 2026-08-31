@@ -217,3 +217,7 @@ iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-pag
 `assets/mood/남자 코디 예시.png`·`여자 코디 예시.png`를 look-identity로 쓴다.
 댄디·미니멀처럼 남녀 투샷은 인물 입력에서 뺀다. 캐시 `model-id7-` ([[model-look-toggle]] [[mood-groups]]).
 
+## [2026-08-31] fix | 데일리 첫 추천 즉시 카드·착장, 추가 coordinate 제거
+첫 coordinate 응답으로 컷아웃을 그리고 looks를 바로 시작한다. 부족분·wish 보충용
+추가 추천 호출은 뺀다. 전신은 장당 SSE ([[model-look-toggle]]).
+
