@@ -213,3 +213,7 @@ iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-pag
 아니라 옷 교체. Image 1=인물, Image 2+=옷장 실물. 무드·라벨을 looks API로 넘김.
 캐시 `model-id6-` / `model-id-v6-` ([[model-look-toggle]]).
 
+## [2026-08-31] fix | 남·여 canonical을 mood 폴더 예시로 맞춤
+`assets/mood/남자 코디 예시.png`·`여자 코디 예시.png`를 look-identity로 쓴다.
+댄디·미니멀처럼 남녀 투샷은 인물 입력에서 뺀다. 캐시 `model-id7-` ([[model-look-toggle]] [[mood-groups]]).
+

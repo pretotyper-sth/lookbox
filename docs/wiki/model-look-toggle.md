@@ -25,10 +25,11 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 
 배경은 옷장·코디 카드와 같은 `--thumb-bg` `#E5E3DE` 한 장이다. 카드 안 패딩으로
 더 작은 회색 사각형이 생기면 안 된다(2026-08-30). 기준 인물은 성별 canonical
-원본(`backend/assets/look-identity/{m,f}.jpg`)을 다시 그리지 않고 `images.edit` 첫
-장(Image 1)으로 쓴다. 이전 착장 결과는 다음 생성의 reference로 쓰지 않는다.
-옷장 실물 컷은 격자 보드가 아니라 Image 2+로 붙인다. 캐시
-`model-id-v6-` / `model-id6-`(2026-08-31). 프롬프트는 outfit replacement:
+원본(`backend/assets/look-identity/{m,f}.jpg`, `assets/mood/남자·여자 코디 예시.png`)을
+다시 그리지 않고 `images.edit` 첫 장(Image 1)으로 쓴다. 댄디·미니멀처럼 남녀가
+한 장에 있는 무드 컷은 인물 입력이 아니다. 이전 착장 결과는 다음 생성의
+reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라 Image 2+로 붙인다. 캐시
+`model-id-v7-` / `model-id7-`(2026-08-31). 프롬프트는 outfit replacement:
 인물·스튜디오·포즈 고정, 옷만 교체. 하의는 긴 기장이 기본. 출력은 plate flatten.
 크레딧 잔액으로 장 수를 자르지 않는다.
 `wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리

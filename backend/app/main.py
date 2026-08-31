@@ -3671,7 +3671,7 @@ Change the outfit. Do not change the person. Do not change the studio.
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v6-{_look_gender_key(gender)}"
+    return f"model-id-v7-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -3990,7 +3990,7 @@ def generate_model_look_image(
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id6-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id7-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
