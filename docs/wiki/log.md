@@ -234,3 +234,8 @@ iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-pag
 장당 OpenAI는 그대로고, 순차 대기를 병렬(최대 4)로 줄임. 전환 중 회색 뱃지/레이어
 대신 스켈레톤과 같은 `.lb-look-wave` ([[model-look-toggle]]).
 
+## [2026-08-31] fix | 착장 젊게 · 4번째 wish · 오늘 코디 리셋
+댄디 옷이 얼굴을 나이 들게 하지 않게 20대 중반으로 읽는다. 첫 추천 마지막 칸에
+옷장에 없는 아이템. hydrate가 제안 아이템을 ALL에 넣는다. 오늘 코디 다시 받기
+(`daily/reset`). 캐시 `model-id9-` ([[model-look-toggle]]).
+

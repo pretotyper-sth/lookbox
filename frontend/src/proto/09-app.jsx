@@ -1133,6 +1133,7 @@ function App() {
   // 서버 코디 목록 → 룩북·날짜별 기록·오늘 코디 캐시. 로컬은 첫 페인트용 캐시일 뿐이다.
   const hydrateOutfits = useCallback((data, ownedItems, mutAtStart) => {
     const list = data.outfits || [];
+    (data.items || []).forEach(liveRememberItem);
     list.forEach((o) => {
       LB_DATA.OUTFIT_BY_ID[o.id] = {
         id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
@@ -1162,7 +1163,7 @@ function App() {
         writeDailyCache({
           style: (cached && cached.style) || '',
           outfits: kept,
-          items: dailyCacheItemsFromOwned(ownedItems, kept),
+          items: snapshotItemsForOutfits(kept, data.items || [], ownedItems),
           // sig는 지금 옷장 기준. 서버에서 받아온 직후엔 '옷장이 늘었다' CTA가 뜰 이유가 없다.
           wardrobeSig: (cached && cached.wardrobeSig) || wardrobeSigOf(ownedItems),
           wardrobeCount: cached && cached.wardrobeCount != null ? cached.wardrobeCount : (ownedItems || []).length,
@@ -1419,7 +1420,8 @@ function App() {
   // 처음 추천받을 때 만드는 코디 수와, 그중 '옷장에 없는 아이템'을 더한 코디 수.
   // 둘 다 계정 설정이라 기기를 옮겨도 그대로다.
   const dailyCount = Math.max(2, Math.min(8, parseInt(prefs.dailyCount, 10) || parseInt(t.dailyCount, 10) || 4));
-  const wishCount = Math.max(0, Math.min(3, parseInt(prefs.wishCount, 10) || 0));
+  const parsedWish = parseInt(prefs.wishCount, 10);
+  const wishCount = Math.max(0, Math.min(3, Number.isFinite(parsedWish) ? parsedWish : 1));
   const setDailyCount = (n) => {
     const np = { ...prefs, dailyCount: Math.max(2, Math.min(8, parseInt(n, 10) || 4)) };
     setPrefs(np); persistPrefs(np);
@@ -1529,6 +1531,7 @@ function App() {
   const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
     const force = !!(opts && opts.force);
     const quiet = !!(opts && opts.quiet);
+    const replace = !!(opts && opts.replace);
     if (!prefs.dailyEnabled) return { added: 0, wardrobeGrew: false };
     // 캐시/메모리에 남은 삭제·보관 아이템 코디를 먼저 걷어낸다.
     syncAllFromWardrobe(items, archived);
@@ -1540,7 +1543,22 @@ function App() {
     // 마이페이지에 저장한 취향은 계정(user_metadata)에만 있어서 서버가 모른다.
     // 코디는 퍼스널 컬러·선호 실루엣까지 봐야 감이 맞으므로 요청마다 같이 싣는다.
     const styleProfile = coordProfile(prefs);
-    if (!force) {
+    if (replace) {
+      try {
+        await liveJSON('/api/live/outfits/daily/reset', {
+          method: 'POST',
+          body: JSON.stringify({ for_date: localYmd() }),
+        });
+      } catch (e) {
+        showToast(e.message || '오늘 코디를 지우지 못했어요');
+        return { added: 0, wardrobeGrew, error: true };
+      }
+      LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      clearDailyCache();
+      overwriteDailyRecord(localYmd(), { outfits: [], items: [], wornIds: [] });
+      bumpDaily();
+    }
+    if (!force && !replace) {
       // 오늘 이미 추천한 이력이 있으면 API 없이 기존 코디만 보여준다.
       if (LB_DATA.DAILY.length > 0) {
         const cached = readDailyCache();
@@ -1635,7 +1653,7 @@ function App() {
           style,
           styles: preferredStyles,
           for_date: localYmd(),
-          wish_combos: Math.min(wishCount, baseCount),
+          wish_combos: Math.min(Math.max(wishCount, 1), baseCount),
           ...styleProfile,
           ...modelLook,
         }),

@@ -37,10 +37,13 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 다시 그리지 않고 `images.edit` 첫 장(Image 1)으로 쓴다. 댄디·미니멀처럼 남녀가
 한 장에 있는 무드 컷은 인물 입력이 아니다. 이전 착장 결과는 다음 생성의
 reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라 Image 2+로 붙인다. 캐시
-`model-id-v7-` / `model-id8-`(2026-08-31). 프롬프트는 outfit replacement:
-인물·스튜디오·포즈 고정, 옷만 교체. 다리·몸 비율은 Image 1과 같게(길어 보이게 금지).
-하의는 긴 기장이 기본. 출력은 plate flatten 뒤 4:5 카드 비율로 가장자리 스튜디오색 패딩
-(`_pad_look_to_card`). 2:3을 4:5 카드에 contain하면 양옆 `--thumb-bg`가 섞인다.
+`model-id-v7-` / `model-id9-`(2026-08-31). 프롬프트는 outfit replacement:
+인물·스튜디오·포즈 고정, 옷만 교체. 얼굴은 20대 중반으로 읽고 나이를 먹지 않게.
+다리·몸 비율은 Image 1과 같게. 하의는 긴 기장이 기본. 출력은 plate flatten 뒤
+4:5 카드 비율로 가장자리 스튜디오색 패딩 (`_pad_look_to_card`).
+첫 추천의 마지막 칸은 옷장에 없는 아이템(`wish_combos` 최소 1). hydrate가 제안
+아이템을 ALL에 넣지 않으면 상세에 옷장만 보였다. 오늘 코디는
+`POST /api/live/outfits/daily/reset` 후 다시 받는다.
 크레딧 잔액으로 장 수를 자르지 않는다.
 `wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리
 (신발·가방 등)를 제안으로 넣는다(`_fill_wish_quota`, 2026-08-30).

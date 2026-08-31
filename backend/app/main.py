@@ -2951,10 +2951,10 @@ def _wish_note(wish_combos: int, max_combos: int) -> str:
         return "\n- 옷장에 있는 아이템만 쓴다. 없는 아이템을 만들어 넣지 말 것.\n"
     return (
         f"\n[제안 아이템] 반드시 {n}개 코디에 wish를 넣는다. wish가 빠진 채 {n}개를 채우면 실패다.\n"
-        f"- {max_combos}개 중 {n}개는 옷장에 없는 아이템 하나를 더해 만든다. 그 코디에만 wish(name·category·color·reason).\n"
+        f"- {max_combos}개 중 마지막 {n}개에 옷장에 없는 아이템 하나를 더한다. 그 코디에만 wish(name·category·color·reason).\n"
         "- 제안은 실제로 살 수 있는 보편 아이템. 이미 옷장에 있는 것과 겹치지 않게.\n"
         "- name·color는 한국어(색은 블랙·아이보리처럼 패션 음차). reason은 왜 필요한지 한 문장.\n"
-        f"- 나머지 {max_combos - n}개는 옷장만으로. wish 없는 코디에는 wish 키 자체를 생략.\n"
+        f"- 앞쪽 {max_combos - n}개는 옷장만으로. wish 없는 코디에는 wish 키 자체를 생략.\n"
     )
 
 
@@ -3205,8 +3205,9 @@ def _fill_wish_quota(
     have = sum(1 for c in combos if c.get("wish"))
     if have >= n:
         return
+    # 마지막 칸부터. 4칸이면 4번째가 새 아이템 코디가 된다.
     slot = 0
-    for combo in combos:
+    for combo in reversed(combos):
         if have >= n:
             return
         if combo.get("wish"):
@@ -3612,11 +3613,15 @@ Dress that same person using the supplied wardrobe garments.
 CANONICAL CHARACTER:
 Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
-hairstyle, hair color, skin tone, age impression, body proportions, physique,
-shoulder width, limb proportions, height impression, and neutral expression.
-Do not redesign, reinterpret, beautify, age, slim, muscularize, or elongate the character.
+hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
+height impression, and neutral expression.
+Read Image 1 as a youthful mid-20s Korean lookbook model — smooth skin,
+no wrinkles, no nasolabial folds, no under-eye bags, no aging.
+Do not make the person look 30s or older. Office, dandy, or formal clothes
+must not age the face.
+Do not redesign, reinterpret, beautify, slim, muscularize, or elongate the character.
 Do not lengthen the legs or torso. Keep the same height-to-head ratio as Image 1.
-Fashion mood is expressed through clothing, never by changing the person.
+Fashion mood is expressed through clothing, never by changing the person's age.
 
 OUTFIT:
 Dress the character using the supplied wardrobe items.
@@ -4023,7 +4028,7 @@ def generate_model_look_image(
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id8-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id9-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4403,6 +4408,10 @@ class LiveLooks(BaseModel):
     # 예전 클라가 얼굴을 실어 보내도 422 나지 않게 받을 뿐, 착장에는 쓰지 않는다.
     face_data_url: str | None = None
     outfits: list[LiveLookOutfit] = []
+
+
+class LiveDailyReset(BaseModel):
+    for_date: str
 
 
 class LiveStatus(BaseModel):
@@ -7065,6 +7074,33 @@ def _outfit_for_date(row: dict[str, Any]) -> str | None:
         if len(created) >= 10:
             return created[:10]
     return None
+
+
+@app.post("/api/live/outfits/daily/reset")
+def live_reset_daily(body: LiveDailyReset, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """오늘 받은 데일리 코디만 지운다. 룩북에 저장한 건 남긴다."""
+    require_supabase()
+    day = (body.for_date or "").strip()[:10]
+    if len(day) != 10:
+        raise HTTPException(status_code=400, detail="날짜가 필요해요.")
+    rows = (
+        supabase_admin.table("outfits")
+        .select("id,type,saved,metadata,created_at")
+        .eq("user_id", user.id)
+        .eq("type", "daily")
+        .execute()
+        .data
+        or []
+    )
+    ids = [
+        r["id"] for r in rows
+        if r.get("id") and _outfit_for_date(r) == day and not r.get("saved")
+    ]
+    deleted = 0
+    if ids:
+        supabase_admin.table("outfits").delete().eq("user_id", user.id).in_("id", ids).execute()
+        deleted = len(ids)
+    return {"deleted": deleted}
 
 
 @app.get("/api/live/outfits")

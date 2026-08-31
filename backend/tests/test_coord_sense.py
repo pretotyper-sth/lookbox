@@ -121,11 +121,16 @@ class IncludeAndWishTest(unittest.TestCase):
 
     def setUp(self):
         tree = ast.parse(MAIN_PATH.read_text())
-        names = ("_item_bucket", "_combo_has_top_and_bottom", "_clean_wish", "_include_note", "_wish_note")
+        names = (
+            "_item_bucket", "_combo_has_top_and_bottom", "_clean_wish", "_include_note",
+            "_wish_note", "_combo_has_category", "_gap_wish", "_fill_wish_quota",
+        )
         body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
         consts = [
             n for n in tree.body
-            if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "_WISH_CATEGORIES"
+            if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in (
+                "_WISH_CATEGORIES", "_WISH_GAP_ITEMS",
+            )
         ]
         ns = {"Any": object, "_canonicalize_color": lambda c: {"black": "블랙"}.get(c.lower(), c)}
         exec(compile(ast.Module(body=[*body, *consts], type_ignores=[]), "<wish>", "exec"), ns)
@@ -153,4 +158,19 @@ class IncludeAndWishTest(unittest.TestCase):
         self.assertIn("와이드 데님", note)
         self.assertEqual(self.ns["_include_note"]([], items), "")
         self.assertIn("옷장에 있는 아이템만", self.ns["_wish_note"](0, 4))
-        self.assertIn("4개 중 2개", self.ns["_wish_note"](2, 4))
+        self.assertIn("4개 중 마지막 2개", self.ns["_wish_note"](2, 4))
+        self.assertIn("반드시 2개", self.ns["_wish_note"](2, 4))
+
+    def test_fill_wish_quota_when_model_omits(self):
+        by_id = {
+            "t": {"id": "t", "category": "top"},
+            "b": {"id": "b", "category": "bottom"},
+        }
+        combos = [{"label": "A", "item_ids": ["t", "b"]}, {"label": "B", "item_ids": ["t", "b"]}]
+        self.ns["_fill_wish_quota"](combos, 1, by_id)
+        wished = [c for c in combos if c.get("wish")]
+        self.assertEqual(len(wished), 1)
+        self.assertEqual(combos[-1]["wish"]["category"], "shoes")
+        self.assertIsNone(combos[0].get("wish"))
+        self.ns["_fill_wish_quota"](combos, 1, by_id)
+        self.assertEqual(sum(1 for c in combos if c.get("wish")), 1)

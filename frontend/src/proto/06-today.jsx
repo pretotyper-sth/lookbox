@@ -403,6 +403,7 @@ function TodayScreen({ ctx }) {
     // 스크롤이 끊기지 않는다.
     setTimeout(run, 320);
   };
+  const [resetOpen, setResetOpen] = useTd(false);
   const reshuffle = async () => {
     setLoading(true);
     scrollToBottom();
@@ -412,6 +413,14 @@ function TodayScreen({ ctx }) {
     if (result.added > 0) { scrollToBottom(); return; }
     setNeedMoreKind(result.wardrobeGrew || wardrobeGrew ? 'grewButNone' : 'exhausted');
     setNeedMoreOpen(true);
+  };
+
+  const redoToday = async () => {
+    setResetOpen(false);
+    setLoading(true);
+    const result = await requestDailyOutfits(preferredDailyStyle, { replace: true });
+    setLoading(false);
+    if (result && result.error) return;
   };
 
   /* ---- 설정에서 미허용 (디폴트 off) ---- */
@@ -500,6 +509,18 @@ function TodayScreen({ ctx }) {
           </>
         )}
       </p>
+      {picks.length > 0 && !busy ? (
+        <button
+          type="button"
+          onClick={() => setResetOpen(true)}
+          style={{
+            marginTop: 8, padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
+          }}
+        >
+          오늘 코디 다시 받기
+        </button>
+      ) : null}
       {ctxStrip}
     </div>
   ) : (
@@ -640,6 +661,18 @@ function TodayScreen({ ctx }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
             <Btn full size="lg" icon="plus" onClick={() => { setNeedMoreOpen(false); openAdd ? openAdd('wardrobe') : startComboOrWardrobe(); }}>아이템 추가</Btn>
             <Btn full variant="ghost" onClick={() => setNeedMoreOpen(false)}>취소</Btn>
+          </div>
+        </div>
+      </BottomSheet>
+      <BottomSheet open={resetOpen} onClose={() => setResetOpen(false)}>
+        <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>오늘 코디를 다시 받을까요?</h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+            지금 받은 추천을 지우고 새로 만들어요.<br />추천·착장 크레딧이 다시 쓰여요.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
+            <Btn full size="lg" icon="sparkle" onClick={redoToday}>다시 받기</Btn>
+            <Btn full variant="ghost" onClick={() => setResetOpen(false)}>취소</Btn>
           </div>
         </div>
       </BottomSheet>
