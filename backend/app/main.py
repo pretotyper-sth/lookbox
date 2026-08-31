@@ -3569,7 +3569,7 @@ def _bottom_hem_note(items: list[dict[str, Any]], seed: str = "") -> str:
         )
     return (
         "하의는 발목·신발 입구까지 덮는 긴 기장. 정강이·발목만 오는 짧은 기장 금지. "
-        "다리가 길어 보이게 밑단을 신발 위에 살짝 얹거나 거의 닿게 그린다."
+        "다리 길이나 체형 비율은 바꾸지 않는다."
     )
 
 
@@ -3614,7 +3614,8 @@ Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, age impression, body proportions, physique,
 shoulder width, limb proportions, height impression, and neutral expression.
-Do not redesign, reinterpret, beautify, age, slim, or muscularize the character.
+Do not redesign, reinterpret, beautify, age, slim, muscularize, or elongate the character.
+Do not lengthen the legs or torso. Keep the same height-to-head ratio as Image 1.
 Fashion mood is expressed through clothing, never by changing the person.
 
 OUTFIT:
@@ -3924,6 +3925,38 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+# 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 contain이면 양옆에 다른 회색이 생긴다.
+_LOOK_CARD_RATIO = 4 / 5
+
+
+def _pad_look_to_card(png_bytes: bytes) -> bytes:
+    """생성본을 카드 비율(4:5)로 맞춘다. 빈 칸은 이미지 가장자리 스튜디오 색으로 채운다."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    w, h = img.size
+    if w < 8 or h < 8:
+        return png_bytes
+    current = w / h
+    if abs(current - _LOOK_CARD_RATIO) < 0.02:
+        return png_bytes
+    px = img.load()
+    samples = (
+        px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2],
+        px[w // 2, 1], px[w // 2, h - 2], px[1, h // 2], px[w - 2, h // 2],
+    )
+    fill = tuple(sum(c[i] for c in samples) // len(samples) for i in range(3))
+    if current < _LOOK_CARD_RATIO:
+        new_w = int(round(h * _LOOK_CARD_RATIO))
+        new_h = h
+    else:
+        new_w = w
+        new_h = int(round(w / _LOOK_CARD_RATIO))
+    canvas = Image.new("RGB", (new_w, new_h), fill)
+    canvas.paste(img, ((new_w - w) // 2, (new_h - h) // 2))
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _model_look_board(items: list[dict[str, Any]]) -> bytes:
     """참고 보드 — 옷은 상단 작은 스트립만. 2×2 격자가 출력에 남는 걸 막는다."""
     board = Image.new("RGB", (1024, 1536), _LOOK_PLATE_RGB)
@@ -3990,7 +4023,7 @@ def generate_model_look_image(
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id7-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id8-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4046,6 +4079,7 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         try:
             out = _flatten_look_plate(out)
+            out = _pad_look_to_card(out)
         except Exception as flat_exc:  # noqa: BLE001
             print(f"[model-look] flatten skip: {flat_exc}", flush=True)
         storage_path = f"{user_id}/looks/{key}.png"
@@ -6770,8 +6804,10 @@ def _apply_model_looks(
 ) -> None:
     """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
 
-    한 장이 끝나는 즉시 persist·report 한다. 전부 끝날 때까지 응답을 붙잡으면
-    Render가 ~100초에 끊어서, 서버엔 착장이 있는데 화면은 옷 컷아웃만 남았다.
+    canonical 인물은 파일이라 착장끼리 이전 결과를 물리지 않는다. 장당 OpenAI
+    호출은 병렬로 돌리고, 한 장이 끝나는 즉시 persist·report 한다. 전부 끝날
+    때까지 응답을 붙잡으면 Render가 ~100초에 끊어서, 서버엔 착장이 있는데
+    화면은 옷 컷아웃만 남았다.
     """
     if not outfits:
         return
@@ -6814,10 +6850,25 @@ def _apply_model_looks(
 
     t0 = time.perf_counter()
     identity = _ensure_model_identity_png(user_id, gender)
-    for outfit in targets:
+    persist_lock = threading.Lock()
+
+    def run_one(outfit: dict[str, Any]) -> None:
         outfit, url = one(outfit, identity)
         if url:
-            persist(outfit, url)
+            with persist_lock:
+                persist(outfit, url)
+
+    workers = min(4, len(targets))
+    if workers <= 1:
+        run_one(targets[0])
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(run_one, o) for o in targets]
+            for fut in as_completed(futs):
+                try:
+                    fut.result()
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[model-look] parallel skip: {exc}", flush=True)
     ms = int((time.perf_counter() - t0) * 1000)
     done = sum(1 for o in targets if o.get("lookImg"))
     print(

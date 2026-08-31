@@ -126,7 +126,7 @@ function lookPlacement(items) {
 
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
   const cleanItems = (items || []).filter(Boolean);
-  // AI 착장 이미지는 세로로 길어(2:3) 카드 비율에 맞춰 자르면 머리나 신발이 날아간다. 통째로 넣는다.
+  // 서버가 4:5로 패딩해서 넣는다. contain으로 머리·발을 자르지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
@@ -152,7 +152,11 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
   return (
-    <div style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
+    <div
+      aria-busy={looking ? 'true' : undefined}
+      aria-label={looking ? 'AI 착장 이미지로 바꾸는 중' : undefined}
+      style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}
+    >
       {shown.map((it) => {
         const at = place[it.id] || LOOK_SPOT.top;
         const size = Math.min(100, (LOOK_SIZE[it.category] || LOOK_SIZE['상의']) * scale);
@@ -170,18 +174,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           </div>
         );
       })}
-      {looking ? (
-        <div style={{
-          position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 8,
-          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
-        }}>
-          <div style={{
-            padding: '5px 10px', borderRadius: 999,
-            background: 'color-mix(in srgb, var(--ink) 72%, transparent)',
-            color: '#fff', fontSize: 11.5, fontWeight: 700, letterSpacing: '-0.01em',
-          }}>AI 착장 만드는 중</div>
-        </div>
-      ) : null}
+      {looking ? <div className="lb-look-wave" aria-hidden /> : null}
     </div>
   );
 }

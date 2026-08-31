@@ -21,11 +21,12 @@ FNS = (
     '_model_look_garment_lines',
     '_model_look_outfit_block',
     '_flatten_look_plate',
+    '_pad_look_to_card',
     '_bottom_hem_note',
 )
 CONSTS = (
     '_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
-    '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER',
+    '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER', '_LOOK_CARD_RATIO',
 )
 
 
@@ -131,10 +132,12 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v7-", src)
-        self.assertIn("model-id7-", src)
+        self.assertIn("model-id8-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
+        self.assertIn("Do not lengthen the legs", src)
+        self.assertNotIn("다리가 길어 보이게", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn('_png_named(identity, "01-canonical.png")', src)
         self.assertNotIn("인상은 순하고 부드럽게", src)
@@ -146,6 +149,7 @@ class ModelLookPromptTest(unittest.TestCase):
             {"category": "shoes", "name": "로퍼"},
         ], "abc")
         self.assertIn("긴 기장", note)
+        self.assertNotIn("다리가 길어", note)
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
 
@@ -209,6 +213,19 @@ class ModelLookPromptTest(unittest.TestCase):
         plate = self.ns['_LOOK_PLATE_RGB']
         self.assertEqual(img.getpixel((12, 84)), plate)
 
+    def test_pad_look_widens_2_3_to_card(self):
+        im = Image.new("RGB", (40, 60), (180, 185, 190))
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        out = self.ns['_pad_look_to_card'](buf.getvalue())
+        padded = Image.open(io.BytesIO(out)).convert("RGB")
+        w, h = padded.size
+        self.assertEqual(h, 60)
+        self.assertAlmostEqual(w / h, self.ns['_LOOK_CARD_RATIO'], places=2)
+        self.assertGreater(w, 40)
+        self.assertEqual(padded.getpixel((1, 30))[:3], (180, 185, 190))
+        self.assertEqual(padded.getpixel((w - 2, 30))[:3], (180, 185, 190))
+
     def test_flatten_fills_island_behind_dark_ring(self):
         out = self.ns['_flatten_look_plate'](island_behind_ring())
         img = Image.open(io.BytesIO(out)).convert("RGB")
@@ -236,14 +253,17 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id7-", src)
+        self.assertIn("model-id8-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn("_flatten_look_plate(out)", src)
+        self.assertIn("_pad_look_to_card(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
         end = looks_src.index("\ndef ", start + 1)
         self.assertIn("stream_with_keepalive", looks_src[start:end])
-        self.assertIn('"_look"', looks_src[looks_src.index("def _apply_model_looks"):start])
+        apply_src = looks_src[looks_src.index("def _apply_model_looks"):start]
+        self.assertIn('"_look"', apply_src)
+        self.assertIn("ThreadPoolExecutor", apply_src)
 
 
 if __name__ == "__main__":

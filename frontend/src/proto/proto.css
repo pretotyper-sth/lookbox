@@ -227,6 +227,27 @@ img { display: block; max-width: 100%; }
 }
 @keyframes lb-shimmer { from { background-position: 180% 0; } to { background-position: -60% 0; } }
 
+/* 컷아웃 위에 스켈레톤과 같은 물결만. 옷을 가리는 회색 레이어는 두지 않는다. */
+.lb-look-wave {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 38%,
+    color-mix(in srgb, var(--surface) 52%, transparent) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: lb-shimmer 1.25s var(--ease) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lb-look-wave { animation: none; background: color-mix(in srgb, var(--surface) 18%, transparent); }
+}
+
 /* ---- entrance (transform-only: content stays visible even if the
    environment freezes animations at 0%) ---- */
 .lb-anim-in { animation: lb-rise 420ms var(--ease) both; }

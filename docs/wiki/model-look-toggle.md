@@ -22,10 +22,10 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 
 착장 API는 keepalive SSE다. Render는 응답이 안 오면 ~100초에 끊어서, 서버에
 `look_image_url`이 있어도 화면은 옷 컷아웃만 남았다. 한 장이 끝나는 즉시
-`_look` 이벤트로 카드를 바꾼다. 인물 일관성을 위해 순차 생성(2026-08-30).
-대기 중인 카드는 컷아웃을 그대로 두고, 지금 그리는 장만 하단 뱃지
-「AI 착장 만드는 중」을 붙인다. 사진 없는 wish는 점선 칸으로 그리지 않는다
-(2026-08-31).
+`_look` 이벤트로 카드를 바꾼다. canonical 인물은 파일이라 착장끼리 물리지 않는다.
+장당 OpenAI 호출은 최대 4장 병렬(2026-08-31). 대기 중인 카드는 컷아웃을 가리지
+않고, 스켈레톤과 같은 `.lb-look-wave` 물결만 올린다. 사진 없는 wish는 점선 칸으로
+그리지 않는다 (2026-08-31).
 
 `hydrateOutfits`가 DAILY를 새 객체로 갈아끼우면 착장 URL이 옛 객체에만 붙는다.
 `paintLook`은 `LB_DATA.DAILY`를 id로 찾아 쓰고, hydrate는 로컬 lookImg를 보존한다
@@ -37,8 +37,10 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 다시 그리지 않고 `images.edit` 첫 장(Image 1)으로 쓴다. 댄디·미니멀처럼 남녀가
 한 장에 있는 무드 컷은 인물 입력이 아니다. 이전 착장 결과는 다음 생성의
 reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라 Image 2+로 붙인다. 캐시
-`model-id-v7-` / `model-id7-`(2026-08-31). 프롬프트는 outfit replacement:
-인물·스튜디오·포즈 고정, 옷만 교체. 하의는 긴 기장이 기본. 출력은 plate flatten.
+`model-id-v7-` / `model-id8-`(2026-08-31). 프롬프트는 outfit replacement:
+인물·스튜디오·포즈 고정, 옷만 교체. 다리·몸 비율은 Image 1과 같게(길어 보이게 금지).
+하의는 긴 기장이 기본. 출력은 plate flatten 뒤 4:5 카드 비율로 가장자리 스튜디오색 패딩
+(`_pad_look_to_card`). 2:3을 4:5 카드에 contain하면 양옆 `--thumb-bg`가 섞인다.
 크레딧 잔액으로 장 수를 자르지 않는다.
 `wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리
 (신발·가방 등)를 제안으로 넣는다(`_fill_wish_quota`, 2026-08-30).
