@@ -5,7 +5,7 @@
 두지 않는다. 라벨은 `LabeledField`와 같다: 12px / weight 600 / `--ink-2`. 값도 700이 아니라 600.
 
 키·몸무게는 프로필에만 둔다. 추천 `_profile_block`과 착장/바로 보기 이미지
-프롬프트에 체형 문장을 넣지 않는다. 착장 모델은 성별만 보고 룩북 얼굴을 새로 그린다.
+프롬프트에 체형 문장을 넣지 않는다. 착장은 성별 canonical 원본을 쓰고 얼굴을 다시 그리지 않는다.
 `_body_note`는 2026-08-23에 제거.
 
 근거: `08-mypage.jsx` `personalBody`·`AccountEditSheet`, `generate_model_look_image`,

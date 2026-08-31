@@ -1474,6 +1474,8 @@ function App() {
             id: o.id,
             item_ids: o.itemIds || [],
             label: o.label || '',
+            mood: o.mood || '',
+            styles: o.styles || [],
             wish: o.wish || null,
           })),
         }),

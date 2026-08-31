@@ -1,4 +1,4 @@
-"""AI 착장은 무드 룩북 인물 + 옷장·코디와 같은 #E5E3DE 판."""
+"""AI 착장은 canonical 인물 + 옷장 실물. 배경은 옷장·코디와 같은 #E5E3DE 판."""
 
 import ast
 import io
@@ -13,13 +13,20 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     '_look_gender_key',
     '_category_display',
+    '_category_key',
     '_model_look_subject',
     '_model_identity_prompt',
     '_model_look_prompt',
+    '_garment_desc',
     '_model_look_garment_lines',
+    '_model_look_outfit_block',
     '_flatten_look_plate',
+    '_bottom_hem_note',
 )
-CONSTS = ('_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', '_LEGACY_CATEGORY_KO')
+CONSTS = (
+    '_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
+    '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER',
+)
 
 
 def load():
@@ -111,22 +118,36 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn(self.ns['_LOOK_PLATE_HEX'], prompt)
-        self.assertIn("순하", prompt)
-        self.assertIn("쓰지 마세요", prompt)
-        self.assertNotIn("선명한 이목구비", prompt)
-        self.assertNotIn("얼굴을 그대로", prompt)
+        self.assertIn("identity lock", prompt)
+        self.assertIn("Do not use the user's face", prompt)
+        self.assertNotIn("순하", prompt)
+        self.assertNotIn("키 크고", prompt)
         self.assertEqual(self.ns['_LOOK_PLATE_HEX'], "#E5E3DE")
         self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
-        self.assertIn("소스 이미지와 동일한 모델", src)
-        self.assertIn("model-id-v4-", src)
-        self.assertIn("model-id4-", src)
+        self.assertIn("outfit replacement task", src)
+        self.assertIn("Image 1 defines the character identity", src)
+        self.assertIn("Do not mix these roles", src)
+        self.assertIn("model-id-v6-", src)
+        self.assertIn("model-id6-", src)
         self.assertIn("look-identity", src)
+        self.assertIn("01-canonical.png", src)
+        self.assertIn("긴 기장", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
-        self.assertIn('_png_named(identity, "identity.png")', src)
-        self.assertIn("쨍", src)
+        self.assertIn('_png_named(identity, "01-canonical.png")', src)
+        self.assertNotIn("인상은 순하고 부드럽게", src)
+        self.assertNotIn("키 크고 비율 좋은 카탈로그", src)
+
+    def test_bottom_hem_prefers_long_inseam(self):
+        note = self.ns['_bottom_hem_note']([
+            {"category": "bottom", "name": "슬랙스"},
+            {"category": "shoes", "name": "로퍼"},
+        ], "abc")
+        self.assertIn("긴 기장", note)
+        short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
+        self.assertIn("반바지", short)
 
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([
@@ -145,6 +166,18 @@ class ModelLookPromptTest(unittest.TestCase):
         ])
         self.assertIn("셔츠", lines)
         self.assertIn("cotton", lines)
+
+    def test_outfit_block_groups_slots(self):
+        block = self.ns['_model_look_outfit_block']([
+            {"category": "top", "name": "그레이 티", "color": "그레이"},
+            {"category": "bottom", "name": "데님", "color": "블루"},
+            {"category": "shoes", "name": "로퍼", "color": "블랙"},
+        ])
+        self.assertIn("TOP:", block)
+        self.assertIn("BOTTOM:", block)
+        self.assertIn("SHOES:", block)
+        self.assertIn("그레이 티", block)
+        self.assertIn("로퍼", block)
 
     def test_mood_identity_files_exist(self):
         root = Path(__file__).parents[1] / "assets" / "look-identity"
@@ -203,7 +236,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id4-", src)
+        self.assertIn("model-id6-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn("_flatten_look_plate(out)", src)
         looks_src = MAIN_PATH.read_text()

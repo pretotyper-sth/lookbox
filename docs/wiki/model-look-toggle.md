@@ -1,7 +1,7 @@
-# AI 착장 토글은 룩북 모델을 입힌다
+# AI 착장 토글은 canonical 캐릭터에 옷만 입힌다
 
-마이페이지 `AI 캐릭터 착장 이미지로 보기`를 켜면 성별만 맞춘 무신사 룩북 스타일
-모델이 그 코디를 입은 전신 컷을 만든다. 프로필 사진·키·몸무게는 쓰지 않는다.
+마이페이지 `AI 캐릭터 착장 이미지로 보기`를 켜면 성별 canonical 캐릭터에
+그 코디를 입힌 전신 컷을 만든다. 프로필 사진·키·몸무게는 쓰지 않는다.
 무료에서도 열려 있고, 장당 10크레딧이다(`PLANS["free"]["model_look"]=True`,
 `CREDIT_COSTS["model_look"]=10`, 2026-08-30). 설정 행에는 비용 안내를 붙이지 않는다.
 켤 때 사진 시트는 없다. 토스트는 「다음 추천부터 AI 착장으로 보여드려요」 /
@@ -24,11 +24,15 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 (2026-08-30). 설정 `modelLook`은 계정 prefs에 있고 리셋은 코디 행만 지운다.
 
 배경은 옷장·코디 카드와 같은 `--thumb-bg` `#E5E3DE` 한 장이다. 카드 안 패딩으로
-더 작은 회색 사각형이 생기면 안 된다(2026-08-30). ChatGPT 무드 룩북과 같이
-**무드 인물 사진 1장**(`backend/assets/look-identity/{m,f}.jpg`)을 `images.edit`에
-넣고, 옷은 텍스트로 기술한다. 기준 인물 `model-id-v4-{m|f}`는 그 사진을 순한 인상·
-전면 스튜디오로 고정. 착장 캐시 `model-id4-`. 출력은 plate flatten으로 판을 맞춘다.
+더 작은 회색 사각형이 생기면 안 된다(2026-08-30). 기준 인물은 성별 canonical
+원본(`backend/assets/look-identity/{m,f}.jpg`)을 다시 그리지 않고 `images.edit` 첫
+장(Image 1)으로 쓴다. 이전 착장 결과는 다음 생성의 reference로 쓰지 않는다.
+옷장 실물 컷은 격자 보드가 아니라 Image 2+로 붙인다. 캐시
+`model-id-v6-` / `model-id6-`(2026-08-31). 프롬프트는 outfit replacement:
+인물·스튜디오·포즈 고정, 옷만 교체. 하의는 긴 기장이 기본. 출력은 plate flatten.
 크레딧 잔액으로 장 수를 자르지 않는다.
+`wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리
+(신발·가방 등)를 제안으로 넣는다(`_fill_wish_quota`, 2026-08-30).
 
-근거: `backend/app/main.py` `_model_look_garment_lines`, `_model_look_prompt_with_reference`,
+근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `generate_model_look_image`; `frontend/src/proto/proto.css` `--thumb-bg`.

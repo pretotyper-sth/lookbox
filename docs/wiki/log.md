@@ -203,3 +203,13 @@ iOS가 13px 검색창으로 페이지를 확대하고 기억했다 ([[mobile-pag
 없앤다. 기준 인물은 무드 사진(`backend/assets/look-identity`) edit, 순한 인상·흰 옷
 과노출 금지, 캐시 `model-id4-`/`model-id-v4-` ([[model-look-toggle]]).
 
+## [2026-08-30] fix | 무드 원본·옷 실물·wish 쿼타
+착장은 무드 JPG를 다시 그리지 않고 옷장 컷을 별도 입력으로 붙인다. 하의 긴 기장.
+`wish_combos`는 `_fill_wish_quota`가 추천 시점에 채운다. 캐시 `model-id5-`
+([[model-look-toggle]]).
+
+## [2026-08-31] fix | 착장은 outfit replacement — canonical 고정, 옷만 교체
+남성 기준 인물을 룩북 전신으로 교체(`look-identity/m.jpg`). 프롬프트는 캐릭터 생성이
+아니라 옷 교체. Image 1=인물, Image 2+=옷장 실물. 무드·라벨을 looks API로 넘김.
+캐시 `model-id6-` / `model-id-v6-` ([[model-look-toggle]]).
+

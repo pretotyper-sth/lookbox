@@ -56,7 +56,7 @@ OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 상품컷이면 애초에 다시 그리지 않고 배경만 지우니(studio cutout) 이 경로는 재생성이
 # 꼭 필요한 사진에만 쓰인다.
 OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
-# 착장·기준 인물 전용. ChatGPT처럼 무드 룩북 1장에 옷만 갈아입히려면 gpt-image-2 + 단일 edit.
+# 착장·기준 인물 전용. canonical 인물에 옷만 갈아입히려면 gpt-image-2 + 단일 edit.
 OPENAI_IMAGE_MODEL_LOOK = (
     os.environ.get("OPENAI_IMAGE_MODEL_LOOK") or OPENAI_IMAGE_MODEL_TEXT or "gpt-image-2"
 )
@@ -254,6 +254,17 @@ _LEGACY_CATEGORY_KO = {"accessory": "소품"}
 def _category_display(category: str | None) -> str:
     cat = category or ""
     return CATEGORY_KO.get(cat) or _LEGACY_CATEGORY_KO.get(cat) or cat or "상의"
+
+
+def _category_key(category: str | None) -> str:
+    cat = (category or "").strip()
+    if cat in CATEGORY_KO:
+        return cat
+    if cat in CATEGORY_EN:
+        return CATEGORY_EN[cat]
+    if cat in _LEGACY_CATEGORY_KO:
+        return "misc"
+    return cat or "misc"
 
 # 계절(다중 선택 가능) — 마이페이지 퍼스널컬러의 'autumn' 표기와 맞춤(fall 아님)
 SEASON_KO = {
@@ -2939,16 +2950,25 @@ def _wish_note(wish_combos: int, max_combos: int) -> str:
     if not n:
         return "\n- 옷장에 있는 아이템만 쓴다. 없는 아이템을 만들어 넣지 말 것.\n"
     return (
-        f"\n[제안 아이템] {max_combos}개 중 {n}개는 '옷장에 없지만 있으면 훨씬 좋아질 아이템' 하나를 더해 만든다.\n"
-        "- 그 코디의 wish에 제안 아이템을 적는다(name·category·color·reason). 나머지는 옷장 아이템으로 채운다.\n"
-        "- 제안은 실제로 살 수 있는 보편적인 아이템으로, 이미 옷장에 있는 것과 겹치지 않게 한다.\n"
-        "- name·color는 한국어로 (색은 블랙·아이보리처럼 패션 음차).\n"
-        "- reason은 왜 이 옷장에 이 아이템이 필요한지 한 문장(한국어).\n"
-        f"- 나머지 {max_combos - n}개는 옷장 아이템만으로 만든다.\n"
+        f"\n[제안 아이템] 반드시 {n}개 코디에 wish를 넣는다. wish가 빠진 채 {n}개를 채우면 실패다.\n"
+        f"- {max_combos}개 중 {n}개는 옷장에 없는 아이템 하나를 더해 만든다. 그 코디에만 wish(name·category·color·reason).\n"
+        "- 제안은 실제로 살 수 있는 보편 아이템. 이미 옷장에 있는 것과 겹치지 않게.\n"
+        "- name·color는 한국어(색은 블랙·아이보리처럼 패션 음차). reason은 왜 필요한지 한 문장.\n"
+        f"- 나머지 {max_combos - n}개는 옷장만으로. wish 없는 코디에는 wish 키 자체를 생략.\n"
     )
 
 
 _WISH_CATEGORIES = ("top", "bottom", "skirt", "outer", "dress", "shoes", "bag", "hat", "misc")
+_WISH_GAP_ITEMS = (
+    {"name": "화이트 스니커즈", "category": "shoes", "color": "화이트",
+     "reason": "하의 기장이 정리되고 외출 완성도가 올라간다"},
+    {"name": "미니 크로스백", "category": "bag", "color": "블랙",
+     "reason": "손이 자유롭고 코디가 한 덩어리로 보인다"},
+    {"name": "볼캡", "category": "hat", "color": "블랙",
+     "reason": "캐주얼 무드를 잡아 주는 기본 모자"},
+    {"name": "라이트 자켓", "category": "outer", "color": "네이비",
+     "reason": "겉옷 한 겹이면 바깥에서 코디가 끝난다"},
+)
 
 
 def _clean_wish(raw: Any) -> dict[str, Any] | None:
@@ -3013,7 +3033,9 @@ def recommend_text(
     )
     if not openai_client or AI_TEST_MODE:
         print("[recommend] no openai client / TEST MODE — fallback ($0)", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+        combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+        _fill_wish_quota(combos, wish_combos, {item["id"]: item for item in items})
+        return combos
     prompt = f"""당신은 퍼스널 스타일리스트다. 사용자의 옷장 목록만 사용해 실제로 입고 나갈 만한 코디를 최대 {max_combos}개 만들어라.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
@@ -3100,7 +3122,9 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
         )
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
-            return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+            combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+            _fill_wish_quota(combos, wish_combos, valid)
+            return combos
         # 모델이 max_combos개를 돌려줘도 중복·상하의 미충족으로 걸러지면 그만큼 비어 버린다.
         # 옷장에 남은 조합이 있는데 개수가 모자라면 결정적 페어링으로 채운다.
         if len(combos) < max_combos:
@@ -3114,11 +3138,14 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                 if len(combos) >= max_combos:
                     break
             print(f"[recommend] topped up {len(combos) - (max_combos - short)} combo(s) from wardrobe pairs", flush=True)
+        _fill_wish_quota(combos, wish_combos, valid)
         print(f"[recommend] ok via=ai combos={len(combos)}", flush=True)
         return combos
     except Exception as exc:  # noqa: BLE001
         print(f"[recommend] ai call failed: {exc} — fallback", flush=True)
-        return fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+        combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
+        _fill_wish_quota(combos, wish_combos, {item["id"]: item for item in items})
+        return combos
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -3144,6 +3171,49 @@ def _combo_has_top_and_bottom(
     if "dress" in buckets:
         return True
     return ("top" in buckets) and ("bottom" in buckets)
+
+
+def _combo_has_category(ids: list[str], by_id: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    for i in ids:
+        it = by_id.get(i) or {}
+        cat = str(it.get("category") or "").lower()
+        if cat in keys or _item_bucket(it) in keys:
+            return True
+    return False
+
+
+def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str, Any]:
+    """옷장 조합에서 비는 자리를 채울 제안 아이템. 모델이 wish를 빼먹어도 쿼타를 맞춘다."""
+    ranked: list[dict[str, Any]] = []
+    if not _combo_has_category(ids, by_id, ("shoes", "신발")):
+        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "shoes")
+    if not _combo_has_category(ids, by_id, ("bag", "가방")):
+        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "bag")
+    if not _combo_has_category(ids, by_id, ("hat", "모자")):
+        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "hat")
+    ranked.extend(x for x in _WISH_GAP_ITEMS if x not in ranked)
+    pick = ranked[slot % len(ranked)]
+    return dict(pick)
+
+
+def _fill_wish_quota(
+    combos: list[dict[str, Any]], wish_combos: int, by_id: dict[str, Any],
+) -> None:
+    n = max(0, min(int(wish_combos or 0), len(combos)))
+    if not n or not combos:
+        return
+    have = sum(1 for c in combos if c.get("wish"))
+    if have >= n:
+        return
+    slot = 0
+    for combo in combos:
+        if have >= n:
+            return
+        if combo.get("wish"):
+            continue
+        combo["wish"] = _gap_wish(combo.get("item_ids") or [], by_id, slot)
+        slot += 1
+        have += 1
 
 
 _NEUTRAL_COLORS = ("블랙", "화이트", "그레이", "네이비", "아이보리", "베이지", "차콜")
@@ -3381,22 +3451,13 @@ def _look_gender_key(gender: str | None) -> str:
 
 
 def _model_look_subject(gender: str | None) -> str:
-    """착장 모델은 프로필 사진이 아니라, 성별만 맞춘 룩북 모델."""
+    """착장 모델은 프로필 사진이 아니라, 성별 canonical 캐릭터."""
     g = (gender or "").strip()
     if g.startswith("남"):
-        return (
-            "20대 한국인 남성 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
-            "깨끗한 피부, 정돈된 헤어, 키 크고 비율 좋은 카탈로그 모델"
-        )
+        return "남성 canonical 룩북 캐릭터. 원본 사진 속 바로 그 사람"
     if g.startswith("여"):
-        return (
-            "20대 한국인 여성 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
-            "깨끗한 피부, 정돈된 헤어, 키 크고 비율 좋은 카탈로그 모델"
-        )
-    return (
-        "20대 한국인 패션 모델. 무드 룩북처럼 순하고 부드러운 인상, "
-        "옷의 성별에 맞는, 키 크고 비율 좋은 카탈로그 모델"
-    )
+        return "여성 canonical 룩북 캐릭터. 원본 사진 속 바로 그 사람"
+    return "canonical 룩북 캐릭터. 원본 사진 속 바로 그 사람"
 
 
 def _model_look_prompt(gender: str | None) -> str:
@@ -3404,36 +3465,52 @@ def _model_look_prompt(gender: str | None) -> str:
 
 
 def _model_identity_prompt(gender: str | None) -> str:
-    return f"""소스 사진 속 바로 이 사람을 기준 모델로 고정하세요. 얼굴·헤어·체형은 그대로, 인상만 더 순하고 부드럽게: 부드러운 이목구비, 힘주지 않은 눈, 가벼운 중립 표정. 날카롭거나 차가운 인상 금지.
-이후 모든 착장이 이 사람과 동일한 얼굴·헤어·키·체형·포즈·조명을 씁니다.
-모델: {_model_look_subject(gender)}. 사용자 얼굴·프로필 사진·체형을 쓰지 마세요. 실존 유명인 모사 금지.
-- 인물 한 명, 정면 전신 룩북. 포즈: 한 손은 바지 주머니, 다른 팔은 옆구리, 발은 어깨너비, 시선은 카메라
-- 출력 프레임의 모든 픽셀을 {_LOOK_PLATE_HEX} 단색 스튜디오로 채우세요. 벽과 바닥이 같은 색. 인물 뒤에 더 작은 회색 사각형·두 번째 배경·레터박스·액자 금지
-- 머리 위·발 아래 약간의 여백은 두되 배경은 가장자리까지 한 장
-- 옷은 심플한 기본 상의·하의. 로고·패턴 없음
-- 소프트 스튜디오 조명. 흰 옷·밝은 옷도 하이라이트가 날아가지 않게, 옷감 결이 보이게. 쨍한 과노출·포스터화 금지
-- 텍스트, 로고, 워터마크, 다른 사람, 콜라주·썸네일 금지
+    return f"""This is an identity lock, not a character redesign.
+Keep the exact person in the source photo. Do not beautify, age, slim, muscularize, or restyle them.
+Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
+- one person, full-body standing lookbook, front-facing, slightly relaxed
+- fill every pixel with {_LOOK_PLATE_HEX} seamless studio. wall and floor the same color. no second plate, letterbox, or frame
+- keep a little margin above the head and below the feet
+- simple base garments already in the photo; do not invent logos or extra people
+- soft studio lighting, photorealistic contemporary Korean fashion lookbook
+- no text, watermark, collage, or thumbnail
 """
+
+
+_LOOK_SLOT_LABEL = {
+    "top": "TOP",
+    "dress": "DRESS",
+    "outer": "OUTERWEAR",
+    "bottom": "BOTTOM",
+    "skirt": "SKIRT",
+    "shoes": "SHOES",
+    "bag": "ACCESSORIES",
+    "hat": "ACCESSORIES",
+    "misc": "ACCESSORIES",
+}
+_LOOK_SLOT_ORDER = ("top", "dress", "outer", "bottom", "skirt", "shoes", "bag", "hat", "misc")
+
+
+def _garment_desc(item: dict[str, Any]) -> str:
+    cat = _category_display(item.get("category"))
+    name = (item.get("name") or item.get("brand") or "").strip()
+    color = (item.get("color") or "").strip()
+    bits = [b for b in (color, name, cat) if b]
+    meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    st = meta.get("style") if isinstance(meta.get("style"), dict) else {}
+    for key in ("subtype", "material", "fit", "pattern"):
+        val = st.get(key)
+        if val and val != "solid":
+            bits.append(str(val))
+    details = st.get("details") if isinstance(st.get("details"), list) else []
+    bits.extend(str(d) for d in details[:3] if d)
+    return " ".join(bits)
 
 
 def _model_look_garment_lines(
     items: list[dict[str, Any]], wish: dict[str, Any] | None = None,
 ) -> str:
-    lines: list[str] = []
-    for item in items:
-        cat = _category_display(item.get("category"))
-        name = (item.get("name") or item.get("brand") or "").strip()
-        color = (item.get("color") or "").strip()
-        bits = [b for b in (color, name, cat) if b]
-        meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
-        st = meta.get("style") if isinstance(meta.get("style"), dict) else {}
-        if st.get("subtype"):
-            bits.append(st["subtype"])
-        if st.get("material"):
-            bits.append(st["material"])
-        if st.get("fit"):
-            bits.append(st["fit"])
-        lines.append("- " + " ".join(bits))
+    lines = [f"- {_garment_desc(item)}" for item in items]
     if wish:
         bits = [
             wish.get("color") or "",
@@ -3446,27 +3523,155 @@ def _model_look_garment_lines(
     return "\n".join(lines) if lines else "- 옷장 코디 조합"
 
 
+def _model_look_outfit_block(
+    items: list[dict[str, Any]], wish: dict[str, Any] | None = None,
+) -> str:
+    grouped: dict[str, list[str]] = {label: [] for label in (
+        "TOP", "DRESS", "OUTERWEAR", "BOTTOM", "SKIRT", "SHOES", "ACCESSORIES",
+    )}
+    for item in items:
+        key = _category_key(item.get("category"))
+        label = _LOOK_SLOT_LABEL.get(key, "ACCESSORIES")
+        grouped.setdefault(label, []).append(_garment_desc(item))
+    if wish:
+        bits = [
+            wish.get("color") or "",
+            wish.get("name") or "",
+            _category_display(wish.get("category")) if wish.get("category") else "",
+        ]
+        desc = " ".join(b for b in bits if b).strip()
+        if desc:
+            key = _category_key(wish.get("category"))
+            label = _LOOK_SLOT_LABEL.get(key, "ACCESSORIES")
+            grouped.setdefault(label, []).append(f"(suggested, not in wardrobe photo) {desc}")
+    lines: list[str] = []
+    for label in ("TOP", "DRESS", "OUTERWEAR", "BOTTOM", "SKIRT", "SHOES", "ACCESSORIES"):
+        vals = grouped.get(label) or []
+        lines.append(f"{label}:")
+        lines.append("\n".join(f"- {v}" for v in vals) if vals else "- none")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def _bottom_hem_note(items: list[dict[str, Any]], seed: str = "") -> str:
+    blob = " ".join(
+        f"{it.get('category') or ''} {it.get('name') or ''} {it.get('brand') or ''}"
+        for it in items
+    ).lower()
+    if any(k in blob for k in ("반바지", "숏팬츠", "숏츠", "shorts", "short pants")):
+        return "하의는 반바지 기장을 유지한다."
+    sneaker = any(k in blob for k in ("스니커", "운동화", "뉴발", "new balance", "nb "))
+    cuff = bool(sneaker and seed and (sum(ord(c) for c in seed) % 4 == 0))
+    if cuff:
+        return (
+            "운동화 코디: 바지는 기본적으로 길게. 밑단만 한 단 단정히 접어 발목이 조금 보이게. "
+            "정강이에서 끝나는 짧은 앵클/크롭 실루엣 금지."
+        )
+    return (
+        "하의는 발목·신발 입구까지 덮는 긴 기장. 정강이·발목만 오는 짧은 기장 금지. "
+        "다리가 길어 보이게 밑단을 신발 위에 살짝 얹거나 거의 닿게 그린다."
+    )
+
+
+def _look_styling_block(
+    mood: str = "",
+    occasion: str = "",
+    styles: list[str] | None = None,
+    user_request: str = "",
+) -> tuple[str, str, str]:
+    tones = [_style_tone(s) for s in (styles or []) if s]
+    mood_line = " · ".join(x for x in (*tones, (mood or "").strip()) if x) or "daily / smart casual"
+    occasion_line = (occasion or "").strip() or "daily outfit"
+    request_line = (user_request or "").strip() or "coordinate from the user's wardrobe"
+    return mood_line, occasion_line, request_line
+
+
 def _model_look_prompt_with_reference(
     gender: str | None,
     items: list[dict[str, Any]],
     wish: dict[str, Any] | None = None,
+    hem_seed: str = "",
+    mood: str = "",
+    occasion: str = "",
+    styles: list[str] | None = None,
+    user_request: str = "",
 ) -> str:
-    garment_lines = _model_look_garment_lines(items, wish)
-    return f"""소스 이미지와 동일한 모델을 유지하세요. 얼굴·헤어·피부톤·체형·키·포즈·카메라 각도·조명·화질을 절대 바꾸지 마세요.
-인상은 순하고 부드럽게. 이 사람에게 아래 옷만 입히세요. 사람은 그대로, 의상만 교체합니다.
+    outfit_block = _model_look_outfit_block(items, wish)
+    hem = _bottom_hem_note(items, hem_seed)
+    mood_line, occasion_line, request_line = _look_styling_block(
+        mood, occasion, styles, user_request,
+    )
+    return f"""This is an outfit replacement task, not a character generation task.
 
-{garment_lines}
+Image 1 defines the character identity.
+The wardrobe reference images define the garments.
+Do not mix these roles.
+Preserve the person from the canonical reference.
+Dress that same person using the supplied wardrobe garments.
 
-- 포즈 고정: 한 손 바지 주머니, 다른 팔 옆구리, 정면 응시, 발 어깨너비
-- 배경은 프레임 전체를 {_LOOK_PLATE_HEX} 단색 한 장으로. 인물 뒤 작은 사각형·두 번째 판·레터박스 금지
-- 흰 옷·밝은 셔츠: 플래시처럼 쨍하게 날리지 말 것. 단추·칼라·주름·옷감 결이 보이게. 과노출·포스터화·얼룩 하이라이트·격자 잔상 금지
-- 옷 색·실루엣·프린트는 설명과 일치. 매트한 원단, 상업 룩북 화질
-- 텍스트·로고·워터마크·다른 사람 추가 금지
+CANONICAL CHARACTER:
+Use Image 1 as the authoritative visual identity.
+Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
+hairstyle, hair color, skin tone, age impression, body proportions, physique,
+shoulder width, limb proportions, height impression, and neutral expression.
+Do not redesign, reinterpret, beautify, age, slim, or muscularize the character.
+Fashion mood is expressed through clothing, never by changing the person.
+
+OUTFIT:
+Dress the character using the supplied wardrobe items.
+
+{outfit_block}
+
+WARDROBE REFERENCES:
+Images after Image 1 are photographs of the actual garments.
+Preserve each garment's recognizable color, category, silhouette, material, fit,
+neckline, sleeve length, pattern, and major construction details (seams, pockets, collar).
+Do not invent unrelated garments.
+Do not add logos, typography, graphics, extra pockets, zippers, stripes, or embroidery
+that are not visible in the wardrobe photos. If a wardrobe photo already has a print or logo, keep it.
+Collage, floating clothes, grids, and thumbnails are forbidden — only the dressed person.
+
+STYLING:
+Requested mood: {mood_line}
+Occasion: {occasion_line}
+Season / Weather: not specified
+Additional user request: {request_line}
+Express the mood through clothing combination, silhouette, layering, fit, color, footwear, and accessories.
+Do NOT express the mood by changing the character, hair, body, or background.
+
+COMPOSITION:
+Preserve Image 1's standing pose, camera angle, camera distance, full-body framing,
+studio lighting, gray studio background, gray studio floor, shadow, and color grading.
+One person, centered, head and both feet fully visible, slight margin.
+Keep the pose from the canonical: standing, front-facing, slightly relaxed.
+Small hand/arm shifts are allowed (pocket, holding a bag). No walking, sitting, crop, or dramatic pose.
+Fill the entire frame with {_LOOK_PLATE_HEX} seamless studio. No second plate, letterbox, or inset square.
+{hem}
+White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
+
+VISUAL STYLE:
+Premium contemporary Korean fashion lookbook photography.
+Photorealistic, minimal, clean, sophisticated, soft studio lighting,
+natural skin texture, realistic fabric folds, natural body proportions.
+Avoid illustration, anime, 3D, CGI, overly smooth skin, cinematic lighting, heavy grading.
+
+PRIORITY IF CONFLICTS:
+1. Character identity consistency
+2. User wardrobe item fidelity
+3. Natural garment fit
+4. Outfit coordination quality
+5. Requested fashion mood
+6. Photographic aesthetics
+
+FINAL:
+The result must look like the exact same character from Image 1 photographed again
+in the same studio lookbook session, wearing a different outfit.
+Change the outfit. Do not change the person. Do not change the studio.
 """
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v4-{_look_gender_key(gender)}"
+    return f"model-id-v6-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -3476,7 +3681,7 @@ def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
     for ext in ("jpg", "jpeg", "png", "webp"):
         path = _LOOK_IDENTITY_DIR / f"{key}.{ext}"
         if path.is_file():
-            return path.read_bytes(), f"mood.{ext}"
+            return path.read_bytes(), f"canonical.{ext}"
     return None
 
 
@@ -3540,8 +3745,21 @@ def _save_model_identity_png(user_id: str, gender: str | None, png_bytes: bytes)
 _MODEL_IDENTITY_LOCK = threading.Lock()
 
 
+def _image_bytes_to_png(data: bytes) -> bytes:
+    im = Image.open(io.BytesIO(data)).convert("RGB")
+    buf = io.BytesIO()
+    im.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
-    """모든 착장이 공유할 기준 인물. 옷만 갈아입히기 전에 한 장 고정한다."""
+    """모든 착장이 공유할 canonical 인물. 원본 파일을 다시 그리지 않는다."""
+    seed = _mood_identity_seed(gender)
+    if seed:
+        try:
+            return _image_bytes_to_png(seed[0])
+        except Exception as exc:  # noqa: BLE001
+            print(f"[model-look] mood identity decode skip: {exc}", flush=True)
     cached = _get_model_identity_png(user_id, gender)
     if cached:
         return cached
@@ -3725,17 +3943,54 @@ def _model_look_board(items: list[dict[str, Any]]) -> bytes:
     return buf.getvalue()
 
 
+def _garment_edit_images(items: list[dict[str, Any]]) -> list[io.BytesIO]:
+    """옷장 실물 컷을 별도 입력으로 넘긴다. 한 장 격자로 붙이면 출력에 칸이 남는다.
+
+    순서는 Image 2+=의류 역할이 드러나게 상의→하의→아우터→신발→소품.
+    """
+    ranked = sorted(
+        enumerate(items),
+        key=lambda pair: (
+            _LOOK_SLOT_ORDER.index(_category_key(pair[1].get("category")))
+            if _category_key(pair[1].get("category")) in _LOOK_SLOT_ORDER
+            else 99,
+            pair[0],
+        ),
+    )
+    files: list[io.BytesIO] = []
+    for n, (_, item) in enumerate(ranked[:6], start=2):
+        path = item.get("storage_path")
+        if not path:
+            continue
+        try:
+            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
+            image = Image.open(io.BytesIO(raw)).convert("RGBA")
+            image.thumbnail((768, 768))
+            buf = io.BytesIO()
+            image.save(buf, format="PNG")
+            slot = _category_key(item.get("category"))
+            files.append(_png_named(buf.getvalue(), f"{n:02d}-{slot}.png"))
+        except Exception:
+            continue
+    return files
+
+
 def generate_model_look_image(
     user_id: str, item_ids: list[str], items: list[dict[str, Any]], gender: str | None = None,
     reference_png: bytes | None = None,
     wish: dict[str, Any] | None = None,
+    mood: str = "",
+    occasion: str = "",
+    styles: list[str] | None = None,
+    user_request: str = "",
 ) -> str | None:
-    """룩북 모델이 이 코디를 입은 전신 컷. 프로필 얼굴은 쓰지 않고 성별만 본다.
+    """canonical 캐릭터에 옷장 실물을 입힌 전신 컷. 프로필 얼굴은 쓰지 않는다.
 
-    기준 인물(identity) 한 장을 고정한 뒤, ChatGPT처럼 그 사진에 옷만 입힌다.
+    원본 canonical + 옷장 실물 컷을 한 번에 edit한다. 이전 착장 결과는 쓰지 않는다.
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
-    key = f"model-id4-{look_cache_key(item_ids)}-{_look_gender_key(gender)}"
+    hem_seed = look_cache_key(item_ids)
+    key = f"model-id6-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -3757,15 +4012,20 @@ def generate_model_look_image(
         return None
     try:
         identity = reference_png or _ensure_model_identity_png(user_id, gender)
-        prompt = _model_look_prompt_with_reference(gender, items, wish)
+        prompt = _model_look_prompt_with_reference(
+            gender, items, wish, hem_seed,
+            mood=mood, occasion=occasion, styles=styles, user_request=user_request,
+        )
         look_model = OPENAI_IMAGE_MODEL_LOOK
         if AI_TEST_MODE:
             print("[model-look] TEST MODE — 기준 인물만, AI 미호출 ($0)", flush=True)
             out = identity or _model_look_board(items)
         elif identity:
+            images = [_png_named(identity, "01-canonical.png")]
+            images.extend(_garment_edit_images(items))
             kwargs: dict[str, Any] = {
                 "model": look_model,
-                "image": [_png_named(identity, "identity.png")],
+                "image": images,
                 "prompt": prompt,
                 "size": "1024x1536",
                 "quality": quality,
@@ -4099,6 +4359,8 @@ class LiveLookOutfit(BaseModel):
     id: str
     item_ids: list[str] = []
     label: str = ""
+    mood: str = ""
+    styles: list[str] = []
     wish: dict[str, Any] | None = None
 
 
@@ -6544,6 +6806,10 @@ def _apply_model_looks(
         return outfit, generate_model_look_image(
             user_id, outfit["itemIds"], members, gender,
             reference_png=identity, wish=_clean_wish(outfit.get("wish")),
+            mood=outfit.get("mood") or "",
+            occasion="daily outfit",
+            styles=outfit.get("styles") or [],
+            user_request=outfit.get("label") or "",
         )
 
     t0 = time.perf_counter()
@@ -6721,6 +6987,8 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
             "id": row.id,
             "itemIds": row.item_ids,
             "label": row.label or "",
+            "mood": row.mood or "",
+            "styles": row.styles or [],
             "lookImg": None,
             "wish": row.wish,
         }
