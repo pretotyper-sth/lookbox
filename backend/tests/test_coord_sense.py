@@ -124,6 +124,7 @@ class IncludeAndWishTest(unittest.TestCase):
         names = (
             "_item_bucket", "_combo_has_top_and_bottom", "_clean_wish", "_include_note",
             "_wish_note", "_combo_has_category", "_gap_wish", "_fill_wish_quota",
+            "_wish_slot_key", "_apply_wish_slot",
         )
         body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
         consts = [
@@ -174,3 +175,18 @@ class IncludeAndWishTest(unittest.TestCase):
         self.assertIsNone(combos[0].get("wish"))
         self.ns["_fill_wish_quota"](combos, 1, by_id)
         self.assertEqual(sum(1 for c in combos if c.get("wish")), 1)
+
+    def test_overlapping_wish_replaces_same_slot(self):
+        by_id = {
+            "t": {"id": "t", "category": "top"},
+            "b": {"id": "b", "category": "bottom"},
+            "s": {"id": "s", "category": "shoes"},
+        }
+        combos = [{
+            "label": "A",
+            "item_ids": ["t", "b", "s"],
+            "wish": {"name": "화이트 캔버스 스니커즈", "category": "shoes", "color": "화이트"},
+        }]
+        self.ns["_fill_wish_quota"](combos, 1, by_id)
+        self.assertEqual(combos[0]["item_ids"], ["t", "b"])
+        self.assertEqual(combos[0]["wish"]["category"], "shoes")

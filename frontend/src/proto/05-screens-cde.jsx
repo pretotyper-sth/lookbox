@@ -124,6 +124,25 @@ function lookPlacement(items) {
   return out;
 }
 
+function LookPendingMarks() {
+  const [tick, setTick] = useSc(0);
+  useEc(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 2600);
+    return () => clearInterval(id);
+  }, []);
+  const labels = ['코디를 입히는 중', '실루엣을 다듬는 중', '최종본을 뽑는 중'];
+  return (
+    <>
+      <div className="lb-look-wave" aria-hidden />
+      <p className="lb-look-status">{labels[tick % labels.length]}</p>
+      <div className="lb-look-mark" aria-hidden>
+        <span className="lb-look-mark-disk"><Icon name="sparkle" size={16} stroke={1.8} /></span>
+        <span className="lb-look-mark-disk"><Icon name="user" size={16} stroke={1.8} /></span>
+      </div>
+    </>
+  );
+}
+
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
   const cleanItems = (items || []).filter(Boolean);
   // 서버가 4:5로 패딩해서 넣는다. contain으로 머리·발을 자르지 않는다.
@@ -174,7 +193,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           </div>
         );
       })}
-      {looking ? <div className="lb-look-wave" aria-hidden /> : null}
+      {looking ? <LookPendingMarks /> : null}
     </div>
   );
 }

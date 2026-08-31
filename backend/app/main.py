@@ -74,8 +74,9 @@ OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "medium"
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 # 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
 OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
-# 착장(전신 인물)은 추출의 착용컷·재시도와 같은 high. medium이면 얼굴·질감이 뭉개진다.
-OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or OPENAI_IMAGE_QUALITY_HARD
+# 착장 4장을 high로 한꺼번에 돌리면 첫 장이 40~90초×대기라 컷아웃이 너무 길다.
+# medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
+OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
 # 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
@@ -2952,7 +2953,8 @@ def _wish_note(wish_combos: int, max_combos: int) -> str:
     return (
         f"\n[제안 아이템] 반드시 {n}개 코디에 wish를 넣는다. wish가 빠진 채 {n}개를 채우면 실패다.\n"
         f"- {max_combos}개 중 마지막 {n}개에 옷장에 없는 아이템 하나를 더한다. 그 코디에만 wish(name·category·color·reason).\n"
-        "- 제안은 실제로 살 수 있는 보편 아이템. 이미 옷장에 있는 것과 겹치지 않게.\n"
+        "- 제안은 실제로 살 수 있는 보편 아이템. 그 코디에 이미 있는 자리(신발·상의·하의·가방)와 겹치지 않게.\n"
+        "- 신발이 있으면 다른 신발 금지. 빈 자리(가방·모자·겉옷)나, 같은 자리를 옷장 아이템 대신 바꿀 때만.\n"
         "- name·color는 한국어(색은 블랙·아이보리처럼 패션 음차). reason은 왜 필요한지 한 문장.\n"
         f"- 앞쪽 {max_combos - n}개는 옷장만으로. wish 없는 코디에는 wish 키 자체를 생략.\n"
     )
@@ -3182,6 +3184,25 @@ def _combo_has_category(ids: list[str], by_id: dict[str, Any], keys: tuple[str, 
     return False
 
 
+def _wish_slot_key(item: dict[str, Any] | None) -> str:
+    """wish가 차지하는 한 자리. 신발끼리·가방끼리만 겹친다."""
+    if not item:
+        return ""
+    bucket = _item_bucket(item)
+    if bucket != "other":
+        return bucket
+    cat = str(item.get("category") or "").strip().lower()
+    if cat in ("bag", "가방"):
+        return "bag"
+    if cat in ("hat", "모자"):
+        return "hat"
+    if cat in ("outer", "아우터"):
+        return "outer"
+    if cat in ("misc", "기타"):
+        return "misc"
+    return cat or "other"
+
+
 def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str, Any]:
     """옷장 조합에서 비는 자리를 채울 제안 아이템. 모델이 wish를 빼먹어도 쿼타를 맞춘다."""
     ranked: list[dict[str, Any]] = []
@@ -3196,25 +3217,49 @@ def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str,
     return dict(pick)
 
 
+def _apply_wish_slot(combo: dict[str, Any], by_id: dict[str, Any]) -> None:
+    """wish가 이미 있는 자리(신발 위 신발)면 옷장 쪽을 빼거나, 못 빼면 빈 자리로 돌린다."""
+    wish = combo.get("wish")
+    if not isinstance(wish, dict):
+        return
+    ids = list(combo.get("item_ids") or [])
+    slot = _wish_slot_key(wish)
+    if not slot:
+        return
+    overlap = [i for i in ids if i in by_id and _wish_slot_key(by_id[i]) == slot]
+    if not overlap:
+        return
+    stripped = [i for i in ids if i not in overlap]
+    if _combo_has_top_and_bottom(stripped, by_id, wish):
+        combo["item_ids"] = stripped
+        return
+    alt = _gap_wish(ids, by_id, 0)
+    if alt and _wish_slot_key(alt) != slot:
+        combo["wish"] = alt
+        _apply_wish_slot(combo, by_id)
+
+
 def _fill_wish_quota(
     combos: list[dict[str, Any]], wish_combos: int, by_id: dict[str, Any],
 ) -> None:
     n = max(0, min(int(wish_combos or 0), len(combos)))
-    if not n or not combos:
+    if not combos:
         return
     have = sum(1 for c in combos if c.get("wish"))
-    if have >= n:
-        return
-    # 마지막 칸부터. 4칸이면 4번째가 새 아이템 코디가 된다.
-    slot = 0
-    for combo in reversed(combos):
-        if have >= n:
-            return
+    if n and have < n:
+        # 마지막 칸부터. 4칸이면 4번째가 새 아이템 코디가 된다.
+        slot = 0
+        for combo in reversed(combos):
+            if have >= n:
+                break
+            if combo.get("wish"):
+                continue
+            combo["wish"] = _gap_wish(combo.get("item_ids") or [], by_id, slot)
+            slot += 1
+            have += 1
+    for combo in combos:
         if combo.get("wish"):
-            continue
-        combo["wish"] = _gap_wish(combo.get("item_ids") or [], by_id, slot)
-        slot += 1
-        have += 1
+            _apply_wish_slot(combo, by_id)
 
 
 _NEUTRAL_COLORS = ("블랙", "화이트", "그레이", "네이비", "아이보리", "베이지", "차콜")
@@ -3467,11 +3512,17 @@ def _model_look_prompt(gender: str | None) -> str:
 
 def _model_identity_prompt(gender: str | None) -> str:
     return f"""This is an identity lock, not a character redesign.
-Keep the exact person in the source photo. Do not beautify, age, slim, muscularize, or restyle them.
+Keep the same person in the source photo: face structure, eyes, nose, lips, jawline,
+hairstyle, hair color, skin tone, shoulder width.
+De-age only: they must read as a youthful Korean lookbook model in their early-to-mid 20s.
+Smooth skin. No wrinkles, nasolabial folds, under-eye bags, sagging, or 30s+ office face.
 Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
 - one person, full-body standing lookbook, front-facing, slightly relaxed
+- natural adult proportions: about 7 to 7.5 heads tall. Do not lengthen the legs.
+  Fashion-illustration 8-head ratio and runway-long inseam are forbidden.
+- head fully in frame with a little margin above the hair. Both feet fully in frame.
+  Never crop the chin, crown, or shoes.
 - fill every pixel with {_LOOK_PLATE_HEX} seamless studio. wall and floor the same color. no second plate, letterbox, or frame
-- keep a little margin above the head and below the feet
 - simple base garments already in the photo; do not invent logos or extra people
 - soft studio lighting, photorealistic contemporary Korean fashion lookbook
 - no text, watermark, collage, or thumbnail
@@ -3554,10 +3605,14 @@ def _model_look_outfit_block(
     return "\n".join(lines).rstrip()
 
 
-def _bottom_hem_note(items: list[dict[str, Any]], seed: str = "") -> str:
+def _bottom_hem_note(
+    items: list[dict[str, Any]], seed: str = "", wish: dict[str, Any] | None = None,
+) -> str:
+    extra = [wish] if wish else []
     blob = " ".join(
         f"{it.get('category') or ''} {it.get('name') or ''} {it.get('brand') or ''}"
-        for it in items
+        for it in [*items, *extra]
+        if it
     ).lower()
     if any(k in blob for k in ("반바지", "숏팬츠", "숏츠", "shorts", "short pants")):
         return "하의는 반바지 기장을 유지한다."
@@ -3598,10 +3653,23 @@ def _model_look_prompt_with_reference(
     user_request: str = "",
 ) -> str:
     outfit_block = _model_look_outfit_block(items, wish)
-    hem = _bottom_hem_note(items, hem_seed)
+    hem = _bottom_hem_note(items, hem_seed, wish)
     mood_line, occasion_line, request_line = _look_styling_block(
         mood, occasion, styles, user_request,
     )
+    wish_line = ""
+    if wish:
+        bits = [
+            wish.get("color") or "",
+            wish.get("name") or "",
+            _category_display(wish.get("category")) if wish.get("category") else "",
+        ]
+        desc = " ".join(b for b in bits if b).strip() or "the suggested item"
+        wish_line = (
+            f"The person MUST wear this suggested item (no wardrobe photo): {desc}. "
+            "Synthesize a photorealistic garment from the description and put it on them. "
+            "Do not keep a wardrobe garment in the same slot."
+        )
     return f"""This is an outfit replacement task, not a character generation task.
 
 Image 1 defines the character identity.
@@ -3615,16 +3683,18 @@ Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
 height impression, and neutral expression.
-Read Image 1 as a youthful mid-20s Korean lookbook model — smooth skin,
+Read Image 1 as a youthful early-to-mid-20s Korean lookbook model — smooth skin,
 no wrinkles, no nasolabial folds, no under-eye bags, no aging.
 Do not make the person look 30s or older. Office, dandy, or formal clothes
 must not age the face.
 Do not redesign, reinterpret, beautify, slim, muscularize, or elongate the character.
-Do not lengthen the legs or torso. Keep the same height-to-head ratio as Image 1.
+Do not lengthen the legs or torso. Keep a natural 7 to 7.5 heads-tall adult ratio.
+Fashion-illustration 8-head bodies and runway-long legs are forbidden.
 Fashion mood is expressed through clothing, never by changing the person's age.
 
 OUTFIT:
 Dress the character using the supplied wardrobe items.
+{wish_line}
 
 {outfit_block}
 
@@ -3648,10 +3718,12 @@ Do NOT express the mood by changing the character, hair, body, or background.
 COMPOSITION:
 Preserve Image 1's standing pose, camera angle, camera distance, full-body framing,
 studio lighting, gray studio background, gray studio floor, shadow, and color grading.
-One person, centered, head and both feet fully visible, slight margin.
+One person, centered. Crown of hair, chin, and both feet fully visible with a little margin.
+Never crop the head at the chin or the feet at the shoes.
 Keep the pose from the canonical: standing, front-facing, slightly relaxed.
 Small hand/arm shifts are allowed (pocket, holding a bag). No walking, sitting, crop, or dramatic pose.
-Fill the entire frame with {_LOOK_PLATE_HEX} seamless studio. No second plate, letterbox, or inset square.
+Fill every pixel of the frame with {_LOOK_PLATE_HEX} seamless studio. Wall and floor the same color.
+No second plate, letterbox, inset photograph, white border, or framed picture-in-picture.
 {hem}
 White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
 
@@ -3663,11 +3735,12 @@ Avoid illustration, anime, 3D, CGI, overly smooth skin, cinematic lighting, heav
 
 PRIORITY IF CONFLICTS:
 1. Character identity consistency
-2. User wardrobe item fidelity
-3. Natural garment fit
-4. Outfit coordination quality
-5. Requested fashion mood
-6. Photographic aesthetics
+2. Suggested item must be worn if listed
+3. User wardrobe item fidelity
+4. Natural garment fit
+5. Outfit coordination quality
+6. Requested fashion mood
+7. Photographic aesthetics
 
 FINAL:
 The result must look like the exact same character from Image 1 photographed again
@@ -3677,7 +3750,7 @@ Change the outfit. Do not change the person. Do not change the studio.
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v7-{_look_gender_key(gender)}"
+    return f"model-id-v8-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -3759,13 +3832,7 @@ def _image_bytes_to_png(data: bytes) -> bytes:
 
 
 def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
-    """모든 착장이 공유할 canonical 인물. 원본 파일을 다시 그리지 않는다."""
-    seed = _mood_identity_seed(gender)
-    if seed:
-        try:
-            return _image_bytes_to_png(seed[0])
-        except Exception as exc:  # noqa: BLE001
-            print(f"[model-look] mood identity decode skip: {exc}", flush=True)
+    """모든 착장이 공유할 canonical 인물. 시드 JPG는 성숙해 보여서 한 번 젊게 고정한다."""
     cached = _get_model_identity_png(user_id, gender)
     if cached:
         return cached
@@ -3773,11 +3840,20 @@ def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None
         cached = _get_model_identity_png(user_id, gender)
         if cached:
             return cached
-        return _generate_model_identity_png(user_id, gender)
+        generated = _generate_model_identity_png(user_id, gender)
+        if generated:
+            return generated
+        seed = _mood_identity_seed(gender)
+        if seed:
+            try:
+                return _image_bytes_to_png(seed[0])
+            except Exception as exc:  # noqa: BLE001
+                print(f"[model-look] mood identity decode skip: {exc}", flush=True)
+        return None
 
 
 def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
-    quality = OPENAI_IMAGE_QUALITY_LOOK
+    quality = OPENAI_IMAGE_QUALITY_HARD
     t0 = time.perf_counter()
     try:
         if AI_TEST_MODE:
@@ -3935,7 +4011,7 @@ _LOOK_CARD_RATIO = 4 / 5
 
 
 def _pad_look_to_card(png_bytes: bytes) -> bytes:
-    """생성본을 카드 비율(4:5)로 맞춘다. 빈 칸은 이미지 가장자리 스튜디오 색으로 채운다."""
+    """생성본을 카드 비율(4:5)로 맞춘다. 빈 칸은 카드와 같은 스튜디오판(#E5E3DE)으로 채운다."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
     if w < 8 or h < 8:
@@ -3943,19 +4019,13 @@ def _pad_look_to_card(png_bytes: bytes) -> bytes:
     current = w / h
     if abs(current - _LOOK_CARD_RATIO) < 0.02:
         return png_bytes
-    px = img.load()
-    samples = (
-        px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2],
-        px[w // 2, 1], px[w // 2, h - 2], px[1, h // 2], px[w - 2, h // 2],
-    )
-    fill = tuple(sum(c[i] for c in samples) // len(samples) for i in range(3))
     if current < _LOOK_CARD_RATIO:
         new_w = int(round(h * _LOOK_CARD_RATIO))
         new_h = h
     else:
         new_w = w
         new_h = int(round(w / _LOOK_CARD_RATIO))
-    canvas = Image.new("RGB", (new_w, new_h), fill)
+    canvas = Image.new("RGB", (new_w, new_h), _LOOK_PLATE_RGB)
     canvas.paste(img, ((new_w - w) // 2, (new_h - h) // 2))
     buf = io.BytesIO()
     canvas.save(buf, format="PNG")
@@ -4028,7 +4098,7 @@ def generate_model_look_image(
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id9-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id10-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -6814,10 +6884,9 @@ def _apply_model_looks(
 ) -> None:
     """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
 
-    canonical 인물은 파일이라 착장끼리 이전 결과를 물리지 않는다. 장당 OpenAI
-    호출은 병렬로 돌리고, 한 장이 끝나는 즉시 persist·report 한다. 전부 끝날
-    때까지 응답을 붙잡으면 Render가 ~100초에 끊어서, 서버엔 착장이 있는데
-    화면은 옷 컷아웃만 남았다.
+    한 장씩 만들고 끝나는 즉시 persist·report 한다. 4장 병렬은 레이트리밋에
+    걸려 첫 장이 더 늦었다. 전부 끝날 때까지 응답을 붙잡으면 Render가 ~100초에
+    끊어서, 서버엔 착장이 있는데 화면은 옷 컷아웃만 남았다.
     """
     if not outfits:
         return
@@ -6860,25 +6929,13 @@ def _apply_model_looks(
 
     t0 = time.perf_counter()
     identity = _ensure_model_identity_png(user_id, gender)
-    persist_lock = threading.Lock()
-
-    def run_one(outfit: dict[str, Any]) -> None:
-        outfit, url = one(outfit, identity)
-        if url:
-            with persist_lock:
+    for outfit in targets:
+        try:
+            outfit, url = one(outfit, identity)
+            if url:
                 persist(outfit, url)
-
-    workers = min(4, len(targets))
-    if workers <= 1:
-        run_one(targets[0])
-    else:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(run_one, o) for o in targets]
-            for fut in as_completed(futs):
-                try:
-                    fut.result()
-                except Exception as exc:  # noqa: BLE001
-                    print(f"[model-look] parallel skip: {exc}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[model-look] sequential skip: {exc}", flush=True)
     ms = int((time.perf_counter() - t0) * 1000)
     done = sum(1 for o in targets if o.get("lookImg"))
     print(

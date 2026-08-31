@@ -131,13 +131,15 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("outfit replacement task", src)
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
-        self.assertIn("model-id-v7-", src)
-        self.assertIn("model-id9-", src)
+        self.assertIn("model-id-v8-", src)
+        self.assertIn("model-id10-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
         self.assertIn("Do not lengthen the legs", src)
-        self.assertIn("youthful mid-20s", src)
+        self.assertIn("7.5 heads", src)
+        self.assertIn("youthful early-to-mid-20s", src)
+        self.assertIn("MUST wear this suggested item", src)
         self.assertNotIn("다리가 길어 보이게", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn('_png_named(identity, "01-canonical.png")', src)
@@ -224,8 +226,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertEqual(h, 60)
         self.assertAlmostEqual(w / h, self.ns['_LOOK_CARD_RATIO'], places=2)
         self.assertGreater(w, 40)
-        self.assertEqual(padded.getpixel((1, 30))[:3], (180, 185, 190))
-        self.assertEqual(padded.getpixel((w - 2, 30))[:3], (180, 185, 190))
+        plate = self.ns['_LOOK_PLATE_RGB']
+        self.assertEqual(padded.getpixel((1, 30))[:3], plate)
+        self.assertEqual(padded.getpixel((w - 2, 30))[:3], plate)
 
     def test_flatten_fills_island_behind_dark_ring(self):
         out = self.ns['_flatten_look_plate'](island_behind_ring())
@@ -254,7 +257,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id9-", src)
+        self.assertIn("model-id10-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn("_flatten_look_plate(out)", src)
         self.assertIn("_pad_look_to_card(out)", src)
@@ -267,7 +270,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("body.ids", looks_src)
         apply_src = looks_src[looks_src.index("def _apply_model_looks"):start]
         self.assertIn('"_look"', apply_src)
-        self.assertIn("ThreadPoolExecutor", apply_src)
+        self.assertIn("sequential skip", apply_src)
+        self.assertNotIn("ThreadPoolExecutor", apply_src)
 
 
 if __name__ == "__main__":

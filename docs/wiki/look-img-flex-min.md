@@ -8,7 +8,7 @@
 뷰어는 `max-width/height: 100%` + `width/height: auto`.
 
 2026-08-31: 생성본은 1024×1536(2:3)이라 4:5 카드 contain 시 양옆 회색이 달랐다.
-서버 `_pad_look_to_card`가 가장자리 스튜디오색으로 4:5를 맞춘다. `objectFit: cover`는
+서버 `_pad_look_to_card`가 카드와 같은 `#E5E3DE`로 4:5를 맞춘다. `objectFit: cover`는
 머리·발을 자를 수 있어 쓰지 않는다.
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`;
