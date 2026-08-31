@@ -264,6 +264,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("stream_with_keepalive", looks_src[start:end])
         self.assertIn("live_reset_daily", looks_src)
         self.assertIn("/api/live/outfits/daily/reset", looks_src)
+        self.assertIn("body.ids", looks_src)
         apply_src = looks_src[looks_src.index("def _apply_model_looks"):start]
         self.assertIn('"_look"', apply_src)
         self.assertIn("ThreadPoolExecutor", apply_src)

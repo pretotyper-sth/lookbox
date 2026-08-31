@@ -417,8 +417,10 @@ function TodayScreen({ ctx }) {
 
   const redoToday = async () => {
     setResetOpen(false);
+    const ids = (LB_DATA.DAILY || []).map((o) => o && o.id).filter(Boolean);
+    LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
     setLoading(true);
-    const result = await requestDailyOutfits(preferredDailyStyle, { replace: true });
+    const result = await requestDailyOutfits(preferredDailyStyle, { replace: true, replaceIds: ids });
     setLoading(false);
     if (result && result.error) return;
   };

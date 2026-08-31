@@ -43,7 +43,8 @@ reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라 I
 4:5 카드 비율로 가장자리 스튜디오색 패딩 (`_pad_look_to_card`).
 첫 추천의 마지막 칸은 옷장에 없는 아이템(`wish_combos` 최소 1). hydrate가 제안
 아이템을 ALL에 넣지 않으면 상세에 옷장만 보였다. 오늘 코디는
-`POST /api/live/outfits/daily/reset` 후 다시 받는다.
+`POST /api/live/outfits/daily/reset`에 화면 id를 실어 저장 여부와 관계없이 지운다.
+카드를 먼저 비우고, hydrate가 옛 id를 다시 그리지 않게 한다.
 크레딧 잔액으로 장 수를 자르지 않는다.
 `wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리
 (신발·가방 등)를 제안으로 넣는다(`_fill_wish_quota`, 2026-08-30).

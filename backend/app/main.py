@@ -4412,6 +4412,7 @@ class LiveLooks(BaseModel):
 
 class LiveDailyReset(BaseModel):
     for_date: str
+    ids: list[str] = []
 
 
 class LiveStatus(BaseModel):
@@ -7078,10 +7079,11 @@ def _outfit_for_date(row: dict[str, Any]) -> str | None:
 
 @app.post("/api/live/outfits/daily/reset")
 def live_reset_daily(body: LiveDailyReset, user: UserContext = Depends(current_user)) -> dict[str, Any]:
-    """오늘 받은 데일리 코디만 지운다. 룩북에 저장한 건 남긴다."""
+    """오늘 받은 데일리 코디를 지운다. 화면의 id와 날짜 둘 다 본다. 저장한 것도 오늘 것이면 지운다."""
     require_supabase()
     day = (body.for_date or "").strip()[:10]
-    if len(day) != 10:
+    want = {str(i) for i in (body.ids or []) if i}
+    if len(day) != 10 and not want:
         raise HTTPException(status_code=400, detail="날짜가 필요해요.")
     rows = (
         supabase_admin.table("outfits")
@@ -7092,10 +7094,13 @@ def live_reset_daily(body: LiveDailyReset, user: UserContext = Depends(current_u
         .data
         or []
     )
-    ids = [
-        r["id"] for r in rows
-        if r.get("id") and _outfit_for_date(r) == day and not r.get("saved")
-    ]
+    ids = []
+    for r in rows:
+        rid = r.get("id")
+        if not rid:
+            continue
+        if str(rid) in want or (day and _outfit_for_date(r) == day):
+            ids.append(rid)
     deleted = 0
     if ids:
         supabase_admin.table("outfits").delete().eq("user_id", user.id).in_("id", ids).execute()

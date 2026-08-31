@@ -188,6 +188,7 @@ const DAILY_HISTORY_BASE = 'lb_daily_history_v1';
 function dailyHistoryKey(uid) { return DAILY_HISTORY_BASE + ':' + (uid || dailyScope()); }
 const DAILY_HISTORY_MAX_DAYS = 120;
 const serverDailyHistory = {};
+const wipedDailyIds = new Set();
 function mergeDailyRecord(local, remote) {
   if (!local && !remote) return null;
   if (!local) return remote;
@@ -270,6 +271,7 @@ function hydrateDailyHistoryFromServer(data, ownedItems) {
   const byDate = {};
   list.slice().reverse().forEach((o) => {
     if (!o.forDate) return;
+    if (wipedDailyIds.has(o.id)) return;
     (byDate[o.forDate] = byDate[o.forDate] || []).push({
       id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
       itemIds: o.itemIds, lookImg: o.lookImg, wish: o.wish,
@@ -1533,9 +1535,25 @@ function App() {
     const quiet = !!(opts && opts.quiet);
     const replace = !!(opts && opts.replace);
     if (!prefs.dailyEnabled) return { added: 0, wardrobeGrew: false };
-    // 캐시/메모리에 남은 삭제·보관 아이템 코디를 먼저 걷어낸다.
     syncAllFromWardrobe(items, archived);
-    pruneDailyAgainstOwned(items);
+    if (replace) {
+      const ids = (opts.replaceIds || LB_DATA.DAILY.map((o) => o && o.id).filter(Boolean));
+      ids.forEach((id) => wipedDailyIds.add(id));
+      LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
+      clearDailyCache();
+      overwriteDailyRecord(localYmd(), { outfits: [], items: [], wornIds: [] });
+      bumpDaily();
+      try {
+        await liveJSON('/api/live/outfits/daily/reset', {
+          method: 'POST',
+          body: JSON.stringify({ for_date: localYmd(), ids }),
+        });
+      } catch (e) {
+        console.warn('[daily-reset]', e && e.message);
+      }
+    } else {
+      pruneDailyAgainstOwned(items);
+    }
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     // AI 착장 이미지 — 토글이 켜져 있으면 성별만 맞춰 룩북 모델을 그린다.
     // 성별은 coordProfile에 이미 들어 있다.
@@ -1543,21 +1561,6 @@ function App() {
     // 마이페이지에 저장한 취향은 계정(user_metadata)에만 있어서 서버가 모른다.
     // 코디는 퍼스널 컬러·선호 실루엣까지 봐야 감이 맞으므로 요청마다 같이 싣는다.
     const styleProfile = coordProfile(prefs);
-    if (replace) {
-      try {
-        await liveJSON('/api/live/outfits/daily/reset', {
-          method: 'POST',
-          body: JSON.stringify({ for_date: localYmd() }),
-        });
-      } catch (e) {
-        showToast(e.message || '오늘 코디를 지우지 못했어요');
-        return { added: 0, wardrobeGrew, error: true };
-      }
-      LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length);
-      clearDailyCache();
-      overwriteDailyRecord(localYmd(), { outfits: [], items: [], wornIds: [] });
-      bumpDaily();
-    }
     if (!force && !replace) {
       // 오늘 이미 추천한 이력이 있으면 API 없이 기존 코디만 보여준다.
       if (LB_DATA.DAILY.length > 0) {
