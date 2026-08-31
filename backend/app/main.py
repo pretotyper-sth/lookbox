@@ -92,7 +92,7 @@ FRONTEND_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,https://lookbox.vercel.app",
+        "http://localhost:5173,http://127.0.0.1:5173,https://lookbox.vercel.app,https://realcloset.vercel.app",
     ).split(",")
     if origin.strip()
 ]

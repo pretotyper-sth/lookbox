@@ -244,6 +244,8 @@ export function initLiveBridge() {
   installFetchBridge()
   addPreconnect(API_BASE)
   addPreconnect(SUPABASE_URL)
+  // Render 무료 플랜은 잠든 뒤 첫 요청이 실패한다. 인증 없는 /health로 먼저 깨운다.
+  window.fetch(`${API_BASE}/health`).catch(() => {})
   // fire-and-forget: don't await, so module import + render start immediately
   ensureToken().catch(() => {
     /* offline / not configured — prototype falls back to sample data */

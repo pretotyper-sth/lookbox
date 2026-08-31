@@ -262,3 +262,7 @@ cover로 채운다. 캐시 `model-id11-` ([[look-img-flex-min]] [[model-look-tog
 `LOOK_TEST_LIMIT=1`(서버 env + 프론트). 오늘 코디 카드는 여러 개여도 착장
 이미지는 한 장만 만든다. 0이면 제한 없음 ([[model-look-toggle]]).
 
+## [2026-09-01] fix | 새로고침마다 네트워크 불안정 토스트
+옷장 GET에 JSON 헤더를 붙여 OPTIONS가 Render 슬립에 죽었다. 헤더를 빼고
+재시도·/health 깨우기를 넣는다 ([[live-fetch-wake]]).
+

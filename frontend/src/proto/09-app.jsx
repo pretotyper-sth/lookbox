@@ -577,31 +577,42 @@ async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
   const timeoutMs = options.timeoutMs || 165000;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
-  try {
-    const { timeoutMs: _t, onProgress: _p, onLook: _l, ...fetchOpts } = options;
-    res = await fetch(url, {
-      ...fetchOpts,
-      signal: ctrl.signal,
-      headers: options.body instanceof FormData ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    });
-  } catch (e) {
-    clearTimeout(timer);
-    if (e && e.name === 'AbortError') {
-      throw new Error('시간이 너무 오래 걸려 중단했어요. 잠시 후 다시 시도해 주세요.');
+  const { timeoutMs: _t, onProgress, onLook, ...fetchOpts } = options;
+  const headers = { ...(options.headers || {}) };
+  // GET에 application/json을 붙이면 매번 CORS preflight가 나간다.
+  // Render가 잠든 직후 OPTIONS가 실패하면 '네트워크가 불안정해요'로 떨어진다.
+  if (!(options.body instanceof FormData) && options.body != null && options.body !== '') {
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/json';
     }
-    throw new Error('네트워크 연결이 불안정해요. 잠시 후 다시 시도해 주세요.');
   }
-  clearTimeout(timer);
+  let res;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      res = await fetch(url, { ...fetchOpts, signal: ctrl.signal, headers });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') {
+        throw new Error('시간이 너무 오래 걸려 중단했어요. 잠시 후 다시 시도해 주세요.');
+      }
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+      throw new Error('네트워크 연결이 불안정해요. 잠시 후 다시 시도해 주세요.');
+    }
+    clearTimeout(timer);
+    break;
+  }
   // keep-alive 스트리밍은 헤더가 먼저 오고 본문이 늦게 끝난다 — 본문이 중간에
   // 끊기거나 공백만 오면(서버 재시작 등) 성공으로 오인하지 말고 명확히 실패 처리.
   // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = (options.onProgress || options.onLook)
-      ? await readProgressStream(res, options.onProgress, options.onLook)
+    text = (onProgress || onLook)
+      ? await readProgressStream(res, onProgress, onLook)
       : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
