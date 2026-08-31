@@ -148,10 +148,12 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       </div>
     );
   }
-  const place = lookPlacement(cleanItems);
+  // 사진 없는 제안(wish)은 점선 칸으로 두지 않는다. 옷장 실물만 먼저 보여 준다.
+  const shown = cleanItems.filter((it) => it.img);
+  const place = lookPlacement(shown);
   return (
     <div style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}>
-      {cleanItems.map((it) => {
+      {shown.map((it) => {
         const at = place[it.id] || LOOK_SPOT.top;
         const size = Math.min(100, (LOOK_SIZE[it.category] || LOOK_SIZE['상의']) * scale);
         const frame = {
@@ -159,40 +161,26 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           transform: 'translate(-50%,-50%)', zIndex: at.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         };
-        if (it.img) {
-          return (
-            <div key={it.id} style={frame}>
-              <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
-                width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                transform: `scale(${lookImageZoom(it.category)})`,
-              }} />
-            </div>
-          );
-        }
-        // 옷장에 없는 제안 아이템은 사진이 없다. 점선 자리로 그려 '아직 없는 옷'임을 드러낸다.
-        if (it.wish) {
-          return (
-            <div key={it.id} style={{ ...frame, flexDirection: 'column', gap: 3, padding: 4, boxSizing: 'border-box' }}>
-              <div style={{
-                width: '78%', height: '78%', borderRadius: 'var(--r-md)',
-                border: '1.5px dashed var(--line-2)', color: 'var(--ink-3)',
-                display: 'grid', placeItems: 'center', boxSizing: 'border-box',
-                background: 'color-mix(in srgb, var(--surface) 70%, transparent)',
-              }}>
-                <Silhouette category={it.category} />
-              </div>
-            </div>
-          );
-        }
-        return <div key={it.id} style={{ ...frame, color: 'var(--ink-3)' }}><Silhouette category={it.category} /></div>;
+        return (
+          <div key={it.id} style={frame}>
+            <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
+              width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+              transform: `scale(${lookImageZoom(it.category)})`,
+            }} />
+          </div>
+        );
       })}
       {looking ? (
         <div style={{
-          position: 'absolute', inset: 0, zIndex: 8,
-          background: 'color-mix(in srgb, var(--thumb-bg) 42%, transparent)',
-          display: 'grid', placeItems: 'center',
-          fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)',
-        }}>AI 착장 만드는 중</div>
+          position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 8,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+        }}>
+          <div style={{
+            padding: '5px 10px', borderRadius: 999,
+            background: 'color-mix(in srgb, var(--ink) 72%, transparent)',
+            color: '#fff', fontSize: 11.5, fontWeight: 700, letterSpacing: '-0.01em',
+          }}>AI 착장 만드는 중</div>
+        </div>
       ) : null}
     </div>
   );
@@ -276,7 +264,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
                     <div style={{ padding: '10px 4px 4px' }}>
                       <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3, textWrap: 'pretty' }}>{o.label}</div>
                       <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 3 }}>
-                        {items.length}개 품목{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
+                        {items.filter((it) => it.img).length}개 품목{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
                       </div>
                     </div>
                   </button>

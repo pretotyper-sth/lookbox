@@ -23,6 +23,9 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 착장 API는 keepalive SSE다. Render는 응답이 안 오면 ~100초에 끊어서, 서버에
 `look_image_url`이 있어도 화면은 옷 컷아웃만 남았다. 한 장이 끝나는 즉시
 `_look` 이벤트로 카드를 바꾼다. 인물 일관성을 위해 순차 생성(2026-08-30).
+대기 중인 카드는 컷아웃을 그대로 두고, 지금 그리는 장만 하단 뱃지
+「AI 착장 만드는 중」을 붙인다. 사진 없는 wish는 점선 칸으로 그리지 않는다
+(2026-08-31).
 
 `hydrateOutfits`가 DAILY를 새 객체로 갈아끼우면 착장 URL이 옛 객체에만 붙는다.
 `paintLook`은 `LB_DATA.DAILY`를 id로 찾아 쓰고, hydrate는 로컬 lookImg를 보존한다
