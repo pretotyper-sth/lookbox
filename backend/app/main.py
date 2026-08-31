@@ -81,6 +81,12 @@ OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medi
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
 # 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
 AI_TEST_MODE = os.environ.get("AI_TEST_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+# 착장 품질 테스트: 오늘 코디 묶음에서 착장 이미지를 최대 N장만 만든다. 0이면 제한 없음.
+# 다시 4장 쓰라고 하기 전까지 기본 1.
+try:
+    LOOK_TEST_LIMIT = int(os.environ.get("LOOK_TEST_LIMIT", "1").strip() or "1")
+except ValueError:
+    LOOK_TEST_LIMIT = 1
 DEFAULT_IMAGE_CREDITS = int(os.environ.get("DEFAULT_IMAGE_CREDITS", "25"))
 FRONTEND_ORIGINS = [
     origin.strip()
@@ -117,6 +123,8 @@ if AI_TEST_MODE:
     print("  패션 여부 분류(classify)는 API 키가 있으면 그대로 실행됩니다.", flush=True)
     print("  끄려면 .env에서 AI_TEST_MODE 삭제/0 후 서버 재시작", flush=True)
     print("=" * 60, flush=True)
+if LOOK_TEST_LIMIT > 0:
+    print(f"[LOOK_TEST_LIMIT] {LOOK_TEST_LIMIT} — 착장 품질 테스트, 장 수 제한 (0이면 제한 없음)", flush=True)
 
 
 def _vision_client():
@@ -3520,8 +3528,10 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - one person, full-body standing lookbook, front-facing, slightly relaxed
 - natural adult proportions: about 7 to 7.5 heads tall. Do not lengthen the legs.
   Fashion-illustration 8-head ratio and runway-long inseam are forbidden.
-- head fully in frame with a little margin above the hair. Both feet fully in frame.
-  Never crop the chin, crown, or shoes.
+- frame for a 4:5 card crop: person vertically centered in the middle ~70% of the height
+- leave about 15% of the frame empty above the hair and 15% empty below the shoes
+- the top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes
+- never crop the chin, crown, or shoes in this source frame
 - fill every pixel with {_LOOK_PLATE_HEX} seamless studio. wall and floor the same color. no second plate, letterbox, or frame
 - simple base garments already in the photo; do not invent logos or extra people
 - soft studio lighting, photorealistic contemporary Korean fashion lookbook
@@ -3716,10 +3726,14 @@ Express the mood through clothing combination, silhouette, layering, fit, color,
 Do NOT express the mood by changing the character, hair, body, or background.
 
 COMPOSITION:
-Preserve Image 1's standing pose, camera angle, camera distance, full-body framing,
-studio lighting, gray studio background, gray studio floor, shadow, and color grading.
-One person, centered. Crown of hair, chin, and both feet fully visible with a little margin.
-Never crop the head at the chin or the feet at the shoes.
+Keep Image 1's standing pose, camera angle, studio lighting, gray studio,
+gray studio floor, shadow, and color grading.
+Do not copy a tight head-to-toe crop from Image 1.
+Frame for a 4:5 lookbook card. The person is vertically centered.
+Leave about 15% of the frame empty above the hair and 15% empty below the shoes.
+The top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes.
+Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle 70%.
+One person, centered. Crown of hair, chin, and both feet fully visible.
 Keep the pose from the canonical: standing, front-facing, slightly relaxed.
 Small hand/arm shifts are allowed (pocket, holding a bag). No walking, sitting, crop, or dramatic pose.
 Fill every pixel of the frame with {_LOOK_PLATE_HEX} seamless studio. Wall and floor the same color.
@@ -3750,7 +3764,7 @@ Change the outfit. Do not change the person. Do not change the studio.
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v8-{_look_gender_key(gender)}"
+    return f"model-id-v9-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -4006,12 +4020,67 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
-# 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 contain이면 양옆에 다른 회색이 생긴다.
+# 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 스튜디오 여백만 잘라 칸을 채운다.
 _LOOK_CARD_RATIO = 4 / 5
+_LOOK_CROP_PAD = 0.08
 
 
-def _pad_look_to_card(png_bytes: bytes) -> bytes:
-    """생성본을 카드 비율(4:5)로 맞춘다. 빈 칸은 카드와 같은 스튜디오판(#E5E3DE)으로 채운다."""
+def _look_is_plate_pixel(r: int, g: int, b: int) -> bool:
+    tr, tg, tb = _LOOK_PLATE_RGB
+    if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 36:
+        return True
+    if max(r, g, b) - min(r, g, b) > 28:
+        return False
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    plate_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
+    return abs(luma - plate_luma) <= 18
+
+
+def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
+    """스튜디오판이 아닌 픽셀(인물)의 박스. 없으면 None."""
+    w, h = img.size
+    px = img.load()
+    step = 2
+    y0, y1, x0, x1 = h, -1, w, -1
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            r, g, b = px[x, y]
+            if not _look_is_plate_pixel(r, g, b):
+                if y < y0:
+                    y0 = y
+                if y > y1:
+                    y1 = y
+                if x < x0:
+                    x0 = x
+                if x > x1:
+                    x1 = x
+    if y1 < 0:
+        return None
+    return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
+
+
+def _fit_look_to_card(
+    img: Image.Image, cw: int, ch: int, box: tuple[int, int, int, int], pad: int,
+) -> bytes:
+    """인물을 자르지 않고 4:5 판 안에 여백 두고 넣는다."""
+    x0, y0, x1, y1 = box
+    region = img.crop((
+        max(0, x0 - pad),
+        max(0, y0 - pad),
+        min(img.width, x1 + pad),
+        min(img.height, y1 + pad),
+    ))
+    region = region.copy()
+    region.thumbnail((cw, ch))
+    canvas = Image.new("RGB", (cw, ch), _LOOK_PLATE_RGB)
+    canvas.paste(region, ((cw - region.width) // 2, (ch - region.height) // 2))
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _crop_look_to_card(png_bytes: bytes) -> bytes:
+    """생성본을 카드 비율(4:5)로 맞춘다. 인물은 자르지 않고 스튜디오 여백만 자른다."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
     if w < 8 or h < 8:
@@ -4019,16 +4088,45 @@ def _pad_look_to_card(png_bytes: bytes) -> bytes:
     current = w / h
     if abs(current - _LOOK_CARD_RATIO) < 0.02:
         return png_bytes
+    box = _look_content_box(img)
     if current < _LOOK_CARD_RATIO:
-        new_w = int(round(h * _LOOK_CARD_RATIO))
-        new_h = h
+        new_w, new_h = w, int(round(w / _LOOK_CARD_RATIO))
+        if new_h >= h:
+            return png_bytes
+        pad = max(8, int(round(new_h * _LOOK_CROP_PAD)))
+        if not box:
+            top = max(0, (h - new_h) // 2)
+            img = img.crop((0, top, w, top + new_h))
+        else:
+            _, y0, _, y1 = box
+            if y1 - y0 + 2 * pad > new_h:
+                return _fit_look_to_card(img, new_w, new_h, box, pad)
+            extra = new_h - (y1 - y0) - 2 * pad
+            top = y0 - pad - extra // 2
+            top = max(0, min(h - new_h, top))
+            if top > y0 or top + new_h < y1:
+                return _fit_look_to_card(img, new_w, new_h, box, pad)
+            img = img.crop((0, top, w, top + new_h))
     else:
-        new_w = w
-        new_h = int(round(w / _LOOK_CARD_RATIO))
-    canvas = Image.new("RGB", (new_w, new_h), _LOOK_PLATE_RGB)
-    canvas.paste(img, ((new_w - w) // 2, (new_h - h) // 2))
+        new_w, new_h = int(round(h * _LOOK_CARD_RATIO)), h
+        if new_w >= w:
+            return png_bytes
+        pad = max(8, int(round(new_w * _LOOK_CROP_PAD)))
+        if not box:
+            left = max(0, (w - new_w) // 2)
+            img = img.crop((left, 0, left + new_w, h))
+        else:
+            x0, _, x1, _ = box
+            if x1 - x0 + 2 * pad > new_w:
+                return _fit_look_to_card(img, new_w, new_h, box, pad)
+            extra = new_w - (x1 - x0) - 2 * pad
+            left = x0 - pad - extra // 2
+            left = max(0, min(w - new_w, left))
+            if left > x0 or left + new_w < x1:
+                return _fit_look_to_card(img, new_w, new_h, box, pad)
+            img = img.crop((left, 0, left + new_w, h))
     buf = io.BytesIO()
-    canvas.save(buf, format="PNG")
+    img.save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -4098,7 +4196,7 @@ def generate_model_look_image(
     """
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id10-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id12-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4154,7 +4252,7 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         try:
             out = _flatten_look_plate(out)
-            out = _pad_look_to_card(out)
+            out = _crop_look_to_card(out)
         except Exception as flat_exc:  # noqa: BLE001
             print(f"[model-look] flatten skip: {flat_exc}", flush=True)
         storage_path = f"{user_id}/looks/{key}.png"
@@ -4186,7 +4284,7 @@ def health() -> dict[str, Any]:
         "openai": bool(openai_client),
         "supabase": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
         "rev": (DEPLOY_REV or "")[:12],
-        "credits_gated": False,
+        "look_test_limit": LOOK_TEST_LIMIT,
     }
 
 
@@ -6891,6 +6989,15 @@ def _apply_model_looks(
     if not outfits:
         return
     targets = [o for o in outfits if not o.get("lookImg")]
+    if LOOK_TEST_LIMIT > 0:
+        have = sum(1 for o in outfits if o.get("lookImg"))
+        room = max(0, LOOK_TEST_LIMIT - have)
+        if len(targets) > room:
+            print(
+                f"[model-look] LOOK_TEST_LIMIT={LOOK_TEST_LIMIT} have={have} taking={room}",
+                flush=True,
+            )
+            targets = targets[:room]
     if not targets:
         return
     remaining = billing_state(user_id)["remaining"]

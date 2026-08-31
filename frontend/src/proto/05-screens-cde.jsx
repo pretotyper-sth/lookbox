@@ -145,7 +145,7 @@ function LookPendingMarks() {
 
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
   const cleanItems = (items || []).filter(Boolean);
-  // 서버가 4:5로 패딩해서 넣는다. contain으로 머리·발을 자르지 않는다.
+  // 서버가 4:5로 가운데 자른다. cover로 칸을 채워 양옆 다른 색이 안 비친다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
@@ -160,7 +160,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'contain', objectPosition: 'center',
+            objectFit: 'cover', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
         />

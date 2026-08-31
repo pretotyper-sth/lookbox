@@ -21,12 +21,16 @@ FNS = (
     '_model_look_garment_lines',
     '_model_look_outfit_block',
     '_flatten_look_plate',
-    '_pad_look_to_card',
+    '_look_is_plate_pixel',
+    '_look_content_box',
+    '_fit_look_to_card',
+    '_crop_look_to_card',
     '_bottom_hem_note',
 )
 CONSTS = (
     '_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
     '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER', '_LOOK_CARD_RATIO',
+    '_LOOK_CROP_PAD',
 )
 
 
@@ -120,6 +124,7 @@ class ModelLookPromptTest(unittest.TestCase):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn(self.ns['_LOOK_PLATE_HEX'], prompt)
         self.assertIn("identity lock", prompt)
+        self.assertIn("15% of the frame empty", prompt)
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
         self.assertNotIn("키 크고", prompt)
@@ -131,13 +136,15 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("outfit replacement task", src)
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
-        self.assertIn("model-id-v8-", src)
-        self.assertIn("model-id10-", src)
+        self.assertIn("model-id-v9-", src)
+        self.assertIn("model-id12-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
         self.assertIn("Do not lengthen the legs", src)
         self.assertIn("7.5 heads", src)
+        self.assertIn("15% of the frame empty", src)
+        self.assertIn("middle 70%", src)
         self.assertIn("youthful early-to-mid-20s", src)
         self.assertIn("MUST wear this suggested item", src)
         self.assertNotIn("다리가 길어 보이게", src)
@@ -216,19 +223,51 @@ class ModelLookPromptTest(unittest.TestCase):
         plate = self.ns['_LOOK_PLATE_RGB']
         self.assertEqual(img.getpixel((12, 84)), plate)
 
-    def test_pad_look_widens_2_3_to_card(self):
-        im = Image.new("RGB", (40, 60), (180, 185, 190))
+    def test_crop_look_keeps_person_inside_card(self):
+        plate = self.ns['_LOOK_PLATE_RGB']
+        navy = (28, 42, 72)
+        im = Image.new("RGB", (40, 60), plate)
+        px = im.load()
+        for y in range(16, 44):
+            for x in range(12, 28):
+                px[x, y] = navy
         buf = io.BytesIO()
         im.save(buf, format="PNG")
-        out = self.ns['_pad_look_to_card'](buf.getvalue())
-        padded = Image.open(io.BytesIO(out)).convert("RGB")
-        w, h = padded.size
-        self.assertEqual(h, 60)
+        out = self.ns['_crop_look_to_card'](buf.getvalue())
+        cropped = Image.open(io.BytesIO(out)).convert("RGB")
+        w, h = cropped.size
+        self.assertEqual(w, 40)
+        self.assertLess(h, 60)
         self.assertAlmostEqual(w / h, self.ns['_LOOK_CARD_RATIO'], places=2)
-        self.assertGreater(w, 40)
+        navy_rows = [
+            y for y in range(h)
+            if any(cropped.getpixel((x, y))[:3] == navy for x in range(w))
+        ]
+        self.assertTrue(navy_rows)
+        self.assertGreater(navy_rows[0], 2)
+        self.assertLess(navy_rows[-1], h - 3)
+
+    def test_crop_look_fits_instead_of_cutting_tall_person(self):
         plate = self.ns['_LOOK_PLATE_RGB']
-        self.assertEqual(padded.getpixel((1, 30))[:3], plate)
-        self.assertEqual(padded.getpixel((w - 2, 30))[:3], plate)
+        navy = (28, 42, 72)
+        im = Image.new("RGB", (40, 60), plate)
+        px = im.load()
+        for y in range(1, 59):
+            for x in range(14, 26):
+                px[x, y] = navy
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        out = self.ns['_crop_look_to_card'](buf.getvalue())
+        fitted = Image.open(io.BytesIO(out)).convert("RGB")
+        w, h = fitted.size
+        self.assertAlmostEqual(w / h, self.ns['_LOOK_CARD_RATIO'], places=2)
+        navy_rows = [
+            y for y in range(h)
+            if any(fitted.getpixel((x, y))[:3] == navy for x in range(w))
+        ]
+        self.assertTrue(navy_rows)
+        self.assertGreaterEqual(navy_rows[0], 0)
+        self.assertLessEqual(navy_rows[-1], h - 1)
 
     def test_flatten_fills_island_behind_dark_ring(self):
         out = self.ns['_flatten_look_plate'](island_behind_ring())
@@ -257,10 +296,10 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id10-", src)
+        self.assertIn("model-id12-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn("_flatten_look_plate(out)", src)
-        self.assertIn("_pad_look_to_card(out)", src)
+        self.assertIn("_crop_look_to_card(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
         end = looks_src.index("\ndef ", start + 1)
@@ -270,6 +309,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("body.ids", looks_src)
         apply_src = looks_src[looks_src.index("def _apply_model_looks"):start]
         self.assertIn('"_look"', apply_src)
+        self.assertIn("LOOK_TEST_LIMIT", apply_src)
         self.assertIn("sequential skip", apply_src)
         self.assertNotIn("ThreadPoolExecutor", apply_src)
 

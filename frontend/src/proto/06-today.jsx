@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, LOOK_TEST_LIMIT, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // RealCloset — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
@@ -537,6 +537,10 @@ function TodayScreen({ ctx }) {
   );
 
   const shown = isToday ? picks : uniqueDailyOutfits((pastRecord && pastRecord.outfits) || []);
+  const lookCap = LOOK_TEST_LIMIT || 0;
+  const lookBusyId = (isToday && modelLook && (lookCap <= 0 || shown.filter((x) => x.lookImg).length < lookCap))
+    ? (shown.find((x) => !x.lookImg) || {}).id
+    : null;
   // 룩북과 같은 상세 화면을 쓴다. 상세는 LB_DATA에서 코디·아이템을 찾으므로 지난 날짜의
   // 스냅샷은 열기 전에 조회용으로 등록해 둔다(그날 옷을 지웠어도 기록이 깨지지 않게).
   const dailyLooks = shown.map((o) => ({ id: 'daily-' + o.id, outfitId: o.id, label: o.label }));
@@ -590,7 +594,7 @@ function TodayScreen({ ctx }) {
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
-                  looking={isToday && !!modelLook && !o.lookImg}
+                  looking={isToday && !!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId)}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

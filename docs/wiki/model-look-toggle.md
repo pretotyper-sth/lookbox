@@ -11,6 +11,8 @@
 `POST /api/live/coordinate/looks`가 이어서 채운다(2026-08-30). 품질은
 `OPENAI_IMAGE_MODEL_LOOK`(기본 `gpt-image-2`) + `OPENAI_IMAGE_QUALITY_LOOK`(기본 medium,
 2026-08-31). high 4장 병렬은 첫 장이 더 늦었다.
+품질 테스트 동안 `LOOK_TEST_LIMIT`(기본 1)로 착장 이미지를 1장만 만든다. 0이면
+제한 없음. 프론트 `LOOK_TEST_LIMIT`와 서버 env가 같다(2026-08-31).
 
 2026-08-31: 첫 추천 응답이 오면 컷아웃 카드를 바로 그리고 착장을 시작한다.
 개수가 모자라도 coordinate를 추가로 돌리지 않는다. wish는 첫 요청의
@@ -35,13 +37,14 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 배경은 옷장·코디 카드와 같은 `--thumb-bg` `#E5E3DE` 한 장이다. 카드 안 패딩으로
 더 작은 회색 사각형이 생기면 안 된다(2026-08-30). 시드 JPG
 (`backend/assets/look-identity/{m,f}.jpg`)는 성숙해 보여서 그대로 Image 1로
-쓰지 않고, 한 번 젊게 edit한 결과를 `model-id-v8-`에 둔다(2026-08-31).
+쓰지 않고, 한 번 젊게 edit한 결과를 `model-id-v9-`에 둔다(2026-08-31).
 댄디·미니멀처럼 남녀가 한 장에 있는 무드 컷은 인물 입력이 아니다. 이전 착장
 결과는 다음 생성의 reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라
-Image 2+로 붙인다. 캐시 `model-id-v8-` / `model-id10-`(2026-08-31). 프롬프트는
+Image 2+로 붙인다. 캐시 `model-id-v9-` / `model-id12-`(2026-08-31). 프롬프트는
 outfit replacement: 인물·스튜디오·포즈 고정, 옷만 교체. 얼굴은 20대 초중반.
-다리는 7~7.5등신, 머리·발 크롭 금지. 하의는 긴 기장이 기본. 출력은 plate
-flatten 뒤 4:5를 `#E5E3DE`로 패딩 (`_pad_look_to_card`).
+다리는 7~7.5등신. 위아래 15%는 빈 스튜디오(4:5 크롭용). 하의는 긴 기장이 기본.
+출력은 plate flatten 뒤 인물을 피해 4:5로 자른다 (`_crop_look_to_card`).
+인물이 창보다 크면 축소해 넣는다. 카드는 cover로 채운다.
 
 첫 추천의 마지막 칸은 옷장에 없는 아이템(`wish_combos` 최소 1). wish가 이미
 있는 자리(신발 위 신발)면 `_apply_wish_slot`이 옷장 쪽을 빼거나 빈 자리로

@@ -8,8 +8,9 @@
 뷰어는 `max-width/height: 100%` + `width/height: auto`.
 
 2026-08-31: 생성본은 1024×1536(2:3)이라 4:5 카드 contain 시 양옆 회색이 달랐다.
-서버 `_pad_look_to_card`가 카드와 같은 `#E5E3DE`로 4:5를 맞춘다. `objectFit: cover`는
-머리·발을 자를 수 있어 쓰지 않는다.
+색을 덧대지 않는다. `_crop_look_to_card`는 인물 박스를 보고 스튜디오 여백만 잘라
+4:5로 맞춘다. 인물이 창보다 크면 자르지 않고 판 안에 축소해 넣는다. 프롬프트는
+위아래 15% 빈 스튜디오를 요구해서 보통은 여백만 잘린다. 카드는 `objectFit: cover`.
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`;
-`frontend/src/proto/02-shared.jsx` ImageViewer. 관련 [[image-viewer-gestures]]
+`backend/app/main.py` `_crop_look_to_card`. 관련 [[image-viewer-gestures]]

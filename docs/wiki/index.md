@@ -10,10 +10,10 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Features
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. 100%에서도 핀치가 먹게 touch-action none
-- [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 서버가 2:3을 #E5E3DE로 4:5 패딩해 양옆 회색이 안 섞인다
+- [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 2:3은 인물 여백을 두고 4:5로 자른다. 안 들어가면 축소해 넣는다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장은 20대 초중반·7.5등신. 한 장씩 SSE. wish는 같은 자리를 바꿈. 대기 카드에 스파클+인물 원
+- [model-look-toggle](model-look-toggle.md) — 착장은 20대 초중반·7.5등신. 품질 테스트 중 착장 1장(`LOOK_TEST_LIMIT`)
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. 구멍은 옷 픽셀, 양옆은 막음. 후면 카메라만
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋

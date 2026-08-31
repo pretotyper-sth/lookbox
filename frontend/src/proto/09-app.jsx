@@ -1447,9 +1447,17 @@ function App() {
 
   const lookInflight = useRef(new Set());
   const applyModelLooks = useCallback(async (list) => {
-    const targets = (list || LB_DATA.DAILY || []).filter((o) => (
+    const pending = (list || LB_DATA.DAILY || []).filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id && !lookInflight.current.has(o.id)
     ));
+    if (!pending.length) return 0;
+    const lookLimit = window.LOOK_TEST_LIMIT || 0;
+    const daily = LB_DATA.DAILY || [];
+    const fromDaily = pending.every((o) => daily.some((d) => d && d.id === o.id));
+    const pool = fromDaily ? daily : (list || pending);
+    const have = pool.filter((o) => o && o.lookImg).length;
+    const room = lookLimit > 0 ? Math.max(0, lookLimit - have) : pending.length;
+    const targets = pending.slice(0, room);
     if (!targets.length) return 0;
     targets.forEach((o) => lookInflight.current.add(o.id));
     const paintLook = (id, url) => {

@@ -171,7 +171,11 @@ const DEFAULT_PREFS = {
   tryOnCut: '', // 'top' | 'bottom' | 'custom'
 };
 
-Object.assign(window, { LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+// 착장 품질 테스트. 1이면 오늘 코디에서 착장 이미지 1장만. 0이면 제한 없음.
+// 다시 4장 쓰라고 하기 전까지 1로 둔다.
+const LOOK_TEST_LIMIT = 1;
+
+Object.assign(window, { LOOK_TEST_LIMIT, LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
 
 
 /* @prototype-ported: real-service start = empty user content */

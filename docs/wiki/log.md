@@ -249,3 +249,16 @@ sparkle·인물 원, 좌상단에 작업 문구. 시드는 한 번 젊게 고정
 다리는 7.5등신, 패딩은 `#E5E3DE`. wish가 같은 자리면 옷장 아이템을 뺀다.
 캐시 `model-id10-` ([[model-look-toggle]] [[look-img-flex-min]]).
 
+## [2026-08-31] fix | 착장 카드는 패딩 대신 4:5로 자른다
+양옆에 카드색을 덧대지 않는다. 2:3 생성본을 가운데 4:5로 자르고 카드는
+cover로 채운다. 캐시 `model-id11-` ([[look-img-flex-min]] [[model-look-toggle]]).
+
+## [2026-08-31] fix | 착장 크롭은 인물을 피하고 여백을 남긴다
+프롬프트가 위아래 15% 빈 스튜디오를 요구한다. 자를 때는 인물 박스 기준이고,
+창에 안 들어가면 축소해 넣는다. 캐시 `model-id-v9-` / `model-id12-`
+([[look-img-flex-min]] [[model-look-toggle]]).
+
+## [2026-08-31] config | 착장 품질 테스트는 1장만
+`LOOK_TEST_LIMIT=1`(서버 env + 프론트). 오늘 코디 카드는 여러 개여도 착장
+이미지는 한 장만 만든다. 0이면 제한 없음 ([[model-look-toggle]]).
+
