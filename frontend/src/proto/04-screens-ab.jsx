@@ -2199,7 +2199,7 @@ function AddSheet({ ctx }) {
                             ? '크롬에서 로그인한 뒤 다시 눌러 주세요.'
                             : orderBusy
                               ? '크롬에서 주문내역을 읽고 있어요.'
-                              : '쇼핑몰을 고르고 가져오면, 담을 옷은 다음에 고르면 돼요.'}
+                              : '먼저 원하는 쇼핑몰을 골라주세요.'}
                         </div>
                         <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                           {ORDER_PLATFORMS.map((p) => (
