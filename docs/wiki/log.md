@@ -266,3 +266,30 @@ cover로 채운다. 캐시 `model-id11-` ([[look-img-flex-min]] [[model-look-tog
 옷장 GET에 JSON 헤더를 붙여 OPTIONS가 Render 슬립에 죽었다. 헤더를 빼고
 재시도·/health 깨우기를 넣는다 ([[live-fetch-wake]]).
 
+## [2026-09-02] fix | 착장 대기 문구를 진짜 단계로
+2.6초 타이머로 세 문구를 돌리던 걸 걷어냈다. 서버가 `prep/dress/finish/save`를
+`_look` 이벤트로 흘리고 카드는 그 키만 그린다. 가운데 픽토그램 두 개는 빼고
+sparkle 하나를 문구 앞에 붙였다 ([[model-look-toggle]]).
+
+## [2026-09-02] fix | 신발 옆 깨짐은 프롬프트가 아니라 판 정리였다
+`_flatten_look_plate`가 접지 그림자까지 판 색으로 못박아 계단 경계를 만들었다.
+밝은 쪽만 못박고 어두운 쪽은 배경 보정량만큼 평행이동한다. 훼손 픽셀 1359→175
+([[look-plate-shadow]]).
+
+## [2026-09-02] change | 룩북 모델 키를 낮췄다
+7~7.5등신 → 7등신(최대 7.25), "평균 키의 한국 성인, 런웨이 모델 아님".
+캐시 `model-id-v10-` / `model-id13-` ([[model-look-toggle]]).
+
+## [2026-09-02] change | 데스크탑 코디 상세 레이아웃
+왼쪽 사진 / 오른쪽 가로 한 줄 코디 레일 + 그 아래 품목. 1440x900에서 코디
+목록이 접혀 스크롤해야 보이던 걸 없앴다 ([[detail-wide-layout]]).
+
+## [2026-09-02] perf | 착장 지연의 실제 출처를 쟀다
+프롬프트(3.9KB)는 범인이 아니다. 입력 이미지 최대 7장 + 1024x1536이 대부분이다.
+옷장 사진 다운로드를 병렬로 바꾸고, `[timing] model-look`에 단계별 시간을 붙였다.
+`_flatten_look_plate`는 로컬 1.85s — 아직 안 고쳤다 ([[look-latency]]).
+
+## [2026-09-02] fix | 가로 레일 카드가 예전 격자보다 작았다
+`width:148px` 고정 → `flex:1 0 148px` + `maxWidth:188px`. 격자의 `1fr`이 칸을
+늘려 코디 4개일 때 한 칸이 약 187px였다 ([[detail-wide-layout]]).
+

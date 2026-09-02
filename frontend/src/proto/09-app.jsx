@@ -1471,8 +1471,15 @@ function App() {
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
     targets.forEach((o) => lookInflight.current.add(o.id));
+    // 서버가 단계를 흘려보낸다(prep/dress/finish/save). 카드 문구는 이 값만 보고 그린다.
+    const markStage = (id, key) => {
+      if (!id || !key) return;
+      LB_DATA.LOOK_STAGE[id] = key;
+      bumpDaily();
+    };
     const paintLook = (id, url) => {
       if (!id || !url) return;
+      delete LB_DATA.LOOK_STAGE[id];
       // hydrate가 DAILY를 새 객체로 갈아끼워도 id로 찾아 붙인다.
       (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
       (list || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
@@ -1490,7 +1497,11 @@ function App() {
       const payload = await liveJSON('/api/live/coordinate/looks', {
         method: 'POST',
         timeoutMs: 420000,
-        onLook: (row) => paintLook(row && row.id, row && row.lookImg),
+        onLook: (row) => {
+          if (!row) return;
+          if (row.lookImg) paintLook(row.id, row.lookImg);
+          else markStage(row.id, row.stage);
+        },
         body: JSON.stringify({
           gender: prefs.gender || '',
           outfits: targets.map((o) => ({
@@ -1513,7 +1524,10 @@ function App() {
       reloadBilling();
       return n;
     } finally {
-      targets.forEach((o) => lookInflight.current.delete(o.id));
+      targets.forEach((o) => {
+        lookInflight.current.delete(o.id);
+        delete LB_DATA.LOOK_STAGE[o.id];
+      });
       bumpDaily();
     }
   }, [prefs.gender, dailyStyle, items, bumpDaily, reloadBilling]);

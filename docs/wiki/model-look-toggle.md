@@ -25,10 +25,16 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 
 착장 API는 keepalive SSE다. Render는 응답이 안 오면 ~100초에 끊어서, 서버에
 `look_image_url`이 있어도 화면은 옷 컷아웃만 남았다. 한 장이 끝나는 즉시
-`_look` 이벤트로 카드를 바꾼다. 대기 카드는 컷아웃 위에 `.lb-look-wave`와
-가운데 테두리 원 두 개(sparkle + user), 좌상단 순환 문구
-(입히는 중 / 다듬는 중 / 최종본). 사진 없는 wish는 점선 칸으로 그리지 않는다
+`_look` 이벤트로 카드를 바꾼다. 사진 없는 wish는 점선 칸으로 그리지 않는다
 (2026-08-31).
+
+대기 카드 문구는 서버가 보내는 실제 단계다. `generate_model_look_image(stage=…)`가
+`prep`(기준 인물·옷장 사진 준비) → `dress`(images.edit 호출) → `finish`(plate
+flatten + 4:5 크롭) → `save`(업로드)를 `{"_look":{"id","stage"}}`로 흘리고,
+`09-app.jsx` `markStage`가 `LB_DATA.LOOK_STAGE[id]`에 넣는다. `LookPendingMarks`는
+그 키만 보고 그린다. 타이머로 문구를 돌리지 않는다 — 진짜 단계와 안 맞았다.
+픽토그램은 가운데 원이 아니라 문구 앞 sparkle 하나다. 경과 초는 붙이지 않는다
+(2026-09-02).
 
 `hydrateOutfits`가 DAILY를 새 객체로 갈아끼우면 착장 URL이 옛 객체에만 붙는다.
 `paintLook`은 `LB_DATA.DAILY`를 id로 찾아 쓰고, hydrate는 로컬 lookImg를 보존한다
@@ -40,9 +46,11 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 쓰지 않고, 한 번 젊게 edit한 결과를 `model-id-v9-`에 둔다(2026-08-31).
 댄디·미니멀처럼 남녀가 한 장에 있는 무드 컷은 인물 입력이 아니다. 이전 착장
 결과는 다음 생성의 reference로 쓰지 않는다. 옷장 실물 컷은 격자 보드가 아니라
-Image 2+로 붙인다. 캐시 `model-id-v9-` / `model-id12-`(2026-08-31). 프롬프트는
+Image 2+로 붙인다. 캐시 `model-id-v10-` / `model-id13-`(2026-09-02). 프롬프트는
 outfit replacement: 인물·스튜디오·포즈 고정, 옷만 교체. 얼굴은 20대 초중반.
-다리는 7~7.5등신. 위아래 15%는 빈 스튜디오(4:5 크롭용). 하의는 긴 기장이 기본.
+키는 평균 체형의 한국 성인 — 7등신, 최대 7.25. 런웨이 모델처럼 크면 키 작은
+사용자가 자기 얘기로 안 본다(2026-09-02). 위아래 15%는 빈 스튜디오(4:5 크롭용).
+하의는 긴 기장이 기본.
 출력은 plate flatten 뒤 인물을 피해 4:5로 자른다 (`_crop_look_to_card`).
 인물이 창보다 크면 축소해 넣는다. 카드는 cover로 채운다.
 

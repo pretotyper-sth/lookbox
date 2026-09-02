@@ -255,6 +255,9 @@ img { display: block; max-width: 100%; }
   z-index: 4;
   margin: 0;
   max-width: calc(100% - 56px);
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -263,26 +266,7 @@ img { display: block; max-width: 100%; }
   text-shadow: 0 1px 0 color-mix(in srgb, var(--surface) 78%, transparent);
   pointer-events: none;
 }
-.lb-look-mark {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  pointer-events: none;
-}
-.lb-look-mark-disk {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  background: color-mix(in srgb, var(--surface) 42%, transparent);
-  color: var(--ink);
-  display: grid;
-  place-items: center;
-}
+.lb-look-status svg { flex: none; }
 
 /* ---- entrance (transform-only: content stays visible even if the
    environment freezes animations at 0%) ---- */

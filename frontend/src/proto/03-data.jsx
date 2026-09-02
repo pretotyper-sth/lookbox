@@ -182,5 +182,7 @@ Object.assign(window, { LOOK_TEST_LIMIT, LB_DATA: { CATEGORIES, SEASONS, WARDROB
 Object.assign(window.LB_DATA, {
   WARDROBE: [], OUTFITS: [], DAILY: [], SAVED: [], DETECT: [],
   ALL: {}, OUTFIT_BY_ID: {},
+  // 착장 생성 중인 코디의 실제 진행 단계. 서버 스트림이 코디 id별로 채운다.
+  LOOK_STAGE: {},
 });
 Object.assign(window.LB_DATA.ANCHOR, { name: '', category: '', color: '', img: null });

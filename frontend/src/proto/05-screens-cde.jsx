@@ -124,21 +124,23 @@ function lookPlacement(items) {
   return out;
 }
 
-function LookPendingMarks() {
-  const [tick, setTick] = useSc(0);
-  useEc(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 2600);
-    return () => clearInterval(id);
-  }, []);
-  const labels = ['코디를 입히는 중', '실루엣을 다듬는 중', '최종본을 뽑는 중'];
+// 서버가 흘려보내는 실제 단계. 지어낸 순환 문구가 아니라 그때 도는 작업 이름이다.
+const LOOK_STAGE_LABEL = {
+  queued: '차례를 기다리는 중',
+  prep: '옷장 사진을 모으는 중',
+  dress: 'AI가 옷을 입히는 중',
+  finish: '배경을 카드에 맞추는 중',
+  save: '이미지를 저장하는 중',
+};
+
+function LookPendingMarks({ stage }) {
   return (
     <>
       <div className="lb-look-wave" aria-hidden />
-      <p className="lb-look-status">{labels[tick % labels.length]}</p>
-      <div className="lb-look-mark" aria-hidden>
-        <span className="lb-look-mark-disk"><Icon name="sparkle" size={16} stroke={1.8} /></span>
-        <span className="lb-look-mark-disk"><Icon name="user" size={16} stroke={1.8} /></span>
-      </div>
+      <p className="lb-look-status">
+        <Icon name="sparkle" size={13} stroke={1.9} />
+        <span>{LOOK_STAGE_LABEL[stage] || LOOK_STAGE_LABEL.queued}</span>
+      </p>
     </>
   );
 }
@@ -193,7 +195,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           </div>
         );
       })}
-      {looking ? <LookPendingMarks /> : null}
+      {looking ? <LookPendingMarks stage={outfit && LB_DATA.LOOK_STAGE[outfit.id]} /> : null}
     </div>
   );
 }
@@ -908,7 +910,7 @@ function DetailScreen({ ctx }) {
     if (Math.abs(dx) > 48) nav(dx < 0 ? 1 : -1);
   };
 
-  // 데스크탑: 우측 레일을 방향키로 이동. 좌우는 한 칸, 위아래는 한 줄(레일의 실제 열 수)씩.
+  // 데스크탑: 우측 레일은 한 줄짜리 가로 목록이라 좌우 방향키로만 한 칸씩 옮긴다.
   const railRef = React.useRef(null);
   React.useEffect(() => {
     if (!wide || !multi) return undefined;
@@ -918,10 +920,7 @@ function DetailScreen({ ctx }) {
       if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
       // 시트·뷰어가 떠 있으면 뒤 화면이 따라 움직이지 않게 둔다.
       if (document.querySelector('.lb-sheet-scrim')) return;
-      const cols = railRef.current
-        ? window.getComputedStyle(railRef.current).gridTemplateColumns.split(' ').filter(Boolean).length
-        : 1;
-      const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+      const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
       if (!step) return;
       const next = detailIndex + step;
       if (next < 0 || next >= detailTotal) return;   // 레일 밖으로는 넘기지 않는다
@@ -932,12 +931,41 @@ function DetailScreen({ ctx }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [wide, multi, detailIndex, detailTotal, looks, openDetail, detailFromLookbook, detailListLabel]);
 
+  // 코디가 레일 폭을 넘치면 화살표로 넘긴다. 끝에 닿으면 그쪽 화살표를 죽인다.
+  const [railEnds, setRailEnds] = useSc({ prev: false, next: false });
+  const syncRail = React.useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    setRailEnds({
+      prev: el.scrollLeft > 4,
+      next: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+  const pageRail = (dir) => {
+    const el = railRef.current;
+    if (el) el.scrollBy({ left: dir * Math.max(160, el.clientWidth * 0.8), behavior: 'smooth' });
+  };
+  const RailPageBtn = ({ dir }) => {
+    const on = dir > 0 ? railEnds.next : railEnds.prev;
+    return (
+      <button type="button" onClick={() => pageRail(dir)} disabled={!on}
+        aria-label={dir > 0 ? '코디 더 보기' : '코디 이전으로'} className="lb-iconbtn" style={{
+          width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
+          boxShadow: 'inset 0 0 0 1px var(--line-2)', color: 'var(--ink)',
+          opacity: on ? 1 : 0.3, cursor: on ? 'pointer' : 'default',
+        }}>
+        <Icon name={dir > 0 ? 'chevR' : 'chevL'} size={14} />
+      </button>
+    );
+  };
+
   // 레일이 길어져도 지금 보는 코디가 화면 밖에 있지 않게
   React.useEffect(() => {
     if (!wide || !railRef.current) return;
     const active = railRef.current.querySelector('[aria-current="true"]');
-    if (active) active.scrollIntoView({ block: 'nearest' });
-  }, [wide, detailLook]);
+    if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    syncRail();
+  }, [wide, detailLook, looks.length, syncRail]);
 
   // 코디 이미지 위에 얹는다. 카드 높이(품목 수)가 달라져도 늘 같은 자리에 오도록.
   const ArrowBtn = ({ d, name, side }) => (
@@ -965,9 +993,10 @@ function DetailScreen({ ctx }) {
     ? removeThis
     : () => (isSaved ? requestUnsave(detailLook.outfitId) : saveOutfit(detailLook.outfitId));
 
-  // 코디 카드 — 데스크탑·모바일이 같은 카드를 쓰고, 바깥 껍데기만 화면 폭에 따라 달라진다.
-  const card = (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)' }}>
+  // 사진과 품목 목록을 따로 만든다. 모바일은 한 카드에 위아래로 붙이고,
+  // 데스크탑은 사진만 왼쪽에 두고 목록은 오른쪽 레일 아래로 내린다 —
+  // 그래야 100% 배율에서 코디 목록이 스크롤 없이 보인다.
+  const photoBlock = (
       <div style={{ position: 'relative' }}>
         <button
           type="button"
@@ -1000,8 +1029,10 @@ function DetailScreen({ ctx }) {
           </>
         )}
       </div>
+  );
 
-      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'var(--s3)' }}>
+  const itemsBlock = (
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         {items.map((it, i) => {
           const justAdded = it.isAnchor && addedItemIds.includes(it.id);
           return (
@@ -1024,7 +1055,19 @@ function DetailScreen({ ctx }) {
           );
         })}
       </div>
+  );
+
+  const surface = (children, extra) => (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)', ...extra }}>
+      {children}
     </div>
+  );
+  // 모바일(과 데스크탑에서 코디가 하나뿐일 때)은 사진과 목록이 한 카드다.
+  const card = surface(
+    <>
+      {photoBlock}
+      <div style={{ marginTop: 'var(--s3)' }}>{itemsBlock}</div>
+    </>,
   );
 
   // 몇 번째 코디인지는 데스크탑에선 오른쪽 레일 머리에 적힌다. 여기까지 달면 두 번 읽힌다.
@@ -1047,21 +1090,36 @@ function DetailScreen({ ctx }) {
             gridTemplateColumns: multi ? 'minmax(300px, 400px) minmax(0, 1fr)' : 'minmax(300px, 440px)',
             justifyContent: multi ? 'start' : 'center',
           }}>
-            <div key={detailLook.id} className="lb-anim-in">{card}</div>
-            {multi && (
+            <div key={detailLook.id} className="lb-anim-in">
+              {multi ? surface(photoBlock) : card}
+            </div>
+            {multi ? (
               <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>{detailListLabel}</span>
-                  <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>{detailIndex + 1} / {detailTotal}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>{detailIndex + 1} / {detailTotal}</span>
+                    <RailPageBtn dir={-1} />
+                    <RailPageBtn dir={1} />
+                  </div>
                 </div>
-                <div ref={railRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 12 }}>
+                {/* 코디가 늘면 세로로 쌓지 않고 이 줄에 가로로 붙는다. 넘치면 화살표로 넘긴다. */}
+                <div ref={railRef} onScroll={syncRail} className="lb-scrollable" style={{
+                  display: 'flex', gap: 12, overflowX: 'auto', scrollBehavior: 'smooth', paddingBottom: 2,
+                }}>
                   {looks.map((lk) => (
-                    <RailCard key={lk.id} look={lk} active={lk.id === detailLook.id}
-                      onClick={() => openDetail(lk, detailFromLookbook ? null : looks, detailListLabel)} />
+                    // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전
+                    // auto-fill 그리드가 한 칸에 줄 수 있던 최대 폭이라, 코디가 둘뿐일 때도
+                    // 카드가 혼자 커지지 않는다.
+                    <div key={lk.id} style={{ flex: '1 0 148px', maxWidth: 188 }}>
+                      <RailCard look={lk} active={lk.id === detailLook.id}
+                        onClick={() => openDetail(lk, detailFromLookbook ? null : looks, detailListLabel)} />
+                    </div>
                   ))}
                 </div>
+                <div style={{ marginTop: 20 }}>{surface(itemsBlock)}</div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

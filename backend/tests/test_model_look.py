@@ -136,13 +136,16 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("outfit replacement task", src)
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
-        self.assertIn("model-id-v9-", src)
-        self.assertIn("model-id12-", src)
+        self.assertIn("model-id-v10-", src)
+        self.assertIn("model-id13-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
         self.assertIn("Do not lengthen the legs", src)
-        self.assertIn("7.5 heads", src)
+        # 룩북 모델 키가 커 보인다는 피드백. 7~7.25등신으로 낮췄다(2026-09-02).
+        self.assertIn("never more than 7.25", src)
+        self.assertIn("not a tall\nrunway or editorial model", src)
+        self.assertNotIn("7 to 7.5 heads", src)
         self.assertIn("15% of the frame empty", src)
         self.assertIn("middle 70%", src)
         self.assertIn("youthful early-to-mid-20s", src)
@@ -269,6 +272,32 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertGreaterEqual(navy_rows[0], 0)
         self.assertLessEqual(navy_rows[-1], h - 1)
 
+    def test_flatten_keeps_contact_shadow_gradient(self):
+        """발밑 그림자를 판 색으로 못박으면 신발 주변에 계단 경계가 생긴다(2026-09-02).
+
+        배경은 목표색으로 맞추되, 그림자의 상대 명암은 그대로 남아야 한다.
+        """
+        plate = self.ns['_LOOK_PLATE_RGB']
+        # 실제 생성 결과의 배경(228,227,222)처럼 목표색과 한 단계 차이인 상태.
+        bg = (plate[0] - 1, plate[1], plate[2])
+        im = Image.new("RGB", (60, 60), bg)
+        px = im.load()
+        # 왼쪽으로 갈수록 옅어지는 접지 그림자
+        for y in range(44, 52):
+            for x in range(6, 40):
+                fade = (x - 6) / 34
+                px[x, y] = tuple(int(v - 22 * (1 - fade)) for v in bg)
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        out = self.ns['_flatten_look_plate'](buf.getvalue())
+        img = Image.open(io.BytesIO(out)).convert("RGB")
+        self.assertEqual(img.getpixel((2, 2)), plate)
+        # 그림자는 사라지지도, 계단이 지지도 않는다 — 옆 픽셀과의 낙차가 완만하다.
+        # 못박던 시절엔 이 줄에서 19단 낙차가 났다.
+        row = [img.getpixel((x, 48))[0] for x in range(6, 40)]
+        self.assertLess(min(row), plate[0] - 8)
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(row, row[1:])), 2)
+
     def test_flatten_fills_island_behind_dark_ring(self):
         out = self.ns['_flatten_look_plate'](island_behind_ring())
         img = Image.open(io.BytesIO(out)).convert("RGB")
@@ -296,7 +325,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id12-", src)
+        self.assertIn("model-id13-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertIn("_flatten_look_plate(out)", src)
         self.assertIn("_crop_look_to_card(out)", src)

@@ -3526,8 +3526,10 @@ De-age only: they must read as a youthful Korean lookbook model in their early-t
 Smooth skin. No wrinkles, nasolabial folds, under-eye bags, sagging, or 30s+ office face.
 Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
 - one person, full-body standing lookbook, front-facing, slightly relaxed
-- natural adult proportions: about 7 to 7.5 heads tall. Do not lengthen the legs.
+- an average-height Korean adult, not a tall runway or editorial model.
+  natural proportions: about 7 heads tall, and never more than 7.25. Do not lengthen the legs.
   Fashion-illustration 8-head ratio and runway-long inseam are forbidden.
+  Keep the balance flattering: waist at its natural height, head not shrunk to fake height.
 - frame for a 4:5 card crop: person vertically centered in the middle ~70% of the height
 - leave about 15% of the frame empty above the hair and 15% empty below the shoes
 - the top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes
@@ -3698,8 +3700,10 @@ no wrinkles, no nasolabial folds, no under-eye bags, no aging.
 Do not make the person look 30s or older. Office, dandy, or formal clothes
 must not age the face.
 Do not redesign, reinterpret, beautify, slim, muscularize, or elongate the character.
-Do not lengthen the legs or torso. Keep a natural 7 to 7.5 heads-tall adult ratio.
+Do not lengthen the legs or torso. This is an average-height Korean adult, not a tall
+runway or editorial model: about 7 heads tall, and never more than 7.25.
 Fashion-illustration 8-head bodies and runway-long legs are forbidden.
+Keep the balance flattering — waist at its natural height, head not shrunk to fake height.
 Fashion mood is expressed through clothing, never by changing the person's age.
 
 OUTFIT:
@@ -3764,7 +3768,7 @@ Change the outfit. Do not change the person. Do not change the studio.
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v9-{_look_gender_key(gender)}"
+    return f"model-id-v10-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -3933,10 +3937,15 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
 
 
 def _flatten_look_plate(png_bytes: bytes) -> bytes:
-    """가장자리와 이어진 밝은 회·베이지 픽셀을 상품 카드와 같은 #E5E3DE로 칠한다.
+    """가장자리와 이어진 밝은 회·베이지 픽셀을 상품 카드와 같은 #E5E3DE 톤으로 옮긴다.
 
     images.edit가 인물 주변만 다른 톤으로 깔거나, 참고 격자 조각이 왼쪽 아래에
     남는 걸 막는다. 채도 낮은 밝은 픽셀만 바꿔 회색 옷은 건드리지 않는다.
+
+    칠하지 않고 '옮기는' 이유: 발밑 접지 그림자는 배경에서 서서히 어두워지는
+    그라데이션인데, 통과한 픽셀을 전부 #E5E3DE로 못박으면 임계값을 넘는 지점에
+    계단 같은 경계가 생긴다. 신발 주변이 깨져 보이던 게 이거였다(2026-09-02).
+    배경 실측색과 목표색의 차이만큼 평행이동하면 그림자의 상대 명암은 그대로다.
     """
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
@@ -3945,6 +3954,24 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
     px = img.load()
     corners = (px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2])
     tr, tg, tb = _LOOK_PLATE_RGB
+    # 네 귀퉁이는 항상 빈 스튜디오다. 실측 배경색과 목표색의 차이가 보정량.
+    sr = tr - sum(c[0] for c in corners) // len(corners)
+    sg = tg - sum(c[1] for c in corners) // len(corners)
+    sb = tb - sum(c[2] for c in corners) // len(corners)
+    target_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
+
+    def tone(c: tuple[int, int, int]) -> tuple[int, int, int]:
+        r, g, b = c
+        # 판보다 밝은 픽셀 = AI가 잘못 깔아 둔 다른 톤이거나 밴딩. 목표색으로 못박는다.
+        if 0.299 * r + 0.587 * g + 0.114 * b >= target_luma:
+            return _LOOK_PLATE_RGB
+        # 판보다 어두운 쪽은 발밑 접지 그림자다. 여기까지 못박으면 신발 옆에
+        # 계단 경계가 생긴다. 배경 보정량만큼만 옮겨 상대 명암을 남긴다.
+        return (
+            min(255, max(0, r + sr)),
+            min(255, max(0, g + sg)),
+            min(255, max(0, b + sb)),
+        )
     visited = bytearray(w * h)
     q: deque[tuple[int, int]] = deque()
     jumps = ((1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (0, 2), (0, -2))
@@ -3977,7 +4004,7 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
         seed(w - 1, y)
     while q:
         x, y = q.popleft()
-        px[x, y] = _LOOK_PLATE_RGB
+        px[x, y] = tone(px[x, y])
         for dx, dy in jumps:
             nx, ny = x + dx, y + dy
             if 0 <= nx < w and 0 <= ny < h and not visited[ny * w + nx]:
@@ -4014,7 +4041,7 @@ def _flatten_look_plate(png_bytes: bytes) -> bytes:
             in_body = sum(1 for x, y in island if bx0 <= x < bx1 and by0 <= y < by1)
             if len(island) <= max_island and in_body * 5 < len(island):
                 for x, y in island:
-                    px[x, y] = _LOOK_PLATE_RGB
+                    px[x, y] = tone(px[x, y])
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -4163,22 +4190,26 @@ def _garment_edit_images(items: list[dict[str, Any]]) -> list[io.BytesIO]:
             pair[0],
         ),
     )
-    files: list[io.BytesIO] = []
-    for n, (_, item) in enumerate(ranked[:6], start=2):
-        path = item.get("storage_path")
-        if not path:
-            continue
+    picked = [(n, item) for n, (_, item) in enumerate(ranked[:6], start=2) if item.get("storage_path")]
+
+    def fetch(n: int, item: dict[str, Any]) -> io.BytesIO | None:
         try:
-            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(path)
+            raw = supabase_admin.storage.from_(SUPABASE_BUCKET).download(item["storage_path"])
             image = Image.open(io.BytesIO(raw)).convert("RGBA")
             image.thumbnail((768, 768))
             buf = io.BytesIO()
             image.save(buf, format="PNG")
             slot = _category_key(item.get("category"))
-            files.append(_png_named(buf.getvalue(), f"{n:02d}-{slot}.png"))
-        except Exception:
-            continue
-    return files
+            return _png_named(buf.getvalue(), f"{n:02d}-{slot}.png")
+        except Exception:  # noqa: BLE001
+            return None
+
+    if not picked:
+        return []
+    # 순차로 받으면 Supabase 왕복이 장수만큼 쌓여 OpenAI 호출이 그만큼 늦게 시작한다.
+    with ThreadPoolExecutor(max_workers=min(6, len(picked))) as pool:
+        got = list(pool.map(lambda pair: fetch(*pair), picked))
+    return [f for f in got if f is not None]
 
 
 def generate_model_look_image(
@@ -4189,14 +4220,35 @@ def generate_model_look_image(
     occasion: str = "",
     styles: list[str] | None = None,
     user_request: str = "",
+    stage: Callable[[str], None] | None = None,
 ) -> str | None:
     """canonical 캐릭터에 옷장 실물을 입힌 전신 컷. 프로필 얼굴은 쓰지 않는다.
 
     원본 canonical + 옷장 실물 컷을 한 번에 edit한다. 이전 착장 결과는 쓰지 않는다.
+
+    stage(key)를 주면 실제 단계가 바뀔 때마다 부른다 — 화면 문구가 진짜 진행을
+    따라가게. 단계 경계마다 걸린 시간도 로그에 남겨 어디가 느린지 재고 있다.
     """
+    marks: list[tuple[str, float]] = []
+
+    def mark(key: str) -> None:
+        marks.append((key, time.perf_counter()))
+        if stage:
+            try:
+                stage(key)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def phases() -> str:
+        out = []
+        for i, (key, at) in enumerate(marks):
+            end = marks[i + 1][1] if i + 1 < len(marks) else time.perf_counter()
+            out.append(f"{key}={int((end - at) * 1000)}ms")
+        return " ".join(out)
+
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id12-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id13-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4217,6 +4269,7 @@ def generate_model_look_image(
     ):
         return None
     try:
+        mark("prep")
         identity = reference_png or _ensure_model_identity_png(user_id, gender)
         prompt = _model_look_prompt_with_reference(
             gender, items, wish, hem_seed,
@@ -4229,6 +4282,7 @@ def generate_model_look_image(
         elif identity:
             images = [_png_named(identity, "01-canonical.png")]
             images.extend(_garment_edit_images(items))
+            mark("dress")
             kwargs: dict[str, Any] = {
                 "model": look_model,
                 "image": images,
@@ -4242,6 +4296,7 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         else:
             board = _model_look_board(items)
+            mark("dress")
             result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
                 model=look_model,
                 image=_png_named(board, "clothes.png"),
@@ -4250,11 +4305,13 @@ def generate_model_look_image(
                 quality=quality,
             )
             out = base64.b64decode(result.data[0].b64_json)
+        mark("finish")
         try:
             out = _flatten_look_plate(out)
             out = _crop_look_to_card(out)
         except Exception as flat_exc:  # noqa: BLE001
             print(f"[model-look] flatten skip: {flat_exc}", flush=True)
+        mark("save")
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")
         supabase_admin.table("generated_images").insert(
@@ -4264,7 +4321,8 @@ def generate_model_look_image(
         if not AI_TEST_MODE:
             log_ai_usage(user_id, "model_look", look_model, {"quality": quality})
         print(
-            f"[timing] model-look cache=0 quality={quality} identity={bool(identity)} duration_ms={ms} ({ms / 1000:.1f}s)",
+            f"[timing] model-look cache=0 quality={quality} identity={bool(identity)} "
+            f"inputs={len(items)} duration_ms={ms} ({ms / 1000:.1f}s) {phases()}",
             flush=True,
         )
         return image_url
@@ -7025,6 +7083,12 @@ def _apply_model_looks(
         members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
         if not members:
             return outfit, None
+        oid = outfit.get("id")
+
+        def stage(key: str) -> None:
+            if report:
+                report({"_look": {"id": oid, "stage": key}})
+
         return outfit, generate_model_look_image(
             user_id, outfit["itemIds"], members, gender,
             reference_png=identity, wish=_clean_wish(outfit.get("wish")),
@@ -7032,6 +7096,7 @@ def _apply_model_looks(
             occasion="daily outfit",
             styles=outfit.get("styles") or [],
             user_request=outfit.get("label") or "",
+            stage=stage,
         )
 
     t0 = time.perf_counter()
