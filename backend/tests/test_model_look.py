@@ -1,4 +1,4 @@
-"""AI 착장은 canonical 인물 + 옷장 실물. 배경은 옷장·코디와 같은 #E5E3DE 판."""
+"""AI 착장은 canonical 인물 + 옷장 실물. 배경은 레퍼런스 스튜디오를 그대로 쓴다."""
 
 import ast
 import io
@@ -20,17 +20,16 @@ FNS = (
     '_garment_desc',
     '_model_look_garment_lines',
     '_model_look_outfit_block',
-    '_flatten_look_plate',
-    '_look_is_plate_pixel',
+    '_look_row_backdrop',
     '_look_content_box',
     '_fit_look_to_card',
     '_crop_look_to_card',
     '_bottom_hem_note',
 )
 CONSTS = (
-    '_LOOK_PLATE_HEX', '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
+    '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
     '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER', '_LOOK_CARD_RATIO',
-    '_LOOK_CROP_PAD',
+    '_LOOK_CROP_PAD', '_LOOK_BACKDROP_TOL',
 )
 
 
@@ -47,69 +46,19 @@ def load():
     return ns
 
 
-def _wrong_plate() -> tuple[int, int, int]:
-    return (210, 207, 202)
-
-
-def two_tone_look() -> bytes:
-    """인물 주변만 다른 톤, 양옆은 AI가 깔아 둔 잘못된 판색."""
-    wrong = _wrong_plate()
-    plate = (229, 227, 222)
-    navy = (28, 42, 72)
-    im = Image.new("RGB", (80, 120), wrong)
+def studio_look(w: int, h: int, person: tuple[int, int, int, int] | None) -> bytes:
+    """레퍼런스 스튜디오처럼 위에서 아래로 어두워지는 배경 + 인물."""
+    im = Image.new("RGB", (w, h))
     px = im.load()
-    for y in range(120):
-        for x in range(22, 58):
-            px[x, y] = plate
-    for y in range(28, 100):
-        for x in range(30, 50):
-            px[x, y] = navy
-    buf = io.BytesIO()
-    im.save(buf, format="PNG")
-    return buf.getvalue()
-
-
-def interior_plate_patch() -> bytes:
-    """테두리와 끊긴 밝은 판 조각 — 인물 옆 왼쪽 아래 아티팩트."""
-    wrong = _wrong_plate()
-    plate = (229, 227, 222)
-    navy = (28, 42, 72)
-    im = Image.new("RGB", (80, 120), wrong)
-    px = im.load()
-    for y in range(120):
-        for x in range(22, 58):
-            px[x, y] = plate
-    for y in range(28, 100):
-        for x in range(30, 50):
-            px[x, y] = navy
-    for y in range(72, 96):
-        for x in range(8, 20):
-            px[x, y] = plate
-    buf = io.BytesIO()
-    im.save(buf, format="PNG")
-    return buf.getvalue()
-
-
-def island_behind_ring() -> bytes:
-    """어두운 링으로 테두리와 끊긴 판 섬 — 격자 잔상."""
-    wrong = _wrong_plate()
-    plate = (229, 227, 222)
-    navy = (28, 42, 72)
-    dark = (40, 40, 38)
-    im = Image.new("RGB", (80, 120), wrong)
-    px = im.load()
-    for y in range(120):
-        for x in range(22, 58):
-            px[x, y] = plate
-    for y in range(28, 100):
-        for x in range(30, 50):
-            px[x, y] = navy
-    for y in range(70, 98):
-        for x in range(6, 22):
-            px[x, y] = dark
-    for y in range(74, 94):
-        for x in range(10, 18):
-            px[x, y] = plate
+    for y in range(h):
+        base = 236 - int(34 * (y / h) ** 1.4)
+        for x in range(w):
+            px[x, y] = (base, base - 1, base - 5)
+    if person:
+        x0, y0, x1, y1 = person
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                px[x, y] = (28, 42, 72)
     buf = io.BytesIO()
     im.save(buf, format="PNG")
     return buf.getvalue()
@@ -122,13 +71,15 @@ class ModelLookPromptTest(unittest.TestCase):
 
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
-        self.assertIn(self.ns['_LOOK_PLATE_HEX'], prompt)
         self.assertIn("identity lock", prompt)
+        # 배경은 단색 판이 아니라 레퍼런스 스튜디오. 판 색을 강요하면 그라데이션이
+        # 계단처럼 뭉개진다(2026-09-02).
+        self.assertNotIn("#E5E3DE", prompt)
+        self.assertIn("one continuous soft gray studio backdrop", prompt)
         self.assertIn("15% of the frame empty", prompt)
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
         self.assertNotIn("키 크고", prompt)
-        self.assertEqual(self.ns['_LOOK_PLATE_HEX'], "#E5E3DE")
         self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
 
     def test_look_prompt_single_image_swap(self):
@@ -136,19 +87,20 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("outfit replacement task", src)
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
-        self.assertIn("model-id-v10-", src)
-        self.assertIn("model-id13-", src)
+        self.assertIn("model-id-v11-", src)
+        self.assertIn("model-id14-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
         self.assertIn("Do not lengthen the legs", src)
-        # 룩북 모델 키가 커 보인다는 피드백. 7~7.25등신으로 낮췄다(2026-09-02).
-        self.assertIn("never more than 7.25", src)
-        self.assertIn("not a tall\nrunway or editorial model", src)
-        self.assertNotIn("7 to 7.5 heads", src)
+        # 레퍼런스가 실제 룩북 모델로 바뀌었다. 억지로 젊게·작게 만들던 규칙은
+        # 얼굴과 비율만 흔들어서 걷어냈다(2026-09-02).
+        self.assertNotIn("heads tall", src)
+        self.assertNotIn("De-age", src)
+        self.assertNotIn("youthful early-to-mid-20s", src)
+        self.assertIn("Keep the height and proportions of Image 1", src)
         self.assertIn("15% of the frame empty", src)
         self.assertIn("middle 70%", src)
-        self.assertIn("youthful early-to-mid-20s", src)
         self.assertIn("MUST wear this suggested item", src)
         self.assertNotIn("다리가 길어 보이게", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
@@ -210,33 +162,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertEqual(self.ns['_look_gender_key']("남성"), "m")
         self.assertEqual(self.ns['_look_gender_key']("여성"), "f")
 
-    def test_flatten_unifies_two_plate_tones(self):
-        out = self.ns['_flatten_look_plate'](two_tone_look())
-        img = Image.open(io.BytesIO(out)).convert("RGB")
-        plate = self.ns['_LOOK_PLATE_RGB']
-        self.assertEqual(img.getpixel((2, 2)), plate)
-        self.assertEqual(img.getpixel((40, 8)), plate)
-        self.assertEqual(img.getpixel((24, 60)), plate)
-        r, g, b = img.getpixel((40, 60))
-        self.assertLess(r + g + b, 180)
-
-    def test_flatten_fills_interior_plate_patch(self):
-        out = self.ns['_flatten_look_plate'](interior_plate_patch())
-        img = Image.open(io.BytesIO(out)).convert("RGB")
-        plate = self.ns['_LOOK_PLATE_RGB']
-        self.assertEqual(img.getpixel((12, 84)), plate)
-
     def test_crop_look_keeps_person_inside_card(self):
-        plate = self.ns['_LOOK_PLATE_RGB']
         navy = (28, 42, 72)
-        im = Image.new("RGB", (40, 60), plate)
-        px = im.load()
-        for y in range(16, 44):
-            for x in range(12, 28):
-                px[x, y] = navy
-        buf = io.BytesIO()
-        im.save(buf, format="PNG")
-        out = self.ns['_crop_look_to_card'](buf.getvalue())
+        out = self.ns['_crop_look_to_card'](studio_look(40, 60, (12, 16, 28, 44)))
         cropped = Image.open(io.BytesIO(out)).convert("RGB")
         w, h = cropped.size
         self.assertEqual(w, 40)
@@ -251,16 +179,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertLess(navy_rows[-1], h - 3)
 
     def test_crop_look_fits_instead_of_cutting_tall_person(self):
-        plate = self.ns['_LOOK_PLATE_RGB']
         navy = (28, 42, 72)
-        im = Image.new("RGB", (40, 60), plate)
-        px = im.load()
-        for y in range(1, 59):
-            for x in range(14, 26):
-                px[x, y] = navy
-        buf = io.BytesIO()
-        im.save(buf, format="PNG")
-        out = self.ns['_crop_look_to_card'](buf.getvalue())
+        out = self.ns['_crop_look_to_card'](studio_look(40, 60, (14, 1, 26, 59)))
         fitted = Image.open(io.BytesIO(out)).convert("RGB")
         w, h = fitted.size
         self.assertAlmostEqual(w / h, self.ns['_LOOK_CARD_RATIO'], places=2)
@@ -272,39 +192,25 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertGreaterEqual(navy_rows[0], 0)
         self.assertLessEqual(navy_rows[-1], h - 1)
 
-    def test_flatten_keeps_contact_shadow_gradient(self):
-        """발밑 그림자를 판 색으로 못박으면 신발 주변에 계단 경계가 생긴다(2026-09-02).
-
-        배경은 목표색으로 맞추되, 그림자의 상대 명암은 그대로 남아야 한다.
+    def test_crop_keeps_backdrop_gradient_smooth(self):
+        """배경을 판 색으로 못박던 시절, 배경 밝기가 판 밝기를 지나는 줄에서
+        얼룩진 띠가 생겼다. 신발 옆이 깨져 보이던 게 이거다(2026-09-02).
+        이제 후처리는 자르기뿐이라 그라데이션이 그대로 남아야 한다.
         """
-        plate = self.ns['_LOOK_PLATE_RGB']
-        # 실제 생성 결과의 배경(228,227,222)처럼 목표색과 한 단계 차이인 상태.
-        bg = (plate[0] - 1, plate[1], plate[2])
-        im = Image.new("RGB", (60, 60), bg)
-        px = im.load()
-        # 왼쪽으로 갈수록 옅어지는 접지 그림자
-        for y in range(44, 52):
-            for x in range(6, 40):
-                fade = (x - 6) / 34
-                px[x, y] = tuple(int(v - 22 * (1 - fade)) for v in bg)
-        buf = io.BytesIO()
-        im.save(buf, format="PNG")
-        out = self.ns['_flatten_look_plate'](buf.getvalue())
+        src = studio_look(80, 120, (30, 20, 50, 100))
+        out = self.ns['_crop_look_to_card'](src)
         img = Image.open(io.BytesIO(out)).convert("RGB")
-        self.assertEqual(img.getpixel((2, 2)), plate)
-        # 그림자는 사라지지도, 계단이 지지도 않는다 — 옆 픽셀과의 낙차가 완만하다.
-        # 못박던 시절엔 이 줄에서 19단 낙차가 났다.
-        row = [img.getpixel((x, 48))[0] for x in range(6, 40)]
-        self.assertLess(min(row), plate[0] - 8)
-        self.assertLessEqual(max(abs(a - b) for a, b in zip(row, row[1:])), 2)
+        col = [img.getpixel((2, y))[0] for y in range(img.height)]
+        self.assertGreater(col[0] - col[-1], 4)          # 그라데이션이 살아 있다
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 2)
 
-    def test_flatten_fills_island_behind_dark_ring(self):
-        out = self.ns['_flatten_look_plate'](island_behind_ring())
+    def test_fit_pads_with_backdrop_not_flat_plate(self):
+        """인물이 커서 넣기로 갈 때도 단색을 깔면 카드에 배경이 둘이 된다."""
+        out = self.ns['_crop_look_to_card'](studio_look(40, 60, (14, 1, 26, 59)))
         img = Image.open(io.BytesIO(out)).convert("RGB")
-        plate = self.ns['_LOOK_PLATE_RGB']
-        self.assertEqual(img.getpixel((14, 88)), plate)
-        r, g, b = img.getpixel((40, 60))
-        self.assertLess(r + g + b, 180)
+        self.assertNotEqual(img.getpixel((1, 1)), self.ns['_LOOK_PLATE_RGB'])
+        col = [img.getpixel((1, y))[0] for y in range(img.height)]
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 2)
 
     def test_generate_signature_has_gender_not_face(self):
         tree = ast.parse(MAIN_PATH.read_text())
@@ -325,9 +231,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id13-", src)
+        self.assertIn("model-id14-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
-        self.assertIn("_flatten_look_plate(out)", src)
+        self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")

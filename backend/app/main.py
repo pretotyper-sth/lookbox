@@ -3488,9 +3488,8 @@ def _face_image_bytes(src: str | None) -> bytes | None:
     return None
 
 
-# 옷장·코디 카드 `--thumb-bg`와 같은 색. 생성 이미지가 이 판을 프레임 끝까지 채우면
-# contain 옆 여백이 두 번째 배경처럼 안 보인다.
-_LOOK_PLATE_HEX = "#E5E3DE"
+# 옷장·코디 카드 `--thumb-bg`와 같은 색. 참고 보드 바탕에만 쓴다.
+# 착장 배경은 이 색으로 강요하지 않는다 — 레퍼런스 스튜디오를 그대로 둔다.
 _LOOK_PLATE_RGB = (229, 227, 222)
 _LOOK_IDENTITY_DIR = Path(__file__).resolve().parent.parent / "assets" / "look-identity"
 
@@ -3521,20 +3520,20 @@ def _model_look_prompt(gender: str | None) -> str:
 def _model_identity_prompt(gender: str | None) -> str:
     return f"""This is an identity lock, not a character redesign.
 Keep the same person in the source photo: face structure, eyes, nose, lips, jawline,
-hairstyle, hair color, skin tone, shoulder width.
-De-age only: they must read as a youthful Korean lookbook model in their early-to-mid 20s.
-Smooth skin. No wrinkles, nasolabial folds, under-eye bags, sagging, or 30s+ office face.
+hairstyle, hair color, skin tone, apparent age, shoulder width.
+The source is already the canonical model — do not de-age, beautify, or restyle them.
 Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
 - one person, full-body standing lookbook, front-facing, slightly relaxed
-- an average-height Korean adult, not a tall runway or editorial model.
-  natural proportions: about 7 heads tall, and never more than 7.25. Do not lengthen the legs.
-  Fashion-illustration 8-head ratio and runway-long inseam are forbidden.
-  Keep the balance flattering: waist at its natural height, head not shrunk to fake height.
+- keep the source photo's body proportions exactly. Do not lengthen the legs or torso,
+  raise the waist, or shrink the head to make the model read taller.
 - frame for a 4:5 card crop: person vertically centered in the middle ~70% of the height
 - leave about 15% of the frame empty above the hair and 15% empty below the shoes
 - the top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes
 - never crop the chin, crown, or shoes in this source frame
-- fill every pixel with {_LOOK_PLATE_HEX} seamless studio. wall and floor the same color. no second plate, letterbox, or frame
+- one continuous soft gray studio backdrop, wall blending into floor, reaching all four
+  edges of the frame. no second plate, letterbox, border, or framed inset
+- keep the soft contact shadow under the shoes smooth. no banding, posterization,
+  dithering, or blotchy patches anywhere in the backdrop or shadow
 - simple base garments already in the photo; do not invent logos or extra people
 - soft studio lighting, photorealistic contemporary Korean fashion lookbook
 - no text, watermark, collage, or thumbnail
@@ -3695,16 +3694,11 @@ Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
 height impression, and neutral expression.
-Read Image 1 as a youthful early-to-mid-20s Korean lookbook model — smooth skin,
-no wrinkles, no nasolabial folds, no under-eye bags, no aging.
-Do not make the person look 30s or older. Office, dandy, or formal clothes
-must not age the face.
-Do not redesign, reinterpret, beautify, slim, muscularize, or elongate the character.
-Do not lengthen the legs or torso. This is an average-height Korean adult, not a tall
-runway or editorial model: about 7 heads tall, and never more than 7.25.
-Fashion-illustration 8-head bodies and runway-long legs are forbidden.
-Keep the balance flattering — waist at its natural height, head not shrunk to fake height.
-Fashion mood is expressed through clothing, never by changing the person's age.
+Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
+do not de-age, age, beautify, slim, muscularize, or elongate the character.
+Do not lengthen the legs or torso, raise the waist, or shrink the head.
+Keep the height and proportions of Image 1 as they are.
+Fashion mood is expressed through clothing, never by changing the person.
 
 OUTFIT:
 Dress the character using the supplied wardrobe items.
@@ -3740,8 +3734,12 @@ Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle
 One person, centered. Crown of hair, chin, and both feet fully visible.
 Keep the pose from the canonical: standing, front-facing, slightly relaxed.
 Small hand/arm shifts are allowed (pocket, holding a bag). No walking, sitting, crop, or dramatic pose.
-Fill every pixel of the frame with {_LOOK_PLATE_HEX} seamless studio. Wall and floor the same color.
-No second plate, letterbox, inset photograph, white border, or framed picture-in-picture.
+Reproduce Image 1's studio backdrop exactly — the same soft gray wall blending into the
+same floor, the same soft contact shadow under the shoes — and let it reach all four
+edges of the frame. One continuous backdrop: no second plate, letterbox, inset
+photograph, white border, or framed picture-in-picture.
+Keep the backdrop and shadow smooth. No banding, posterization, dithering, or blotchy
+patches around the shoes.
 {hem}
 White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
 
@@ -3768,7 +3766,7 @@ Change the outfit. Do not change the person. Do not change the studio.
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
-    return f"model-id-v10-{_look_gender_key(gender)}"
+    return f"model-id-v11-{_look_gender_key(gender)}"
 
 
 def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
@@ -3850,7 +3848,19 @@ def _image_bytes_to_png(data: bytes) -> bytes:
 
 
 def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
-    """모든 착장이 공유할 canonical 인물. 시드 JPG는 성숙해 보여서 한 번 젊게 고정한다."""
+    """모든 착장이 공유할 canonical 인물.
+
+    시드 JPG가 곧 캐논이다. 예전에는 시드가 실제 룩북 모델이 아니라 한 번 더
+    생성해 젊게 고정했는데, 그 과정이 얼굴·비율을 흔들었다. 시드를 바로 쓰면
+    유료 호출 한 번과 첫 착장 지연이 통째로 사라진다(2026-09-02).
+    성별을 안 밝힌 경우만 시드가 없어 생성으로 내려간다.
+    """
+    seed = _mood_identity_seed(gender)
+    if seed:
+        try:
+            return _image_bytes_to_png(seed[0])
+        except Exception as exc:  # noqa: BLE001
+            print(f"[model-look] mood identity decode skip: {exc}", flush=True)
     cached = _get_model_identity_png(user_id, gender)
     if cached:
         return cached
@@ -3858,16 +3868,7 @@ def _ensure_model_identity_png(user_id: str, gender: str | None) -> bytes | None
         cached = _get_model_identity_png(user_id, gender)
         if cached:
             return cached
-        generated = _generate_model_identity_png(user_id, gender)
-        if generated:
-            return generated
-        seed = _mood_identity_seed(gender)
-        if seed:
-            try:
-                return _image_bytes_to_png(seed[0])
-            except Exception as exc:  # noqa: BLE001
-                print(f"[model-look] mood identity decode skip: {exc}", flush=True)
-        return None
+        return _generate_model_identity_png(user_id, gender)
 
 
 def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | None:
@@ -3903,10 +3904,6 @@ def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | No
                     quality=quality,
                 )
             out = base64.b64decode(result.data[0].b64_json)
-            try:
-                out = _flatten_look_plate(out)
-            except Exception as flat_exc:  # noqa: BLE001
-                print(f"[model-look] identity flatten skip: {flat_exc}", flush=True)
             log_ai_usage(user_id, "model_identity", OPENAI_IMAGE_MODEL_LOOK, {"quality": quality})
         _save_model_identity_png(user_id, gender, out)
         ms = int((time.perf_counter() - t0) * 1000)
@@ -3936,151 +3933,48 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
     return buf.getvalue()
 
 
-def _flatten_look_plate(png_bytes: bytes) -> bytes:
-    """가장자리와 이어진 밝은 회·베이지 픽셀을 상품 카드와 같은 #E5E3DE 톤으로 옮긴다.
-
-    images.edit가 인물 주변만 다른 톤으로 깔거나, 참고 격자 조각이 왼쪽 아래에
-    남는 걸 막는다. 채도 낮은 밝은 픽셀만 바꿔 회색 옷은 건드리지 않는다.
-
-    칠하지 않고 '옮기는' 이유: 발밑 접지 그림자는 배경에서 서서히 어두워지는
-    그라데이션인데, 통과한 픽셀을 전부 #E5E3DE로 못박으면 임계값을 넘는 지점에
-    계단 같은 경계가 생긴다. 신발 주변이 깨져 보이던 게 이거였다(2026-09-02).
-    배경 실측색과 목표색의 차이만큼 평행이동하면 그림자의 상대 명암은 그대로다.
-    """
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    w, h = img.size
-    if w < 8 or h < 8:
-        return png_bytes
-    px = img.load()
-    corners = (px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2])
-    tr, tg, tb = _LOOK_PLATE_RGB
-    # 네 귀퉁이는 항상 빈 스튜디오다. 실측 배경색과 목표색의 차이가 보정량.
-    sr = tr - sum(c[0] for c in corners) // len(corners)
-    sg = tg - sum(c[1] for c in corners) // len(corners)
-    sb = tb - sum(c[2] for c in corners) // len(corners)
-    target_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
-
-    def tone(c: tuple[int, int, int]) -> tuple[int, int, int]:
-        r, g, b = c
-        # 판보다 밝은 픽셀 = AI가 잘못 깔아 둔 다른 톤이거나 밴딩. 목표색으로 못박는다.
-        if 0.299 * r + 0.587 * g + 0.114 * b >= target_luma:
-            return _LOOK_PLATE_RGB
-        # 판보다 어두운 쪽은 발밑 접지 그림자다. 여기까지 못박으면 신발 옆에
-        # 계단 경계가 생긴다. 배경 보정량만큼만 옮겨 상대 명암을 남긴다.
-        return (
-            min(255, max(0, r + sr)),
-            min(255, max(0, g + sg)),
-            min(255, max(0, b + sb)),
-        )
-    visited = bytearray(w * h)
-    q: deque[tuple[int, int]] = deque()
-    jumps = ((1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (0, 2), (0, -2))
-
-    def is_plate(r: int, g: int, b: int) -> bool:
-        if max(r, g, b) - min(r, g, b) > 28:
-            return False
-        luma = 0.299 * r + 0.587 * g + 0.114 * b
-        plate_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
-        if luma < plate_luma - 30:
-            return False
-        if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 44:
-            return True
-        return any(abs(r - cr) + abs(g - cg) + abs(b - cb) <= 40 for cr, cg, cb in corners)
-
-    def seed(x: int, y: int) -> None:
-        i = y * w + x
-        if visited[i]:
-            return
-        r, g, b = px[x, y]
-        if is_plate(r, g, b):
-            visited[i] = 1
-            q.append((x, y))
-
-    for x in range(w):
-        seed(x, 0)
-        seed(x, h - 1)
-    for y in range(h):
-        seed(0, y)
-        seed(w - 1, y)
-    while q:
-        x, y = q.popleft()
-        px[x, y] = tone(px[x, y])
-        for dx, dy in jumps:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < w and 0 <= ny < h and not visited[ny * w + nx]:
-                r, g, b = px[nx, ny]
-                if is_plate(r, g, b):
-                    visited[ny * w + nx] = 1
-                    q.append((nx, ny))
-    # 어두운 테두리에 막혀 끊긴 판 조각(격자 잔상)은 칠한다.
-    # 가운데(인물·밝은 옷)에 걸친 덩어리는 남긴다.
-    max_island = max(64, (w * h) // 20)
-    bx0, bx1 = int(w * 0.28), int(w * 0.72)
-    by0, by1 = int(h * 0.18), int(h * 0.88)
-    for y0 in range(h):
-        for x0 in range(w):
-            i0 = y0 * w + x0
-            if visited[i0]:
-                continue
-            r0, g0, b0 = px[x0, y0]
-            if not is_plate(r0, g0, b0):
-                continue
-            island: list[tuple[int, int]] = []
-            q.append((x0, y0))
-            visited[i0] = 1
-            while q:
-                x, y = q.popleft()
-                island.append((x, y))
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    nx, ny = x + dx, y + dy
-                    if 0 <= nx < w and 0 <= ny < h and not visited[ny * w + nx]:
-                        r, g, b = px[nx, ny]
-                        if is_plate(r, g, b):
-                            visited[ny * w + nx] = 1
-                            q.append((nx, ny))
-            in_body = sum(1 for x, y in island if bx0 <= x < bx1 and by0 <= y < by1)
-            if len(island) <= max_island and in_body * 5 < len(island):
-                for x, y in island:
-                    px[x, y] = tone(px[x, y])
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
-
-
 # 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 스튜디오 여백만 잘라 칸을 채운다.
 _LOOK_CARD_RATIO = 4 / 5
 _LOOK_CROP_PAD = 0.08
 
 
-def _look_is_plate_pixel(r: int, g: int, b: int) -> bool:
-    tr, tg, tb = _LOOK_PLATE_RGB
-    if abs(r - tr) + abs(g - tg) + abs(b - tb) <= 36:
-        return True
-    if max(r, g, b) - min(r, g, b) > 28:
-        return False
-    luma = 0.299 * r + 0.587 * g + 0.114 * b
-    plate_luma = 0.299 * tr + 0.587 * tg + 0.114 * tb
-    return abs(luma - plate_luma) <= 18
+# 배경은 레퍼런스 스튜디오라 위아래로 밝기가 변한다. 고정색과 비교하면 바닥이
+# 통째로 인물로 잡히므로, 그 줄의 좌우 끝(항상 배경)을 기준으로 삼는다.
+_LOOK_BACKDROP_TOL = 26
+
+
+def _look_row_backdrop(px, w: int, y: int) -> tuple[int, int, int]:
+    edge = [px[x, y] for x in range(6)] + [px[w - 1 - x, y] for x in range(6)]
+    n = len(edge)
+    return (
+        sum(c[0] for c in edge) // n,
+        sum(c[1] for c in edge) // n,
+        sum(c[2] for c in edge) // n,
+    )
 
 
 def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
-    """스튜디오판이 아닌 픽셀(인물)의 박스. 없으면 None."""
+    """스튜디오 배경이 아닌 픽셀(인물)의 박스. 없으면 None."""
     w, h = img.size
+    if w < 16:
+        return None
     px = img.load()
     step = 2
     y0, y1, x0, x1 = h, -1, w, -1
     for y in range(0, h, step):
+        br, bg, bb = _look_row_backdrop(px, w, y)
         for x in range(0, w, step):
             r, g, b = px[x, y]
-            if not _look_is_plate_pixel(r, g, b):
-                if y < y0:
-                    y0 = y
-                if y > y1:
-                    y1 = y
-                if x < x0:
-                    x0 = x
-                if x > x1:
-                    x1 = x
+            if abs(r - br) + abs(g - bg) + abs(b - bb) <= _LOOK_BACKDROP_TOL:
+                continue
+            if y < y0:
+                y0 = y
+            if y > y1:
+                y1 = y
+            if x < x0:
+                x0 = x
+            if x > x1:
+                x1 = x
     if y1 < 0:
         return None
     return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
@@ -4089,7 +3983,12 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
 def _fit_look_to_card(
     img: Image.Image, cw: int, ch: int, box: tuple[int, int, int, int], pad: int,
 ) -> bytes:
-    """인물을 자르지 않고 4:5 판 안에 여백 두고 넣는다."""
+    """인물을 자르지 않고 4:5 판 안에 넣는다.
+
+    남는 자리는 단색으로 메우지 않는다. 배경이 레퍼런스의 그라데이션이라
+    단색을 깔면 카드 안에 두 가지 배경이 생긴다. 대신 이미지 자신의 가장자리
+    줄(항상 스튜디오 배경)을 늘려 이어 붙인다.
+    """
     x0, y0, x1, y1 = box
     region = img.crop((
         max(0, x0 - pad),
@@ -4099,8 +3998,21 @@ def _fit_look_to_card(
     ))
     region = region.copy()
     region.thumbnail((cw, ch))
-    canvas = Image.new("RGB", (cw, ch), _LOOK_PLATE_RGB)
-    canvas.paste(region, ((cw - region.width) // 2, (ch - region.height) // 2))
+    left, top = (cw - region.width) // 2, (ch - region.height) // 2
+    canvas = Image.new("RGB", (cw, ch))
+    canvas.paste(region, (left, top))
+    if top > 0:
+        canvas.paste(region.crop((0, 0, region.width, 1)).resize((region.width, top)), (left, 0))
+    below = ch - top - region.height
+    if below > 0:
+        edge = region.crop((0, region.height - 1, region.width, region.height))
+        canvas.paste(edge.resize((region.width, below)), (left, top + region.height))
+    if left > 0:
+        canvas.paste(canvas.crop((left, 0, left + 1, ch)).resize((left, ch)), (0, 0))
+    right = cw - left - region.width
+    if right > 0:
+        edge = canvas.crop((left + region.width - 1, 0, left + region.width, ch))
+        canvas.paste(edge.resize((right, ch)), (left + region.width, 0))
     buf = io.BytesIO()
     canvas.save(buf, format="PNG")
     return buf.getvalue()
@@ -4248,7 +4160,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id13-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id14-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4307,10 +4219,9 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         mark("finish")
         try:
-            out = _flatten_look_plate(out)
             out = _crop_look_to_card(out)
-        except Exception as flat_exc:  # noqa: BLE001
-            print(f"[model-look] flatten skip: {flat_exc}", flush=True)
+        except Exception as crop_exc:  # noqa: BLE001
+            print(f"[model-look] crop skip: {crop_exc}", flush=True)
         mark("save")
         storage_path = f"{user_id}/looks/{key}.png"
         image_url = upload_bytes(storage_path, out, "image/png")

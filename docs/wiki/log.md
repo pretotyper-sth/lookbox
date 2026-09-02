@@ -293,3 +293,14 @@ sparkle 하나를 문구 앞에 붙였다 ([[model-look-toggle]]).
 `width:148px` 고정 → `flex:1 0 148px` + `maxWidth:188px`. 격자의 `1fr`이 칸을
 늘려 코디 4개일 때 한 칸이 약 187px였다 ([[detail-wide-layout]]).
 
+## [2026-09-02] fix | 신발 깨짐의 진짜 원인은 판 평탄화 자체였다
+앞선 두 번(칠하기 → 평행이동)은 임계값만 옮긴 수정이라 띠 위치만 바뀌었다.
+`_flatten_look_plate`를 삭제하고 배경은 레퍼런스 스튜디오를 그대로 둔다.
+같은 신발 영역 얼룩 비율 13.6% → 1.9% ([[look-plate-shadow]]).
+
+## [2026-09-02] change | 남성 canonical 레퍼런스를 실제 룩북 컷으로 갈았다
+`assets/mood/남자 코디 레퍼런스.png` → `backend/assets/look-identity/m.jpg`.
+시드를 한 번 더 젊게 edit하던 단계를 없앴다 — 유료 호출 한 번과 첫 착장 지연이
+사라진다. 20대 초중반·7등신 강요 문구도 뺐다. 캐시 `model-id-v11-` / `model-id14-`
+([[model-look-toggle]]).
+
