@@ -1,5 +1,6 @@
 /* @prototype-ported */
-import { ORDER_PLATFORMS } from './order-platforms.js';
+import { ORDER_PLATFORMS, orderPlatformById } from './order-platforms.js';
+import { OrderImportSession } from './order-import-session.jsx';
 const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
@@ -865,89 +866,6 @@ function toHttpsUrl(raw) {
   return /^https?:\/\//i.test(t) ? t : ('https://' + t.replace(/^\/+/, ''));
 }
 
-function ConnectOrdersModal({ open, onClose, onReady }) {
-  const [phase, setPhase] = useS('ask'); // ask | save | check
-  const [busy, setBusy] = useS(false);
-  useE(() => {
-    if (open) { setPhase('ask'); setBusy(false); }
-  }, [open]);
-
-  const pingOk = () => extCall({ type: 'PING' }, 800).then(() => true).catch(() => false);
-
-  const onAllow = async () => {
-    setBusy(true);
-    const ok = await pingOk();
-    setBusy(false);
-    if (ok) { onReady(); return; }
-    setPhase('save');
-  };
-
-  const onSave = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch('/api/live/orders/extension.zip');
-      if (!res.ok) throw new Error('save');
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'RealCloset 구매내역.zip';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    } catch (e) { /* 저장에 실패해도 다음 화면에서 다시 확인할 수 있다 */ }
-    setBusy(false);
-    setPhase('check');
-  };
-
-  const onOpened = async () => {
-    setBusy(true);
-    const ok = await pingOk();
-    setBusy(false);
-    if (ok) onReady();
-  };
-
-  const title = phase === 'ask' ? '구매내역을 가져올까요?'
-    : phase === 'save' ? '연결 파일을 저장할게요'
-    : '저장한 파일을 열어 주세요';
-  const body = phase === 'ask' ? '크롬에 로그인된 쇼핑몰에서 산 옷 목록만 읽어요. 비밀번호는 받지 않아요.'
-    : phase === 'save' ? '한 번만 저장하면, 다음부터는 버튼만 누르면 가져와요.'
-    : '브라우저 아래 받은 파일을 누르면 크롬이 연결을 물어요. 허용을 누르면 끝나요.';
-  const cta = phase === 'ask' ? (busy ? '확인 중…' : '허용')
-    : phase === 'save' ? (busy ? '저장 중…' : '저장하기')
-    : (busy ? '확인 중…' : '열었어요');
-
-  return (
-    <BottomSheet open={open} onClose={onClose} zIndex={80} dismissOnScrim={!busy}>
-      <div className="lb-sheet-body" style={{ padding: '8px 24px 28px' }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>{title}</h2>
-        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all' }}>{body}</p>
-        <Btn
-          full
-          size="lg"
-          icon={phase === 'ask' ? 'bag' : (phase === 'save' ? 'plus' : 'check')}
-          disabled={busy}
-          onClick={phase === 'ask' ? onAllow : (phase === 'save' ? onSave : onOpened)}
-          style={{ marginTop: 22 }}
-        >
-          {cta}
-        </Btn>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          style={{
-            display: 'block', width: '100%', marginTop: 10, padding: '12px 8px',
-            fontSize: 14, fontWeight: 600, color: 'var(--ink-3)', background: 'none',
-          }}
-        >
-          나중에
-        </button>
-      </div>
-    </BottomSheet>
-  );
-}
-
 function extCall(payload, timeoutMs) {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
@@ -1118,7 +1036,7 @@ function AddSheet({ ctx }) {
   const [picked, setPicked] = useS(false);
   const [urls, setUrls] = useS(['']);
   const urlFieldRefs = useR([]);
-  const [connectOpen, setConnectOpen] = useS(false);
+  const [orderSession, setOrderSession] = useS(null);
   // 구매내역에서 가져온 후보 목록. URL 탭은 여러 주소를 이 목록으로 넘길 수 있다.
   const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
@@ -1136,7 +1054,6 @@ function AddSheet({ ctx }) {
   const [orderShop, setOrderShop] = useS('musinsa');
   const [orderBusy, setOrderBusy] = useS(false);
   const [orderNeedLogin, setOrderNeedLogin] = useS(false);
-  const [orderNeedExt, setOrderNeedExt] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
   const previewUrlRef = useR('');
   const [tryOnErr, setTryOnErr] = useS('');
@@ -1183,7 +1100,7 @@ function AddSheet({ ctx }) {
     setBusy(false); setErr('');
     setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
-    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderNeedExt(false); setOrderTabId(null); setConnectOpen(false);
+    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderTabId(null); setOrderSession(null);
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -1341,14 +1258,13 @@ function AddSheet({ ctx }) {
     const known = new Set(knownSourceUrls);
     const rows = found.map((it) => {
       const dup = known.has(normalizeForDup(it.url));
-      return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '' };
+      return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '', thumb: it.thumb || '' };
     });
     setBulk(rows);
     // URL 입력칸은 비우지 않는다. 후보를 지웠을 때 주소를 다시 볼 수 있게.
     setErr('');
     setBulkResult(null);
     setOrderNeedLogin(false);
-    setOrderNeedExt(false);
     if (checkDuplicates) {
       setBulkChecking(true);
       checkDuplicates(rows)
@@ -1363,11 +1279,17 @@ function AddSheet({ ctx }) {
     }
     return true;
   };
-  const startOrderCollect = async () => {
+  const collectOrderItems = async ({ platform, onProgress }) => {
+    const shopId = (platform && platform.id) || orderShop;
     setErr('');
-    setOrderNeedExt(false);
+    setOrderNeedLogin(false);
     setOrderBusy(true);
     try {
+      const native = window.LookboxNative && typeof window.LookboxNative.collectOrders === 'function'
+        ? await window.LookboxNative.collectOrders(platform, onProgress)
+        : null;
+      if (native && native.items) return native.items;
+
       let usedExt = false;
       try {
         await extCall({ type: 'PING' }, 700);
@@ -1376,56 +1298,26 @@ function AddSheet({ ctx }) {
         usedExt = false;
       }
       if (usedExt) {
-        const res = await extCall({ type: 'COLLECT', platform: orderShop, tabId: orderTabId }, 210000);
+        const res = await extCall({ type: 'COLLECT', platform: shopId, tabId: orderTabId }, 210000);
         if (res && res.tabId) setOrderTabId(res.tabId);
         if (res && res.status === 'need_login') {
           setOrderNeedLogin(true);
-          setErr('열린 크롬에서 로그인한 뒤 다시 눌러 주세요.');
-          return;
+          const err = new Error('NEED_LOGIN');
+          throw err;
         }
-        const items = (res && res.items) || [];
-        if (!items.length) {
-          setErr('이 화면에서 상품을 찾지 못했어요. 주문내역 페이지인지 확인해 주세요.');
-          return;
-        }
-        applyCollectedRows(items.map((it) => ({
-          url: it.url,
-          name: it.name || '',
-          store: it.platform || it.store || '',
-          price: it.price || '',
-          purchasedAt: it.purchasedAt || '',
-        })));
-        return;
+        return (res && res.items) || [];
       }
-      if (!onThisComputer() || typeof liveCollectOrders !== 'function') {
-        setConnectOpen(true);
-        return;
+      if (onThisComputer() && typeof liveCollectOrders === 'function') {
+        const data = await liveCollectOrders({ platform: shopId, onProgress });
+        return (data && data.items) || [];
       }
-      const data = await liveCollectOrders({ platform: orderShop });
-      const items = (data && data.items) || [];
-      if (!items.length) {
-        setErr('주문 목록이 비어 있어요. 로그인한 뒤 다시 눌러 주세요.');
-        return;
-      }
-      applyCollectedRows(items.map((it) => ({
-        url: it.url,
-        name: it.name || '',
-        store: it.platform || it.store || '',
-        price: it.price || '',
-        purchasedAt: it.purchasedAt || '',
-      })));
+      throw new Error('ORDER_READ_BLOCKED');
     } catch (err) {
       const msg = String((err && err.message) || '');
-      if (msg === 'NEED_LOGIN') {
-        setOrderNeedLogin(true);
-        setErr('열린 크롬에서 로그인한 뒤 다시 눌러 주세요.');
-        return;
-      }
       if (msg === 'NEED_SETUP' || msg === 'NO_EXT') {
-        setConnectOpen(true);
-        return;
+        throw new Error('ORDER_READ_BLOCKED');
       }
-      setErr(msg || '주문 내역을 가져오지 못했어요.');
+      throw err;
     } finally {
       setOrderBusy(false);
     }
@@ -2008,21 +1900,6 @@ function AddSheet({ ctx }) {
                           </div>
                         )}
                       </>
-                    ) : tab === 'orders' && !wide && !bulk && !bulkResult ? (
-                      <div style={{
-                        ...stagePanel,
-                        background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        padding: 'var(--s5) var(--s4)', textAlign: 'center',
-                      }}>
-                        <Icon name="lock" size={22} stroke={1.7} />
-                        <div style={{ marginTop: 'var(--s3)', fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
-                          구매내역 가져오기는 컴퓨터에서만 쓸 수 있어요
-                        </div>
-                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45, wordBreak: 'keep-all' }}>
-                          PC에서 아이템 추가 → 구매내역을 열면, 쇼핑몰 주문내역에서 옷을 골라 한 번에 담을 수 있어요.
-                        </div>
-                      </div>
                     ) : (tab === 'orders' || tab === 'url') && bulkResult ? (
                       /* 다 담고 난 뒤 요약. 중복으로 건너뛴 것과 실패한 것을 이유까지 보여준다. */
                       <div style={{
@@ -2196,17 +2073,20 @@ function AddSheet({ ctx }) {
                         </div>
                         <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {orderNeedLogin
-                            ? '크롬에서 로그인한 뒤 다시 눌러 주세요.'
-                            : orderBusy
-                              ? '크롬에서 주문내역을 읽고 있어요.'
-                              : '먼저 원하는 쇼핑몰을 골라주세요.'}
+                            ? '로그인한 뒤 불러오기를 눌러 주세요.'
+                            : '쇼핑몰을 누르면 바로 열어요.'}
                         </div>
                         <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                           {ORDER_PLATFORMS.map((p) => (
                             <button
                               key={p.id}
                               type="button"
-                              onClick={() => { setOrderShop(p.id); setErr(''); setOrderNeedLogin(false); }}
+                              onClick={() => {
+                                setOrderShop(p.id);
+                                setErr('');
+                                setOrderNeedLogin(false);
+                                setOrderSession(p);
+                              }}
                               style={{
                                 padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
                                 background: orderShop === p.id ? 'var(--surface-2)' : 'var(--ivory)',
@@ -2411,26 +2291,21 @@ function AddSheet({ ctx }) {
                             )}
                             <Btn icon="check" onClick={closeAdd} style={{ flex: 1 }}>확인</Btn>
                           </div>
-                      ) : tab === 'orders' && !wide && !bulk ? null : (
+                      ) : tab === 'orders' && !bulk ? null : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={bulk ? runBulk : (tab === 'orders' ? startOrderCollect : onSubmitAdd)}
+                          onClick={bulk ? runBulk : onSubmitAdd}
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
-                            : tab === 'orders'
-                              ? (orderBusy || busy || !!bulkRun)
-                              : (!canSubmit || busy || !!bulkRun)}
+                            : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
                             : bulk
                               ? (bulkAuto
                                 ? `${bulkPicked.length}개 옷장에 담기`
                                 : `${bulkPicked.length}개 확인하고 담기`)
-                            : orderBusy ? '크롬에서 가져오는 중…'
                             : busy ? '인식 중…'
-                            : (tab === 'orders'
-                              ? (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')
-                              : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
+                            : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
                         </Btn>
                       )}
                     </div>
@@ -2447,7 +2322,7 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name={tab === 'orders' ? 'bag' : 'sparkle'} size={15} />
                 {tab === 'orders'
-                  ? (wide ? '내역 확인 후 고른 옷만 옷장에 담아요' : '컴퓨터에서 주문내역을 가져와 한 번에 담을 수 있어요')
+                  ? '내역 확인 후 고른 옷만 옷장에 담아요'
                   : '사진 속 상의·하의·신발까지 따로따로 찾아드려요'}
               </div>
             ) : null}
@@ -2668,10 +2543,22 @@ function AddSheet({ ctx }) {
             </div>
           </div>
         )}
-      <ConnectOrdersModal
-        open={connectOpen}
-        onClose={() => setConnectOpen(false)}
-        onReady={() => { setConnectOpen(false); startOrderCollect(); }}
+      <OrderImportSession
+        open={!!orderSession}
+        platform={orderSession || orderPlatformById(orderShop)}
+        onClose={() => setOrderSession(null)}
+        collectOrders={collectOrderItems}
+        onConfirm={(picked) => {
+          setOrderSession(null);
+          applyCollectedRows(picked.map((it) => ({
+            url: it.url,
+            name: it.name || '',
+            store: it.store || '',
+            price: it.price || '',
+            purchasedAt: it.purchasedAt || '',
+            thumb: it.thumb || '',
+          })));
+        }}
       />
       </div>
     </BottomSheet>

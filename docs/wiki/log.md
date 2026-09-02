@@ -308,3 +308,8 @@ sparkle 하나를 문구 앞에 붙였다 ([[model-look-toggle]]).
 새 아이템 포함 코디 힌트는 칸 수와 무관하게 「옷장에 없는 아이템을 넣어요」.
 구매내역 유휴 안내는 「먼저 원하는 쇼핑몰을 골라주세요.」 (`08-mypage.jsx`, `04-screens-ab.jsx`).
 
+## [2026-09-02] change | 구매내역 zip 제거, 몰 탭이 곧 세션
+`ConnectOrdersModal` zip 설치와 모바일 「컴퓨터에서만」 잠금을 없앴다. 몰을 누르면
+`OrderImportSession`이 바로 뜨고, 불러오기가 주문내역을 읽어 그리드에 쌓는다
+([[order-import-webview]], `order-import-session.jsx`).
+
