@@ -5,10 +5,10 @@
 
 ## 상품컷 기준 코디 (`POST /api/live/coordinate`)
 
-2026-09-03 저녁부터 카드를 한 장씩 보낸다. 서버는 `gpt-4o`를 1장 → 나머지 3장으로
-쪼개고, persist되는 즉시 SSE `_outfit`을 흘린다. 프론트 `onOutfit`이
-`LB_DATA.DAILY`에 붙인다. 첫 장은 예전 4장 대기(~15–18초)보다 먼저 보인다.
-마지막 카드의 wish 상품컷(`images.generate`)은 그 장만 늦게 붙는다.
+2026-09-03 저녁부터 옷장 상품컷은 GPT를 기다리지 않는다. `recommend_closet`
+(`fallback_combos`, 텍스트·속성 페어링)으로 앞 칸을 바로 SSE `_outfit`으로 붙인다.
+이미지는 옷장에 이미 있다. `_ensure_style_attrs`와 `gpt-4o`는 마지막 wish 카드
+뒤에만 돈다. wish 상품컷(`images.generate`)은 그 장만 늦게 붙는다.
 
 `recommendation_timings.duration_ms`는 스트림 작업 전체(추천 2회 + wish 이미지
 + persist)다 (`live_coordinate` `work`).

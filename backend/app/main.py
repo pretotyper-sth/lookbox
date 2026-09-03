@@ -3500,6 +3500,39 @@ def fallback_combos(
     return combos
 
 
+def recommend_closet(
+    items: list[dict[str, Any]],
+    anchor: dict[str, Any] | None,
+    max_combos: int,
+    style: str,
+    exclude_item_ids: list[list[str]] | None,
+    styles: list[str] | None,
+    profile: dict[str, Any] | None,
+    include_ids: list[str] | None,
+) -> list[dict[str, Any]]:
+    """옷장 실물만 짝짓는다. GPT를 부르지 않는다 — 상품컷 이미지는 이미 있다."""
+    if not items or max_combos < 1:
+        return []
+    style_ids = [s for s in (styles or []) if s] or ([style] if style else ["dandy"])
+    uniq: list[str] = []
+    seen: set[str] = set()
+    for s in style_ids:
+        if s in seen:
+            continue
+        seen.add(s)
+        uniq.append(s)
+    tone = " · ".join(_style_tone(s) for s in uniq)
+    exclude_keys = {
+        tuple(sorted(str(x) for x in ids if x))
+        for ids in (exclude_item_ids or [])
+        if ids
+    }
+    combos = fallback_combos(
+        items, anchor, max_combos, tone, exclude_keys, uniq, profile, include_ids,
+    )
+    return _finish_combos(combos, items, 0, profile)
+
+
 def look_cache_key(item_ids: list[str]) -> str:
     return hashlib.sha256(",".join(sorted(item_ids)).encode()).hexdigest()[:20]
 
@@ -7416,9 +7449,6 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
     pool = [row for row in pool if row]
     if len(pool) < 2:
         raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요.")
-    # 이전에 담아둔 아이템에는 숨은 스타일 속성이 없다. 추천 전에 한 번 채운다
-    # (이름 기반 일괄 추론 1회, 이후에는 저장돼 있어 호출이 없다).
-    _ensure_style_attrs(user.id, pool)
     profile = {
         "personal_color": body.personal_color,
         "fit": body.fit,
@@ -7508,31 +7538,29 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                     paint_wish=bool(wish_on_last and last and combo.get("wish")),
                 )
 
-        if max_combos >= 2:
-            first = recommend_text(
-                user.id, anchor, pool, body.style, 1,
+        # 옷장 상품컷은 이미지가 있다. 텍스트 페어링만으로 바로 붙인다.
+        closet_n = max(0, max_combos - max(0, min(int(wish_combos or 0), max_combos)))
+        if closet_n:
+            quick = recommend_closet(
+                pool, anchor, closet_n, body.style,
                 body.exclude_item_ids or [], body.styles or None, profile,
-                body.include_item_ids or None, 0,
+                body.include_item_ids or None,
             )
-            run_batch(first, False, 0)
+            run_batch(quick, False, 0)
+            print(f"[coordinate] closet stream n={len(quick)}", flush=True)
+        rest_n = max(0, max_combos - len(outfits))
+        if rest_n:
+            _ensure_style_attrs(user.id, pool)
             exclude = list(body.exclude_item_ids or []) + [
-                list(c.get("item_ids") or []) for c in first
+                [i for i in (o.get("itemIds") or []) if not str(i).startswith("wish-")]
+                for o in outfits
             ]
-            rest_n = max(0, max_combos - len(first))
-            if rest_n:
-                rest = recommend_text(
-                    user.id, anchor, pool, body.style, rest_n,
-                    exclude, body.styles or None, profile,
-                    body.include_item_ids or None, wish_combos,
-                )
-                run_batch(rest, True, len(first))
-        else:
-            combos = recommend_text(
-                user.id, anchor, pool, body.style, max_combos,
-                body.exclude_item_ids or [], body.styles or None, profile,
+            rest = recommend_text(
+                user.id, anchor, pool, body.style, rest_n,
+                exclude, body.styles or None, profile,
                 body.include_item_ids or None, wish_combos,
             )
-            run_batch(combos, True, 0)
+            run_batch(rest, True, len(outfits))
 
         recommend_ms = int((time.perf_counter() - t0) * 1000)
         _record_recommendation_timing(
