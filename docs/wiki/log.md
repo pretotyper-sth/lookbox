@@ -349,4 +349,7 @@ SSE로 끝나는 장부터 착장. 실유저 기본은 4장. [[model-look-toggle
 ## [2026-09-03] change | 상세 품목 줄 높이 통일
 wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight: 62`. [[detail-wide-layout]]
 
+## [2026-09-03] change | 레일 선택 테두리는 누르자마자 위까지
+호버 리프트와 `scrollIntoView`를 빼 위 테두리가 잘렸다 내려오지 않게. [[detail-wide-layout]]
+
 
