@@ -95,7 +95,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
-    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
         <button
@@ -121,7 +121,11 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
       </div>
 
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
+        <div style={{
+          fontSize: 14.5, fontWeight: 700, lineHeight: 1.35, textWrap: 'pretty',
+          minHeight: 'calc(1.35em * 2)',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>{outfit.label}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
           {moodBasis ? `${moodBasis} · ` : ''}{items.filter((it) => it.img).length}개 조합{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
         </div>
@@ -503,7 +507,7 @@ function TodayScreen({ ctx }) {
       <Eyebrow>오늘의 추천 코디</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
         {busy ? (
-          <>오늘의 추천을 준비 중이에요 <span style={{ fontWeight: 500, color: 'var(--ink-3)', fontSize: 13 }}>· 최대 10초</span></>
+          <>오늘의 추천을 준비 중이에요</>
         ) : (
           <>
             옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
@@ -582,6 +586,7 @@ function TodayScreen({ ctx }) {
         display: 'grid',
         gridTemplateColumns: gridCols,
         gap: wide ? 'var(--s4)' : 'var(--s3)',
+        alignItems: 'stretch',
       }}>
         {isFirstLoad
           ? Array.from({ length: COLS }).map((_, i) => <TodayCardSkeleton key={'sk' + i} />)
@@ -594,6 +599,7 @@ function TodayScreen({ ctx }) {
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
+                  // 테스트(limit>0): 대기 오버레이는 만들 1장만. 실서비스(0): 상품컷 카드마다 대기, 끝나는 장부터 착장으로 바뀐다.
                   looking={isToday && !!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId)}
                   onOpen={openLook} />
               ))}
@@ -617,7 +623,7 @@ function TodayScreen({ ctx }) {
       {isToday && picks.length >= COLS && (
         <div style={{ marginTop: 'var(--s5)' }}>
           <Btn full size="lg" variant="soft" icon="sparkle" onClick={reshuffle} disabled={loading || dailyLoading}>
-            {loading || dailyLoading ? '만드는 중… 최대 10초' : '추가로 코디 추천받기'}
+            {loading || dailyLoading ? '만드는 중…' : '추가로 코디 추천받기'}
           </Btn>
           <p style={{ margin: '10px 0 0', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
             지금 추천은 유지하고 코디 2개를 더 받아요

@@ -63,9 +63,38 @@ function lumaOf(r, g, b) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-function isPlatePixel(r, g, b) {
+function sampleBackdrop(data, W, H, dx, dy, dw, dh) {
+  // 생성본 배경은 #F2F1EE가 아닐 때가 많다. 모서리에서 실제 판색을 읽어 양옆을 맞춘다.
+  const inset = Math.max(2, Math.round(Math.min(dw, dh) * 0.02));
+  const pts = [
+    [dx + inset, dy + inset],
+    [dx + dw - inset - 1, dy + inset],
+    [dx + inset, dy + dh - inset - 1],
+    [dx + dw - inset - 1, dy + dh - inset - 1],
+    [dx + inset, dy + Math.round(dh * 0.45)],
+    [dx + dw - inset - 1, dy + Math.round(dh * 0.45)],
+    [dx + Math.round(dw * 0.5), dy + inset],
+  ];
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let p = 0; p < pts.length; p += 1) {
+    const x = pts[p][0];
+    const y = pts[p][1];
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const i = (y * W + x) * 4;
+    r += data[i];
+    g += data[i + 1];
+    b += data[i + 2];
+    n += 1;
+  }
+  if (!n) return { r: 242, g: 241, b: 238 };
+  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) };
+}
+
+function isPlatePixel(r, g, b, plate) {
+  const dr = Math.abs(r - plate.r) + Math.abs(g - plate.g) + Math.abs(b - plate.b);
+  if (dr < 46) return true;
   const L = lumaOf(r, g, b);
-  return L > 188 && (Math.max(r, g, b) - Math.min(r, g, b)) < 36;
+  return L > 198 && (Math.max(r, g, b) - Math.min(r, g, b)) < 28;
 }
 
 function isSkinPixel(r, g, b) {
@@ -73,32 +102,37 @@ function isSkinPixel(r, g, b) {
   return r > 88 && r > b + 8 && r >= g - 8 && L > 72 && L < 210;
 }
 
-function isGarmentPixel(r, g, b) {
-  if (isPlatePixel(r, g, b) || isSkinPixel(r, g, b)) return false;
-  return lumaOf(r, g, b) < 168;
+function isGarmentPixel(r, g, b, plate) {
+  if (isPlatePixel(r, g, b, plate) || isSkinPixel(r, g, b)) return false;
+  const L = lumaOf(r, g, b);
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  if (L > 178 && chroma < 26) return false;
+  return L < 205;
 }
 
 function garmentBand(mode) {
-  if (mode === 'top') return { y0: 0.22, y1: 0.56, x0: 0.16, x1: 0.84 };
-  if (mode === 'bottom') return { y0: 0.48, y1: 0.94, x0: 0.18, x1: 0.82 };
-  return { y0: 0.22, y1: 0.94, x0: 0.16, x1: 0.84 };
+  // 소매·기장이 밴드 밖으로 나가면 구멍이 직선으로 잘린다. 밑단은 발끝까지.
+  if (mode === 'top') return { y0: 0.16, y1: 0.58, x0: 0.06, x1: 0.94 };
+  if (mode === 'bottom') return { y0: 0.44, y1: 0.995, x0: 0.08, x1: 0.92 };
+  return { y0: 0.16, y1: 0.995, x0: 0.06, x1: 0.94 };
 }
 
-function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode) {
+function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode, plate) {
   const band = garmentBand(mode);
   const x0 = Math.max(0, Math.floor(dx + dw * band.x0));
   const x1 = Math.min(W, Math.ceil(dx + dw * band.x1));
   const y0 = Math.max(0, Math.floor(dy + dh * band.y0));
   const y1 = Math.min(H, Math.ceil(dy + dh * band.y1));
+  const yBot = Math.min(H, dy + dh);
   const punch = new Uint8Array(W * H);
   const src = srcData.data;
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const i = (y * W + x) * 4;
-      if (isGarmentPixel(src[i], src[i + 1], src[i + 2])) punch[y * W + x] = 1;
+      if (isGarmentPixel(src[i], src[i + 1], src[i + 2], plate)) punch[y * W + x] = 1;
     }
   }
-  const dilate = 3;
+  const dilate = 4;
   const grown = new Uint8Array(W * H);
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
@@ -110,6 +144,28 @@ function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode) {
           if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
           grown[ny * W + nx] = 1;
         }
+      }
+    }
+  }
+  // 하의·전체: 옷이 잡힌 맨 아래부터 발 아래까지 같은 폭으로 더 뚫어 밑단 잔여를 없앤다.
+  if (mode === 'bottom' || mode === 'full') {
+    let minX = x1;
+    let maxX = x0;
+    let maxY = y0;
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        if (!grown[y * W + x]) continue;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxY > y0 && maxX > minX) {
+      const padX = Math.max(4, Math.round((maxX - minX) * 0.05));
+      const xL = Math.max(0, minX - padX);
+      const xR = Math.min(W, maxX + padX + 1);
+      for (let y = maxY; y < yBot; y += 1) {
+        for (let x = xL; x < xR; x += 1) grown[y * W + x] = 1;
       }
     }
   }
@@ -132,23 +188,38 @@ async function punchBody(src, mode, stageW, stageH) {
   canvas.width = sw;
   canvas.height = sh;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.fillStyle = '#F2F1EE';
+  ctx.drawImage(img, dx, dy, dw, dh);
+  const sampled = ctx.getImageData(0, 0, sw, sh);
+  const plate = sampleBackdrop(sampled.data, sw, sh, dx, dy, dw, dh);
+  ctx.fillStyle = `rgb(${plate.r},${plate.g},${plate.b})`;
   ctx.fillRect(0, 0, sw, sh);
   ctx.drawImage(img, dx, dy, dw, dh);
+  const filled = ctx.getImageData(0, 0, sw, sh);
 
-  const sampled = ctx.getImageData(0, 0, sw, sh);
-  const punch = punchGarmentMask(sampled, sw, sh, dx, dy, dw, dh, mode);
+  const punch = punchGarmentMask(filled, sw, sh, dx, dy, dw, dh, mode, plate);
   const out = ctx.createImageData(sw, sh);
   for (let i = 0; i < punch.length; i += 1) {
-    if (punch[i]) out.data[i * 4 + 3] = 255;
+    if (!punch[i]) continue;
+    const o = i * 4;
+    out.data[o] = 255;
+    out.data[o + 1] = 255;
+    out.data[o + 2] = 255;
+    out.data[o + 3] = 255;
   }
   const mask = document.createElement('canvas');
   mask.width = sw;
   mask.height = sh;
   mask.getContext('2d').putImageData(out, 0, 0);
+  const soft = document.createElement('canvas');
+  soft.width = sw;
+  soft.height = sh;
+  const sctx = soft.getContext('2d');
+  sctx.filter = 'blur(1.8px)';
+  sctx.drawImage(mask, 0, 0);
   ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(mask, 0, 0);
+  ctx.drawImage(soft, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'none';
   return canvas.toDataURL('image/png');
 }
 

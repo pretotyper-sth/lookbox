@@ -13,18 +13,18 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 2:3은 인물 여백을 두고 4:5로 자른다. 안 들어가면 축소해 넣는다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장은 시드 JPG를 그대로 캐논으로 쓴다(나이·키 지시 없음). 품질 테스트 중 착장 1장(`LOOK_TEST_LIMIT`). 대기 문구는 서버 단계(`prep/dress/finish/save`)
-- [look-latency](look-latency.md) — 착장이 느린 건 프롬프트가 아니라 입력 이미지 7장·1024x1536. 단계별 `[timing]` 로그로 잰다
+- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. `LOOK_TEST_LIMIT=1`은 품질 테스트용(종료 전). 실유저는 4장·카드마다 대기·1장씩 전환. 캐시 `model-id15`
+- [look-latency](look-latency.md) — 상품컷 조합은 GPT-4o 한 번에 ~15초(옷장 47). 착장은 images.edit가 분 단위. 「최대 10초」는 사실이 아님
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 배경을 단색으로 맞추길 포기하고 후처리를 자르기만 남겼다
-- [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일 + 그 아래 품목
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기는 계정 프사. 구멍은 옷 픽셀, 양옆은 막음. 후면 카메라만
+- [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일. 레일 카드는 같은 폭
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 양옆은 생성본 판색. 구멍은 옷 픽셀+밑단까지. 캐시 `tryon3-`. 후면 카메라만
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용. 착장 인물은 `assets/mood` 남·여 예시. 분류 id는 `_STYLE_IDS`와 같음
-- [order-import-webview](order-import-webview.md) — 구매내역은 zip이 아니라 몰 탭→불러오기→그리드. iframe이 막히면 안내 카드. 비밀번호는 서버가 안 받음
-- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 구매내역은 몰을 누르면 바로 세션([[order-import-webview]])
+- [order-import-webview](order-import-webview.md) — 구매내역: 몰 칩 선택 → CTA → 불러오기(로그인 창) → collect 이후 그리드. 가짜 로고·죽은 뒤로/새로고침 없음
+- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. URL이면 가격·재질도 HTML에서 채움
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷·브랜드·가격·재질을 페이지에서 읽는다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼

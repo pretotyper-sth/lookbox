@@ -126,6 +126,12 @@ if AI_TEST_MODE:
 if LOOK_TEST_LIMIT > 0:
     print(f"[LOOK_TEST_LIMIT] {LOOK_TEST_LIMIT} — 착장 품질 테스트, 장 수 제한 (0이면 제한 없음)", flush=True)
 
+# LOOK_TEST_LIMIT는 품질 테스트 게이트다. 실유저는 0(오늘 코디 전부, 한 장씩 전환).
+# 「테스트 종료」 전까지 1. 프론트가 빈 카드만 다시 보내면 요청마다 have=0이 되어
+# 장이 더 만들어지던 구멍을, 오늘 코디 전체 개수로 막는다.
+_LOOK_FILLING: set[str] = set()
+_LOOK_FILLING_LOCK = threading.Lock()
+
 
 def _vision_client():
     """짧은 타임아웃의 분류/감지용 클라이언트. 타임아웃 시 각자 폴백으로 진행."""
@@ -164,6 +170,9 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     # 결정해야 반영된다. 이미지 변경은 commit=false라 아예 저장하지 않는다.
     "save": ("결과를 정리하고 있어요", 95, 99, 3),
     "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
+    "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
+    "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
+    "collect": ("주문내역에서 옷을 찾고 있어요", 40, 90, 30),
 }
 
 
@@ -3696,8 +3705,10 @@ hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
 height impression, and neutral expression.
 Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
 do not de-age, age, beautify, slim, muscularize, or elongate the character.
-Do not lengthen the legs or torso, raise the waist, or shrink the head.
-Keep the height and proportions of Image 1 as they are.
+Keep Image 1's face, shoulders, and clothing silhouette.
+Fashion lookbooks often stretch the legs — shorten them slightly so the figure
+reads as a real adult, not an illustration. Crotch closer to mid-body. Do not
+go stocky. This is a small correction, not a new body.
 Fashion mood is expressed through clothing, never by changing the person.
 
 OUTFIT:
@@ -4160,7 +4171,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id14-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id15-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -6586,11 +6597,20 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
-_TRYON_BODY_PROMPT = """입력 사진과 동일한 얼굴을 유지하세요. 이목구비·피부톤·헤어를 바꾸거나 미화하지 마세요.
-- 인물 한 명, 정면 전신. 머리끝부터 발끝까지 잘리지 않게, 팔은 몸 옆에 자연스럽게
-- 몸에 붙는 검정 반팔 티와 검정 슬랙스만. 무늬·로고 없이
-- 배경은 #F2F1EE 단색, 그림자 최소
-- 텍스트·로고·워터마크·프레임·다른 사람 추가 금지
+_TRYON_BODY_PROMPT = """This is an identity lock, not a new person.
+Image 1 is a photograph of the actual user. Keep that exact face:
+same eyes, nose, lips, jawline, hairline, hair color, and skin tone.
+Do not beautify, de-age, restyle hair, or replace them with a similar-looking person.
+If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head pixels.
+
+- one person, front-facing full body, crown of hair to shoes fully in frame, arms relaxed at the sides
+- slightly more lookbook-ready than a casual snapshot: a little longer legs and cleaner posture,
+  still a real adult — not a fashion illustration, not stocky
+- plain black short-sleeve tee and black slacks only. no pattern, logo, or extra garments
+- background is ONE continuous solid fill of #F2F1EE from edge to edge.
+  no second gray, no side panels, no gradient split, no letterbox of a different color
+- minimal contact shadow under the shoes
+- no text, watermark, frame, or other people
 """
 
 
@@ -6639,7 +6659,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     ensure_within_limit(user.id, "tryon_body")
 
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon2-{sig}"
+    key = f"tryon3-{sig}"
     cached = (
         supabase_admin.table("generated_images")
         .select("image_url")
@@ -6907,7 +6927,7 @@ def live_orders_collect(
         if not os.path.isdir(playwright):
             raise HTTPException(status_code=422, detail="NEED_SETUP")
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 [
                     "node",
                     script,
@@ -6916,30 +6936,73 @@ def live_orders_collect(
                     "--login-wait=180000",
                 ],
                 cwd=collector,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=210,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=422, detail="NEED_SETUP") from exc
+        err_chunks: list[str] = []
+        deadline = time.time() + 210
+        try:
+            assert proc.stderr is not None
+            while True:
+                if time.time() > deadline:
+                    proc.kill()
+                    raise subprocess.TimeoutExpired(proc.args, 210)
+                line = proc.stderr.readline()
+                if line:
+                    err_chunks.append(line)
+                    if line.startswith("STEP "):
+                        key = line.strip().split(" ", 1)[-1]
+                        if key in ("open", "need_login", "collect"):
+                            report(key)
+                    continue
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+            leftover = proc.stderr.read()
+            if leftover:
+                err_chunks.append(leftover)
+            stdout = proc.stdout.read() if proc.stdout else ""
         except subprocess.TimeoutExpired as exc:
             raise HTTPException(
                 status_code=422,
                 detail="시간이 너무 오래 걸렸어요. 크롬에서 로그인한 뒤 다시 눌러 주세요.",
             ) from exc
+        stderr = "".join(err_chunks)
         if proc.returncode == 2:
             raise HTTPException(status_code=422, detail="NEED_LOGIN")
         if proc.returncode != 0:
-            print(f"[orders] collect failed: {proc.stderr[-500:]}", flush=True)
+            print(f"[orders] collect failed: {stderr[-500:]}", flush=True)
             raise HTTPException(status_code=422, detail="주문 내역을 읽지 못했어요.")
         try:
-            data = json.loads(proc.stdout or "{}")
+            data = json.loads(stdout or "{}")
         except json.JSONDecodeError as exc:
             raise HTTPException(status_code=422, detail="주문 내역을 읽지 못했어요.") from exc
         items = data.get("items") if isinstance(data, dict) else []
         return {"items": items or []}
 
     return stream_with_keepalive(work)
+
+
+def _filled_daily_looks_today(user_id: str) -> int:
+    """오늘 날짜(KST) 데일리 코디 중 착장 URL이 있는 개수.
+
+    LOOK_TEST_LIMIT는 요청 단위가 아니다. 프론트가 lookImg 없는 카드만 다시 보내면
+    요청마다 have=0이 되어 장이 더 만들어졌다.
+    """
+    rows = (
+        supabase_admin.table("outfits")
+        .select("look_image_url,type,metadata,created_at")
+        .eq("user_id", user_id)
+        .eq("type", "daily")
+        .execute()
+        .data
+        or []
+    )
+    today = datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+    return sum(1 for r in rows if r.get("look_image_url") and _outfit_for_date(r) == today)
 
 
 def _apply_model_looks(
@@ -6958,8 +7021,18 @@ def _apply_model_looks(
     if not outfits:
         return
     targets = [o for o in outfits if not o.get("lookImg")]
+    claimed = False
     if LOOK_TEST_LIMIT > 0:
-        have = sum(1 for o in outfits if o.get("lookImg"))
+        with _LOOK_FILLING_LOCK:
+            if user_id in _LOOK_FILLING:
+                print("[model-look] LOOK_TEST_LIMIT skip — already filling", flush=True)
+                return
+            _LOOK_FILLING.add(user_id)
+            claimed = True
+        have = max(
+            _filled_daily_looks_today(user_id),
+            sum(1 for o in outfits if o.get("lookImg")),
+        )
         room = max(0, LOOK_TEST_LIMIT - have)
         if len(targets) > room:
             print(
@@ -6967,6 +7040,10 @@ def _apply_model_looks(
                 flush=True,
             )
             targets = targets[:room]
+        if not targets:
+            with _LOOK_FILLING_LOCK:
+                _LOOK_FILLING.discard(user_id)
+            return
     if not targets:
         return
     remaining = billing_state(user_id)["remaining"]
@@ -7011,14 +7088,20 @@ def _apply_model_looks(
         )
 
     t0 = time.perf_counter()
-    identity = _ensure_model_identity_png(user_id, gender)
-    for outfit in targets:
-        try:
-            outfit, url = one(outfit, identity)
-            if url:
-                persist(outfit, url)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[model-look] sequential skip: {exc}", flush=True)
+    identity = None
+    try:
+        identity = _ensure_model_identity_png(user_id, gender)
+        for outfit in targets:
+            try:
+                outfit, url = one(outfit, identity)
+                if url:
+                    persist(outfit, url)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[model-look] sequential skip: {exc}", flush=True)
+    finally:
+        if claimed:
+            with _LOOK_FILLING_LOCK:
+                _LOOK_FILLING.discard(user_id)
     ms = int((time.perf_counter() - t0) * 1000)
     done = sum(1 for o in targets if o.get("lookImg"))
     print(

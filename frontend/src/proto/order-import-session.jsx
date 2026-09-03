@@ -1,7 +1,7 @@
-/* 구매내역: 몰을 누르면 바로 쇼핑몰 화면. 아래 불러오기가 주문내역을 읽는다.
-   zip·확장 설치 안내는 없다. 비밀번호는 받지 않는다. */
+/* 구매내역 세션. 몰은 시트에서 고르고, 여기서는 로그인 → 불러오기만 한다.
+   비밀번호는 받지 않는다. 웹뷰 뒤로/새로고침은 막을 수 없어서 넣지 않는다. */
 const React = window.React;
-const { useState, useRef, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 function OrderImportSession({
   open,
@@ -11,65 +11,52 @@ function OrderImportSession({
   collectOrders,
 }) {
   const Icon = window.Icon;
-  const iframeRef = useRef(null);
-  const [phase, setPhase] = useSess('browse'); // browse | scan
-  const [guide, setGuide] = useSess(false);
-  const [busy, setBusy] = useSess(false);
-  const [progress, setProgress] = useSess(0);
-  const [err, setErr] = useSess('');
-  const [found, setFound] = useSess([]);
-  const [frameOk, setFrameOk] = useSess(false);
+  const [phase, setPhase] = useState('browse'); // browse | scan
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [err, setErr] = useState('');
+  const [found, setFound] = useState([]);
+  const [loginWait, setLoginWait] = useState(false);
   const cancelRef = useRef(false);
 
   useEffect(() => {
     if (!open) return undefined;
     cancelRef.current = false;
     setPhase('browse');
-    setGuide(false);
     setBusy(false);
     setProgress(0);
     setErr('');
     setFound([]);
-    setFrameOk(false);
+    setLoginWait(false);
     return () => { cancelRef.current = true; };
   }, [open, platform && platform.id]);
 
   if (!open || !platform) return null;
 
-  const host = platform.host || '쇼핑몰';
   const picked = found.filter((x) => x.pick);
   const close = () => {
     cancelRef.current = true;
     onClose();
   };
 
-  const goBack = () => {
-    try { iframeRef.current.contentWindow.history.back(); } catch (e) { /* SOP */ }
-  };
-  const goForward = () => {
-    try { iframeRef.current.contentWindow.history.forward(); } catch (e) { /* SOP */ }
-  };
-  const reload = () => {
-    const el = iframeRef.current;
-    if (!el) return;
-    try { el.contentWindow.location.reload(); } catch (e) { el.src = platform.ordersUrl; }
-  };
-
   const onImport = async () => {
     setErr('');
-    setPhase('scan');
     setBusy(true);
-    setProgress(8);
     setFound([]);
+    setProgress(0);
+    setLoginWait(false);
     try {
       const items = await collectOrders({
         platform,
-        iframe: iframeRef.current,
         onProgress: (step) => {
           if (cancelRef.current) return;
           const key = (step && (step.key || step)) || '';
-          const pct = key === 'open' ? 18 : key === 'need_login' ? 28 : key === 'collect' ? 62 : 40;
-          setProgress((p) => Math.max(p, pct));
+          if (key === 'open' || key === 'need_login') setLoginWait(true);
+          if (key === 'collect') {
+            setLoginWait(false);
+            setPhase('scan');
+            setProgress((p) => Math.max(p, 40));
+          }
         },
       });
       if (cancelRef.current) return;
@@ -83,11 +70,11 @@ function OrderImportSession({
         pick: true,
       }));
       if (!rows.length) {
-        setErr('이 화면에서 상품을 찾지 못했어요. 주문내역이 보이면 다시 불러오세요.');
-        setBusy(false);
-        setProgress(0);
+        setPhase('browse');
+        setErr('주문내역이 보이면 다시 불러오세요.');
         return;
       }
+      setPhase('scan');
       for (let i = 0; i < rows.length; i++) {
         if (cancelRef.current) return;
         setFound((prev) => prev.concat([rows[i]]));
@@ -98,11 +85,11 @@ function OrderImportSession({
     } catch (e) {
       if (cancelRef.current) return;
       const msg = String((e && e.message) || '');
+      setPhase('browse');
       if (msg === 'NEED_LOGIN' || /로그인/.test(msg)) {
-        setPhase('browse');
-        setErr('로그인한 뒤, 주문내역이 보이면 불러오기를 눌러 주세요.');
+        setErr('열린 창에서 로그인한 뒤 다시 불러오세요.');
       } else if (msg === 'ORDER_READ_BLOCKED') {
-        setErr('이 화면의 주문내역을 읽지 못했어요. 주문 목록이 보이는 상태에서 다시 눌러 주세요.');
+        setErr('주문내역이 보이는 창에서 다시 불러오세요.');
       } else {
         setErr(msg || '주문 내역을 가져오지 못했어요.');
       }
@@ -129,105 +116,52 @@ function OrderImportSession({
       {phase === 'browse' ? (
         <>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            height: 48, padding: '0 8px 0 4px', flex: 'none',
-            borderBottom: '1px solid var(--line)',
+            display: 'flex', alignItems: 'center', height: 48,
+            padding: '0 8px 0 4px', flex: 'none',
           }}>
             <button type="button" aria-label="닫기" onClick={close} style={iconHit}>
               <Icon name="x" size={20} stroke={2} />
             </button>
-            <div style={{
-              flex: 1, minWidth: 0, height: 32, borderRadius: 999,
-              background: 'var(--surface-2)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', gap: 6, padding: '0 12px',
-              fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
-            }}>
-              <Icon name="lock" size={12} stroke={2} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{host}</span>
-            </div>
-            <button type="button" onClick={() => setGuide((g) => !g)} style={{
-              flex: 'none', padding: '8px 10px', fontSize: 13, fontWeight: 700, color: 'var(--ink-2)',
-            }}>
-              가이드
-            </button>
           </div>
-
-          {guide ? (
+          <div style={{
+            flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: '24px 28px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em' }}>{platform.name}</div>
             <div style={{
-              margin: '10px 18px 0', padding: '12px 14px', borderRadius: 'var(--r-md)',
-              background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
-              fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)', wordBreak: 'keep-all',
+              marginTop: 12, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all',
             }}>
-              {platform.name}에 로그인한 뒤, 주문내역이 보이면 아래 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>불러오기</b>를 누르세요. 비밀번호는 받지 않아요.
+              <div>로그인하면 주문내역이 열려요.</div>
+              <div>불러오면 산 옷이 하나씩 보여요.</div>
             </div>
-          ) : null}
-
-          {err ? (
-            <div style={{
-              margin: '10px 18px 0', fontSize: 13, fontWeight: 600, color: '#B0573C',
-              lineHeight: 1.4, wordBreak: 'keep-all',
-            }}>
-              {err}
-            </div>
-          ) : null}
-
-          <div style={{ flex: 1, minHeight: 0, position: 'relative', background: 'var(--ivory)' }}>
-            <iframe
-              ref={iframeRef}
-              title={`${platform.name} 주문내역`}
-              src={platform.ordersUrl}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-              onLoad={() => {
-                try {
-                  const doc = iframeRef.current && iframeRef.current.contentDocument;
-                  setFrameOk(!!(doc && doc.body && (doc.body.childElementCount > 0 || (doc.body.innerText || '').length > 8)));
-                } catch (e) {
-                  setFrameOk(false);
-                }
-              }}
-              style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, background: '#fff',
-                opacity: frameOk ? 1 : 0, pointerEvents: frameOk ? 'auto' : 'none',
-              }}
-            />
-            {!frameOk ? (
+            {err ? (
               <div style={{
-                position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', padding: '24px 28px', textAlign: 'center',
+                marginTop: 16, fontSize: 13, fontWeight: 600, color: '#B0573C',
+                lineHeight: 1.4, wordBreak: 'keep-all',
               }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: 14, background: 'var(--ink)', color: '#fff',
-                  display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 800, letterSpacing: '-0.04em',
-                }}>
-                  {(platform.name || '?').slice(0, 2)}
-                </div>
-                <div style={{ marginTop: 16, fontSize: 18, fontWeight: 800 }}>{platform.name}</div>
-                <div style={{ marginTop: 8, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all', maxWidth: 280 }}>
-                  로그인하면 주문내역이 열려요. 아래 불러오기를 누르면 산 옷이 하나씩 보여요.
-                </div>
+                {err}
               </div>
             ) : null}
           </div>
-
           <div style={{
-            flex: 'none', display: 'flex', alignItems: 'center', gap: 8,
+            flex: 'none',
             padding: '10px 18px calc(10px + env(safe-area-inset-bottom, 0px))',
-            borderTop: '1px solid var(--line)', background: '#fff',
+            background: '#fff',
           }}>
-            <button type="button" aria-label="뒤로" onClick={goBack} style={iconHit}><Icon name="chevL" size={20} /></button>
-            <button type="button" aria-label="앞으로" onClick={goForward} style={iconHit}><Icon name="chevR" size={20} /></button>
             <button
               type="button"
               onClick={onImport}
               disabled={busy}
               style={{
-                flex: 1, height: 48, borderRadius: 999, fontSize: 16, fontWeight: 800,
+                width: '100%', height: 52, borderRadius: 999, fontSize: 16, fontWeight: 800,
                 background: 'var(--ink)', color: 'var(--surface)',
               }}
             >
-              {busy ? '찾는 중…' : '불러오기'}
+              {busy
+                ? (loginWait ? '열린 창에서 로그인하세요' : '로그인 창을 여는 중…')
+                : '불러오기'}
             </button>
-            <button type="button" aria-label="새로고침" onClick={reload} style={iconHit}><Icon name="refresh" size={20} /></button>
           </div>
         </>
       ) : (
@@ -239,23 +173,8 @@ function OrderImportSession({
             <button type="button" aria-label="뒤로" onClick={() => { setPhase('browse'); setErr(''); }} style={iconHit}>
               <Icon name="chevL" size={20} />
             </button>
-            <div style={{ flex: 1 }} />
-            <button type="button" onClick={() => setGuide((g) => !g)} style={{
-              padding: '8px 10px', fontSize: 13, fontWeight: 700, color: 'var(--ink-2)',
-            }}>가이드</button>
-          </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', padding: '0 18px 12px', gap: 10,
-          }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 8, background: 'var(--ink)', color: '#fff',
-              display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, letterSpacing: '-0.04em',
-            }}>
-              {(platform.name || '?').slice(0, 2)}
-            </div>
-            <div style={{ flex: 1, fontSize: 18, fontWeight: 800 }}>{platform.name}</div>
-            <button type="button" onClick={close} style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-2)' }}>취소</button>
+            <div style={{ flex: 1, fontSize: 16, fontWeight: 800, textAlign: 'center' }}>{platform.name}</div>
+            <button type="button" onClick={close} style={{ padding: '8px 12px', fontSize: 14, fontWeight: 700, color: 'var(--ink-2)' }}>취소</button>
           </div>
 
           <div className="lb-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px 12px' }}>
@@ -263,7 +182,7 @@ function OrderImportSession({
               borderRadius: 16, background: 'var(--surface-2)', padding: '16px 16px 14px',
             }}>
               <div style={{ fontSize: 15, fontWeight: 800 }}>
-                {busy ? '구매 아이템 분석 중' : (found.length ? '아이템을 찾았어요' : '아이템을 찾는 중')}
+                {busy ? '아이템을 찾는 중' : (found.length ? '아이템을 찾았어요' : '아이템을 찾는 중')}
               </div>
               <div style={{
                 marginTop: 12, height: 6, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden',
@@ -274,7 +193,7 @@ function OrderImportSession({
                 }} />
               </div>
               <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                {err || '잠시 시간이 걸릴 수 있으니 이 화면을 열어 둔 채로 기다려 주세요'}
+                {err || '이 화면을 열어 둔 채로 기다려 주세요'}
               </div>
             </div>
 
@@ -286,9 +205,7 @@ function OrderImportSession({
                   key={it.url}
                   type="button"
                   onClick={() => togglePick(it.url)}
-                  style={{
-                    textAlign: 'left', background: 'transparent', padding: 0,
-                  }}
+                  style={{ textAlign: 'left', background: 'transparent', padding: 0 }}
                 >
                   <div style={{
                     position: 'relative', aspectRatio: '1', borderRadius: 12, overflow: 'hidden',
@@ -315,7 +232,7 @@ function OrderImportSession({
                     marginTop: 8, fontSize: 12.5, fontWeight: 700, lineHeight: 1.35,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
-                    {it.store || host}
+                    {it.store || platform.name}
                   </div>
                   <div style={{
                     marginTop: 2, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.35,
@@ -351,7 +268,7 @@ function OrderImportSession({
                 color: picked.length && !busy ? 'var(--surface)' : 'var(--ink-3)',
               }}
             >
-              아이템 {picked.length}개 추가하기
+              {picked.length}개 추가하기
             </button>
           </div>
         </>
@@ -364,10 +281,6 @@ const iconHit = {
   width: 44, height: 44, display: 'grid', placeItems: 'center',
   background: 'none', color: 'var(--ink)', flex: 'none',
 };
-
-function useSess(init) {
-  return useState(init);
-}
 
 window.LB_ORDER_IMPORT = { OrderImportSession };
 export { OrderImportSession };

@@ -1229,7 +1229,8 @@ function AddSheet({ ctx }) {
     if (wide || !tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    let body = (prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '';
+    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon3');
+    let body = stale ? '' : ((prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       body = await makeTryOnBody({ silent: true });
     }
@@ -2073,8 +2074,8 @@ function AddSheet({ ctx }) {
                         </div>
                         <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {orderNeedLogin
-                            ? '로그인한 뒤 불러오기를 눌러 주세요.'
-                            : '쇼핑몰을 누르면 바로 열어요.'}
+                            ? '로그인한 뒤 다시 눌러 주세요.'
+                            : '쇼핑몰을 고른 뒤 아래 버튼으로 열어요.'}
                         </div>
                         <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                           {ORDER_PLATFORMS.map((p) => (
@@ -2085,7 +2086,6 @@ function AddSheet({ ctx }) {
                                 setOrderShop(p.id);
                                 setErr('');
                                 setOrderNeedLogin(false);
-                                setOrderSession(p);
                               }}
                               style={{
                                 padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
@@ -2291,21 +2291,26 @@ function AddSheet({ ctx }) {
                             )}
                             <Btn icon="check" onClick={closeAdd} style={{ flex: 1 }}>확인</Btn>
                           </div>
-                      ) : tab === 'orders' && !bulk ? null : (
+                      ) : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={bulk ? runBulk : onSubmitAdd}
+                          onClick={bulk ? runBulk : (tab === 'orders' ? () => setOrderSession(orderPlatformById(orderShop)) : onSubmitAdd)}
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
-                            : (!canSubmit || busy || !!bulkRun)}
+                            : tab === 'orders'
+                              ? (orderBusy || busy || !!bulkRun)
+                              : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
                             : bulk
                               ? (bulkAuto
                                 ? `${bulkPicked.length}개 옷장에 담기`
                                 : `${bulkPicked.length}개 확인하고 담기`)
+                            : orderBusy ? '로그인 창을 여는 중…'
                             : busy ? '인식 중…'
-                            : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기'))}
+                            : (tab === 'orders'
+                              ? (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')
+                              : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
                     </div>

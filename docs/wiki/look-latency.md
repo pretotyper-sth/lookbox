@@ -1,4 +1,43 @@
-# 착장 생성이 느린 건 프롬프트 때문이 아니다
+# 상품컷 조합도 10초가 아니고, 착장은 그보다 길다
+
+화면에 「최대 10초」를 쓰지 않는다. 2026-09-03에 오늘 코디·룩북 카피에서 뺐다
+(`06-today.jsx`, `05-screens-cde.jsx`).
+
+## 상품컷 기준 코디 (`POST /api/live/coordinate`)
+
+카드가 한 장씩 나오지 않는다. 프론트는 조합 JSON 전체를 기다린 뒤에 컷아웃
+4장을 한 번에 그린다(`09-app.jsx` `requestDailyOutfits`). 서버도 코디를
+스트리밍하지 않고 `gpt-4o` 추천 1회 + 옷장 persist 뒤에 응답한다.
+
+`recommendation_timings.duration_ms`는 `_ensure_style_attrs` + `recommend_text`
+까지이고, 그 다음 코디 행 insert는 포함하지 않는다
+(`backend/app/main.py` `live_coordinate`).
+
+2026-09-03 08:19:56 KST 실측 (옷장 47, 4콤보): **14.7초**. `recommend_text`
+토큰 `text_in=5547`. 같은 풀 크기 누적: 평균 10.9초, p95 15.7초, 최대 24.3초
+(`GET /api/live/recommend-stats`, n=12 at pool=47). 전날 08:44는 9.8초.
+
+첫 추천이 더 느려질 수 있는 이유: 스타일 속성 없는 옷 최대 25개를 이름 기반
+추론한다(`_ensure_style_attrs`, timeout 45초). 이번 08:20 요청에는
+`style_attrs` 로그가 없었다.
+
+## 착장 (`POST /api/live/coordinate/looks`)
+
+같은 08:20 요청에서 추천이 끝난 뒤 착장 4장이 크레딧에 남았다.
+
+| 단계 | 시각 (KST) | 간격 |
+|---|---|---|
+| 상품컷 4장 응답 | 08:19:56 | 추천 14.7초 |
+| 착장 1 | 08:20:55 | +59초 |
+| 착장 2 | 08:21:02 | +7초 |
+| 착장 3·4 | 08:21:10 | +8초 |
+
+첫 착장 ~1분이 `images.edit` 본론이다. `LOOK_TEST_LIMIT=1`인데 4장이 나온 건
+요청마다 have=0으로 다시 채운 구멍이다(2026-09-03 08:20, [[model-look-toggle]]).
+
+---
+
+## 착장 생성이 느린 건 프롬프트 때문이 아니다
 
 「AI 착장 한 장」이 ChatGPT에서 이미지 하나 뽑는 것보다 오래 걸리는 이유는
 프롬프트 길이가 아니라 **입력 이미지 개수와 출력 크기**다.

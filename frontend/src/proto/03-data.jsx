@@ -171,11 +171,14 @@ const DEFAULT_PREFS = {
   tryOnCut: '', // 'top' | 'bottom' | 'custom'
 };
 
-// 착장 품질 테스트. 1이면 오늘 코디에서 착장 이미지 1장만. 0이면 제한 없음.
-// 다시 4장 쓰라고 하기 전까지 1로 둔다.
+// 바로 보기 전신 캐시 세대. 프롬프트를 바꾸면 올려서 예전 컷을 다시 쓰지 않는다.
+const TRYON_BODY_REV = 'tryon3';
+
+// 착장 품질 테스트 게이트. 실유저는 0 — 오늘 코디 전부 착장, 카드마다 대기 후 1장씩 전환.
+// 「테스트 종료」라고 하기 전까지 1장만 만든다. 끄려면 여기와 서버 LOOK_TEST_LIMIT를 0.
 const LOOK_TEST_LIMIT = 1;
 
-Object.assign(window, { LOOK_TEST_LIMIT, LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
+Object.assign(window, { LOOK_TEST_LIMIT, TRYON_BODY_REV, LB_DATA: { CATEGORIES, SEASONS, WARDROBE, ANCHOR, ALL, OUTFITS, DAILY, WEATHER, OUTFIT_BY_ID, SAVED, IMG, DETECT, STYLES, FITS, AGES, PALETTE, PERSONAL_COLORS, DEFAULT_PREFS } });
 
 
 /* @prototype-ported: real-service start = empty user content */

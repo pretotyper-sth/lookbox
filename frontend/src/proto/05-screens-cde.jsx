@@ -153,7 +153,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   if (outfit && outfit.lookImg) {
     return (
       <div style={{
-        position: 'relative', minWidth: 0, minHeight: 0,
+        position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
         background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
       }}>
         <img
@@ -176,7 +176,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     <div
       aria-busy={looking ? 'true' : undefined}
       aria-label={looking ? 'AI 착장 이미지로 바꾸는 중' : undefined}
-      style={{ position: 'relative', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}
+      style={{ position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}
     >
       {shown.map((it) => {
         const at = place[it.id] || LOOK_SPOT.top;
@@ -312,7 +312,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
       {!error && !!outfits.length && (
         <div style={{ marginTop: 'var(--s4)' }}>
           <Btn full variant="soft" icon="sparkle" onClick={onMore} disabled={loading}>
-            {loading ? '만드는 중… 최대 10초' : '코디 2개 더 받기'}
+            {loading ? '만드는 중…' : '코디 2개 더 받기'}
           </Btn>
         </div>
       )}
@@ -446,7 +446,6 @@ function ResultsScreen({ ctx }) {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 'var(--s3)' }}>
             <div style={{ fontSize: 15, fontWeight: 700, minWidth: 0 }}>
               {busy ? '어울리는 조합을 찾는 중' : '내 옷장과 어울리는 코디'}
-              {busy && <span style={{ fontWeight: 500, color: 'var(--ink-3)', fontSize: 12.5 }}> · 최대 10초</span>}
             </div>
             {!busy && <div style={{ fontSize: 12.5, color: 'var(--ink-3)', flex: 'none' }}>{outfits.length}개</div>}
           </div>
@@ -470,7 +469,7 @@ function ResultsScreen({ ctx }) {
           {!busy && (
             <div style={{ marginTop: 'var(--s5)' }}>
               <Btn full variant="soft" icon="sparkle" onClick={loadMoreCombos} disabled={moreBusy}>
-                {moreBusy ? '추천 만드는 중… 최대 10초' : '2개 더 추천받기'}
+                {moreBusy ? '추천 만드는 중…' : '2개 더 추천받기'}
               </Btn>
             </div>
           )}
@@ -873,13 +872,18 @@ function RailCard({ look, active, onClick }) {
   const its = (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
     <button onClick={onClick} className="lb-rail-card" aria-current={active ? 'true' : undefined} style={{
-      textAlign: 'left', display: 'block', padding: 8, borderRadius: 'var(--r-lg)',
+      textAlign: 'left', display: 'block', width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 'var(--r-lg)',
       background: active ? 'var(--surface)' : 'transparent',
       boxShadow: active ? 'inset 0 0 0 2px var(--ink)' : 'none',
       opacity: active ? 1 : 0.45,
     }}>
       <LookComposite outfit={o} items={its} ratio="1 / 1" />
-      <div style={{ padding: '8px 2px 2px', fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{look.label}</div>
+      <div style={{
+        padding: '8px 2px 0', fontSize: 12.5, fontWeight: 700, lineHeight: 1.3,
+        minHeight: 'calc(1.3em * 2)',
+        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      }}>{look.label}</div>
     </button>
   );
 }
@@ -1111,7 +1115,7 @@ function DetailScreen({ ctx }) {
                     // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전
                     // auto-fill 그리드가 한 칸에 줄 수 있던 최대 폭이라, 코디가 둘뿐일 때도
                     // 카드가 혼자 커지지 않는다.
-                    <div key={lk.id} style={{ flex: '1 0 148px', maxWidth: 188 }}>
+                    <div key={lk.id} style={{ flex: '1 1 148px', minWidth: 148, maxWidth: 188, overflow: 'hidden' }}>
                       <RailCard look={lk} active={lk.id === detailLook.id}
                         onClick={() => openDetail(lk, detailFromLookbook ? null : looks, detailListLabel)} />
                     </div>

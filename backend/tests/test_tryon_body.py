@@ -14,15 +14,17 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 500]
-        self.assertIn("동일한 얼굴", prompt)
-        self.assertIn("미화하지 마세요", prompt)
+        prompt = self.src[start:start + 1200]
+        self.assertIn("identity lock", prompt)
+        self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
+        self.assertIn("ONE continuous", prompt)
 
     def test_cache_and_timeout_are_tryon_specific(self):
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 1600]
-        self.assertIn("tryon2-", chunk)
+        self.assertIn("tryon3-", chunk)
+        self.assertNotIn('key = f"tryon2-{sig}"', chunk)
         self.assertNotIn('key = f"tryon-{sig}"', chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
         self.assertIn('input_fidelity="high"', chunk)

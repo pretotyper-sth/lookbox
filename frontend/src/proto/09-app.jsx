@@ -886,6 +886,7 @@ function App() {
       tryOnBody: '',
       tryOnFrame: '',
       tryOnCut: '',
+      tryOnRev: '',
     };
     setPrefs(np);
     persistPrefs(np, { clearAvatar: !dataUrl });
@@ -897,6 +898,7 @@ function App() {
       tryOnBody: body || '',
       tryOnFrame: frame || '',
       tryOnCut: cut || '',
+      tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon3') : '',
     };
     setPrefs(np);
     persistPrefs(np);
@@ -924,7 +926,7 @@ function App() {
       });
       const url = res && res.imageUrl;
       if (!url) throw new Error('바로 보기 이미지를 만들지 못했어요');
-      const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto' };
+      const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon3' };
       setPrefs(np); persistPrefs(np);
       reloadBilling();
       if (!silent) showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
@@ -978,7 +980,7 @@ function App() {
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
-    if (!prefs.tryOnFrame) {
+    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon3')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (prefs.avatar) {
         const made = await makeTryOnBody();
@@ -1463,10 +1465,12 @@ function App() {
     ));
     if (!pending.length) return 0;
     const lookLimit = window.LOOK_TEST_LIMIT || 0;
+    if (lookLimit > 0 && lookInflight.current.size > 0) return 0;
     const daily = LB_DATA.DAILY || [];
     const fromDaily = pending.every((o) => daily.some((d) => d && d.id === o.id));
-    const pool = fromDaily ? daily : (list || pending);
-    const have = pool.filter((o) => o && o.lookImg).length;
+    const have = fromDaily
+      ? daily.filter((o) => o && o.lookImg).length
+      : pending.filter((o) => o && o.lookImg).length;
     const room = lookLimit > 0 ? Math.max(0, lookLimit - have) : pending.length;
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
@@ -1536,6 +1540,10 @@ function App() {
   // 그때 applyModelLooks가 안 타서 착장 토글이 켜져 있어도 옷 컷아웃만 보였다.
   useEffect(() => {
     if (isShowcase || !authUid || !wardrobeLoaded || !prefs.modelLook || !prefs.dailyEnabled) return;
+    if (lookInflight.current.size > 0) return;
+    const lookLimit = window.LOOK_TEST_LIMIT || 0;
+    const have = (LB_DATA.DAILY || []).filter((o) => o && o.lookImg).length;
+    if (lookLimit > 0 && have >= lookLimit) return;
     const pending = (LB_DATA.DAILY || []).filter((o) => (
       o && !o.lookImg && (o.itemIds || []).length && o.id && !lookInflight.current.has(o.id)
     ));
