@@ -862,7 +862,7 @@ function RailCard({ look, active, onClick }) {
     <button onClick={onClick} className="lb-rail-card" aria-current={active ? 'true' : undefined} style={{
       textAlign: 'left', display: 'block', width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 'var(--r-lg)',
       background: active ? 'var(--surface)' : 'transparent',
-      boxShadow: active ? 'inset 0 0 0 2px var(--ink)' : 'none',
+      border: active ? '2px solid var(--ink)' : '2px solid transparent',
       opacity: active ? 1 : 0.45,
     }}>
       <LookComposite outfit={o} items={its} ratio="1 / 1" />
@@ -951,11 +951,19 @@ function DetailScreen({ ctx }) {
     );
   };
 
-  // 레일이 길어져도 지금 보는 코디가 화면 밖에 있지 않게
+  // 레일이 길어져도 지금 보는 코디가 가로로 화면 밖에 있지 않게.
+  // scrollIntoView(block:nearest)는 overflow-y 조상까지 밀어 카드가 내려오며
+  // 위 테두리가 뒤늦게 보이는 현상이 난다. 좌우만 맞춘다.
   React.useEffect(() => {
     if (!wide || !railRef.current) return;
-    const active = railRef.current.querySelector('[aria-current="true"]');
-    if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const rail = railRef.current;
+    const active = rail.querySelector('[aria-current="true"]');
+    if (active) {
+      const r = active.getBoundingClientRect();
+      const p = rail.getBoundingClientRect();
+      if (r.left < p.left + 4) rail.scrollLeft -= (p.left + 4 - r.left);
+      else if (r.right > p.right - 4) rail.scrollLeft += (r.right - (p.right - 4));
+    }
     syncRail();
   }, [wide, detailLook, looks.length, syncRail]);
 
@@ -1104,7 +1112,8 @@ function DetailScreen({ ctx }) {
                 </div>
                 {/* 코디가 늘면 세로로 쌓지 않고 이 줄에 가로로 붙는다. 넘치면 화살표로 넘긴다. */}
                 <div ref={railRef} onScroll={syncRail} className="lb-scrollable" style={{
-                  display: 'flex', gap: 12, overflowX: 'auto', scrollBehavior: 'smooth', paddingBottom: 2,
+                  display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
+                  scrollBehavior: 'smooth', padding: '2px 0 4px',
                 }}>
                   {looks.map((lk) => (
                     // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전

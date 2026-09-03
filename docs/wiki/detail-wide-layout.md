@@ -20,6 +20,12 @@
 화살표(`RailPageBtn`)는 `scrollBy(clientWidth * 0.8)`. `syncRail`이 스크롤·코디 수
 변화마다 양 끝 도달 여부를 보고 끝에 닿은 쪽 화살표를 죽인다.
 
+선택 테두리는 `2px solid`이고 비활성은 투명 2px라 칸 크기가 안 바뀐다. 호버로
+카드를 올리지 않는다 — `translateY(-2px)` + 레일 `overflow-y:auto`면 위 테두리가
+잘리고, `scrollIntoView({block:'nearest'})`가 조상을 밀어 누른 뒤에야 테두리가
+보였다(2026-09-03). 레일은 `overflowY:hidden` + 위 2px 패딩. 활성 카드는
+가로 `scrollLeft`만 맞춘다.
+
 레일이 한 줄이 되면서 방향키는 좌우만 ±1로 옮긴다. 예전 위/아래 ±cols는
 `gridTemplateColumns`를 읽어 열 수를 세던 코드였고, flex에서는 의미가 없어 지웠다.
 활성 카드 `scrollIntoView`는 `inline: 'nearest'`를 같이 준다.

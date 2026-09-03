@@ -296,8 +296,8 @@ img { display: block; max-width: 100%; }
 .lb-savedcard { transition: transform var(--dur) var(--ease); }
 .lb-savedcard:hover { transform: translateY(-2px); }
 /* 룩북 상세(데스크탑) 우측 레일 — 현재 코디만 선명하고 나머지는 물러나 있게 */
-.lb-rail-card { transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
-.lb-rail-card:hover { opacity: 0.85; transform: translateY(-2px); }
+.lb-rail-card { transition: opacity var(--dur) var(--ease); }
+.lb-rail-card:hover { opacity: 0.85; }
 .lb-rail-card[aria-current='true']:hover { opacity: 1; }
 .lb-input:focus { border-color: var(--ink-2); }
 /* iOS는 16px 미만 input에 포커스하면 페이지를 확대하고, 그 배율이 다음 방문까지 남는다. */
