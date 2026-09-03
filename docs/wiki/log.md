@@ -338,3 +338,7 @@ SSE로 끝나는 장부터 착장. 실유저 기본은 4장. [[model-look-toggle
 전신 프롬프트는 얼굴 고정·배경 한 색·비율만 조금. 캐시 `tryon3-`.
 [[tryon-setup-from-mypage]]
 
+## [2026-09-03] change | 바로 보기 구멍은 블러가 아니라 옷 실루엣
+블러·4px 팽창을 뺀다. 구멍은 옷 픽셀 그대로, 안쪽 핀홀만 1px closing.
+하의는 잡힌 폭 그대로 발 아래까지. [[tryon-setup-from-mypage]]
+

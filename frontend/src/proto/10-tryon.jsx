@@ -117,6 +117,31 @@ function garmentBand(mode) {
   return { y0: 0.16, y1: 0.995, x0: 0.06, x1: 0.94 };
 }
 
+function morphOnce(src, W, H, x0, x1, y0, y1, radius, grow) {
+  const out = new Uint8Array(W * H);
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      let hit = grow ? 0 : 1;
+      loop: for (let oy = -radius; oy <= radius; oy += 1) {
+        for (let ox = -radius; ox <= radius; ox += 1) {
+          const nx = x + ox;
+          const ny = y + oy;
+          const inside = nx >= x0 && ny >= y0 && nx < x1 && ny < y1;
+          const on = inside && src[ny * W + nx];
+          if (grow) {
+            if (on) { hit = 1; break loop; }
+          } else if (!on) {
+            hit = 0;
+            break loop;
+          }
+        }
+      }
+      out[y * W + x] = hit;
+    }
+  }
+  return out;
+}
+
 function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode, plate) {
   const band = garmentBand(mode);
   const x0 = Math.max(0, Math.floor(dx + dw * band.x0));
@@ -132,44 +157,28 @@ function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode, plate) {
       if (isGarmentPixel(src[i], src[i + 1], src[i + 2], plate)) punch[y * W + x] = 1;
     }
   }
-  const dilate = 4;
-  const grown = new Uint8Array(W * H);
-  for (let y = y0; y < y1; y += 1) {
-    for (let x = x0; x < x1; x += 1) {
-      if (!punch[y * W + x]) continue;
-      for (let oy = -dilate; oy <= dilate; oy += 1) {
-        for (let ox = -dilate; ox <= dilate; ox += 1) {
-          const nx = x + ox;
-          const ny = y + oy;
-          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-          grown[ny * W + nx] = 1;
-        }
-      }
-    }
-  }
-  // 하의·전체: 옷이 잡힌 맨 아래부터 발 아래까지 같은 폭으로 더 뚫어 밑단 잔여를 없앤다.
+  // 옷 실루엣은 키우지 않는다. 1px closing만 해서 안쪽 구멍만 메운다.
+  const closed = morphOnce(morphOnce(punch, W, H, x0, x1, y0, y1, 1, true), W, H, x0, x1, y0, y1, 1, false);
+  // 하의·전체: 기장이 덜 잡히면 그 폭 그대로 발 아래까지 이어서 뚫는다. 좌우는 옷 폭을 넘지 않는다.
   if (mode === 'bottom' || mode === 'full') {
     let minX = x1;
     let maxX = x0;
     let maxY = y0;
     for (let y = y0; y < y1; y += 1) {
       for (let x = x0; x < x1; x += 1) {
-        if (!grown[y * W + x]) continue;
+        if (!closed[y * W + x]) continue;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y > maxY) maxY = y;
       }
     }
     if (maxY > y0 && maxX > minX) {
-      const padX = Math.max(4, Math.round((maxX - minX) * 0.05));
-      const xL = Math.max(0, minX - padX);
-      const xR = Math.min(W, maxX + padX + 1);
       for (let y = maxY; y < yBot; y += 1) {
-        for (let x = xL; x < xR; x += 1) grown[y * W + x] = 1;
+        for (let x = minX; x <= maxX; x += 1) closed[y * W + x] = 1;
       }
     }
   }
-  return grown;
+  return closed;
 }
 
 async function punchBody(src, mode, stageW, stageH) {
@@ -210,16 +219,9 @@ async function punchBody(src, mode, stageW, stageH) {
   mask.width = sw;
   mask.height = sh;
   mask.getContext('2d').putImageData(out, 0, 0);
-  const soft = document.createElement('canvas');
-  soft.width = sw;
-  soft.height = sh;
-  const sctx = soft.getContext('2d');
-  sctx.filter = 'blur(1.8px)';
-  sctx.drawImage(mask, 0, 0);
   ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(soft, 0, 0);
+  ctx.drawImage(mask, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
-  ctx.filter = 'none';
   return canvas.toDataURL('image/png');
 }
 

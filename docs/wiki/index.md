@@ -17,7 +17,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-latency](look-latency.md) — 상품컷 조합은 GPT-4o 한 번에 ~15초(옷장 47). 착장은 images.edit가 분 단위. 「최대 10초」는 사실이 아님
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 배경을 단색으로 맞추길 포기하고 후처리를 자르기만 남겼다
 - [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일. 레일 카드는 같은 폭
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 양옆은 생성본 판색. 구멍은 옷 픽셀+밑단까지. 캐시 `tryon3-`. 후면 카메라만
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 구멍은 옷 실루엣 그대로(블러·팽창 없음). 양옆은 생성본 판색. 캐시 `tryon3-`
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
