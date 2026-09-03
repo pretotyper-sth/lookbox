@@ -24,4 +24,8 @@
 `gridTemplateColumns`를 읽어 열 수를 세던 코드였고, flex에서는 의미가 없어 지웠다.
 활성 카드 `scrollIntoView`는 `inline: 'nearest'`를 같이 준다.
 
+품목 목록(`itemsBlock`) 한 줄은 썸네일 44px + 이름 한 줄 + 카테고리 한 줄 + 뱃지.
+`minHeight: 62`. 제안(wish) 이유도 같은 두 줄만 쓰고, 긴 설명은 `title`에만 둔다.
+이름·카테고리가 길어도 ellipsis라 줄 높이가 안 늘어난다(2026-09-03).
+
 근거: `frontend/src/proto/05-screens-cde.jsx` `DetailScreen`, `RailCard`.

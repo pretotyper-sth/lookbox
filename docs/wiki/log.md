@@ -346,4 +346,7 @@ SSE로 끝나는 장부터 착장. 실유저 기본은 4장. [[model-look-toggle
 앞 칸은 `recommend_closet`(텍스트 페어링). `_ensure_style_attrs`·gpt-4o는
 마지막 wish 카드 뒤에. [[look-latency]]
 
+## [2026-09-03] change | 상세 품목 줄 높이 통일
+wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight: 62`. [[detail-wide-layout]]
+
 

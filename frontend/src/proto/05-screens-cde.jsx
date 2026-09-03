@@ -1028,14 +1028,21 @@ function DetailScreen({ ctx }) {
         {items.map((it, i) => {
           const justAdded = it.isAnchor && addedItemIds.includes(it.id);
           return (
-            <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: '9px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
+            <div key={it.id} title={it.wish && it.reason ? it.reason : undefined} style={{
+              display: 'flex', alignItems: 'center', gap: 'var(--s3)',
+              minHeight: 62, padding: '9px 0',
+              borderTop: i === 0 ? 'none' : '1px solid var(--line)',
+            }}>
               <div style={{ width: 44, flex: 'none' }}><Thumb item={it} radius="var(--r-sm)" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, textWrap: 'pretty' }}>{it.name}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>{it.category}{it.color ? ` · ${it.color}` : ''}</div>
-                {it.wish && it.reason ? (
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.45 }}>{it.reason}</div>
-                ) : null}
+                <div style={{
+                  fontSize: 13.5, fontWeight: 600, lineHeight: 1.3,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{it.name}</div>
+                <div style={{
+                  fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{it.category}{it.color ? ` · ${it.color}` : ''}</div>
               </div>
               <div style={{ flex: 'none' }}>
                 {it.wish ? <Badge tone="neutral">새 아이템</Badge>
