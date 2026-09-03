@@ -342,3 +342,9 @@ SSE로 끝나는 장부터 착장. 실유저 기본은 4장. [[model-look-toggle
 블러·4px 팽창을 뺀다. 구멍은 옷 픽셀 그대로, 안쪽 핀홀만 1px closing.
 하의는 잡힌 폭 그대로 발 아래까지. [[tryon-setup-from-mypage]]
 
+## [2026-09-03] change | 오늘 코디 1장씩 · 신발 필수 · wish 상품컷
+상품컷은 SSE `_outfit`으로 되는 대로 붙인다. 추천은 1장 먼저, 나머지 3장.
+상의·하의·신발 필수, 소품은 랜덤 +@. wish 1개는 마지막 카드만. 픽토그램 대신
+`images.generate` 상품컷. 착장 켜져 있으면 그 컷도 입힌다.
+[[look-latency]] [[model-look-toggle]]
+

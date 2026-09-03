@@ -31,8 +31,8 @@ effect로 `lookImg` 없는 코디를 looks API로 채운다(`09-app.jsx`).
 
 착장 API는 keepalive SSE다. Render는 응답이 안 오면 ~100초에 끊어서, 서버에
 `look_image_url`이 있어도 화면은 옷 컷아웃만 남았다. 한 장이 끝나는 즉시
-`_look` 이벤트로 카드를 바꾼다. 사진 없는 wish는 점선 칸으로 그리지 않는다
-(2026-08-31).
+`_look` 이벤트로 카드를 바꾼다. wish는 생성 상품컷이 있으면 카드에 같이 올린다
+(2026-09-03).
 
 대기 카드 문구는 서버가 보내는 실제 단계다. `generate_model_look_image(stage=…)`가
 `prep`(기준 인물·옷장 사진 준비) → `dress`(images.edit 호출) → `finish`(4:5 크롭)
@@ -67,10 +67,12 @@ outfit replacement: 인물·스튜디오·포즈 고정, 옷만 교체.
 후처리는 4:5 자르기뿐이다(`_crop_look_to_card`). 인물이 창보다 크면 축소해 넣고,
 남는 자리는 단색이 아니라 이미지 가장자리 줄을 늘려 메운다. 카드는 cover로 채운다.
 
-첫 추천의 마지막 칸은 옷장에 없는 아이템(`wish_combos` 최소 1). wish가 이미
-있는 자리(신발 위 신발)면 `_apply_wish_slot`이 옷장 쪽을 빼거나 빈 자리로
-돌린다. 착장 프롬프트는 제안 아이템을 반드시 입힌다. hydrate가 제안 아이템을
-ALL에 넣지 않으면 상세에 옷장만 보였다. 오늘 코디는
+첫 추천의 마지막 칸은 옷장에 없는 아이템(`wish_combos` 최소 1). wish는 앞 카드에
+넣지 않고 `_pin_wishes_to_tail`이 맨 뒤로 옮긴다. 상의·하의·신발은 옷장에서
+채우고, wish가 그 자리와 겹치면 옷장을 지키며 가방 등 빈 자리로 돌린다
+(`_apply_wish_slot`, 2026-09-03). wish는 픽토그램이 아니라 `images.generate`로
+상품컷을 그려 `img`에 붙인다. 착장 토글이 켜져 있으면 그 컷도 입력으로 입힌다.
+hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보였다. 오늘 코디는
 `POST /api/live/outfits/daily/reset`에 화면 id를 실어 저장 여부와 관계없이 지운다.
 카드를 먼저 비우고, hydrate가 옛 id를 다시 그리지 않게 한다.
 크레딧 잔액으로 장 수를 자르지 않는다.

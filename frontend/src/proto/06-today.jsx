@@ -390,7 +390,9 @@ function TodayScreen({ ctx }) {
     : uniqueDailyOutfits(pool);
   void dailyTick; // prune/append 후 리렌더 트리거
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
-  const emptySlots = isToday && picks.length < COLS ? COLS - picks.length : 0;
+  const fillingFirst = isToday && (dailyLoading || loading) && picks.length > 0 && picks.length < COLS;
+  const fillingMore = isToday && (dailyLoading || loading) && picks.length >= COLS;
+  const emptySlots = isToday && !fillingFirst && picks.length < COLS ? COLS - picks.length : 0;
   const wardrobeGrew = !!dailyWardrobeGrew;
 
   // '추가로 코디 추천받기'는 화면 밖에 카드를 붙인다. 누른 자리에 그대로 있으면
@@ -493,7 +495,6 @@ function TodayScreen({ ctx }) {
   }
 
   const isFirstLoad = isToday && picks.length === 0 && (dailyLoading || loading || !restoreDone);
-  const isAppending = isToday && picks.length > 0 && (loading || dailyLoading);
   const busy = isFirstLoad;
   // 오늘로 돌아가는 버튼은 카드 아래 풀너비 하나로 통일한다.
   const ctxStrip = (
@@ -611,8 +612,10 @@ function TodayScreen({ ctx }) {
                   onAdd={() => openAdd ? openAdd('wardrobe') : startComboOrWardrobe()}
                 />
               ))}
-              {/* 추가 추천 중: 기존 카드는 유지하고 새 자리만 스켈레톤 */}
-              {isAppending && Array.from({ length: 2 }).map((_, i) => (
+              {fillingFirst && Array.from({ length: COLS - picks.length }).map((_, i) => (
+                <TodayCardSkeleton key={'fsk' + i} />
+              ))}
+              {fillingMore && Array.from({ length: 2 }).map((_, i) => (
                 <TodayCardSkeleton key={'ask' + i} />
               ))}
             </>

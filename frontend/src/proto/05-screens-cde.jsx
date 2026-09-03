@@ -80,19 +80,12 @@ const LOOK_ROLE = {
 
 /** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
 function lookPlacement(items) {
-  const owned = [];
-  const wishes = [];
-  (items || []).forEach((it) => {
-    if (!it) return;
-    if (it.wish) wishes.push(it);
-    else owned.push(it);
-  });
+  const owned = (items || []).filter(Boolean);
   const hasOuter = owned.some((it) => LOOK_ROLE[it.category] === 'outer');
-  // 상·하의만 있는 코디는 아래 절반이 통째로 비어 위로 쏠려 보인다. 그럴 때만 내려 앉힌다.
   const hasLower = owned.some((it) => {
     const role = LOOK_ROLE[it.category];
     return role === 'shoes' || role === 'acc';
-  }) || wishes.length > 0;
+  });
   const dy = hasLower ? 0 : 12;
   const taken = {};
   const out = {};
@@ -115,11 +108,6 @@ function lookPlacement(items) {
     const n = taken[spot] || 0;
     taken[spot] = n + 1;
     out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4 + dy, z: base.z + n };
-  });
-  // 제안 아이템은 같은 자리(상의 등)에 점선 박스로 겹치지 않게 우하 칸에 둔다.
-  wishes.forEach((it, i) => {
-    const base = LOOK_ACC_SPOTS[(accIdx + i) % LOOK_ACC_SPOTS.length];
-    out[it.id] = { cx: base.cx, cy: base.cy, z: 8 + i };
   });
   return out;
 }
@@ -169,7 +157,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       </div>
     );
   }
-  // 사진 없는 제안(wish)은 점선 칸으로 두지 않는다. 옷장 실물만 먼저 보여 준다.
+  // 상품컷이 있는 아이템만 올린다. 제안(wish)도 그려진 컷이 있으면 같이 넣는다.
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
   return (
@@ -1050,7 +1038,7 @@ function DetailScreen({ ctx }) {
                 ) : null}
               </div>
               <div style={{ flex: 'none' }}>
-                {it.wish ? <Badge tone="neutral">옷장에 없어요</Badge>
+                {it.wish ? <Badge tone="neutral">새 아이템</Badge>
                   : justAdded ? <Badge tone="good" icon="check">추가됨</Badge>
                   : !it.isAnchor ? <Badge tone="neutral">옷장에 있음</Badge>
                   : <Btn size="sm" variant="secondary" icon="plus" onClick={() => addToWardrobe(it.id)}>옷장에 추가</Btn>}

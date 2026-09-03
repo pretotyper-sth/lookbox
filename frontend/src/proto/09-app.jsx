@@ -535,15 +535,15 @@ function streamPayload(line) {
 function lastResultLine(text) {
   const lines = String(text || '').split('\n').map(streamPayload).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    // 진행(_step)·착장 한 장(_look)은 결과가 아니다.
-    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1) return lines[i];
+    // 진행(_step)·착장 한 장(_look)·코디 한 장(_outfit)은 결과가 아니다.
+    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1 && lines[i].indexOf('"_outfit"') === -1) return lines[i];
   }
   return '';
 }
 
-// 스트림을 읽으면서 _step / _look 이벤트가 도착할 때마다 콜백. 전체 본문은
+// 스트림을 읽으면서 _step / _look / _outfit 이벤트가 도착할 때마다 콜백. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
-async function readProgressStream(res, onProgress, onLook) {
+async function readProgressStream(res, onProgress, onLook, onOutfit) {
   if (!res.body || !res.body.getReader) return res.text();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -562,11 +562,13 @@ async function readProgressStream(res, onProgress, onLook) {
       if (!payload) continue;
       const isStep = payload.indexOf('"_step"') !== -1;
       const isLook = payload.indexOf('"_look"') !== -1;
-      if (!isStep && !isLook) continue;
+      const isOutfit = payload.indexOf('"_outfit"') !== -1;
+      if (!isStep && !isLook && !isOutfit) continue;
       try {
         const row = JSON.parse(payload);
         if (row._step && onProgress) onProgress(row._step);
         if (row._look && onLook) onLook(row._look);
+        if (row._outfit && onOutfit) onOutfit(row._outfit);
       } catch (e) { /* 부분 수신 줄은 무시 */ }
     }
   }
@@ -577,7 +579,7 @@ async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
   const timeoutMs = options.timeoutMs || 165000;
-  const { timeoutMs: _t, onProgress, onLook, ...fetchOpts } = options;
+  const { timeoutMs: _t, onProgress, onLook, onOutfit, ...fetchOpts } = options;
   const headers = { ...(options.headers || {}) };
   // GET에 application/json을 붙이면 매번 CORS preflight가 나간다.
   // Render가 잠든 직후 OPTIONS가 실패하면 '네트워크가 불안정해요'로 떨어진다.
@@ -611,8 +613,8 @@ async function liveJSON(url, options = {}) {
   // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = (onProgress || onLook)
-      ? await readProgressStream(res, onProgress, onLook)
+    text = (onProgress || onLook || onOutfit)
+      ? await readProgressStream(res, onProgress, onLook, onOutfit)
       : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
@@ -1651,12 +1653,32 @@ function App() {
     try {
       const baseCount = dailyCount;
       const ownedSig = wardrobeSigOf(items);
+      const cacheDaily = () => {
+        writeDailyCache({
+          style,
+          outfits: LB_DATA.DAILY.slice(),
+          items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
+          wardrobeSig: ownedSig,
+          wardrobeCount: items.length,
+        });
+      };
+      const onOutfit = (row) => {
+        if (!row || !row.outfit) return;
+        stampOutfitStyle([row.outfit]);
+        const added = liveAppendDaily({ outfits: [row.outfit], items: row.items || [] }, items);
+        if (!added.length) return;
+        cacheDaily();
+        bumpDaily();
+        if (prefs.modelLook) applyModelLooks(added.filter((o) => !o.lookImg));
+      };
       if (force && LB_DATA.DAILY.length > 0) {
         // 첫 줄(4) 미달이면 나머지만, 찼으면 2개씩 추가(리셋 아님).
         const need = Math.max(0, baseCount - LB_DATA.DAILY.length);
         const maxCombos = need > 0 ? need : DAILY_APPEND_BATCH;
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
+          timeoutMs: 240000,
+          onOutfit,
           body: JSON.stringify({
             max_combos: maxCombos,
             style,
@@ -1670,13 +1692,7 @@ function App() {
         stampOutfitStyle(payload.outfits);
         const added = liveAppendDaily(payload, items);
         pruneDailyAgainstOwned(items);
-        writeDailyCache({
-          style,
-          outfits: LB_DATA.DAILY.slice(),
-          items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
-          wardrobeSig: ownedSig,
-          wardrobeCount: items.length,
-        });
+        cacheDaily();
         bumpDaily();
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 만들 조합이 없어요');
@@ -1692,6 +1708,8 @@ function App() {
       }
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
+        timeoutMs: 240000,
+        onOutfit,
         body: JSON.stringify({
           max_combos: baseCount,
           style,
@@ -1704,19 +1722,12 @@ function App() {
       });
       stampOutfitStyle(payload.outfits);
       (payload.items || []).forEach(liveRememberItem);
-      // 첫 요청은 최대 baseCount개만 (버튼으로 2개씩 추가).
-      // 조합이 오면 바로 컷아웃 카드를 그리고, 착장은 기다리지 않고 시작한다.
-      // 서버가 wish 쿼타를 채우므로 개수가 모자랄 때 coordinate를 다시 돌리지 않는다.
-      const outfits = filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount);
-      liveApplyPayload({ outfits, items: dailyCacheItemsFromOwned(items, outfits) }, 'daily');
-      writeDailyCache({
-        style,
-        outfits: LB_DATA.DAILY.slice(),
-        items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY),
-        wardrobeSig: ownedSig,
-        wardrobeCount: items.length,
-      });
-      setDailyLoading(false);
+      // 스트림으로 이미 붙인 카드는 건너뛰고, 끊긴 경우에만 최종 JSON으로 채운다.
+      liveAppendDaily({
+        outfits: filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount),
+        items: payload.items || [],
+      }, items);
+      cacheDaily();
       bumpDaily();
       reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');

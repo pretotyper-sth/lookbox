@@ -5,17 +5,24 @@
 
 ## 상품컷 기준 코디 (`POST /api/live/coordinate`)
 
-카드가 한 장씩 나오지 않는다. 프론트는 조합 JSON 전체를 기다린 뒤에 컷아웃
-4장을 한 번에 그린다(`09-app.jsx` `requestDailyOutfits`). 서버도 코디를
-스트리밍하지 않고 `gpt-4o` 추천 1회 + 옷장 persist 뒤에 응답한다.
+2026-09-03 저녁부터 카드를 한 장씩 보낸다. 서버는 `gpt-4o`를 1장 → 나머지 3장으로
+쪼개고, persist되는 즉시 SSE `_outfit`을 흘린다. 프론트 `onOutfit`이
+`LB_DATA.DAILY`에 붙인다. 첫 장은 예전 4장 대기(~15–18초)보다 먼저 보인다.
+마지막 카드의 wish 상품컷(`images.generate`)은 그 장만 늦게 붙는다.
 
-`recommendation_timings.duration_ms`는 `_ensure_style_attrs` + `recommend_text`
-까지이고, 그 다음 코디 행 insert는 포함하지 않는다
-(`backend/app/main.py` `live_coordinate`).
+`recommendation_timings.duration_ms`는 스트림 작업 전체(추천 2회 + wish 이미지
++ persist)다 (`live_coordinate` `work`).
 
-2026-09-03 08:19:56 KST 실측 (옷장 47, 4콤보): **14.7초**. `recommend_text`
-토큰 `text_in=5547`. 같은 풀 크기 누적: 평균 10.9초, p95 15.7초, 최대 24.3초
-(`GET /api/live/recommend-stats`, n=12 at pool=47). 전날 08:44는 9.8초.
+2026-09-03 08:19:56 KST 실측 (옷장 47, 4콤보, **스트리밍 전**): **14.7초**.
+`recommend_text` 토큰 `text_in=5547`. 같은 날 20:34:12는 **18.0초**. 같은 풀
+크기 누적: 평균 11.5초, p95 18.0초, 최대 24.3초
+(`GET /api/live/recommend-stats`, n=13 at pool=47). 전날 08:44는 9.8초.
+이 숫자는 한 번에 4콤보 JSON을 기다리던 구경로다.
+
+설정(퍼스널컬러·실루엣 등)은 요청 JSON에 실릴 뿐 별도 왕복이 없다.
+`_ensure_style_attrs`는 빠진 속성 있을 때만 GPT 1회. 08:20·20:34 둘 다
+`style_attrs` 로그 없음. 다시 받기는 `daily/reset`을 기다린 뒤 coordinate라
+DB 삭제 수백 ms가 앞에 붙는다. 본론은 `gpt-4o` 옷장 47줄 추천 1회.
 
 첫 추천이 더 느려질 수 있는 이유: 스타일 속성 없는 옷 최대 25개를 이름 기반
 추론한다(`_ensure_style_attrs`, timeout 45초). 이번 08:20 요청에는
