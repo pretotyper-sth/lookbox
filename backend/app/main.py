@@ -60,6 +60,8 @@ OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2
 OPENAI_IMAGE_MODEL_LOOK = (
     os.environ.get("OPENAI_IMAGE_MODEL_LOOK") or OPENAI_IMAGE_MODEL_TEXT or "gpt-image-2"
 )
+# 바로 보기 전신은 한 장만 만들므로 최고 품질. gpt-image-2는 input_fidelity를 받지 않는다.
+OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")
 # 투명 배경을 지원하지 않는 모델. 이 모델을 쓰면 불투명 결과를 받아 우리 컷아웃을 돌린다.
 _NO_TRANSPARENT_MODELS = ("gpt-image-2",)
 
@@ -77,6 +79,7 @@ OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
 # 착장 4장을 high로 한꺼번에 돌리면 첫 장이 40~90초×대기라 컷아웃이 너무 길다.
 # medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
 OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
+OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
 # 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
@@ -108,7 +111,7 @@ supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 SHOW_ERROR_CODES = os.environ.get("APP_ENV", "dev").strip().lower() not in ("production", "prod", "live")
 OPENAI_IMAGE_TIMEOUT = float(os.environ.get("OPENAI_IMAGE_TIMEOUT", "120"))
 OPENAI_IMAGE_TIMEOUT_FAST = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_FAST", "60"))
-OPENAI_IMAGE_TIMEOUT_TRYON = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_TRYON", "90"))
+OPENAI_IMAGE_TIMEOUT_TRYON = float(os.environ.get("OPENAI_IMAGE_TIMEOUT_TRYON", "150"))
 # 분류·로고 감지(비전 채팅)는 평소 2~8초짜리 호출 — 이미지 생성용 130초를 공유하면
 # OpenAI가 느린 날 분류에서만 몇 분을 태워 전체 요청이 프론트 제한(210초)을 넘는다.
 OPENAI_VISION_TIMEOUT = float(os.environ.get("OPENAI_VISION_TIMEOUT", "25"))
@@ -170,6 +173,10 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     # 결정해야 반영된다. 이미지 변경은 commit=false라 아예 저장하지 않는다.
     "save": ("결과를 정리하고 있어요", 95, 99, 3),
     "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
+    "tryon_profile": ("프로필을 확인하고 있어요", 0, 8, 3),
+    "tryon_generate": ("기본 착장을 만들고 있어요", 8, 78, 70),
+    "tryon_segment": ("옷 경계를 정리하고 있어요", 78, 92, 4),
+    "tryon_save": ("바로 보기를 준비하고 있어요", 92, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
     "collect": ("주문내역에서 옷을 찾고 있어요", 40, 90, 30),
@@ -603,7 +610,7 @@ CREDIT_COSTS = {
 # 요금제에 넣으면 '카메라로 대보는 기능이 유료'처럼 보이는데, 실제로 그 기능은 기기에서
 # 돌고 API를 부르지 않는다. 정상 사용은 한두 번이면 끝나므로 상한만 두면 충분하다.
 MONTHLY_LIMITS = {
-    "tryon_body": 5,
+    "tryon_body": 2,
 }
 CREDIT_LABELS = {
     "import_url": "URL·구매내역으로 옷 등록",
@@ -671,20 +678,26 @@ def plan_perks(plan: dict[str, Any]) -> list[str]:
 
 
 def _period_key(now: datetime | None = None) -> str:
-    """크레딧이 초기화되는 주기(달)."""
+    """크레딧이 초기화되는 주기(달). 달력은 KST."""
+    kst = timezone(timedelta(hours=9))
     d = now or datetime.now(timezone.utc)
-    return f"{d.year:04d}-{d.month:02d}"
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    local = d.astimezone(kst)
+    return f"{local.year:04d}-{local.month:02d}"
 
 
 def _period_end(period: str) -> str:
+    kst = timezone(timedelta(hours=9))
     year, month = (int(x) for x in period.split("-"))
-    nxt = datetime(year + (month // 12), (month % 12) + 1, 1, tzinfo=timezone.utc)
+    nxt = datetime(year + (month // 12), (month % 12) + 1, 1, tzinfo=kst)
     return nxt.isoformat()
 
 
 def _period_start(period: str) -> str:
+    kst = timezone(timedelta(hours=9))
     year, month = (int(x) for x in period.split("-"))
-    return datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
+    return datetime(year, month, 1, tzinfo=kst).isoformat()
 
 
 def _ledger_rows(user_id: str, period: str | None = None) -> list[dict[str, Any]]:
@@ -6731,6 +6744,181 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
+_TRYON_PLATE_RGB = (242, 241, 238)
+_TRYON_TOP_SEED = (0.50, 0.39)
+_TRYON_BOTTOM_SEED = (0.50, 0.67)
+
+
+def _tryon_border_background(rgb: Image.Image) -> Image.Image:
+    """가장자리에서 이어진 판색만 배경으로 본다. 흰 티는 판과 값이 비슷해도 안 먹는다."""
+    im = rgb.convert("RGB")
+    w, h = im.size
+    px = im.load()
+    pr, pg, pb = _TRYON_PLATE_RGB
+    bg = bytearray(w * h)
+    q: deque[tuple[int, int]] = deque()
+    for x in range(w):
+        q.append((x, 0))
+        q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y))
+        q.append((w - 1, y))
+    seen = bytearray(w * h)
+    while q:
+        x, y = q.popleft()
+        if not (0 <= x < w and 0 <= y < h):
+            continue
+        i = y * w + x
+        if seen[i]:
+            continue
+        seen[i] = 1
+        r, g, b = px[x, y]
+        if abs(r - pr) + abs(g - pg) + abs(b - pb) >= 18:
+            continue
+        bg[i] = 1
+        q.append((x + 1, y))
+        q.append((x - 1, y))
+        q.append((x, y + 1))
+        q.append((x, y - 1))
+    return Image.frombytes("L", (w, h), bytes(255 if v else 0 for v in bg))
+
+
+def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
+    """가슴·허벅지 시드에서 흰 티 또는 중청만 4방향으로 모은다."""
+    im = rgb.convert("RGB")
+    w, h = im.size
+    px = im.load()
+    bg_px = bg.convert("L").load()
+    fx, fy = _TRYON_TOP_SEED if kind == "top" else _TRYON_BOTTOM_SEED
+    sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
+    sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
+    y0 = int(h * (0.14 if kind == "top" else 0.42))
+    y1 = int(h * (0.58 if kind == "top" else 0.87))
+    pr, pg, pb = _TRYON_PLATE_RGB
+
+    def match(r: int, g: int, b: int) -> bool:
+        L = 0.299 * r + 0.587 * g + 0.114 * b
+        if kind == "top":
+            ch = max(r, g, b) - min(r, g, b)
+            d = abs(r - pr) + abs(g - pg) + abs(b - pb)
+            return L >= 244 and ch <= 18 and d >= 18
+        return b > r + 8 and b >= g - 4 and 35 < L < 170
+
+    def skin(r: int, g: int, b: int) -> bool:
+        L = 0.299 * r + 0.587 * g + 0.114 * b
+        return r > 88 and r > b + 8 and r >= g - 8 and 72 < L < 210
+
+    out = bytearray(w * h)
+    r0, g0, b0 = px[sx, sy]
+    if bg_px[sx, sy] > 128 or not match(r0, g0, b0) or not (y0 <= sy < y1):
+        return Image.frombytes("L", (w, h), bytes(out))
+    q: deque[tuple[int, int]] = deque([(sx, sy)])
+    seen = bytearray(w * h)
+    while q:
+        x, y = q.popleft()
+        if not (0 <= x < w and y0 <= y < y1):
+            continue
+        i = y * w + x
+        if seen[i]:
+            continue
+        seen[i] = 1
+        if bg_px[x, y] > 128:
+            continue
+        r, g, b = px[x, y]
+        if skin(r, g, b) or not match(r, g, b):
+            continue
+        out[i] = 255
+        q.append((x + 1, y))
+        q.append((x - 1, y))
+        q.append((x, y + 1))
+        q.append((x, y - 1))
+    return Image.frombytes("L", (w, h), bytes(out))
+
+
+def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
+    """1px closing 뒤 안쪽으로 1~2px 페더. 실루엣을 키우지 않는다."""
+    closed = mask.convert("L").filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    inner = closed.filter(ImageFilter.MinFilter(3))
+    soft = inner.filter(ImageFilter.GaussianBlur(radius=1.2))
+    solid = inner.point(lambda v: 255 if v > 200 else 0)
+    return ImageChops.lighter(soft, solid)
+
+
+def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
+    """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
+    rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    bg = _tryon_border_background(rgb)
+    top_m = _tryon_seed_component(rgb, bg, "top")
+    bot_m = _tryon_seed_component(rgb, bg, "bottom")
+    overlap = ImageChops.multiply(top_m, bot_m)
+    if overlap.getbbox():
+        split_y = int(round((_TRYON_TOP_SEED[1] + _TRYON_BOTTOM_SEED[1]) * 0.5 * rgb.height))
+        top_px = top_m.load()
+        bot_px = bot_m.load()
+        w, h = rgb.size
+        for y in range(h):
+            for x in range(w):
+                if top_px[x, y] < 8 or bot_px[x, y] < 8:
+                    continue
+                if y < split_y:
+                    bot_px[x, y] = 0
+                else:
+                    top_px[x, y] = 0
+
+    def png(im: Image.Image) -> bytes:
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def punch(hole: Image.Image) -> Image.Image:
+        rgba = rgb.convert("RGBA")
+        rgba.putalpha(hole.convert("L").point(lambda v: 255 - v))
+        return rgba
+
+    top_h = _tryon_soft_hole(top_m)
+    bot_h = _tryon_soft_hole(bot_m)
+    full_h = ImageChops.lighter(top_h, bot_h)
+    return {
+        "body": png(rgb.convert("RGBA")),
+        "top": png(punch(top_h)),
+        "bottom": png(punch(bot_h)),
+        "full": png(punch(full_h)),
+    }
+
+
+def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
+    if not assets or not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
+        return False
+    top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
+    bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
+    w, h = top.size
+    n = w * h
+    if n < 8:
+        return False
+    top_a = list(top.getchannel("A").getdata())
+    bot_a = list(bottom.getchannel("A").getdata())
+    top_hole = sum(1 for a in top_a if a < 128)
+    bot_hole = sum(1 for a in bot_a if a < 128)
+    if top_hole < n * 0.015 or top_hole > n * 0.28:
+        return False
+    if bot_hole < n * 0.02 or bot_hole > n * 0.35:
+        return False
+    overlap = sum(1 for ta, ba in zip(top_a, bot_a) if ta < 128 and ba < 128)
+    if overlap > n * 0.002:
+        return False
+    shoe_y0 = int(h * 0.88)
+    shoe_n = 0
+    shoe_ok = 0
+    x0, x1 = int(w * 0.25), int(w * 0.75)
+    for y in range(shoe_y0, h):
+        row = y * w
+        for x in range(x0, x1):
+            shoe_n += 1
+            if bot_a[row + x] >= 200:
+                shoe_ok += 1
+    return shoe_n == 0 or (shoe_ok / shoe_n) >= 0.7
+
+
 _TRYON_BODY_PROMPT = """This is an identity lock, not a new person.
 Image 1 is a photograph of the actual user. Keep that exact face:
 same eyes, nose, lips, jawline, hairline, hair color, and skin tone.
@@ -6738,9 +6926,11 @@ Do not beautify, de-age, restyle hair, or replace them with a similar-looking pe
 If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head pixels.
 
 - one person, front-facing full body, crown of hair to shoes fully in frame, arms relaxed at the sides
+- leave about 8% empty studio above the hair and below the shoes so nothing is cropped
 - slightly more lookbook-ready than a casual snapshot: a little longer legs and cleaner posture,
   still a real adult — not a fashion illustration, not stocky
-- plain black short-sleeve tee and black slacks only. no pattern, logo, or extra garments
+- plain white short-sleeve crew-neck tee, mid-blue straight-leg denim jeans, and white low-top sneakers only.
+  no pattern, logo, extra garments, or black clothing
 - background is ONE continuous solid fill of #F2F1EE from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
 - minimal contact shadow under the shoes
@@ -6768,7 +6958,7 @@ def live_profile_avatar(body: ProfileAvatarIn, user: UserContext = Depends(curre
     if not raw:
         raise HTTPException(status_code=400, detail="프로필 사진을 읽지 못했어요.")
     try:
-        webp = to_webp(raw, max_side=512, quality=85)
+        webp = to_webp(raw, max_side=1024, quality=90)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="프로필 사진을 읽지 못했어요.") from exc
     sig = hashlib.sha256(webp).hexdigest()[:12]
@@ -6779,68 +6969,103 @@ def live_profile_avatar(body: ProfileAvatarIn, user: UserContext = Depends(curre
 
 
 @app.post("/api/live/tryon/body")
-def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) -> dict[str, Any]:
-    """프로필 사진으로 '바로 보기'용 전신 이미지를 만든다.
-
-    예전에는 사용자가 전신 사진을 직접 올려야 했다. 매장에서 쓰려면 결국 전신 사진이
-    필요한데, 그걸 미리 찍어 둔 사람은 드물다. 퍼스널 컬러처럼 프로필 사진
-    하나로 만들어 준다. 이미지 생성이라 크레딧을 받는다(원가 $0.25).
-    """
+def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) -> StreamingResponse:
+    """프로필 사진으로 '바로 보기'용 전신과 상의·하의 구멍을 만든다."""
     require_supabase()
     face = _face_image_bytes(body.face_data_url)
     if not face:
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
-    ensure_within_limit(user.id, "tryon_body")
-
+    uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon3-{sig}"
-    cached = (
-        supabase_admin.table("generated_images")
-        .select("image_url")
-        .eq("user_id", user.id)
-        .eq("cache_key", key)
-        .limit(1)
-        .execute()
-        .data
-        or []
-    )
-    if cached:
-        # 같은 얼굴이면 다시 만들지 않는다(크레딧도 받지 않는다).
-        return {"imageUrl": cached[0]["image_url"], "cached": True}
+    key = f"tryon4-{sig}"
 
-    if not openai_client:
-        raise HTTPException(status_code=503, detail="지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.")
-    try:
-        source = io.BytesIO(face)
-        source.name = "face.png"
-        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
-            model=OPENAI_IMAGE_MODEL,
-            image=source,
-            prompt=_TRYON_BODY_PROMPT,
-            size="1024x1536",
-            quality=OPENAI_IMAGE_QUALITY,
-            input_fidelity="high",
+    def work(report: Callable[[str], None]) -> dict[str, Any]:
+        report("tryon_profile")
+        cached = (
+            supabase_admin.table("generated_images")
+            .select("image_url, metadata")
+            .eq("user_id", uid)
+            .eq("cache_key", key)
+            .limit(1)
+            .execute()
+            .data
+            or []
         )
-        out = base64.b64decode(result.data[0].b64_json)
-        log_ai_usage(user.id, "tryon_body", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY},
-                     usage=getattr(result, "usage", None))
-    except Exception as exc:  # noqa: BLE001
-        info = _openai_error_info(exc)
-        print(f"[tryon] body failed: {_fail_log(info)}", flush=True)
-        msg = _EXTRACT_FAIL_MSG.get(_openai_fail_key(info), _EXTRACT_FAIL_MSG["api_error"])
-        raise HTTPException(status_code=502, detail=msg + (f" (코드: {_fail_code(info)})" if SHOW_ERROR_CODES else "")) from exc
+        if cached:
+            meta = cached[0].get("metadata") or {}
+            assets = dict(meta.get("assets") or {})
+            body_url = assets.get("body") or cached[0].get("image_url") or ""
+            if body_url and all(assets.get(k) for k in ("top", "bottom", "full")):
+                assets["body"] = body_url
+                return {"imageUrl": body_url, "assets": assets, "cached": True}
 
-    storage_path = f"{user.id}/tryon/{key}.png"
-    image_url = upload_bytes(storage_path, out, "image/png")
-    try:
-        supabase_admin.table("generated_images").insert({
-            "user_id": user.id, "cache_key": key, "kind": "tryon_body",
-            "storage_path": storage_path, "image_url": image_url,
-        }).execute()
-    except Exception as exc:  # noqa: BLE001
-        print(f"[tryon] cache save failed: {exc}", flush=True)
-    note_usage(user.id, "tryon_body", {"key": key})
-    return {"imageUrl": image_url, "cached": False}
+        ensure_within_limit(uid, "tryon_body")
+        if not openai_client:
+            raise HTTPException(status_code=503, detail="지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.")
+
+        last_info = None
+        for attempt in (0, 1):
+            report("tryon_generate")
+            try:
+                source = io.BytesIO(face)
+                source.name = "face.png"
+                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
+                    model=OPENAI_IMAGE_MODEL_TRYON,
+                    image=source,
+                    prompt=_TRYON_BODY_PROMPT,
+                    size="1024x1536",
+                    quality=OPENAI_IMAGE_QUALITY_TRYON,
+                )
+                out = base64.b64decode(result.data[0].b64_json)
+                log_ai_usage(
+                    uid, "tryon_body", OPENAI_IMAGE_MODEL_TRYON,
+                    {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt},
+                    usage=getattr(result, "usage", None),
+                )
+            except Exception as exc:  # noqa: BLE001
+                last_info = _openai_error_info(exc)
+                print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
+                if attempt == 0:
+                    continue
+                msg = _EXTRACT_FAIL_MSG.get(_openai_fail_key(last_info), _EXTRACT_FAIL_MSG["api_error"])
+                raise HTTPException(
+                    status_code=502,
+                    detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
+                ) from exc
+
+            report("tryon_segment")
+            assets_bytes = _tryon_make_assets(out)
+            if not _tryon_assets_valid(assets_bytes):
+                print(f"[tryon] mask quality failed attempt={attempt}", flush=True)
+                if attempt == 0:
+                    continue
+                raise HTTPException(status_code=502, detail="바로 보기 이미지를 다듬지 못했어요. 잠시 후 다시 시도해 주세요.")
+
+            report("tryon_save")
+            urls: dict[str, str] = {}
+            for name, blob in assets_bytes.items():
+                path = f"{uid}/tryon/{key}-{name}.png"
+                urls[name] = upload_bytes(path, blob, "image/png")
+            storage_path = f"{uid}/tryon/{key}-body.png"
+            try:
+                supabase_admin.table("generated_images").insert({
+                    "user_id": uid, "cache_key": key, "kind": "tryon_body",
+                    "storage_path": storage_path, "image_url": urls["body"],
+                    "metadata": {
+                        "model": OPENAI_IMAGE_MODEL_TRYON,
+                        "quality": OPENAI_IMAGE_QUALITY_TRYON,
+                        "mask": "tryon4",
+                        "assets": urls,
+                    },
+                }).execute()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tryon] cache save failed: {exc}", flush=True)
+            note_usage(uid, "tryon_body", {"key": key})
+            return {"imageUrl": urls["body"], "assets": urls, "cached": False}
+
+        raise HTTPException(status_code=502, detail="바로 보기 이미지를 만들지 못했어요.")
+
+    return stream_with_keepalive(work)
 
 
 @app.get("/api/live/billing")

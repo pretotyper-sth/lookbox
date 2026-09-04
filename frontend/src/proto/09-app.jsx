@@ -880,6 +880,7 @@ function App() {
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
+  const emptyTryOnAssets = () => ({ body: '', top: '', bottom: '', full: '' });
   const setAvatar = (dataUrl) => {
     const np = {
       ...prefs,
@@ -889,21 +890,25 @@ function App() {
       tryOnFrame: '',
       tryOnCut: '',
       tryOnRev: '',
+      tryOnAssets: emptyTryOnAssets(),
     };
     setPrefs(np);
     persistPrefs(np, { clearAvatar: !dataUrl });
     showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');
   };
-  const setTryOnFrame = ({ body, frame, cut }) => {
-    const np = {
-      ...prefs,
-      tryOnBody: body || '',
-      tryOnFrame: frame || '',
-      tryOnCut: cut || '',
-      tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon3') : '',
-    };
-    setPrefs(np);
-    persistPrefs(np);
+  const setTryOnFrame = ({ body, frame, cut, assets }) => {
+    setPrefs((prev) => {
+      const np = {
+        ...prev,
+        tryOnBody: body || '',
+        tryOnFrame: frame || '',
+        tryOnCut: cut || '',
+        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon4') : '',
+        tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
+      };
+      persistPrefs(np);
+      return np;
+    });
     showToast(frame ? '바로 보기 사진을 저장했어요' : '사진을 지웠어요', 'check');
   };
   const [tryOnSetup, setTryOnSetup] = useState(false);
@@ -915,21 +920,35 @@ function App() {
   // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러와 같은 방식). 착장 컷은 얼굴을 쓰지 않는다.
   // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
   const [tryOnMaking, setTryOnMaking] = useState(false);
+  const [tryOnProgress, setTryOnProgress] = useState(null);
   const makeTryOnBody = async (opts) => {
     const silent = !!(opts && opts.silent);
     if (tryOnMaking) return '';
     if (!prefs.avatar) { if (!silent) showToast('프로필 사진을 먼저 등록해 주세요'); return ''; }
     setTryOnMaking(true);
+    setTryOnProgress({ key: 'tryon_profile', label: '프로필을 확인하고 있어요', pct: 0, until: 8, eta: 3 });
     try {
       const res = await liveJSON('/api/live/tryon/body', {
         method: 'POST',
         body: JSON.stringify({ face_data_url: prefs.avatar }),
-        timeoutMs: 100000,
+        timeoutMs: 180000,
+        onProgress: (step) => setTryOnProgress(step),
       });
       const url = res && res.imageUrl;
       if (!url) throw new Error('바로 보기 이미지를 만들지 못했어요');
-      const np = { ...prefs, tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon3' };
-      setPrefs(np); persistPrefs(np);
+      const assets = (res && res.assets) || { body: url, top: '', bottom: '', full: '' };
+      setPrefs((prev) => {
+        const np = {
+          ...prev,
+          tryOnBody: url,
+          tryOnFrame: url,
+          tryOnCut: 'auto',
+          tryOnRev: window.TRYON_BODY_REV || 'tryon4',
+          tryOnAssets: assets,
+        };
+        persistPrefs(np);
+        return np;
+      });
       reloadBilling();
       if (!silent) showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
       return url;
@@ -938,6 +957,7 @@ function App() {
       return '';
     } finally {
       setTryOnMaking(false);
+      setTryOnProgress(null);
     }
   };
   const openTryOnSetup = async (seed, opts) => {
@@ -982,7 +1002,7 @@ function App() {
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
-    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon3')) {
+    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon4')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (prefs.avatar) {
         const made = await makeTryOnBody();
@@ -2288,7 +2308,7 @@ function App() {
       .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, tryOnMaking,
+    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, tryOnMaking, tryOnProgress,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -2470,6 +2490,7 @@ function App() {
         open={tryOnSetup}
         wide={wide}
         making={tryOnSetupMaking}
+        progress={tryOnProgress}
         seedBody={tryOnSeedBody}
         initialBody={prefs.tryOnBody}
         initialFrame={prefs.tryOnFrame}
@@ -2497,6 +2518,7 @@ function App() {
         wide={wide}
         frameSrc={prefs.tryOnFrame}
         bodySrc={prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : ''}
+        assets={prefs.tryOnAssets}
         onClose={() => setTryOnCamera(false)}
         onEdit={() => { setTryOnCamera(false); openTryOnTab(); }}
       />

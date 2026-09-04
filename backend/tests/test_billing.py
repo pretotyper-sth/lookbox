@@ -6,7 +6,7 @@ AI를 쓰는 작업에는 실제 돈이 나간다(측정값은 CREDIT_COSTS 위 
 
 import ast
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -23,7 +23,7 @@ def load():
         or (isinstance(n, (ast.Assign, ast.AnnAssign))
             and getattr(getattr(n, "target", None) or n.targets[0], "id", "") in CONSTS)
     ]
-    ns = {"Any": object, "datetime": datetime, "timezone": timezone}
+    ns = {"Any": object, "datetime": datetime, "timezone": timezone, "timedelta": timedelta}
     exec(compile(ast.Module(body=body, type_ignores=[]), "<billing>", "exec"), ns)
     return ns
 
@@ -75,9 +75,17 @@ class PlanShapeTest(unittest.TestCase):
         # 크레딧 개념에 넣지 않는다 — 대신 어뷰징만 월 상한으로 막는다.
         self.assertNotIn("tryon_body", self.ns["CREDIT_COSTS"])
         self.assertNotIn("tryon_body", self.ns["CREDIT_LABELS"])
-        self.assertGreaterEqual(self.ns["MONTHLY_LIMITS"].get("tryon_body", 0), 1)
+        self.assertEqual(self.ns["MONTHLY_LIMITS"].get("tryon_body"), 2)
         # 반대로 코디 이미지처럼 매번 새로 그리는 건 크레딧을 받는다
         self.assertIn("model_look", self.ns["CREDIT_COSTS"])
+
+    def test_tryon_cache_is_checked_before_monthly_limit(self):
+        src = MAIN_PATH.read_text()
+        start = src.index("def live_tryon_body")
+        chunk = src[start:start + 4500]
+        self.assertLess(chunk.index("generated_images"), chunk.index("ensure_within_limit"))
+        self.assertGreater(chunk.index("note_usage"), chunk.index("generated_images"))
+        self.assertIn("assets", chunk)
 
     def test_free_plan_covers_a_real_first_month(self):
         # 무료로도 '옷장을 만들고 코디를 받아보는' 경험은 끝까지 가야 한다:
@@ -95,6 +103,11 @@ class PeriodTest(unittest.TestCase):
         self.assertEqual(key, "2026-08")
         self.assertTrue(self.ns["_period_end"]("2026-08").startswith("2026-09-01"))
         self.assertTrue(self.ns["_period_end"]("2026-12").startswith("2027-01-01"))
+
+    def test_period_uses_kst_calendar(self):
+        # 2026-08-31 16:00 UTC = 2026-09-01 01:00 KST
+        key = self.ns["_period_key"](datetime(2026, 8, 31, 16, 0, tzinfo=timezone.utc))
+        self.assertEqual(key, "2026-09")
 
 
 class GrantWindowTest(unittest.TestCase):

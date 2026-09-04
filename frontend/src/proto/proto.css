@@ -268,6 +268,34 @@ img { display: block; max-width: 100%; }
 }
 .lb-look-status svg { flex: none; }
 
+.lb-tryon-skel {
+  width: 64px;
+  height: 96px;
+  border-radius: 32px 32px 16px 16px;
+}
+.lb-tryon-frame {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 2 / 3;
+  max-width: 100%;
+  overflow: hidden;
+  background: #F2F1EE;
+}
+.lb-tryon-bar {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.lb-tryon-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ink);
+  transition: width 240ms linear;
+}
+
 /* ---- entrance (transform-only: content stays visible even if the
    environment freezes animations at 0%) ---- */
 .lb-anim-in { animation: lb-rise 420ms var(--ease) both; }

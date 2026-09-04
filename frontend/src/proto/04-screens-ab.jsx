@@ -1021,7 +1021,7 @@ function AddSheet({ ctx }) {
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking, makeTryOnBody, setAvatar,
+    tryOnMaking, tryOnProgress, makeTryOnBody, setAvatar,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1084,6 +1084,10 @@ function AddSheet({ ctx }) {
   const [stepIdx, setStepIdx] = useS(0);
   const [pendingReplace, setPendingReplace] = useS(null); // { item, pending } — 이미지 변경 미리보기 (아직 DB 미반영)
   const progress = useImportProgress(stage === 'analyzing');
+  const tryOnUi = useImportProgress(!!tryOnMaking);
+  useE(() => {
+    if (tryOnProgress) tryOnUi.report(tryOnProgress);
+  }, [tryOnProgress, tryOnMaking]);
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
@@ -1229,7 +1233,7 @@ function AddSheet({ ctx }) {
     if (wide || !tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon3');
+    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon4');
     let body = stale ? '' : ((prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       body = await makeTryOnBody({ silent: true });
@@ -1823,6 +1827,37 @@ function AddSheet({ ctx }) {
                 return (
                   <>
                     {tabLocked ? null : tab === 'tryon' ? (
+                      tryOnMaking ? (
+                        <div
+                          className="lb-drop"
+                          style={{
+                            ...dropBase,
+                            position: 'relative',
+                            cursor: 'wait',
+                            border: '1.5px solid var(--line)',
+                            background: 'var(--ivory)',
+                          }}
+                        >
+                          <div className="lb-skel lb-tryon-skel" aria-hidden />
+                          <div className="lb-look-wave" aria-hidden />
+                          <div style={{
+                            position: 'relative', zIndex: 2, width: '100%', padding: '0 16px',
+                            pointerEvents: 'none',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.01em', wordBreak: 'keep-all' }}>
+                                {(tryOnUi.step && tryOnUi.step.label) || '프로필을 확인하고 있어요'}
+                              </div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                                {tryOnUi.pct}%
+                              </div>
+                            </div>
+                            <div className="lb-tryon-bar" aria-hidden>
+                              <i style={{ width: `${Math.max(2, Math.min(100, tryOnUi.pct))}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
                       <div
                         className="lb-drop"
                         onClick={(e) => {
@@ -1836,7 +1871,7 @@ function AddSheet({ ctx }) {
                         }}
                         style={{
                           ...dropBase,
-                          cursor: tryOnMaking ? 'wait' : 'pointer',
+                          cursor: 'pointer',
                           border: tryOnAvatar ? '1.5px solid var(--line)' : dropBase.border,
                           background: 'var(--ivory)',
                         }}
@@ -1856,11 +1891,9 @@ function AddSheet({ ctx }) {
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
                           <span style={{ fontSize: 14, fontWeight: 600, textAlign: 'center', wordBreak: 'keep-all' }}>
-                            {tryOnMaking
-                              ? '바로 보기 이미지를 만들고 있어요…'
-                              : tryOnAvatar
-                                ? '이 사진으로 옷을 바로 비춰 볼 수 있어요'
-                                : '프로필 사진 올리기'}
+                            {tryOnAvatar
+                              ? '이 사진으로 옷을 바로 비춰 볼 수 있어요'
+                              : '프로필 사진 올리기'}
                           </span>
                           <span style={{
                             fontSize: tryOnErr ? 12.5 : 12,
@@ -1874,6 +1907,7 @@ function AddSheet({ ctx }) {
                           </span>
                         </div>
                       </div>
+                      )
                     ) : tab === 'photo' ? (
                       <>
                         <input ref={fileInput} type="file" accept="image/*" onChange={onFileChange} style={{ display: 'none' }} />

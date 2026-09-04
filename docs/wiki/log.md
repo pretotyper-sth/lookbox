@@ -352,4 +352,13 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 ## [2026-09-03] change | 레일 선택 테두리는 누르자마자 위까지
 호버 리프트와 `scrollIntoView`를 빼 위 테두리가 잘렸다 내려오지 않게. [[detail-wide-layout]]
 
+## [2026-09-04] change | 바로 보기 품질·진행·비교 UX
+전신은 `gpt-image-2` high, 흰 티·중청·흰 스니커즈, 캐시 `tryon4-`.
+서버가 `body/top/bottom/full` 구멍을 만들고 SSE로 단계를 흘린다.
+같은 얼굴 캐시는 한도보다 먼저, 신규 성공만 KST 월 2회.
+카메라 2:3, 버튼 재클릭은 기본 착장, 하단 CTA 제거, 우상단 리셋 확인.
+근거: `backend/app/main.py` `live_tryon_body` `_tryon_make_assets`;
+`frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`.
+[[tryon-setup-from-mypage]] [[profile-avatar]]
+
 

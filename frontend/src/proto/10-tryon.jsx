@@ -250,7 +250,7 @@ function MobileOnlyNote() {
 /* ============================================================
    TryOnSetupOverlay — 바텀시트. 사진 고르기 → 비우기 → 저장
    ============================================================ */
-function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCut, seedBody, onSave, wide, making }) {
+function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCut, seedBody, onSave, wide, making, progress }) {
   const [phase, setPhase] = useState('idle'); // idle | cut
   const [bodySrc, setBodySrc] = useState('');
   const [cut, setCut] = useState('top');
@@ -455,7 +455,20 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
         {phase === 'idle' && (
           <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
             {making ? (
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>바로 보기 이미지를 만들고 있어요…</div>
+              <div style={{ padding: '12px 0 4px' }}>
+                <div className="lb-skel lb-tryon-skel" style={{ margin: '0 auto 14px' }} aria-hidden />
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'left', wordBreak: 'keep-all' }}>
+                    {(progress && progress.label) || '프로필을 확인하고 있어요'}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums' }}>
+                    {progress && typeof progress.pct === 'number' ? `${progress.pct}%` : ''}
+                  </div>
+                </div>
+                <div className="lb-tryon-bar" aria-hidden>
+                  <i style={{ width: `${Math.max(2, Math.min(100, (progress && progress.pct) || 6))}%` }} />
+                </div>
+              </div>
             ) : checking ? (
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>사진 확인 중…</div>
             ) : (
@@ -543,16 +556,18 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
 /* ============================================================
    TryOnCameraOverlay — 후면 카메라 + 투명 프레임 오버레이
    ============================================================ */
-function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) {
+function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, wide }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const streamRef = useRef(null);
   const [err, setErr] = useState('');
   const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState('top');
+  const [mode, setMode] = useState('');
   const [overlay, setOverlay] = useState('');
   const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [resetAsk, setResetAsk] = useState(false);
   const swipeX = useRef(null);
+  const serverAssets = assets && (assets.body || assets.top || assets.bottom || assets.full) ? assets : null;
 
   useLayoutEffect(() => {
     if (!open) return undefined;
@@ -566,11 +581,23 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
   }, [open]);
 
   useEffect(() => {
+    if (!open) {
+      setMode('');
+      setResetAsk(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return undefined;
     let dead = false;
     const src = bodySrc || frameSrc;
     if (!src) { setOverlay(''); return undefined; }
-    if (!bodySrc) { setOverlay(frameSrc || ''); return undefined; }
+    if (serverAssets) {
+      const picked = (mode && serverAssets[mode]) || serverAssets.body || src;
+      setOverlay(picked);
+      return undefined;
+    }
+    if (!bodySrc || !mode) { setOverlay(frameSrc || bodySrc || ''); return undefined; }
     const w = stage.w || (typeof window !== 'undefined' ? window.innerWidth : 0);
     const h = stage.h || (typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.62) : 0);
     if (!w || !h) return undefined;
@@ -578,12 +605,16 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
       .then((url) => { if (!dead) setOverlay(url); })
       .catch(() => { if (!dead) setOverlay(frameSrc || ''); });
     return () => { dead = true; };
-  }, [open, bodySrc, frameSrc, mode, stage.w, stage.h]);
+  }, [open, bodySrc, frameSrc, mode, stage.w, stage.h, serverAssets]);
 
+  const cycleModes = ['', ...TRYON_MODES.map((m) => m.id)];
   const shiftMode = (dir) => {
-    const i = TRYON_MODES.findIndex((m) => m.id === mode);
-    const next = TRYON_MODES[(i + dir + TRYON_MODES.length) % TRYON_MODES.length];
-    setMode(next.id);
+    const i = cycleModes.indexOf(mode);
+    const next = cycleModes[(i + dir + cycleModes.length) % cycleModes.length];
+    setMode(next);
+  };
+  const toggleMode = (id) => {
+    setMode((cur) => (cur === id ? '' : id));
   };
 
   useEscapeClose(open, onClose);
@@ -680,17 +711,26 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
           <Icon name="x" size={22} />
         </button>
         <div style={{ fontSize: 14, fontWeight: 700 }}>
-          {bodySrc ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요` : '구멍을 옷에 맞춰 보세요'}
+          {mode
+            ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요`
+            : '기본 착장과 비교해 보세요'}
         </div>
-        <button type="button" onClick={onEdit} aria-label="사진 수정"
+        <button type="button" onClick={() => setResetAsk(true)} aria-label="사진 다시 고르기"
           style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
-          <Icon name="pencil" size={18} />
+          <Icon name="refresh" size={18} />
         </button>
       </div>
 
       <div
+        style={{
+          flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '8px 0', background: '#111',
+        }}
+      >
+      <div
         ref={stageRef}
-        style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden', touchAction: 'pan-y', background: '#F2F1EE' }}
+        className="lb-tryon-frame"
+        style={{ touchAction: 'pan-y' }}
         onPointerDown={(e) => { swipeX.current = e.clientX; }}
         onPointerUp={(e) => {
           if (swipeX.current == null) return;
@@ -716,7 +756,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
             draggable={false}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'fill', pointerEvents: 'none',
+              objectFit: 'contain', pointerEvents: 'none',
             }}
           />
         )}
@@ -737,6 +777,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
           }}>{err}</div>
         )}
       </div>
+      </div>
 
       <div style={{
         flex: 'none',
@@ -751,7 +792,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
               <button
                 key={m.id}
                 type="button"
-                onClick={() => setMode(m.id)}
+                onClick={() => toggleMode(m.id)}
                 aria-pressed={mode === m.id}
                 style={{
                   padding: '8px 18px', borderRadius: 999, fontSize: 13.5, fontWeight: 700,
@@ -766,20 +807,20 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, onClose, onEdit, wide }) 
           </div>
         ) : null}
         <p style={{ margin: 0, fontSize: 12.5, textAlign: 'center', lineHeight: 1.45, opacity: 0.85, wordBreak: 'keep-all' }}>
-          {bodySrc ? '좌우로 넘기거나 눌러서 비출 부위를 바꿔요.' : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
+          {bodySrc ? '같은 부위를 다시 누르면 기본 착장과 비교해요' : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
         </p>
-        <button
-            type="button"
-            onClick={onEdit}
-            style={{
-              width: '100%', padding: '14px 12px', borderRadius: 'var(--r-pill)',
-              background: '#fff', color: '#1a1814',
-              fontSize: 14, fontWeight: 700,
-            }}
-          >
-            사진 다시 고르기
-          </button>
       </div>
+      <BottomSheet open={resetAsk} onClose={() => setResetAsk(false)}>
+        <div style={{ padding: '8px 24px 26px', textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3 }}>사진을 다시 고를까요?</div>
+          <p style={{ margin: '10px auto 0', maxWidth: 300, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
+            프로필 사진을 바꾸면 바로 보기 이미지도 다시 만들어요. 지금 만든 전신은 그대로 둘 수 있어요.
+          </p>
+          <Btn full size="lg" icon="refresh" onClick={() => { setResetAsk(false); onEdit && onEdit(); }} style={{ marginTop: 22 }}>
+            사진 다시 고르기
+          </Btn>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

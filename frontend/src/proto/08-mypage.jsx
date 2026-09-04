@@ -258,7 +258,7 @@ function readAvatarFile(file) {
       const img = new Image();
       img.onerror = () => reject(new Error('사진을 열지 못했어요'));
       img.onload = () => {
-        const max = 512;
+        const max = 1024;
         const scale = Math.min(1, max / Math.max(img.width, img.height));
         const w = Math.max(1, Math.round(img.width * scale));
         const h = Math.max(1, Math.round(img.height * scale));
