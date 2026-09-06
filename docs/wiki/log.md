@@ -504,6 +504,10 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 캐시 `|flat5`.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_PACK`. [[look-flatlay-overlap]]
 
+## [2026-09-06] change | 룩북 상품컷은 LOOK_PACK을 쓰지 않는다
+오늘 코디만 0.86으로 맞춘다. 룩북 `SavedCard`는 패킹 전 크기로 그린다.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite` `pack`. [[look-flatlay-overlap]]
+
 
 
 

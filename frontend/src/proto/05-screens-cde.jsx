@@ -246,7 +246,7 @@ function packLookRects(rects, w, h) {
   }));
 }
 
-function flattenLookBoard(items, place, scale, ratio) {
+function flattenLookBoard(items, place, scale, ratio, pack) {
   const w = 720;
   const h = Math.round(w / parseLookRatio(ratio));
   const canvas = document.createElement('canvas');
@@ -272,7 +272,8 @@ function flattenLookBoard(items, place, scale, ratio) {
       const dh = im.naturalHeight * s;
       return { im, x: cx - dw / 2, y: cy - dh / 2, dw, dh };
     });
-    packLookRects(rects, w, h).forEach((r) => {
+    const drawn = pack ? packLookRects(rects, w, h) : rects;
+    drawn.forEach((r) => {
       drawLookCutout(ctx, r.im, r.x, r.y, r.dw, r.dh);
     });
     try {
@@ -285,11 +286,11 @@ function flattenLookBoard(items, place, scale, ratio) {
 
 const LOOK_FLAT_CACHE = {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat5';
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat5' : '|flat0');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
@@ -301,12 +302,12 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       return undefined;
     }
     let dead = false;
-    flattenLookBoard(shown, place, scale, ratio).then((url) => {
+    flattenLookBoard(shown, place, scale, ratio, pack).then((url) => {
       if (url) LOOK_FLAT_CACHE[key] = url;
       if (!dead) setFlat(url);
     });
     return () => { dead = true; };
-  }, [key, scale, ratio, !!(outfit && outfit.lookImg)]);
+  }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
 
   // 서버가 4:5로 가운데 자른다. cover로 칸을 채워 양옆 다른 색이 안 비친다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
@@ -663,7 +664,7 @@ function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSel
     <div style={{ position: 'relative', minWidth: 0 }}>
       <div style={{ position: 'relative' }}>
         <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
-          <LookComposite outfit={outfit} items={items} ratio="1 / 1" lined />
+          <LookComposite outfit={outfit} items={items} ratio="1 / 1" lined pack={false} />
         </button>
         {onToggleSel && (showSel || wide) && (
           <button
