@@ -348,6 +348,7 @@ img { display: block; max-width: 100%; }
   input.lb-input, textarea.lb-input, input[type="email"], input[type="password"], input[type="text"] {
     font-size: 16px !important;
   }
+  .lb-look-ai-mark { font-size: 10px; }
 }
 
 /* ---- number slider (키·몸무게 등 숫자 입력) ---- */

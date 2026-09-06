@@ -493,7 +493,6 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
    ============================================================ */
 function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
-  const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
@@ -523,7 +522,7 @@ function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{outfit.label}</div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
-          {moodBasis ? `${moodBasis} · ` : ''}{items.length}개 조합
+          {items.length}개 조합
         </div>
       </div>
 

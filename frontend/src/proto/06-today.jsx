@@ -100,7 +100,6 @@ function todayWishDrawing(outfit) {
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
 function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById, looking }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
-  const moodBasis = outfit.styleLabel || styleLabel || '';
   return (
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
@@ -136,7 +135,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
           {outfit.cardTitle || outfit.label}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
-          {moodBasis ? `${moodBasis} · ` : ''}{items.filter((it) => it.img).length}개 조합{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
+          {items.filter((it) => it.img).length}개 조합{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
         </div>
         {outfit.note ? (
           <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 7, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{outfit.note}</div>

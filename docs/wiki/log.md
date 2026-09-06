@@ -450,6 +450,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`;
 `frontend/src/proto/02-shared.jsx` `ItemRemoveSheet`. [[lookbook-card]]
 
+## [2026-09-06] fix | 모바일 AI 표기·오늘 카드 부제
+모바일 `✦ AI로 생성`은 10px. 오늘 카드 부제는 무드 없이 `N개 조합`.
+근거: `frontend/src/proto/proto.css` `.lb-look-ai-mark`;
+`frontend/src/proto/06-today.jsx` `TodayCard`. [[model-look-toggle]]
+
+
 
 
 
