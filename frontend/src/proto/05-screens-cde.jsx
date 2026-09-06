@@ -321,8 +321,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
+            position: 'absolute', top: 0, bottom: 0, left: '-9%', width: '118%', height: '100%',
+            maxWidth: 'none', maxHeight: '100%', minWidth: 0, minHeight: 0,
             objectFit: 'cover', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
@@ -652,10 +652,8 @@ function ResultsScreen({ ctx }) {
 /* ============================================================
    D · Lookbook (saved coordis)
    ============================================================ */
-/* 카드 위 보조 버튼은 옷장 카드와 같은 자리를 쓴다. 오른쪽 하트는 오늘 코디에서 눌러
-   담았던 그 하트 그대로라, 채워져 있으면 담긴 것이고 다시 누르면 뺀다.
-   inSelectUx일 때 하트를 감추는 것도 옷장과 같다 — 두 버튼이 함께 뜨면 오조작이 난다. */
-function SavedCard({ look, onOpen, onRemove, selected, showSel, onToggleSel, inSelectUx, wide }) {
+/* 우상단은 옷장과 같이 더보기. 빼기는 선택 모드에서만. */
+function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSelectUx, wide }) {
   const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId];
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
   return (
@@ -690,19 +688,18 @@ function SavedCard({ look, onOpen, onRemove, selected, showSel, onToggleSel, inS
         </button>
       )}
 
-      {!inSelectUx && onRemove && (
+      {!inSelectUx && onMore && (
         <button
           type="button"
-          className="lb-save"
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          aria-label={look.label + ' 룩북에서 빼기'}
+          onClick={(e) => { e.stopPropagation(); onMore(look); }}
+          aria-label={look.label + ' 더보기'}
           style={{
-            position: 'absolute', right: 11, top: 11, width: 26, height: 26, borderRadius: '50%',
+            position: 'absolute', right: 4, top: 4, width: 24, height: 20, borderRadius: 6,
             display: 'grid', placeItems: 'center', zIndex: 2,
-            color: 'var(--accent-ink)', background: 'var(--accent)',
+            color: 'var(--ink)', background: 'transparent',
           }}
         >
-          <Icon name="heart" size={14} fill="currentColor" stroke={0} />
+          <Icon name="more" size={15} stroke={2.8} />
         </button>
       )}
     </div>
@@ -851,8 +848,11 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
 }
 
 function LookbookScreen({ ctx }) {
-  const { saved, openDetail, tab, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, requestUnsave, bulkUnsave, refreshLive } = ctx;
+  const { saved, openDetail, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, bulkUnsave, refreshLive, renameSavedLook } = ctx;
   const [makeOpen, setMakeOpen] = useSc(false);
+  const [moreLook, setMoreLook] = useSc(null);
+  const [renameLook, setRenameLook] = useSc(null);
+  const [renameVal, setRenameVal] = useSc('');
   // 여러 개 정리 — 옷장 선택 모드와 같은 규칙. 데스크탑은 hover로 체크가 뜨고,
   // 모바일은 hover가 없어서 헤더의 '선택'으로 모드를 켠다.
   const [sel, setSel] = useSc([]);
@@ -970,7 +970,7 @@ function LookbookScreen({ ctx }) {
                   <SavedCard
                     look={lk}
                     onOpen={() => (inSelectUx ? toggleSel(lk.id) : openDetail(lk))}
-                    onRemove={() => requestUnsave(lk.outfitId)}
+                    onMore={(look) => setMoreLook(look)}
                     selected={on}
                     showSel={wide ? (on || inSelectUx || hoverId === lk.id) : (selectMode || on)}
                     onToggleSel={() => { if (!selectMode) setSelectMode(true); toggleSel(lk.id); }}
@@ -1005,6 +1005,73 @@ function LookbookScreen({ ctx }) {
           </div>
         </div>
       )}
+
+      <BottomSheet open={!!moreLook} onClose={() => setMoreLook(null)}>
+        {moreLook && (() => {
+          const o = LB_DATA.OUTFIT_BY_ID[moreLook.outfitId];
+          const its = o ? (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean) : [];
+          return (
+            <div style={{ padding: '10px 24px 26px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                <div style={{ width: 56, flex: 'none' }}>
+                  {o ? <LookComposite outfit={o} items={its} ratio="1 / 1" /> : null}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 16.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{moreLook.label}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{its.length}개 품목</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
+                <Btn full size="lg" variant="soft" icon="pencil" onClick={() => {
+                  setRenameLook(moreLook);
+                  setRenameVal(moreLook.label || '');
+                  setMoreLook(null);
+                }}>이름 수정하기</Btn>
+                <Btn full variant="ghost" onClick={() => setMoreLook(null)}>취소</Btn>
+              </div>
+            </div>
+          );
+        })()}
+      </BottomSheet>
+
+      <BottomSheet open={!!renameLook} onClose={() => setRenameLook(null)}>
+        {renameLook && (
+          <div style={{ padding: '10px 24px 26px' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>이름 수정하기</h3>
+            <input
+              className="lb-input"
+              value={renameVal}
+              onChange={(e) => setRenameVal(e.target.value)}
+              maxLength={40}
+              aria-label="코디 이름"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && renameVal.trim() && renameSavedLook) {
+                  renameSavedLook(renameLook.outfitId, renameVal);
+                  setRenameLook(null);
+                }
+              }}
+              style={{
+                width: '100%', marginTop: 16, padding: '11px 14px', borderRadius: 'var(--r-md)',
+                fontSize: 16, background: 'var(--ivory)', border: '1px solid var(--line)',
+                color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+              <Btn variant="soft" onClick={() => setRenameLook(null)} style={{ flex: 1 }}>취소</Btn>
+              <Btn
+                icon="check"
+                disabled={!renameVal.trim()}
+                onClick={() => {
+                  if (renameSavedLook) renameSavedLook(renameLook.outfitId, renameVal);
+                  setRenameLook(null);
+                }}
+                style={{ flex: 1 }}
+              >저장</Btn>
+            </div>
+          </div>
+        )}
+      </BottomSheet>
 
       <BottomSheet open={bulkAsk} onClose={() => setBulkAsk(false)}>
         <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
@@ -1050,9 +1117,7 @@ function RailCard({ look, active, onClick }) {
       <LookComposite outfit={o} items={its} ratio="1 / 1" />
       <div style={{
         padding: '8px 2px 0', fontSize: 12.5, fontWeight: 700, lineHeight: 1.3,
-        minHeight: 'calc(1.3em * 2)',
-        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>{look.label}</div>
     </button>
   );
@@ -1200,8 +1265,8 @@ function DetailScreen({ ctx }) {
           <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
           {openOutfitViewer ? <LookExpandBadge /> : null}
         </div>
-        {/* 오늘 코디·룩북 카드와 같은 자리의 같은 하트. 상단바에 두면 코디가 아니라
-            화면에 달린 버튼처럼 보여서, 코디 이미지에 붙여 둔다. */}
+        {/* 오늘 코디에서 연 상세만 하트. 룩북은 카드 더보기·선택 빼기. */}
+        {!detailFromLookbook && (
         <button onClick={onHeart} className="lb-save" aria-label={isSaved ? '룩북에서 빼기' : '룩북에 저장'} style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%',
           display: 'grid', placeItems: 'center', zIndex: 2,
@@ -1212,6 +1277,7 @@ function DetailScreen({ ctx }) {
         }}>
           <Icon name="heart" size={15} fill={isSaved ? 'currentColor' : 'none'} stroke={isSaved ? 0 : 2} />
         </button>
+        )}
         {!wide && multi && (
           <>
             <ArrowBtn d={-1} name="chevL" side="left" />

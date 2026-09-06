@@ -1882,6 +1882,18 @@ function App() {
       method: 'POST', body: JSON.stringify(patch),
     }).catch(() => showToast('서버에 저장하지 못했어요'));
   };
+  const renameSavedLook = (outfitId, name) => {
+    const label = String(name || '').trim().slice(0, 40);
+    if (!outfitId || !label) return;
+    if (LB_DATA.OUTFIT_BY_ID[outfitId]) LB_DATA.OUTFIT_BY_ID[outfitId].label = label;
+    setSavedLooks((arr) => arr.map((l) => (l.outfitId === outfitId ? { ...l, label } : l)));
+    setDetailLook((cur) => (cur && cur.outfitId === outfitId ? { ...cur, label } : cur));
+    setDetailList((cur) => {
+      if (!cur || !cur.looks) return cur;
+      return { ...cur, looks: cur.looks.map((l) => (l.outfitId === outfitId ? { ...l, label } : l)) };
+    });
+    persistOutfitState(outfitId, { label });
+  };
   const saveOutfit = (outfitId) => {
     setSavedLooks((arr) => {
       if (arr.some((l) => l.outfitId === outfitId)) {
@@ -2342,7 +2354,7 @@ function App() {
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
       .filter(Boolean),
-    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, createManualLook, openDetail, addToWardrobe, back,
+    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, tryOnMaking, tryOnProgress,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,

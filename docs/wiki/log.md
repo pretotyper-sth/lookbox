@@ -412,4 +412,14 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고침이 안 먹는다.
 [[vercel-github-silent]]
 
+## [2026-09-06] fix | 착장 양끝 띠·추천 번호·룩북 하트
+맞추기는 원본 4:5 창. 이미 늘린 이미지는 좌우 9%를 잘라 가린다.
+추가 추천은 `추천 코디 5, 6`처럼 이어진다. 룩북 카드는 하트 대신 점 3개로
+이름을 고치고, 빼기는 선택 모드만.
+근거: `backend/app/main.py` `_fit_look_to_card`;
+`frontend/src/proto/06-today.jsx` `dailyLooks`;
+`frontend/src/proto/05-screens-cde.jsx` `SavedCard`.
+[[look-img-flex-min]] [[lookbook-card]] [[model-look-toggle]]
+
+
 

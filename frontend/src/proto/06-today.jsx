@@ -562,7 +562,9 @@ function TodayScreen({ ctx }) {
     : null;
   // 룩북과 같은 상세 화면을 쓴다. 상세는 LB_DATA에서 코디·아이템을 찾으므로 지난 날짜의
   // 스냅샷은 열기 전에 조회용으로 등록해 둔다(그날 옷을 지웠어도 기록이 깨지지 않게).
-  const dailyLooks = shown.map((o) => ({ id: 'daily-' + o.id, outfitId: o.id, label: o.label }));
+  const dailyLooks = shown.map((o, i) => ({
+    id: 'daily-' + o.id, outfitId: o.id, label: `추천 코디 ${i + 1}`,
+  }));
   const openLook = (outfit) => {
     if (!openDetail) return;
     LB_DATA.OUTFIT_BY_ID[outfit.id] = LB_DATA.OUTFIT_BY_ID[outfit.id] || outfit;

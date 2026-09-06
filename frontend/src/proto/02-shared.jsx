@@ -389,7 +389,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           alt={title}
           draggable={false}
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            position: 'absolute', top: 0, bottom: 0, left: '-9%', width: '118%', height: '100%',
             objectFit: 'cover', objectPosition: 'center', display: 'block',
             userSelect: 'none',
           }}

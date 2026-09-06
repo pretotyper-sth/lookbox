@@ -4339,39 +4339,65 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
 def _fit_look_to_card(
     img: Image.Image, cw: int, ch: int, box: tuple[int, int, int, int], pad: int,
 ) -> bytes:
-    """인물을 자르지 않고 4:5 판 안에 넣는다.
+    """인물을 4:5 안에 넣되, 양옆은 원본 스튜디오를 그대로 쓴다.
 
-    남는 자리는 단색으로 메우지 않는다. 배경이 레퍼런스의 그라데이션이라
-    단색을 깔면 카드 안에 두 가지 배경이 생긴다. 대신 이미지 자신의 가장자리
-    줄(항상 스튜디오 배경)을 늘려 이어 붙인다.
+    인물만 잘라 축소하면 좌우가 비고, 그 자리를 가장자리 결로 늘리면
+    세로 띠가 생긴다. 원본에서 4:5 창을 잡아 그 픽셀만 쓴다.
     """
     x0, y0, x1, y1 = box
-    region = img.crop((
-        max(0, x0 - pad),
-        max(0, y0 - pad),
-        min(img.width, x1 + pad),
-        min(img.height, y1 + pad),
-    ))
-    region = region.copy()
-    region.thumbnail((cw, ch))
-    left, top = (cw - region.width) // 2, (ch - region.height) // 2
-    canvas = Image.new("RGB", (cw, ch))
-    canvas.paste(region, (left, top))
-    if top > 0:
-        canvas.paste(region.crop((0, 0, region.width, 1)).resize((region.width, top)), (left, 0))
-    below = ch - top - region.height
-    if below > 0:
-        edge = region.crop((0, region.height - 1, region.width, region.height))
-        canvas.paste(edge.resize((region.width, below)), (left, top + region.height))
-    if left > 0:
-        canvas.paste(canvas.crop((left, 0, left + 1, ch)).resize((left, ch)), (0, 0))
-    right = cw - left - region.width
-    if right > 0:
-        edge = canvas.crop((left + region.width - 1, 0, left + region.width, ch))
-        canvas.paste(edge.resize((right, ch)), (left + region.width, 0))
+    tx0, ty0 = max(0, x0 - pad), max(0, y0 - pad)
+    tx1, ty1 = min(img.width, x1 + pad), min(img.height, y1 + pad)
+    person_h = max(1, ty1 - ty0)
+    ratio = cw / ch
+    need_w = int(round(person_h * ratio))
+    if need_w <= img.width:
+        cx = (tx0 + tx1) // 2
+        nx0 = max(0, min(img.width - need_w, cx - need_w // 2))
+        region = img.crop((nx0, ty0, nx0 + need_w, ty1))
+    else:
+        need_h = int(round(img.width / ratio))
+        if need_h <= img.height:
+            cy = (ty0 + ty1) // 2
+            ny0 = max(0, min(img.height - need_h, cy - need_h // 2))
+            if ny0 > ty0:
+                ny0 = max(0, min(ty0, img.height - need_h))
+            if ny0 + need_h < ty1:
+                ny0 = max(0, min(ty1 - need_h, img.height - need_h))
+            region = img.crop((0, ny0, img.width, ny0 + need_h))
+        else:
+            region = img.crop((tx0, ty0, tx1, ty1)).copy()
+            region.thumbnail((cw, ch))
+            left, top = (cw - region.width) // 2, (ch - region.height) // 2
+            canvas = Image.new("RGB", (cw, ch))
+            canvas.paste(region, (left, top))
+            _pad_look_edges(canvas, left, top, left + region.width, top + region.height)
+            buf = io.BytesIO()
+            canvas.save(buf, format="PNG")
+            return buf.getvalue()
+    region = region.resize((cw, ch), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
-    canvas.save(buf, format="PNG")
+    region.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int) -> None:
+    """원본에 4:5 창이 없을 때만. 결을 늘리지 않고 맞닿은 색을 흐려 메운다."""
+    cw, ch = canvas.size
+
+    def _wash(box: tuple[int, int, int, int], size: tuple[int, int]) -> Image.Image:
+        src = canvas.crop(box).resize(size, Image.Resampling.LANCZOS)
+        return src.filter(ImageFilter.GaussianBlur(24))
+
+    if y0 > 0:
+        canvas.paste(_wash((x0, y0, x1, min(y1, y0 + 2)), (x1 - x0, y0)), (x0, 0))
+    below = ch - y1
+    if below > 0:
+        canvas.paste(_wash((x0, max(y0, y1 - 2), x1, y1), (x1 - x0, below)), (x0, y1))
+    if x0 > 0:
+        canvas.paste(_wash((x0, 0, min(x1, x0 + 2), ch), (x0, ch)), (0, 0))
+    right = cw - x1
+    if right > 0:
+        canvas.paste(_wash((max(x0, x1 - 2), 0, x1, ch), (right, ch)), (x1, 0))
 
 
 def _crop_look_to_card(png_bytes: bytes) -> bytes:
@@ -8107,19 +8133,24 @@ def live_list_outfits(user: UserContext = Depends(current_user)) -> dict[str, An
 class LiveOutfitState(BaseModel):
     saved: bool | None = None
     worn: bool | None = None
+    label: str | None = None
 
 
 @app.post("/api/live/outfits/{outfit_id}/state")
 def live_outfit_state(
     outfit_id: str, body: LiveOutfitState, user: UserContext = Depends(current_user)
 ) -> dict[str, Any]:
-    """룩북 저장 여부·착용 기록. 기기와 무관하게 남아야 하는 값이라 서버에 쓴다."""
+    """룩북 저장 여부·착용 기록·이름. 기기와 무관하게 남아야 하는 값이라 서버에 쓴다."""
     require_supabase()
     patch: dict[str, Any] = {}
     if body.saved is not None:
         patch["saved"] = body.saved
     if body.worn is not None:
         patch["worn_at"] = now_iso() if body.worn else None
+    if body.label is not None:
+        name = str(body.label).strip()[:40]
+        if name:
+            patch["label"] = name
     if not patch:
         return {"ok": True}
     updated = (

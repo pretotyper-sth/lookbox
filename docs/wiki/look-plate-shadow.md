@@ -33,8 +33,9 @@
 | 지금 (실제 생성 1장) | 1.9% |
 
 단색 판을 포기해도 카드에 배경이 둘로 보이지 않는다. 이미지가 카드를 꽉 채우고
-(`objectFit: cover`), 인물이 커서 넣기로 갈 때도 단색이 아니라 **이미지 자신의
-가장자리 줄을 늘려** 메우기 때문이다(`_fit_look_to_card`).
+(`objectFit: cover`), 인물이 커서 넣기로 갈 때도 가장자리를 늘리지 않는다.
+원본에서 4:5 창을 잡아 스튜디오 픽셀을 그대로 쓴다(`_fit_look_to_card`, 2026-09-06).
+이미 늘려 둔 이미지는 프론트가 좌우 9%를 잘라 띠를 가린다.
 
 회귀 테스트: `test_crop_keeps_backdrop_gradient_smooth`(그라데이션이 살아 있고
 인접 낙차 2 이하), `test_fit_pads_with_backdrop_not_flat_plate`(여백이 판 단색이 아니다).
