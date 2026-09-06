@@ -501,6 +501,13 @@ function liveAppendOutfits(payload) {
   return added;
 }
 
+function outfitWishPending(outfit) {
+  if (!outfit || !outfit.wish) return false;
+  const id = (outfit.itemIds || []).find((x) => String(x).indexOf('wish-') === 0);
+  const it = id && LB_DATA.ALL[id];
+  return !(it && it.img);
+}
+
 function liveAppendDaily(payload, ownedItems) {
   const owned = ownedIdSet(ownedItems);
   (payload.items || []).forEach((it) => {
@@ -536,14 +543,14 @@ function lastResultLine(text) {
   const lines = String(text || '').split('\n').map(streamPayload).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     // 진행(_step)·착장 한 장(_look)·코디 한 장(_outfit)은 결과가 아니다.
-    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1 && lines[i].indexOf('"_outfit"') === -1) return lines[i];
+    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1 && lines[i].indexOf('"_outfit"') === -1 && lines[i].indexOf('"_wish"') === -1) return lines[i];
   }
   return '';
 }
 
 // 스트림을 읽으면서 _step / _look / _outfit 이벤트가 도착할 때마다 콜백. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
-async function readProgressStream(res, onProgress, onLook, onOutfit) {
+async function readProgressStream(res, onProgress, onLook, onOutfit, onWish) {
   if (!res.body || !res.body.getReader) return res.text();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -563,12 +570,14 @@ async function readProgressStream(res, onProgress, onLook, onOutfit) {
       const isStep = payload.indexOf('"_step"') !== -1;
       const isLook = payload.indexOf('"_look"') !== -1;
       const isOutfit = payload.indexOf('"_outfit"') !== -1;
-      if (!isStep && !isLook && !isOutfit) continue;
+      const isWish = payload.indexOf('"_wish"') !== -1;
+      if (!isStep && !isLook && !isOutfit && !isWish) continue;
       try {
         const row = JSON.parse(payload);
         if (row._step && onProgress) onProgress(row._step);
         if (row._look && onLook) onLook(row._look);
         if (row._outfit && onOutfit) onOutfit(row._outfit);
+        if (row._wish && onWish) onWish(row._wish);
       } catch (e) { /* 부분 수신 줄은 무시 */ }
     }
   }
@@ -579,7 +588,7 @@ async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
   const timeoutMs = options.timeoutMs || 165000;
-  const { timeoutMs: _t, onProgress, onLook, onOutfit, ...fetchOpts } = options;
+  const { timeoutMs: _t, onProgress, onLook, onOutfit, onWish, ...fetchOpts } = options;
   const headers = { ...(options.headers || {}) };
   // GET에 application/json을 붙이면 매번 CORS preflight가 나간다.
   // Render가 잠든 직후 OPTIONS가 실패하면 '네트워크가 불안정해요'로 떨어진다.
@@ -613,8 +622,8 @@ async function liveJSON(url, options = {}) {
   // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = (onProgress || onLook || onOutfit)
-      ? await readProgressStream(res, onProgress, onLook, onOutfit)
+    text = (onProgress || onLook || onOutfit || onWish)
+      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish)
       : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
@@ -1483,7 +1492,8 @@ function App() {
   const lookInflight = useRef(new Set());
   const applyModelLooks = useCallback(async (list) => {
     const pending = (list || LB_DATA.DAILY || []).filter((o) => (
-      o && (o.itemIds || []).length && !o.lookImg && o.id && !lookInflight.current.has(o.id)
+      o && (o.itemIds || []).length && !o.lookImg && o.id
+      && !lookInflight.current.has(o.id) && !outfitWishPending(o)
     ));
     if (!pending.length) return 0;
     const lookLimit = window.LOOK_TEST_LIMIT || 0;
@@ -1567,7 +1577,8 @@ function App() {
     const have = (LB_DATA.DAILY || []).filter((o) => o && o.lookImg).length;
     if (lookLimit > 0 && have >= lookLimit) return;
     const pending = (LB_DATA.DAILY || []).filter((o) => (
-      o && !o.lookImg && (o.itemIds || []).length && o.id && !lookInflight.current.has(o.id)
+      o && !o.lookImg && (o.itemIds || []).length && o.id
+      && !lookInflight.current.has(o.id) && !outfitWishPending(o)
     ));
     if (!pending.length) return;
     applyModelLooks(pending).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
@@ -1687,9 +1698,32 @@ function App() {
         stampOutfitStyle([row.outfit]);
         const added = liveAppendDaily({ outfits: [row.outfit], items: row.items || [] }, items);
         if (!added.length) return;
+        added.forEach((o) => {
+          if (outfitWishPending(o) && !LB_DATA.WISH_STAGE[o.id]) LB_DATA.WISH_STAGE[o.id] = 'draw';
+        });
         cacheDaily();
         bumpDaily();
-        if (prefs.modelLook) applyModelLooks(added.filter((o) => !o.lookImg));
+        if (prefs.modelLook) applyModelLooks(added.filter((o) => !o.lookImg && !outfitWishPending(o)));
+      };
+      const onWish = (row) => {
+        if (!row || !row.id) return;
+        if (row.stage && !row.item) {
+          LB_DATA.WISH_STAGE[row.id] = row.stage;
+          bumpDaily();
+          return;
+        }
+        delete LB_DATA.WISH_STAGE[row.id];
+        if (row.item) liveRememberItem(row.item);
+        (LB_DATA.DAILY || []).forEach((o) => {
+          if (o && o.id === row.id && row.wish) o.wish = row.wish;
+        });
+        if (LB_DATA.OUTFIT_BY_ID[row.id] && row.wish) LB_DATA.OUTFIT_BY_ID[row.id].wish = row.wish;
+        cacheDaily();
+        bumpDaily();
+        if (prefs.modelLook) {
+          const o = (LB_DATA.DAILY || []).find((x) => x && x.id === row.id);
+          if (o && !o.lookImg && !outfitWishPending(o)) applyModelLooks([o]);
+        }
       };
       if (force && LB_DATA.DAILY.length > 0) {
         // 첫 줄(4) 미달이면 나머지만, 찼으면 2개씩 추가(리셋 아님).
@@ -1699,6 +1733,7 @@ function App() {
           method: 'POST',
           timeoutMs: 240000,
           onOutfit,
+          onWish,
           body: JSON.stringify({
             max_combos: maxCombos,
             style,
@@ -1717,7 +1752,7 @@ function App() {
         if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 만들 조합이 없어요');
         if (prefs.modelLook) {
-          applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg));
+          applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg && !outfitWishPending(o)));
         }
         return { added: added.length, wardrobeGrew };
       }
@@ -1726,12 +1761,13 @@ function App() {
         setDailyAllowed(true);
         return { added: 0, wardrobeGrew, fromCache: true };
       }
-      const payload = await liveJSON('/api/live/coordinate', {
-        method: 'POST',
-        timeoutMs: 240000,
-        onOutfit,
-        body: JSON.stringify({
-          max_combos: baseCount,
+        const payload = await liveJSON('/api/live/coordinate', {
+          method: 'POST',
+          timeoutMs: 240000,
+          onOutfit,
+          onWish,
+          body: JSON.stringify({
+            max_combos: baseCount,
           style,
           styles: preferredStyles,
           for_date: localYmd(),
@@ -1752,7 +1788,7 @@ function App() {
       reloadBilling();
       if (!quiet) showToast('오늘의 코디를 만들었어요', 'sparkle');
       if (prefs.modelLook) {
-        applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg));
+        applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg && !outfitWishPending(o)));
       }
       return { added: LB_DATA.DAILY.length, wardrobeGrew: false };
     } catch (e) {

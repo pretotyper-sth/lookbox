@@ -8,7 +8,11 @@
 2026-09-03 저녁부터 옷장 상품컷은 GPT를 기다리지 않는다. `recommend_closet`
 (`fallback_combos`, 텍스트·속성 페어링)으로 앞 칸을 바로 SSE `_outfit`으로 붙인다.
 이미지는 옷장에 이미 있다. `_ensure_style_attrs`와 `gpt-4o`는 마지막 wish 카드
-뒤에만 돈다. wish 상품컷(`images.generate`)은 그 장만 늦게 붙는다.
+뒤에만 돈다.
+
+2026-09-06: 스트림 시작 전에 옷장 `select(*)`·크레딧 확인을 해서 TTFB가
+20~30초까지 늘었다. 그 작업을 `work()` 안으로 옮겨 패딩 SSE가 먼저 나가게 했다.
+wish 상품컷(`images.generate`)은 카드를 먼저 붙인 뒤 `_wish` 단계로 그린다.
 
 `recommendation_timings.duration_ms`는 스트림 작업 전체(추천 2회 + wish 이미지
 + persist)다 (`live_coordinate` `work`).

@@ -10,10 +10,15 @@ from pathlib import Path
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = ("_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line", "_profile_block")
+FNS = (
+    "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
+    "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
+)
 CONSTS = (
     "_STYLE_IDS", "_FITS", "_PATTERNS", "_MATERIALS", "_PC_GUIDE",
     "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS",
+    "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
+    "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_ATH_TOP",
 )
 
 
@@ -84,6 +89,12 @@ class StyleAttrTest(unittest.TestCase):
         self.assertNotIn("60", block)
         self.assertIn("슬림", block)
 
+    def test_coord_rules_forbid_cargo_chelsea(self):
+        rules = MAIN_PATH.read_text()
+        self.assertIn("첼시 부츠", rules)
+        self.assertIn("패션 테러리스트", rules)
+        self.assertIn("first_ms=", rules)
+
 
 class PairScoreTest(unittest.TestCase):
     def setUp(self):
@@ -114,6 +125,18 @@ class PairScoreTest(unittest.TestCase):
         bottom = item(cat="bottom", color="블랙", tone="neutral", formality=3)
         autumn = {"personal_color": "autumn"}
         self.assertGreater(self.score(warm_top, bottom, autumn), self.score(cool_top, bottom, autumn))
+
+    def test_chelsea_loses_to_sneaker_on_cargo(self):
+        cargo = item(cat="bottom", color="블랙", name="와이드 카고 팬츠", subtype="카고 팬츠")
+        chelsea = item(cat="shoes", color="블랙", name="미니멀 첼시 부츠", subtype="첼시 부츠")
+        sneaker = item(cat="shoes", color="블랙", name="아디다스 삼바")
+        self.assertGreater(self.score(cargo, sneaker, None), self.score(cargo, chelsea, None))
+
+    def test_shirt_prefers_slacks_over_cargo(self):
+        shirt = item(cat="top", color="블루", name="수피마 코튼 셔츠", subtype="셔츠")
+        cargo = item(cat="bottom", color="블랙", name="카고 팬츠", subtype="카고 팬츠")
+        slacks = item(cat="bottom", color="블랙", name="슬랙스", subtype="슬랙스")
+        self.assertGreater(self.score(shirt, slacks, None), self.score(shirt, cargo, None))
 
 
 class IncludeAndWishTest(unittest.TestCase):

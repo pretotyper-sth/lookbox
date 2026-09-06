@@ -98,17 +98,21 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
     <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => onOpen && onOpen(outfit)}
+          onKeyDown={(e) => {
+            if (!onOpen) return;
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(outfit); }
+          }}
           aria-label="코디 자세히 보기"
           style={{
-            display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent',
-            cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
+            display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
           <LookComposite outfit={outfit} items={items} ratio="4 / 5" looking={looking} />
-        </button>
+        </div>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
@@ -601,7 +605,10 @@ function TodayScreen({ ctx }) {
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
                   // 테스트(limit>0): 대기 오버레이는 만들 1장만. 실서비스(0): 상품컷 카드마다 대기, 끝나는 장부터 착장으로 바뀐다.
-                  looking={isToday && !!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId)}
+                  looking={isToday && (
+                    (!!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId))
+                    || !!(o.wish && (!(o.itemIds || []).some((id) => String(id).indexOf('wish-') === 0 && LB_DATA.ALL[id] && LB_DATA.ALL[id].img)))
+                  )}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

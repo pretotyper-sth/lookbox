@@ -368,4 +368,9 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 근거: `backend/app/main.py` `_model_look_prompt_with_reference`;
 `frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[model-look-toggle]]
 
+## [2026-09-06] change | 추천 속도·wish 안내·복붙·비상식 코디
+스트림을 열기 전에 옷장을 읽던 TTFB를 없앤다. wish 카드는 먼저 붙이고
+`제안 아이템을 그리는 중`을 띄운다. 플랫레이는 한 장 이미지라 우클릭 복사.
+셔츠+카고+첼시는 감점. [[look-latency]] [[coord-clash]]
+
 
