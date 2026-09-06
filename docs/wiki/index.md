@@ -15,7 +15,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-flatlay-overlap](look-flatlay-overlap.md) — 플랫레이 소품은 자리로만 구분. 흰 테두리 없음. 덩어리는 LOOK_PACK 0.78로 맞춤
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 오늘 카드는 `추천 코디 N`. wish는 캐시 items+고정 id. `LOOK_TEST_LIMIT=1`
+- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 오늘 카드는 `추천 코디 N`. 지난 날은 다시 받기·오늘 입기를 흐리게 두고 같은 토스트. `LOOK_TEST_LIMIT=1`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
 - [coord-clash](coord-clash.md) — 셔츠+카고+첼시 감점. 신발은 맞는 켤레 안에서 돌아가며 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
