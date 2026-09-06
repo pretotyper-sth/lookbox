@@ -508,6 +508,10 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 오늘 코디만 0.86으로 맞춘다. 룩북 `SavedCard`는 패킹 전 크기로 그린다.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite` `pack`. [[look-flatlay-overlap]]
 
+## [2026-09-06] change | 오늘 코디 상품컷을 1.03으로 키움
+룩북은 그대로. 오늘만 0.86×1.2. 패킹 전 2번 카드의 약 95%. 캐시 `|flat6`.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_PACK`. [[look-flatlay-overlap]]
+
 
 
 
