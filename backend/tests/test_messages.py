@@ -27,10 +27,10 @@ class DetailStringTest(unittest.TestCase):
         msgs = {}
         for node in tree.body:
             if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") in (
-                "_EXTRACT_FAIL_MSG", "_FASHION_REJECT_MSG"
+                "_EXTRACT_FAIL_MSG", "_FASHION_REJECT_MSG", "_TRYON_FAIL_MSG"
             ):
                 msgs[node.targets[0].id] = ast.literal_eval(node.value)
-        self.assertEqual(set(msgs), {"_EXTRACT_FAIL_MSG", "_FASHION_REJECT_MSG"})
+        self.assertEqual(set(msgs), {"_EXTRACT_FAIL_MSG", "_FASHION_REJECT_MSG", "_TRYON_FAIL_MSG"})
         for name, table in msgs.items():
             for key, text in table.items():
                 with self.subTest(msg=f"{name}.{key}"):
@@ -38,8 +38,10 @@ class DetailStringTest(unittest.TestCase):
                     self.assertTrue(text.endswith("."), f"문장으로 끝나야 한다: {text}")
                     # 다음 행동이 있어야 한다: 다시 시도 / 다른 사진 / 올려 주세요 …
                     self.assertRegex(
-                        text, r"(주세요|시도해|시도하|바꾸면|알려)", f"할 일이 없다: {text}"
+                        text, r"(주세요|시도해|시도하|바꾸면|알려|눌러)", f"할 일이 없다: {text}"
                     )
+                    if name == "_TRYON_FAIL_MSG":
+                        self.assertEqual(text.count("\n"), 1, f"바로 보기는 두 줄이어야 한다: {text}")
                     self.assertLessEqual(len(text), 70, f"너무 길다: {text}")
 
     def test_our_fault_messages_do_not_blame_the_photo(self):
@@ -57,5 +59,5 @@ class DetailStringTest(unittest.TestCase):
         self.assertIn("다시 채워져요", credit.group(0))
         # 무료 사용자에게는 지금 이어서 쓸 방법도 알려준다
         self.assertIn("프로로 바꾸면", SOURCE)
-        limit = re.search(r'f"전신 이미지는 한 달에[^"]*"', SOURCE)
+        limit = re.search(r'f"한 달에 \{limit\}번까지예요', SOURCE)
         self.assertIsNotNone(limit)

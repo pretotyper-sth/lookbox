@@ -899,7 +899,7 @@ def ensure_within_limit(user_id: str, action: str) -> None:
         raise HTTPException(
             status_code=429,
             detail=(
-                f"전신 이미지는 한 달에 {limit}번까지예요. "
+                f"한 달에 {limit}번까지예요.\n"
                 f"{_reset_day(billing_state(user_id))}부터 다시 만들 수 있어요."
             ),
         )
@@ -2655,6 +2655,23 @@ _EXTRACT_FAIL_MSG = {
     "no_openai": "지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
     "api_error": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
     "edit_failed": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
+}
+
+# 바로 보기 전용. 상품 추출 문구(옷이 또렷하게)를 쓰지 않는다. 시트는 두 줄로 보여 준다.
+_TRYON_FAIL_MSG = {
+    "timeout": "시간이 너무 오래 걸렸어요.\n잠시 후 다시 시도해 주세요.",
+    "network": "서버에 연결하지 못했어요.\n잠시 후 다시 시도해 주세요.",
+    "rate_limit": "지금 요청이 몰려 있어요.\n1~2분 뒤에 다시 눌러 주세요.",
+    "moderation": "이 사진은 처리할 수 없어요.\n다른 사진으로 시도해 주세요.",
+    "too_large": "사진이 너무 커요.\n더 작은 사진으로 올려 주세요.",
+    "bad_request": "이 사진으로는 만들지 못했어요.\n다른 사진으로 시도해 주세요.",
+    "upstream": "이미지 서버가 불안정해요.\n조금 뒤에 다시 시도해 주세요.",
+    "auth": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
+    "quota": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
+    "bad_setup": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
+    "no_openai": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
+    "api_error": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
+    "edit_failed": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
 }
 
 
@@ -7209,7 +7226,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     require_supabase()
     face = _face_image_bytes(body.face_data_url)
     if not face:
-        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
+        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
     key = f"tryon5-{sig}"
@@ -7236,7 +7253,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
 
         ensure_within_limit(uid, "tryon_body")
         if not openai_client:
-            raise HTTPException(status_code=503, detail="지금은 이미지를 만들 수 없어요. 잠시 후 다시 시도해 주세요.")
+            raise HTTPException(status_code=503, detail=_TRYON_FAIL_MSG["no_openai"])
 
         last_info = None
         for attempt in (0, 1):
@@ -7262,7 +7279,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
                 if attempt == 0:
                     continue
-                msg = _EXTRACT_FAIL_MSG.get(_openai_fail_key(last_info), _EXTRACT_FAIL_MSG["api_error"])
+                msg = _TRYON_FAIL_MSG.get(_openai_fail_key(last_info), _TRYON_FAIL_MSG["api_error"])
                 raise HTTPException(
                     status_code=502,
                     detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
@@ -7274,7 +7291,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 print(f"[tryon] mask quality failed attempt={attempt}", flush=True)
                 if attempt == 0:
                     continue
-                raise HTTPException(status_code=502, detail="바로 보기 이미지를 다듬지 못했어요. 잠시 후 다시 시도해 주세요.")
+                raise HTTPException(status_code=502, detail="이미지를 다듬지 못했어요.\n잠시 후 다시 시도해 주세요.")
 
             report("tryon_save")
             urls: dict[str, str] = {}
@@ -7298,7 +7315,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
             note_usage(uid, "tryon_body", {"key": key})
             return {"imageUrl": urls["body"], "assets": urls, "cached": False}
 
-        raise HTTPException(status_code=502, detail="바로 보기 이미지를 만들지 못했어요.")
+        raise HTTPException(status_code=502, detail=_TRYON_FAIL_MSG["api_error"])
 
     return stream_with_keepalive(work)
 

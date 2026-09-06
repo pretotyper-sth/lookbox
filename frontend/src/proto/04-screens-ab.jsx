@@ -1021,7 +1021,7 @@ function AddSheet({ ctx }) {
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking, tryOnProgress, makeTryOnBody, setAvatar,
+    tryOnMaking, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1236,11 +1236,17 @@ function AddSheet({ ctx }) {
     const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon5');
     let body = stale ? '' : ((prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
-      body = await makeTryOnBody({ silent: true });
+      let fail = '';
+      body = await makeTryOnBody({ silent: true, onFail: (msg) => { fail = msg; } });
+      if (gen !== tryOnLaunchGen.current) return;
+      if (!body) {
+        setTryOnErr(fail || (formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.'));
+        return;
+      }
     }
     if (gen !== tryOnLaunchGen.current) return;
     if (!body) {
-      setTryOnErr('바로 보기 이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.');
+      setTryOnErr(formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.');
       return;
     }
     if (typeof startTryOn === 'function') {
@@ -1886,7 +1892,7 @@ function AddSheet({ ctx }) {
                                 src={tryOnAvatar}
                                 size={80}
                                 onChange={onTryOnAvatar}
-                                onInvalid={(msg) => setTryOnErr(msg)}
+                                onInvalid={(msg) => setTryOnErr(formatTryOnErr ? formatTryOnErr(msg) : msg)}
                               />
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
@@ -1901,6 +1907,7 @@ function AddSheet({ ctx }) {
                             color: tryOnErr ? '#9D472F' : 'var(--ink-3)',
                             textAlign: 'center', wordBreak: 'keep-all',
                             whiteSpace: tryOnErr ? 'pre-line' : undefined,
+                            lineHeight: tryOnErr ? 1.45 : undefined,
                           }}>
                             {tryOnErr
                               ? tryOnErr

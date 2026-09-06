@@ -462,6 +462,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `frontend/src/proto/proto.css` `.lb-tryon-skel`;
 `frontend/src/proto/04-screens-ab.jsx` `launchTryOnFromSheet`. [[tryon-setup-from-mypage]]
 
+## [2026-09-06] change | 바로 보기 실패를 이유별 두 줄로
+시트는 서버·네트워크·한도·사진 이유를 덮지 않고 그대로 보여 준다. 각 문구는
+한 줄이 아니라 `\n` 두 줄. 상품 추출 카피는 쓰지 않는다.
+근거: `backend/app/main.py` `_TRYON_FAIL_MSG`;
+`frontend/src/proto/09-app.jsx` `formatTryOnErr`. [[tryon-setup-from-mypage]]
+
 
 
 
