@@ -6,7 +6,8 @@
 선글라스처럼 이질감이 나서 그리지 않는다(2026-09-06).
 개수가 다르면 덩어리 크기가 달라 3장은 작고 4장은 커 보인다. 오늘 코디는
 `flattenLookBoard`가 그린 뒤 bbox를 `LOOK_PACK`(1.03)로 맞춘다. 1.03은 0.86의
-1.2배, 패킹 전 4개짜리 2번 카드의 약 95%. 캐시 `|flat6`. 룩북 상품컷은 패킹
-전 크기(`pack={false}`, 캐시 `|flat0`)(2026-09-06).
+1.2배, 패킹 전 4개짜리 2번 카드의 약 95%. 기하 가운데가 위로 보여
+`LOOK_NUDGE_Y` 2.4%만 내린다. 캐시 `|flat7`. 룩북 상품컷은 패킹 전 크기
+(`pack={false}`, 캐시 `|flat1`)(2026-09-06).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `lookPlacement` `drawLookCutout`.

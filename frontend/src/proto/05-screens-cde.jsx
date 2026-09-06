@@ -38,6 +38,8 @@ const LOOK_SIZE = {
 const LOOK_SCALE = 1.16;
 const LOOK_PAD = 12;
 const LOOK_PACK = 1.03;
+/* 상의가 커서 기하 가운데가 위로 보인다. 카드 높이의 이만큼만 내린다. */
+const LOOK_NUDGE_Y = 0.024;
 
 /* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
    이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
@@ -246,6 +248,11 @@ function packLookRects(rects, w, h) {
   }));
 }
 
+function nudgeLookRects(rects, h) {
+  const dy = h * LOOK_NUDGE_Y;
+  return rects.map((r) => ({ ...r, y: r.y + dy }));
+}
+
 function flattenLookBoard(items, place, scale, ratio, pack) {
   const w = 720;
   const h = Math.round(w / parseLookRatio(ratio));
@@ -272,7 +279,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
       const dh = im.naturalHeight * s;
       return { im, x: cx - dw / 2, y: cy - dh / 2, dw, dh };
     });
-    const drawn = pack ? packLookRects(rects, w, h) : rects;
+    const drawn = nudgeLookRects(pack ? packLookRects(rects, w, h) : rects, h);
     drawn.forEach((r) => {
       drawLookCutout(ctx, r.im, r.x, r.y, r.dw, r.dh);
     });
@@ -290,7 +297,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat6' : '|flat0');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat7' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {

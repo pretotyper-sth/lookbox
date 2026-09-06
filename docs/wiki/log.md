@@ -512,6 +512,11 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 룩북은 그대로. 오늘만 0.86×1.2. 패킹 전 2번 카드의 약 95%. 캐시 `|flat6`.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_PACK`. [[look-flatlay-overlap]]
 
+## [2026-09-06] change | 상품컷 덩어리를 아주 조금만 내린다
+기하 가운데가 위로 보였다. 카드 높이의 2.4%만 내려 위아래 여백을 맞춘다.
+캐시 `|flat7` `|flat1`.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_NUDGE_Y`. [[look-flatlay-overlap]]
+
 
 
 
