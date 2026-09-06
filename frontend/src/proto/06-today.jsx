@@ -98,7 +98,7 @@ function todayWishDrawing(outfit) {
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById, looking }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
@@ -142,23 +142,18 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
         ) : null}
       </div>
 
-      {/* 오늘 입기 — 데일리 추천 고유 액션. 지난 날짜는 기록만 보여준다. */}
-      {onWear ? (
-        <div style={{ marginTop: 'var(--s3)' }}>
-          <Btn full size="sm" variant={worn ? 'soft' : 'primary'} icon={worn ? 'check' : 'hanger'} onClick={onWear}>
-            {worn ? '오늘 입음' : '오늘 입기'}
-          </Btn>
-        </div>
-      ) : (
-        // 입지 않은 날의 카드도 같은 높이를 유지해야 그리드가 들쭉날쭉하지 않다.
-        <div style={{
-          marginTop: 'var(--s3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-          height: 34, borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 700,
-          color: 'var(--ink-2)', background: worn ? 'var(--surface-2)' : 'transparent',
-        }}>
-          {worn ? <><Icon name="check" size={13} stroke={3} /> 이 날 입었어요</> : null}
-        </div>
-      )}
+      <div style={{ marginTop: 'var(--s3)' }}>
+        <Btn
+          full
+          size="sm"
+          variant={worn ? 'soft' : 'primary'}
+          icon={worn ? 'check' : 'hanger'}
+          onClick={onWear}
+          style={wearLocked ? { opacity: 0.4 } : undefined}
+        >
+          {worn ? '오늘 입음' : '오늘 입기'}
+        </Btn>
+      </div>
     </div>
   );
 }
@@ -348,7 +343,7 @@ function TodayScreen({ ctx }) {
     dailyEnabled, setDailyEnabled,
     preferredDailyStyle, preferredStyleLabel,
     dailyWardrobeGrew, dailyTick,
-    getDayRecord, openDetail, refreshLive,
+    getDayRecord, openDetail, refreshLive, showToast,
     comboNeed, comboProgress,
     modelLook,
   } = ctx;
@@ -511,40 +506,43 @@ function TodayScreen({ ctx }) {
       onSelect={(d) => setSelected(startOfDay(d))} />
   );
 
-  const header = isToday ? (
+  const pastLockToast = () => { if (showToast) showToast('날짜가 지나서 할 수 없어요'); };
+  const showReset = isToday ? (picks.length > 0 && !busy) : !!(pastRecord && pastRecord.outfits && pastRecord.outfits.length);
+  const header = (
     <div style={{ marginBottom: 'var(--gap-header)' }}>
-      <Eyebrow>오늘의 추천 코디</Eyebrow>
+      <Eyebrow>{isToday ? '오늘의 추천 코디' : '지난 추천 코디'}</Eyebrow>
       <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        {busy ? (
-          <>오늘의 추천을 준비 중이에요</>
+        {isToday ? (
+          busy ? (
+            <>오늘의 추천을 준비 중이에요</>
+          ) : (
+            <>
+              옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
+              {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
+            </>
+          )
         ) : (
           <>
-            옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
-            {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
+            <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>
+            {pastRecord ? '에 추천받았던 코디예요.' : '에는 받아둔 코디가 없어요.'}
           </>
         )}
       </p>
-      {picks.length > 0 && !busy ? (
+      {showReset ? (
         <button
           type="button"
-          onClick={() => setResetOpen(true)}
+          onClick={() => (isToday ? setResetOpen(true) : pastLockToast())}
+          aria-disabled={!isToday}
           style={{
-            marginTop: 8, padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+            marginTop: 8, padding: 0, border: 'none', background: 'none',
+            cursor: isToday ? 'pointer' : 'default',
             fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
+            opacity: isToday ? 1 : 0.4,
           }}
         >
           오늘 코디 다시 받기
         </button>
       ) : null}
-      {ctxStrip}
-    </div>
-  ) : (
-    <div style={{ marginBottom: 'var(--gap-header)' }}>
-      <Eyebrow>지난 추천 코디</Eyebrow>
-      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>
-        {pastRecord ? '에 추천받았던 코디예요.' : '에는 받아둔 코디가 없어요.'}
-      </p>
       {ctxStrip}
     </div>
   );
@@ -613,7 +611,8 @@ function TodayScreen({ ctx }) {
                   styleLabel={preferredStyleLabel}
                   saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
-                  onWear={isToday ? () => wearToday(o.id) : null}
+                  onWear={isToday ? () => wearToday(o.id) : pastLockToast}
+                  wearLocked={!isToday}
                   itemsById={isToday ? null : pastItemsById}
                   // 테스트(limit>0): 대기 오버레이는 만들 1장만. 실서비스(0): 상품컷 카드마다 대기, 끝나는 장부터 착장으로 바뀐다.
                   looking={isToday && (todayWishDrawing(o) || (!!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId)))}
