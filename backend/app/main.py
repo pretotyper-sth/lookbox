@@ -6843,7 +6843,7 @@ _TRYON_BOTTOM_SEED = (0.50, 0.67)
 
 
 def _tryon_border_background(rgb: Image.Image) -> Image.Image:
-    """가장자리에서 이어진 판색만 배경으로 본다. 흰 티는 판과 값이 비슷해도 안 먹는다."""
+    """가장자리에서 이어진 판색만 배경으로 본다. 차콜 티는 판과 값이 멀어 안 먹는다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -6877,7 +6877,7 @@ def _tryon_border_background(rgb: Image.Image) -> Image.Image:
 
 
 def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """가슴·허벅지 시드에서 흰 티 또는 중청만 4방향으로 모은다."""
+    """가슴·허벅지 시드에서 차콜 티 또는 중청만 4방향으로 모은다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -6887,14 +6887,13 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
     y0 = int(h * (0.14 if kind == "top" else 0.42))
     y1 = int(h * (0.58 if kind == "top" else 0.87))
-    pr, pg, pb = _TRYON_PLATE_RGB
 
     def match(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
         if kind == "top":
             ch = max(r, g, b) - min(r, g, b)
-            d = abs(r - pr) + abs(g - pg) + abs(b - pb)
-            return L >= 244 and ch <= 18 and d >= 18
+            # 차콜 반팔: 판·피부·중청과 떨어지게. 흰 티는 판(#F2F1EE)과 붙어 톱니가 난다.
+            return 16 <= L <= 110 and ch <= 36 and (b - r) <= 12
         return b > r + 8 and b >= g - 4 and 35 < L < 170
 
     def skin(r: int, g: int, b: int) -> bool:
@@ -6929,11 +6928,10 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
 
 
 def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
-    """1px closing 뒤 안쪽으로 1~2px 페더. 실루엣을 키우지 않는다."""
+    """1px closing 뒤 가장자리만 페더. 실루엣을 키우거나 안쪽으로 깎지 않는다."""
     closed = mask.convert("L").filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
-    inner = closed.filter(ImageFilter.MinFilter(3))
-    soft = inner.filter(ImageFilter.GaussianBlur(radius=1.2))
-    solid = inner.point(lambda v: 255 if v > 200 else 0)
+    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.9))
+    solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
 
 
@@ -6992,7 +6990,7 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     bot_a = list(bottom.getchannel("A").getdata())
     top_hole = sum(1 for a in top_a if a < 128)
     bot_hole = sum(1 for a in bot_a if a < 128)
-    if top_hole < n * 0.015 or top_hole > n * 0.28:
+    if top_hole < n * 0.015 or top_hole > n * 0.35:
         return False
     if bot_hole < n * 0.02 or bot_hole > n * 0.35:
         return False
@@ -7013,17 +7011,30 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
 
 
 _TRYON_BODY_PROMPT = """This is an identity lock, not a new person.
-Image 1 is a photograph of the actual user. Keep that exact face:
-same eyes, nose, lips, jawline, hairline, hair color, and skin tone.
-Do not beautify, de-age, restyle hair, or replace them with a similar-looking person.
-If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head pixels.
+Image 1 is a photograph of the actual user. Reconstruct that exact face at photographic fidelity:
+same eyes, nose, lips, jawline, hairline, hair part, hair color, skin tone, moles, and apparent age.
+Do not replace them with a similar-looking or generic person. Do not beautify into someone else.
+If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head as the same person.
 
-- one person, front-facing full body, crown of hair to shoes fully in frame, arms relaxed at the sides
-- leave about 8% empty studio above the hair and below the shoes so nothing is cropped
-- slightly more lookbook-ready than a casual snapshot: a little longer legs and cleaner posture,
-  still a real adult — not a fashion illustration, not stocky
-- plain white short-sleeve crew-neck tee, mid-blue straight-leg denim jeans, and white low-top sneakers only.
-  no pattern, logo, extra garments, or black clothing
+FACE:
+A sharper, well-lit photograph of the SAME person in Image 1 — not a different model.
+Skin must look real: visible pores, subtle texture, faint natural variation.
+No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
+
+POSE:
+Natural standing pose, slight weight on one leg, relaxed shoulders.
+Arms slightly away from the torso so sleeves are visible. Not a stiff mannequin.
+
+FRAMING:
+Full body, crown of hair to shoes fully in frame, 2:3 portrait.
+Leave only about 4% empty studio above the hair and below the shoes.
+The clothing silhouette should fill most of the frame width — tight full-body crop, not a distant figure.
+
+OUTFIT:
+matte charcoal-gray short-sleeve crew-neck T-shirt, mid-blue straight-leg denim jeans, and white low-top sneakers only.
+The T-shirt is clearly darker than the background — never white, never the same color as the jeans.
+No pattern, logo, extra garments, or black leather.
+
 - background is ONE continuous solid fill of #F2F1EE from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
 - minimal contact shadow under the shoes
@@ -7070,7 +7081,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요. 마이페이지에서 넣을 수 있어요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon4-{sig}"
+    key = f"tryon5-{sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7147,7 +7158,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon4",
+                        "mask": "tryon5",
                         "assets": urls,
                     },
                 }).execute()

@@ -227,10 +227,40 @@ async function punchBody(src, mode, stageW, stageH) {
 
 // 카메라에서 부위를 바꿀 때마다 새로 뚫는다. 캔버스 한 번이면 되니 전환이 즉시다.
 const TRYON_MODES = [
+  { id: '', label: '착장' },
   { id: 'top', label: '상의' },
   { id: 'bottom', label: '하의' },
   { id: 'full', label: '전체' },
 ];
+
+const TRYON_CAM_OK = 'lb_tryon_cam_ok';
+let tryOnCamStream = null;
+
+function stopTryOnCamStream() {
+  if (!tryOnCamStream) return;
+  tryOnCamStream.getTracks().forEach((t) => t.stop());
+  tryOnCamStream = null;
+}
+
+async function acquireTryOnCamStream() {
+  const live = tryOnCamStream && tryOnCamStream.getVideoTracks().some((t) => t.readyState === 'live');
+  if (live) {
+    tryOnCamStream.getVideoTracks().forEach((t) => { t.enabled = true; });
+    return tryOnCamStream;
+  }
+  stopTryOnCamStream();
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 1920 },
+    },
+  });
+  tryOnCamStream = stream;
+  try { localStorage.setItem(TRYON_CAM_OK, '1'); } catch (e) { /* noop */ }
+  return stream;
+}
 
 function MobileOnlyNote() {
   return (
@@ -607,7 +637,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
     return () => { dead = true; };
   }, [open, bodySrc, frameSrc, mode, stage.w, stage.h, serverAssets]);
 
-  const cycleModes = ['', ...TRYON_MODES.map((m) => m.id)];
+  const cycleModes = TRYON_MODES.map((m) => m.id);
   const shiftMode = (dir) => {
     const i = cycleModes.indexOf(mode);
     const next = cycleModes[(i + dir + cycleModes.length) % cycleModes.length];
@@ -620,48 +650,49 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
   useEscapeClose(open, onClose);
 
   const stop = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    stopTryOnCamStream();
+    streamRef.current = null;
     setReady(false);
   };
 
-  const start = async () => {
-    stop();
-    setErr('');
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setErr('이 브라우저에서는 카메라를 열 수 없어요.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 1920 },
-        },
-      });
-      streamRef.current = stream;
-      const v = videoRef.current;
-      if (v) {
-        v.srcObject = stream;
-        await v.play();
-        setReady(true);
-      }
-    } catch (e) {
-      setErr('카메라 권한이 필요해요. 설정에서 허용한 뒤 다시 시도해주세요.');
-    }
-  };
-
   useEffect(() => {
-    if (!open) { stop(); return undefined; }
-    if (wide) return undefined;
-    start();
-    return () => stop();
+    if (!open || wide) {
+      stop();
+      return undefined;
+    }
+    // 착장만 볼 때는 카메라를 켜지 않는다. 상의·하의·전체에서만 요청해서
+    // 켤 때마다 브라우저 권한 배너가 뜨지 않게 한다.
+    if (!mode) {
+      stop();
+      return undefined;
+    }
+    let dead = false;
+    (async () => {
+      setErr('');
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (!dead) setErr('이 브라우저에서는 카메라를 열 수 없어요.');
+        return;
+      }
+      try {
+        const stream = await acquireTryOnCamStream();
+        if (dead) return;
+        streamRef.current = stream;
+        const v = videoRef.current;
+        if (v) {
+          v.srcObject = stream;
+          await v.play();
+          if (!dead) setReady(true);
+        }
+      } catch (e) {
+        if (!dead) setErr('카메라 권한이 필요해요. 설정에서 허용한 뒤 다시 시도해주세요.');
+      }
+    })();
+    return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, wide]);
+  }, [open, wide, mode]);
+
+  useEffect(() => () => stop(), []);
 
   if (!open) return null;
 
@@ -713,7 +744,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
         <div style={{ fontSize: 14, fontWeight: 700 }}>
           {mode
             ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요`
-            : '기본 착장과 비교해 보세요'}
+            : '기본 착장을 보고 있어요'}
         </div>
         <button type="button" onClick={() => setResetAsk(true)} aria-label="사진 다시 고르기"
           style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
@@ -746,7 +777,8 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
           autoPlay
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover',
+            objectFit: 'contain',
+            opacity: mode && ready ? 1 : 0,
           }}
         />
         {overlay && (
@@ -760,7 +792,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
             }}
           />
         )}
-        {!ready && !err && (
+        {mode && !ready && !err && (
           <div style={{
             position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
             color: 'rgba(255,255,255,0.8)', fontSize: 13.5, fontWeight: 600,
@@ -807,7 +839,11 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
           </div>
         ) : null}
         <p style={{ margin: 0, fontSize: 12.5, textAlign: 'center', lineHeight: 1.45, opacity: 0.85, wordBreak: 'keep-all' }}>
-          {bodySrc ? '같은 부위를 다시 누르면 기본 착장과 비교해요' : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
+          {bodySrc
+            ? (mode
+              ? '같은 부위를 다시 누르면 옷만 입은 착장으로 돌아가요'
+              : '착장은 옷만 보여요. 상의·하의·전체를 누르면 카메라에 맞춰 봐요')
+            : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
         </p>
       </div>
       <BottomSheet open={resetAsk} onClose={() => setResetAsk(false)}>

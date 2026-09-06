@@ -373,4 +373,11 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 `제안 아이템을 그리는 중`을 띄운다. 플랫레이는 한 장 이미지라 우클릭 복사.
 셔츠+카고+첼시는 감점. [[look-latency]] [[coord-clash]]
 
+## [2026-09-06] change | 바로 보기 얼굴·기본옷·카메라 초회
+전신은 프사 본인 실사, 차콜 반팔·중청·흰 스니커, 4% 여백. 캐시 `tryon5-`.
+흰 티는 판과 붙어 톱니가 나서 마스크를 차콜 기준으로 바꿨다.
+착장 칩은 옷만(카메라 없음). 상의·하의·전체에서만 카메라를 켠다.
+근거: `backend/app/main.py` `_TRYON_BODY_PROMPT` `_tryon_seed_component`;
+`frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`. [[tryon-setup-from-mypage]]
+
 

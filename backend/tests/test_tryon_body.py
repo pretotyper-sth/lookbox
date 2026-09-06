@@ -56,7 +56,7 @@ def neutral_body() -> bytes:
             px[x, y] = (198, 146, 119)
     for y in range(50, 96):
         for x in range(42, 78):
-            px[x, y] = (250, 250, 248)
+            px[x, y] = (52, 52, 55)
     for y in range(94, 156):
         for x in range(44, 76):
             px[x, y] = (64, 104, 150)
@@ -75,22 +75,23 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 1200]
+        prompt = self.src[start:start + 2200]
         self.assertIn("identity lock", prompt)
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
         self.assertIn("ONE continuous", prompt)
-        self.assertIn("plain white short-sleeve", prompt)
+        self.assertIn("charcoal-gray short-sleeve", prompt)
         self.assertIn("mid-blue straight-leg denim", prompt)
         self.assertIn("white low-top sneakers", prompt)
-        self.assertIn("8% empty", prompt)
+        self.assertIn("4% empty", prompt)
+        self.assertIn("SAME person", prompt)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon4-", chunk)
+        self.assertIn("tryon5-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -102,7 +103,7 @@ class TryOnAssetTest(unittest.TestCase):
     def setUpClass(cls):
         cls.ns = load_assets()
 
-    def test_white_top_and_denim_bottom_are_disjoint_and_keep_skin_and_shoes(self):
+    def test_charcoal_top_and_denim_bottom_are_disjoint_and_keep_skin_and_shoes(self):
         assets = self.ns["_tryon_make_assets"](neutral_body())
         top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
         bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
