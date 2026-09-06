@@ -386,12 +386,18 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         width: '100%', height: '100%', minWidth: 0, minHeight: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <img
-          src={outfit.lookImg}
-          alt={title}
-          draggable={false}
-          style={mediaFit}
-        />
+        <div style={{
+          position: 'relative', display: 'inline-flex',
+          maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
+        }}>
+          <img
+            src={outfit.lookImg}
+            alt={title}
+            draggable={false}
+            style={mediaFit}
+          />
+          <span className="lb-look-ai-mark">✦ AI로 생성</span>
+        </div>
       </div>
     ) : (Composite ? (
       <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>

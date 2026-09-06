@@ -13,7 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 2:3은 인물 여백을 두고 4:5로 자른다. 안 들어가면 축소해 넣는다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. `LOOK_TEST_LIMIT=1`은 품질 테스트용(종료 전). 실유저는 4장·카드마다 대기·1장씩 전환. wish는 마지막 카드+생성 상품컷. 캐시 `model-id15`
+- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 포즈·착용감은 룩북식으로, 얼굴은 같은 사람·실사 피부. 카드에 `✦ AI로 생성`. `LOOK_TEST_LIMIT=1`은 품질 테스트용. 캐시 `model-id16`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. GPT·wish 생성은 마지막 카드. 착장은 분 단위. 「최대 10초」는 사실이 아님
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 배경을 단색으로 맞추길 포기하고 후처리를 자르기만 남겼다
 - [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일. 레일 카드는 같은 폭. 품목 줄 높이는 62px로 통일

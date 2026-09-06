@@ -80,6 +80,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
         self.assertNotIn("키 크고", prompt)
+        self.assertIn("photogenic", prompt)
+        self.assertIn("three-quarter", prompt)
+        self.assertNotIn("beautify", prompt)
         self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
 
     def test_look_prompt_single_image_swap(self):
@@ -88,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id14-", src)
+        self.assertIn("model-id16-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -107,6 +110,12 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn('_png_named(identity, "01-canonical.png")', src)
         self.assertNotIn("인상은 순하고 부드럽게", src)
         self.assertNotIn("키 크고 비율 좋은 카탈로그", src)
+        # 시드 실루엣·정면 포즈를 고정하면 옷이 마네킹에 붙은 것처럼 나온다(2026-09-06).
+        self.assertNotIn("clothing silhouette", src)
+        self.assertIn("three-quarter", src)
+        self.assertIn("worn on a real body", src)
+        self.assertIn("Do not paint any caption", src)
+        self.assertNotIn("MUSINSA", src)
 
     def test_bottom_hem_prefers_long_inseam(self):
         note = self.ns['_bottom_hem_note']([
@@ -231,7 +240,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id14-", src)
+        self.assertIn("model-id16-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)

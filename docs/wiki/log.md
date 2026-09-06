@@ -361,4 +361,11 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 `frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`.
 [[tryon-setup-from-mypage]] [[profile-avatar]]
 
+## [2026-09-06] change | 착장 포즈·착용감·AI 생성 표기
+시드 정면 포즈와 옷 실루엣을 고정하던 규칙을 뺐다. 3/4 스탠스, 몸에 걸친
+원단, 같은 사람의 실사 얼굴. MUSINSA 문구는 생성하지 않고 카드에
+`✦ AI로 생성`. 캐시 `model-id16`.
+근거: `backend/app/main.py` `_model_look_prompt_with_reference`;
+`frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[model-look-toggle]]
+
 

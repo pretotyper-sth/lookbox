@@ -3671,9 +3671,13 @@ def _model_identity_prompt(gender: str | None) -> str:
     return f"""This is an identity lock, not a character redesign.
 Keep the same person in the source photo: face structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, apparent age, shoulder width.
-The source is already the canonical model — do not de-age, beautify, or restyle them.
+The source is already the canonical model — do not de-age, restyle, or replace them.
+Photograph them at lookbook quality: photogenic, defined features, natural skin texture
+with pores. Not CGI-smooth, not a beauty filter, not a different face.
 Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
-- one person, full-body standing lookbook, front-facing, slightly relaxed
+- one person, full-body standing Korean fashion lookbook
+- three-quarter stance, weight on one leg, one hand in a pocket, relaxed shoulders —
+  not a stiff frontal mannequin
 - keep the source photo's body proportions exactly. Do not lengthen the legs or torso,
   raise the waist, or shrink the head to make the model read taller.
 - frame for a 4:5 card crop: person vertically centered in the middle ~70% of the height
@@ -3685,8 +3689,9 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - keep the soft contact shadow under the shoes smooth. no banding, posterization,
   dithering, or blotchy patches anywhere in the backdrop or shadow
 - simple base garments already in the photo; do not invent logos or extra people
+- clothes wrap the body with gravity and natural folds — not pasted on
 - soft studio lighting, photorealistic contemporary Korean fashion lookbook
-- no text, watermark, collage, or thumbnail
+- no text, watermark, collage, thumbnail, brand name, or UI chrome
 """
 
 
@@ -3849,13 +3854,20 @@ CANONICAL CHARACTER:
 Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
-height impression, and neutral expression.
+and height impression.
+Keep the height and proportions of Image 1.
 Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
-do not de-age, age, beautify, slim, muscularize, or elongate the character.
-Keep Image 1's face, shoulders, and clothing silhouette.
+do not de-age, age, slim, muscularize, or elongate the character.
+Do not replace them with a different person or a celebrity.
 Fashion lookbooks often stretch the legs — shorten them slightly so the figure
 reads as a real adult, not an illustration. Crotch closer to mid-body. Do not
 go stocky. This is a small correction, not a new body.
+
+FACE:
+A better photograph of the same person — photogenic Korean lookbook face,
+well-defined features, catchlights in the eyes, natural lips.
+Skin must look real: visible pores, subtle texture, faint natural variation.
+No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
 Fashion mood is expressed through clothing, never by changing the person.
 
 OUTFIT:
@@ -3873,25 +3885,47 @@ Do not add logos, typography, graphics, extra pockets, zippers, stripes, or embr
 that are not visible in the wardrobe photos. If a wardrobe photo already has a print or logo, keep it.
 Collage, floating clothes, grids, and thumbnails are forbidden — only the dressed person.
 
+FIT:
+Clothes must look worn on a real body, not pasted onto a mannequin.
+Each garment wraps a three-dimensional body. Gravity, thickness, and contact
+with the body and with other layers must be visible.
+- Shoulder seams sit on the actual shoulders. Collars wrap the neck.
+  Sleeves follow the arm and crease naturally at the elbow.
+- Pants hang from the waist and hips with a real crotch. Long hems stack
+  slightly on the shoe. No painted-on legs.
+- Outerwear has weight. Inner layers compress underneath instead of floating.
+- Fabric-appropriate folds only: leather creases, cotton wrinkles, wool drapes.
+- A bag strap slightly depresses the shoulder. The bag hangs with weight.
+No hovering clothes, no melted fabric, no warped prints.
+
 STYLING:
 Requested mood: {mood_line}
 Occasion: {occasion_line}
 Season / Weather: not specified
 Additional user request: {request_line}
-Express the mood through clothing combination, silhouette, layering, fit, color, footwear, and accessories.
+Style like a contemporary Korean fashion lookbook: clean silhouette, intentional
+proportions, layers sitting correctly. Express the mood through combination,
+fit, color, footwear, and accessories — not by adding garments that are not listed.
 Do NOT express the mood by changing the character, hair, body, or background.
 
+POSE:
+Editorial Korean lookbook stance — not a stiff frontal mannequin, not a passport photo.
+Three-quarter body angle (about 15–30°), weight on the back leg, the other leg relaxed.
+One hand in a pocket or hanging naturally; if there is a bag, a hand may hold the strap.
+Head slightly turned, gaze near the camera, calm expression, relaxed shoulders.
+Full-body standing, both feet on the floor. Crown of hair, chin, and shoes fully visible.
+No walking, sitting, jumping, or dramatic fashion poses.
+Do not copy a rigid locked pose from Image 1. Keep the person; use a natural lookbook pose.
+
 COMPOSITION:
-Keep Image 1's standing pose, camera angle, studio lighting, gray studio,
+Keep Image 1's camera height, studio lighting, gray studio,
 gray studio floor, shadow, and color grading.
 Do not copy a tight head-to-toe crop from Image 1.
 Frame for a 4:5 lookbook card. The person is vertically centered.
 Leave about 15% of the frame empty above the hair and 15% empty below the shoes.
 The top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes.
 Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle 70%.
-One person, centered. Crown of hair, chin, and both feet fully visible.
-Keep the pose from the canonical: standing, front-facing, slightly relaxed.
-Small hand/arm shifts are allowed (pocket, holding a bag). No walking, sitting, crop, or dramatic pose.
+One person, centered.
 Reproduce Image 1's studio backdrop exactly — the same soft gray wall blending into the
 same floor, the same soft contact shadow under the shoes — and let it reach all four
 edges of the frame. One continuous backdrop: no second plate, letterbox, inset
@@ -3903,23 +3937,29 @@ White or light garments must keep buttons, collar, and fabric grain — no flash
 
 VISUAL STYLE:
 Premium contemporary Korean fashion lookbook photography.
-Photorealistic, minimal, clean, sophisticated, soft studio lighting,
+Photorealistic, minimal, clean, sophisticated, soft even studio lighting,
 natural skin texture, realistic fabric folds, natural body proportions.
 Avoid illustration, anime, 3D, CGI, overly smooth skin, cinematic lighting, heavy grading.
+
+NO TEXT OR UI:
+No brand names, no large typography on the backdrop, no heart icon,
+no UI chrome, no collage, no watermark.
+Do not paint any caption. The app adds its own credit.
 
 PRIORITY IF CONFLICTS:
 1. Character identity consistency
 2. Suggested item must be worn if listed
 3. User wardrobe item fidelity
-4. Natural garment fit
-5. Outfit coordination quality
-6. Requested fashion mood
-7. Photographic aesthetics
+4. Natural garment fit on the body
+5. Natural lookbook pose
+6. Outfit coordination quality
+7. Requested fashion mood
+8. Photographic aesthetics
 
 FINAL:
 The result must look like the exact same character from Image 1 photographed again
-in the same studio lookbook session, wearing a different outfit.
-Change the outfit. Do not change the person. Do not change the studio.
+in the same studio lookbook session, wearing a different outfit, in a natural pose.
+Change the outfit and the stance. Do not change the person. Do not change the studio.
 """
 
 
@@ -4318,7 +4358,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id15-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id16-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")

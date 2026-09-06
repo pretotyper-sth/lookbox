@@ -154,6 +154,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             boxSizing: 'border-box',
           }}
         />
+        <span className="lb-look-ai-mark">✦ AI로 생성</span>
       </div>
     );
   }
