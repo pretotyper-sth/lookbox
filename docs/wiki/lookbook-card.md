@@ -17,9 +17,10 @@ PC는 오늘 코디와 같은 왼쪽 사진·오른쪽 레일.
 `display:flex`로 켜면 애니가 다시 돈다. 옷장처럼 그대로 보이게 한다(2026-09-06).
 
 목록은 옷장과 같이 계정 캐시(`lb_lookbook_v1`)를 먼저 그린다. 서버는
-`GET /api/live/outfits?saved=1`로 저장된 코디만 먼저 받고, 오늘 기록용 전체
-목록은 뒤에서 덮는다. 예전에는 전체 `/outfits`가 실패하면 `.catch(() => null)`로
-룩북이 빈 채로 남았다(2026-09-06).
+`GET /api/live/outfits?saved=1`로 저장된 코디만 먼저 받는다. 착장 사진이 있으면
+옷장 join을 생략한다. 전체 `/outfits`(오늘 기록)는 룩북을 그린 뒤에 받는다.
+목록 fetch는 GPT가 아니다. 첫 방문이 느린 이유는 캐시 없음 + Render 기상 +
+예전엔 무거운 전체 목록을 같이 친 것(2026-09-06).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `SavedCard` `LookbookScreen`;
 `frontend/src/proto/04-screens-ab.jsx` 옷장 그리드;

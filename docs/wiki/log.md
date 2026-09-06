@@ -485,6 +485,12 @@ TodayCard·SavedCard·OutfitCard에서 `lb-anim-in`을 뺀다.
 근거: `frontend/src/proto/06-today.jsx` `TodayCard`;
 `frontend/src/proto/05-screens-cde.jsx` `SavedCard`. [[lookbook-card]]
 
+## [2026-09-06] fix | 룩북 첫 페인트에서 전체 outfits를 빼다
+저장분(`saved=1`)은 착장 URL만 있으면 옷장 join을 안 한다. 전체 목록은
+룩북을 그린 뒤에 받는다. 목록은 무료 모델이 아니다.
+근거: `backend/app/main.py` `_lookbook_list_payload`;
+`frontend/src/proto/09-app.jsx` `refreshLive`. [[lookbook-card]]
+
 
 
 

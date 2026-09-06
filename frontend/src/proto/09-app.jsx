@@ -1360,14 +1360,16 @@ function App() {
       return liveItems;
     })();
 
-    // 룩북은 저장된 코디만 먼저 받는다. 전체 /outfits(오늘 기록 포함)를 기다리지 않는다.
-    const savedP = liveJSON('/api/live/outfits?saved=1').then((data) => {
+    // 룩북을 전체 /outfits와 같이 치면 Render 한 워커를 나눠 스켈레톤이 길어진다.
+    // 저장분만 먼저 그리고, 오늘 기록용 전체 목록은 그다음에 받는다.
+    let savedOk = false;
+    try {
+      const data = await liveJSON('/api/live/outfits?saved=1');
       applyOutfitRecords(data);
       paintSavedLooks(data.outfits || [], mutAtStart);
       setLookbookLoading(false);
-      return true;
-    });
-    const allP = liveJSON('/api/live/outfits');
+      savedOk = true;
+    } catch (e) { /* 전체 목록이 이어서 채운다 */ }
 
     let liveItems = null;
     try {
@@ -1376,13 +1378,8 @@ function App() {
       showToast(e.message || '옷장을 불러오지 못했어요');
     }
 
-    let savedOk = false;
     try {
-      savedOk = !!(await savedP);
-    } catch (e) { /* 전체 목록이 이어서 채운다 */ }
-
-    try {
-      const outfitData = await allP;
+      const outfitData = await liveJSON('/api/live/outfits');
       hydrateOutfits(outfitData, liveItems, mutAtStart);
       setLookbookLoading(false);
     } catch (e) {

@@ -8128,39 +8128,73 @@ def live_list_outfits(
         .data
         or []
     )
+    if saved:
+        # 룩북 카드는 착장 사진만 있으면 된다. 옷장 아이템을 다시 읽으면
+        # 첫 페인트가 옷장보다 느려진다.
+        return _lookbook_list_payload(user.id, rows)
     item_ids = sorted({i for r in rows for i in (r.get("item_ids") or [])})
     items = _wardrobe_rows_by_ids(user.id, item_ids) if item_ids else []
+    return _outfits_with_items(rows, items)
+
+
+def _outfit_row_payload(
+    r: dict[str, Any], ids: list[str], wish: dict[str, Any] | None
+) -> dict[str, Any]:
+    meta = r.get("metadata") or {}
+    return {
+        "id": r["id"],
+        "label": r.get("label") or "코디",
+        "mood": r.get("mood") or "",
+        "styles": meta.get("styles") or [],
+        "itemIds": ids,
+        "lookImg": r.get("look_image_url"),
+        "wish": wish,
+        "saved": bool(r.get("saved")),
+        "wornAt": r.get("worn_at"),
+        "forDate": _outfit_for_date(r),
+        "manual": r.get("type") == "manual",
+        "createdAt": r.get("created_at"),
+    }
+
+
+def _outfits_with_items(rows: list[dict[str, Any]], items: list[dict[str, Any]]) -> dict[str, Any]:
     alive = {i["id"] for i in items}
-    out = []
+    out: list[dict[str, Any]] = []
     wish_items: list[dict[str, Any]] = []
     for r in rows:
         ids = [i for i in (r.get("item_ids") or []) if i in alive]
-        meta = r.get("metadata") or {}
-        # 제안 아이템(옷장에 없는 것)은 코디 메타에만 있다. 다시 가짜 아이템으로 복원해
-        # 저장해 둔 코디가 기기를 옮겨도 같은 모습으로 보이게 한다.
-        wish = _clean_wish(meta.get("wish"))
+        wish = _clean_wish((r.get("metadata") or {}).get("wish"))
         if wish:
             wish_id = f"wish-{r['id'][:8]}"
             wish_items.append(_wish_live_item(wish_id, wish))
             ids = [*ids, wish_id]
-        # 아이템이 지워져 반쪽이 된 코디는 보여줄 수 없다
         if len(ids) < 2:
             continue
-        out.append({
-            "id": r["id"],
-            "label": r.get("label") or "코디",
-            "mood": r.get("mood") or "",
-            "styles": meta.get("styles") or [],
-            "itemIds": ids,
-            "lookImg": r.get("look_image_url"),
-            "wish": wish,
-            "saved": bool(r.get("saved")),
-            "wornAt": r.get("worn_at"),
-            "forDate": _outfit_for_date(r),
-            "manual": r.get("type") == "manual",
-            "createdAt": r.get("created_at"),
-        })
+        out.append(_outfit_row_payload(r, ids, wish))
     return {"outfits": out, "items": [live_item_payload(i) for i in items] + wish_items}
+
+
+def _lookbook_list_payload(user_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """저장된 코디만. 착장이 있으면 옷장 join을 생략한다."""
+    need_ids: list[str] = []
+    ready: list[tuple[dict[str, Any], list[str], dict[str, Any] | None]] = []
+    pending: list[dict[str, Any]] = []
+    for r in rows:
+        ids = list(r.get("item_ids") or [])
+        wish = _clean_wish((r.get("metadata") or {}).get("wish"))
+        if wish:
+            ids = [*ids, f"wish-{r['id'][:8]}"]
+        if r.get("look_image_url"):
+            if len(ids) < 1:
+                continue
+            ready.append((r, ids, wish))
+            continue
+        need_ids.extend(r.get("item_ids") or [])
+        pending.append(r)
+    extra = _outfits_with_items(pending, _wardrobe_rows_by_ids(user_id, sorted(set(need_ids))) if need_ids else [])
+    out = [_outfit_row_payload(r, ids, wish) for r, ids, wish in ready]
+    out.extend(extra["outfits"])
+    return {"outfits": out, "items": extra["items"]}
 
 
 class LiveOutfitState(BaseModel):

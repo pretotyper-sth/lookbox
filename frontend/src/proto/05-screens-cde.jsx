@@ -677,7 +677,7 @@ function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSel
         <div style={{
           fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.3,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{items.length}개 품목 · {look.savedAt}</div>
+        }}>{(items.length || (outfit.itemIds || []).length)}개 품목 · {look.savedAt}</div>
       </button>
     </div>
   );
