@@ -445,6 +445,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 「룩북에서 빼기」와 같은 확인 시트.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`. [[lookbook-card]]
 
+## [2026-09-06] fix | 룩북 더보기를 옷장 시트와 맞춤
+가운데 제목+채운 버튼 대신 옷장처럼 썸네일 헤더와 테두리/테라코타 버튼.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`;
+`frontend/src/proto/02-shared.jsx` `ItemRemoveSheet`. [[lookbook-card]]
+
+
 
 
 
