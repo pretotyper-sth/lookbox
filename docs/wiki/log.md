@@ -402,4 +402,14 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 근거: `frontend/src/proto/09-app.jsx` `dailyCacheItemsFromOwned`;
 `backend/app/main.py` `persist_combo`. [[model-look-toggle]]
 
+## [2026-09-06] change | 신발은 코디마다 같은 켤레를 반복하지 않는다
+댄디·시크에서 첼시만 이기던 건 `max(shoe_score)` 탓이다. 맞는 신발 안에서
+이미 쓴 켤레를 감점하고, 격식 충돌이 큰 후보는 돌리지 않는다.
+근거: `backend/app/main.py` `_pick_rotating_shoe` `_rebalance_combo_shoes`.
+[[coord-clash]]
+
+## [2026-09-06] ops | 오늘 카드 UI는 main에 있어야 실서비스에 보인다
+Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고침이 안 먹는다.
+[[vercel-github-silent]]
+
 

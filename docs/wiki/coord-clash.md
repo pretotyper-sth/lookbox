@@ -6,7 +6,9 @@
 
 - 첼시·로퍼·구두 × 카고·조거·추리닝 → 강한 감점. 스니커가 이긴다
 - 셔츠·옥스퍼드 × 카고·조거 → 감점. 슬랙스·데님이 이긴다
-- GPT 경로(`_COORD_RULES`)에도 같은 금지를 적는다
+- 신발은 점수 1등만 고르지 않는다. 맞는 켤레 안에서 이미 쓴 것을 뒤로 민다
+  (`_pick_rotating_shoe`, 2026-09-06). 카고에 첼시를 넣기 위해 돌리지는 않는다
+- GPT 경로(`_COORD_RULES`)에도 같은 금지와 신발 순환을 적는다
 
 근거: `backend/app/main.py` `_pair_clash`, `_COORD_RULES`;
 `backend/tests/test_coord_sense.py` `test_chelsea_loses_to_sneaker_on_cargo`.

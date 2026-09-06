@@ -551,6 +551,11 @@ function TodayScreen({ ctx }) {
   );
 
   const shown = isToday ? picks : uniqueDailyOutfits((pastRecord && pastRecord.outfits) || []);
+  shown.forEach((o, i) => {
+    if (!o) return;
+    o.cardTitle = `추천 코디 ${i + 1}`;
+    if (LB_DATA.OUTFIT_BY_ID[o.id]) LB_DATA.OUTFIT_BY_ID[o.id].cardTitle = o.cardTitle;
+  });
   const lookCap = LOOK_TEST_LIMIT || 0;
   const lookBusyId = (isToday && modelLook && (lookCap <= 0 || shown.filter((x) => x.lookImg).length < lookCap))
     ? (shown.find((x) => !x.lookImg) || {}).id

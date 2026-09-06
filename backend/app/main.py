@@ -2827,6 +2827,7 @@ _COORD_RULES = """감각 규칙(이걸 지켜야 '그냥 되는 조합'이 아�
 - 격식(formality): 한 코디 안에서 차이가 2를 넘으면 안 된다. 격식 4~5 하의에 격식 1 운동화·트레이닝 금지.
 - 신발은 하의의 격식에 맞춘다. 카고·조거·추리닝·스웨트팬츠에는 스니커·러닝화만.
   첼시 부츠·로퍼·구두·더비는 슬랙스·치노·데님·스커트에만.
+  옷장에 신발이 여러 켤레면 코디마다 같은 신발을 반복하지 말고 번갈아 쓴다.
 - 셔츠·옥스퍼드·블라우스에는 슬랙스·치노·데님. 카고·조거·트레이닝과 붙이지 말 것.
 - '기술적으론 입는다'가 아니라 이 사람이 실제로 입고 나갈 법한지만 본다.
   패션 테러리스트 조합(셔츠+카고+첼시 같은)은 점수를 채워도 내지 말 것.
@@ -3337,31 +3338,118 @@ def _fill_wish_quota(
     _pin_wishes_to_tail(combos, wish_combos, by_id)
 
 
+_SHOE_ROTATE_SLACK = 3.0
+_SHOE_ROTATE_PENALTY = 3.5
+
+
+def _combo_shoe_id(ids: list[str], by_id: dict[str, Any]) -> str | None:
+    for item_id in ids:
+        it = by_id.get(item_id)
+        if it and _item_bucket(it) == "shoes":
+            return item_id
+    return None
+
+
+def _shoe_pair_score(
+    shoe: dict[str, Any],
+    top: dict[str, Any] | None,
+    bottom: dict[str, Any] | None,
+    profile: dict[str, Any] | None,
+) -> float:
+    score = 0.0
+    if bottom:
+        score += _pair_score(bottom, shoe, profile)
+    if top:
+        score += _pair_score(top, shoe, profile)
+    return score
+
+
+def _pick_rotating_shoe(
+    shoes: list[dict[str, Any]],
+    top: dict[str, Any] | None,
+    bottom: dict[str, Any] | None,
+    profile: dict[str, Any] | None,
+    used_counts: dict[str, int] | None = None,
+) -> dict[str, Any] | None:
+    """맞는 신발 중에서 이미 많이 쓴 켤레를 뒤로 미룬다.
+
+    격식 충돌이 큰 후보는 후보에서 빼서, 카고에 첼시를 억지로 넣지 않는다.
+    """
+    if not shoes:
+        return None
+    used_counts = used_counts or {}
+    ranked = [(sh, _shoe_pair_score(sh, top, bottom, profile)) for sh in shoes]
+    best = max(score for _sh, score in ranked)
+    pool = [(sh, score) for sh, score in ranked if score >= best - _SHOE_ROTATE_SLACK]
+    return max(
+        pool,
+        key=lambda row: row[1] - _SHOE_ROTATE_PENALTY * used_counts.get(row[0]["id"], 0),
+    )[0]
+
+
+def _combo_top_bottom(
+    ids: list[str], by_id: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    top = next((by_id[i] for i in ids if _item_bucket(by_id[i]) in ("top", "dress", "outer")), None)
+    bottom = next((by_id[i] for i in ids if _item_bucket(by_id[i]) in ("bottom", "dress")), None)
+    return top, bottom
+
+
 def _ensure_core_slots(
     combo: dict[str, Any],
     by_id: dict[str, Any],
     extras: list[dict[str, Any]],
     want_accent: bool,
     profile: dict[str, Any] | None = None,
+    used_shoes: dict[str, int] | None = None,
 ) -> None:
     """상의·하의 다음에 신발을 붙이고, 단조로움을 피하려고 소품을 가끔 더한다."""
     ids = [i for i in (combo.get("item_ids") or []) if i in by_id]
     if not _combo_has_category(ids, by_id, ("shoes", "신발")):
         shoes = [it for it in by_id.values() if _item_bucket(it) == "shoes"]
         if shoes:
-            bottom = next(
-                (by_id[i] for i in ids if _item_bucket(by_id[i]) in ("bottom", "dress")),
-                None,
-            )
-            shoe = max(shoes, key=lambda sh: _pair_score(bottom, sh, profile)) if bottom else shoes[0]
-            if shoe["id"] not in ids:
+            top, bottom = _combo_top_bottom(ids, by_id)
+            shoe = _pick_rotating_shoe(shoes, top, bottom, profile, used_shoes)
+            if shoe and shoe["id"] not in ids:
                 ids.append(shoe["id"])
+                if used_shoes is not None:
+                    used_shoes[shoe["id"]] = used_shoes.get(shoe["id"], 0) + 1
     if want_accent and not any(_is_accent(by_id[i]) for i in ids if i in by_id):
         pool = [e for e in extras if e.get("id") not in ids]
         if pool:
             salt = sum(ord(c) for c in "".join(ids))
             ids.append(pool[salt % len(pool)]["id"])
     combo["item_ids"] = ids[:5]
+
+
+def _rebalance_combo_shoes(
+    combos: list[dict[str, Any]],
+    by_id: dict[str, Any],
+    profile: dict[str, Any] | None,
+) -> None:
+    """이미 붙은 신발이 한 켤레로 몰리면, 맞는 다른 켤레로 갈아 끼운다."""
+    shoes = [it for it in by_id.values() if _item_bucket(it) == "shoes"]
+    if len(shoes) < 2:
+        return
+    used: dict[str, int] = {}
+    for combo in combos:
+        sid = _combo_shoe_id(combo.get("item_ids") or [], by_id)
+        if sid:
+            used[sid] = used.get(sid, 0) + 1
+    for combo in combos:
+        ids = [i for i in (combo.get("item_ids") or []) if i in by_id]
+        sid = _combo_shoe_id(ids, by_id)
+        if not sid or used.get(sid, 0) <= 1:
+            continue
+        if used[sid] <= min(used.get(sh["id"], 0) for sh in shoes) + 1:
+            continue
+        top, bottom = _combo_top_bottom(ids, by_id)
+        alt = _pick_rotating_shoe(shoes, top, bottom, profile, used)
+        if not alt or alt["id"] == sid:
+            continue
+        used[sid] -= 1
+        used[alt["id"]] = used.get(alt["id"], 0) + 1
+        combo["item_ids"] = [alt["id"] if i == sid else i for i in (combo.get("item_ids") or [])]
 
 
 def _finish_combos(
@@ -3373,10 +3461,16 @@ def _finish_combos(
     """추천 결과를 입을 수 있는 코디로 맞춘다: 신발 필수, 소품 섞기, wish는 맨 뒤."""
     by_id = {item["id"]: item for item in items}
     extras = [it for it in items if _is_accent(it)]
+    used_shoes: dict[str, int] = {}
+    for combo in combos:
+        sid = _combo_shoe_id(combo.get("item_ids") or [], by_id)
+        if sid:
+            used_shoes[sid] = used_shoes.get(sid, 0) + 1
     for combo in combos:
         ids = combo.get("item_ids") or []
         want = (sum(ord(c) for c in "".join(ids)) % 5) != 0
-        _ensure_core_slots(combo, by_id, extras, want, profile)
+        _ensure_core_slots(combo, by_id, extras, want, profile, used_shoes)
+    _rebalance_combo_shoes(combos, by_id, profile)
     _fill_wish_quota(combos, wish_combos, by_id)
     ok = [
         c for c in combos
@@ -3530,15 +3624,21 @@ def fallback_combos(
     decent = [p for p in pairs if p[2] >= -1.5]
     walk = decent if len(decent) >= max_combos else pairs
     used_tops: dict[str, int] = {}
+    used_shoes: dict[str, int] = {}
+    for key in exclude_keys or ():
+        for item_id in key:
+            it = by_id.get(item_id)
+            if it and _item_bucket(it) == "shoes":
+                used_shoes[item_id] = used_shoes.get(item_id, 0) + 1
     for t, b, _score in walk:
         seen_count = used_tops.get(t["id"], 0)
         if seen_count and len(combos) < max_combos - 1:
             continue  # 다른 상의를 먼저 보여준다
         ids = [t["id"], b["id"]]
         if shoes:
-            def shoe_score(sh: dict[str, Any]) -> float:
-                return _pair_score(b, sh, profile) + _pair_score(t, sh, profile)
-            ids.append(max(shoes, key=shoe_score)["id"])
+            shoe = _pick_rotating_shoe(shoes, t, b, profile, used_shoes)
+            if shoe:
+                ids.append(shoe["id"])
         if extras and (sum(ord(c) for c in "".join(ids)) % 5) != 0:
             extra = extras[len(combos) % len(extras)]
             if extra["id"] not in ids:
@@ -3547,6 +3647,9 @@ def fallback_combos(
         _push(ids, f"추천 코디 {len(combos) + 1}")
         if len(combos) > before:
             used_tops[t["id"]] = seen_count + 1
+            sid = _combo_shoe_id(ids, by_id)
+            if sid:
+                used_shoes[sid] = used_shoes.get(sid, 0) + 1
         if len(combos) >= max_combos:
             return combos
 
@@ -3555,7 +3658,9 @@ def fallback_combos(
     for d in dresses:
         ids = [d["id"]]
         if shoes:
-            ids.append(shoes[0]["id"])
+            shoe = _pick_rotating_shoe(shoes, d, d, profile, used_shoes)
+            if shoe:
+                ids.append(shoe["id"])
         if extras and extras[0]["id"] not in ids:
             ids.append(extras[0]["id"])
         if len(ids) >= 2:

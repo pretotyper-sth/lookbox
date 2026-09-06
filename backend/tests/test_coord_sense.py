@@ -13,12 +13,14 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
+    "_shoe_pair_score", "_pick_rotating_shoe",
 )
 CONSTS = (
     "_STYLE_IDS", "_FITS", "_PATTERNS", "_MATERIALS", "_PC_GUIDE",
     "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS",
     "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
     "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_ATH_TOP",
+    "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY",
 )
 
 
@@ -93,6 +95,7 @@ class StyleAttrTest(unittest.TestCase):
         rules = MAIN_PATH.read_text()
         self.assertIn("첼시 부츠", rules)
         self.assertIn("패션 테러리스트", rules)
+        self.assertIn("같은 신발을 반복하지 말고", rules)
         self.assertIn("first_ms=", rules)
 
 
@@ -137,6 +140,41 @@ class PairScoreTest(unittest.TestCase):
         cargo = item(cat="bottom", color="블랙", name="카고 팬츠", subtype="카고 팬츠")
         slacks = item(cat="bottom", color="블랙", name="슬랙스", subtype="슬랙스")
         self.assertGreater(self.score(shirt, slacks, None), self.score(shirt, cargo, None))
+
+
+class ShoeRotateTest(unittest.TestCase):
+    def setUp(self):
+        self.ns = load()
+        self.pick = self.ns["_pick_rotating_shoe"]
+
+    def test_second_look_uses_the_other_shoe(self):
+        shirt = item(cat="top", color="화이트", name="옥스퍼드 셔츠", subtype="셔츠")
+        slacks = item(cat="bottom", color="네이비", name="슬랙스", subtype="슬랙스")
+        chelsea = {
+            **item(cat="shoes", color="블랙", name="미니멀 스퀘어토 집업 첼시 부츠", subtype="첼시 부츠"),
+            "id": "sh-chelsea",
+        }
+        sneaker = {
+            **item(cat="shoes", color="블랙", name="아디다스 삼바"),
+            "id": "sh-samba",
+        }
+        first = self.pick([chelsea, sneaker], shirt, slacks, None, {})
+        second = self.pick([chelsea, sneaker], shirt, slacks, None, {first["id"]: 1})
+        self.assertNotEqual(second["id"], first["id"])
+
+    def test_rotate_does_not_force_chelsea_on_cargo(self):
+        hoodie = item(cat="top", color="블랙", name="후디", subtype="후디")
+        cargo = item(cat="bottom", color="블랙", name="와이드 카고 팬츠", subtype="카고 팬츠")
+        chelsea = {
+            **item(cat="shoes", color="블랙", name="미니멀 첼시 부츠", subtype="첼시 부츠"),
+            "id": "sh-chelsea",
+        }
+        sneaker = {
+            **item(cat="shoes", color="블랙", name="아디다스 삼바"),
+            "id": "sh-samba",
+        }
+        picked = self.pick([chelsea, sneaker], hoodie, cargo, None, {sneaker["id"]: 2})
+        self.assertEqual(picked["id"], sneaker["id"])
 
 
 class IncludeAndWishTest(unittest.TestCase):

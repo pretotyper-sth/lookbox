@@ -341,7 +341,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
   if (!isOutfit && !(item && item.img)) return null;
 
   const title = isOutfit
-    ? (outfit.label || '코디')
+    ? (outfit.cardTitle || outfit.label || '코디')
     : (item.name || '옷');
   const subtitle = isOutfit
     ? [outfit.styleLabel || outfit.mood, outfitItems.length ? `${outfitItems.length}개 조합` : ''].filter(Boolean).join(' · ')
@@ -453,7 +453,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           ) : null}
           {subtitle ? (
             <div style={{
-              fontSize: 12.5, marginTop: 3, opacity: 0.68,
+              fontSize: 12.5, marginTop: 2, lineHeight: 1.3, opacity: 0.68,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{subtitle}</div>
           ) : null}

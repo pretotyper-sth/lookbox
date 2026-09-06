@@ -16,7 +16,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 오늘 카드는 `추천 코디 N`. wish는 캐시 items+고정 id. `LOOK_TEST_LIMIT=1`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
-- [coord-clash](coord-clash.md) — 셔츠+카고+첼시 같은 격식 충돌을 이름 키워드로 감점. GPT 규칙에도 같은 금지
+- [coord-clash](coord-clash.md) — 셔츠+카고+첼시 감점. 신발은 맞는 켤레 안에서 돌아가며 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 배경을 단색으로 맞추길 포기하고 후처리를 자르기만 남겼다
 - [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일. 레일 카드는 같은 폭. 품목 줄 높이는 62px로 통일
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: gpt-image-2 high, 서버 마스크 4장, 캐시 `tryon5-`, 차콜 반팔. 착장은 옷만, 상의/하의/전체에서만 카메라
