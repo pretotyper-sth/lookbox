@@ -14,6 +14,7 @@
 
 사용량은 계정별 `lb_billing_v1` 캐시를 먼저 그리고 `/api/live/billing`이 오면 덮는다.
 `jsharrykim@gmail.com`만 잔액이 0이면 지급분 50을 다시 넣는다(차감은 그대로 보임).
+바로 보기 월 한도에 걸려도 횟수를 지우고 다시 생성한다.
 
 버전은 페이지 맨 아래 `RealCloset v1.0.0 · {날짜}`만. 커밋 해시는 안 넣는다
 (`frontend/vite.config.js` `__BUILD_DATE__`). PC는 설정 | 계정 2열.

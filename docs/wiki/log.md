@@ -521,6 +521,11 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 캐시 `|flat7` `|flat1`.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_NUDGE_Y`. [[look-flatlay-overlap]]
 
+## [2026-09-06] change | 바로 보기 캐시 tryon6, 어드민은 한도 리셋
+캐시를 한 번 올린다. `jsharrykim@gmail.com`은 월 2회에 걸려도 횟수를 지우고 다시 만든다.
+근거: `backend/app/main.py` `ensure_within_limit` `_reset_free_action_usage`.
+[[tryon-setup-from-mypage]] [[mypage-usage-in-account]]
+
 
 
 

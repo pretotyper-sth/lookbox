@@ -91,7 +91,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon5-", chunk)
+        self.assertIn("tryon6-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)

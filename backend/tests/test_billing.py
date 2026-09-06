@@ -79,6 +79,14 @@ class PlanShapeTest(unittest.TestCase):
         # 반대로 코디 이미지처럼 매번 새로 그리는 건 크레딧을 받는다
         self.assertIn("model_look", self.ns["CREDIT_COSTS"])
 
+    def test_admin_tryon_resets_monthly_limit(self):
+        src = MAIN_PATH.read_text()
+        start = src.index("def ensure_within_limit")
+        chunk = src[start:start + 900]
+        self.assertIn("_reset_free_action_usage", chunk)
+        self.assertIn('action == "tryon_body"', chunk)
+        self.assertIn("_is_admin_credit_email", chunk)
+
     def test_tryon_cache_is_checked_before_monthly_limit(self):
         src = MAIN_PATH.read_text()
         start = src.index("def live_tryon_body")

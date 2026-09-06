@@ -998,7 +998,7 @@ function App() {
         tryOnBody: body || '',
         tryOnFrame: frame || '',
         tryOnCut: cut || '',
-        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon5') : '',
+        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon6') : '',
         tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
       };
       persistPrefs(np);
@@ -1045,7 +1045,7 @@ function App() {
           tryOnBody: url,
           tryOnFrame: url,
           tryOnCut: 'auto',
-          tryOnRev: window.TRYON_BODY_REV || 'tryon5',
+          tryOnRev: window.TRYON_BODY_REV || 'tryon6',
           tryOnAssets: assets,
         };
         persistPrefs(np);
@@ -1104,7 +1104,7 @@ function App() {
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
-    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon5')) {
+    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon6')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (prefs.avatar) {
         const made = await makeTryOnBody();

@@ -654,6 +654,7 @@ PLANS: dict[str, dict[str, Any]] = {
 DEFAULT_PLAN = "free"
 
 # 테스트용 어드민. 이 계정만 잔액이 0이 되면 이번 달 지급분(50)을 다시 넣는다.
+# 바로 보기 월 한도에 걸려도 횟수를 지우고 다시 만들 수 있다.
 # 차감은 그대로 보여 주고, 막혀서 실험을 못 하는 일만 막는다.
 ADMIN_CREDIT_EMAILS = frozenset({"jsharrykim@gmail.com"})
 
@@ -890,10 +891,31 @@ def monthly_count(user_id: str, action: str) -> int:
     )
 
 
-def ensure_within_limit(user_id: str, action: str) -> None:
+def _reset_free_action_usage(user_id: str, action: str) -> None:
+    """이번 달 무료 횟수 기록을 지운다. 어드민 바로 보기 재시험용."""
+    period = _period_key()
+    try:
+        ids = [
+            r.get("id") for r in _ledger_rows(user_id, period)
+            if r.get("id")
+            and r.get("reason") == action
+            and (r.get("metadata") or {}).get("period") == period
+        ]
+        for rid in ids:
+            supabase_admin.table("credit_ledger").delete().eq("id", rid).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] reset {action} failed: {exc}", flush=True)
+
+
+def ensure_within_limit(user_id: str, action: str, email: str | None = None) -> None:
     """무료지만 원가가 있는 작업의 월 상한. 넘으면 막는다(어뷰징 차단용)."""
     limit = MONTHLY_LIMITS.get(action, 0)
     if not limit:
+        return
+    em = (email or "").strip().lower() or _profile_email(user_id)
+    if action == "tryon_body" and _is_admin_credit_email(em):
+        if monthly_count(user_id, action) >= limit:
+            _reset_free_action_usage(user_id, action)
         return
     if monthly_count(user_id, action) >= limit:
         raise HTTPException(
@@ -7229,7 +7251,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon5-{sig}"
+    key = f"tryon6-{sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7251,7 +7273,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 assets["body"] = body_url
                 return {"imageUrl": body_url, "assets": assets, "cached": True}
 
-        ensure_within_limit(uid, "tryon_body")
+        ensure_within_limit(uid, "tryon_body", email=user.email)
         if not openai_client:
             raise HTTPException(status_code=503, detail=_TRYON_FAIL_MSG["no_openai"])
 
@@ -7306,7 +7328,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon5",
+                        "mask": "tryon6",
                         "assets": urls,
                     },
                 }).execute()
