@@ -491,6 +491,10 @@ TodayCard·SavedCard·OutfitCard에서 `lb-anim-in`을 뺀다.
 근거: `backend/app/main.py` `_lookbook_list_payload`;
 `frontend/src/proto/09-app.jsx` `refreshLive`. [[lookbook-card]]
 
+## [2026-09-06] fix | 상품컷 플랫레이 크기를 한 덩어리로 맞춤
+3장은 작고 4장은 커 보였다. 그린 뒤 bbox를 카드의 78%로 맞춰 여백을 통일한다.
+근거: `frontend/src/proto/05-screens-cde.jsx` `packLookRects`. [[look-flatlay-overlap]]
+
 
 
 
