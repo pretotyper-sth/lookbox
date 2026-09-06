@@ -31,9 +31,12 @@ const LOOK_SIZE = {
   '액세서리': 16, // 구버전 데이터 호환
 };
 /* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
-   벽에 붙고 잘린다. 1.16이면 상의·하의가 겹치면서도 가장자리 여백이 남는다. */
+   벽에 붙고 잘린다. 1.16이면 상의·하의가 겹치면서도 가장자리 여백이 남는다.
+   개수마다 덩어리 크기가 달라져 3장은 작고 4장은 커 보인다. 그린 뒤
+   LOOK_PACK 비율로 한 덩어리를 맞춘다. */
 const LOOK_SCALE = 1.16;
 const LOOK_PAD = 12;
+const LOOK_PACK = 0.78;
 
 /* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
    이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
@@ -217,6 +220,31 @@ function loadLookImage(src) {
   });
 }
 
+function packLookRects(rects, w, h) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  rects.forEach((r) => {
+    minX = Math.min(minX, r.x);
+    minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.dw);
+    maxY = Math.max(maxY, r.y + r.dh);
+  });
+  const bw = Math.max(1, maxX - minX);
+  const bh = Math.max(1, maxY - minY);
+  const s = Math.min((w * LOOK_PACK) / bw, (h * LOOK_PACK) / bh);
+  const ox = w / 2 - ((minX + maxX) / 2) * s;
+  const oy = h / 2 - ((minY + maxY) / 2) * s;
+  return rects.map((r) => ({
+    ...r,
+    x: r.x * s + ox,
+    y: r.y * s + oy,
+    dw: r.dw * s,
+    dh: r.dh * s,
+  }));
+}
+
 function flattenLookBoard(items, place, scale, ratio) {
   const w = 720;
   const h = Math.round(w / parseLookRatio(ratio));
@@ -231,7 +259,7 @@ function flattenLookBoard(items, place, scale, ratio) {
       .filter((x) => x.im)
       .sort((a, b) => a.z - b.z);
     if (layered.length !== items.length) return '';
-    layered.forEach(({ it, im }) => {
+    const rects = layered.map(({ it, im }) => {
       const at = place[it.id] || LOOK_SPOT.top;
       const size = lookItemSize(it, scale);
       const zoom = lookImageZoom(it.category);
@@ -241,7 +269,10 @@ function flattenLookBoard(items, place, scale, ratio) {
       const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
       const dw = im.naturalWidth * s;
       const dh = im.naturalHeight * s;
-      drawLookCutout(ctx, im, cx - dw / 2, cy - dh / 2, dw, dh);
+      return { im, x: cx - dw / 2, y: cy - dh / 2, dw, dh };
+    });
+    packLookRects(rects, w, h).forEach((r) => {
+      drawLookCutout(ctx, r.im, r.x, r.y, r.dw, r.dh);
     });
     try {
       return canvas.toDataURL('image/png');
@@ -257,7 +288,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat3';
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat4';
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
