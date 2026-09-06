@@ -499,6 +499,11 @@ TodayCard·SavedCard·OutfitCard에서 `lb-anim-in`을 뺀다.
 다시 받기·오늘 입기를 빼지 않고 흐리게 둔다. 누르면 같은 토스트.
 근거: `frontend/src/proto/06-today.jsx` `TodayScreen`. [[model-look-toggle]]
 
+## [2026-09-06] change | 상품컷 덩어리를 옛 2번 카드의 95%로
+LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드에 가깝게.
+캐시 `|flat5`.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LOOK_PACK`. [[look-flatlay-overlap]]
+
 
 
 

@@ -33,10 +33,11 @@ const LOOK_SIZE = {
 /* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
    벽에 붙고 잘린다. 1.16이면 상의·하의가 겹치면서도 가장자리 여백이 남는다.
    개수마다 덩어리 크기가 달라져 3장은 작고 4장은 커 보인다. 그린 뒤
-   LOOK_PACK 비율로 한 덩어리를 맞춘다. */
+   LOOK_PACK 비율로 한 덩어리를 맞춘다. 0.86은 바꾸기 전 4개짜리 2번 카드
+   (칸을 거의 채우던 크기)의 약 95%다. */
 const LOOK_SCALE = 1.16;
 const LOOK_PAD = 12;
-const LOOK_PACK = 0.78;
+const LOOK_PACK = 0.86;
 
 /* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
    이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
@@ -288,7 +289,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat4';
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat5';
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {

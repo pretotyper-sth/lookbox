@@ -5,6 +5,7 @@
 후보(`LOOK_ACC_CANDIDATES`)로 간다. 구분은 자리로만 한다. 흰 발광·테두리는
 선글라스처럼 이질감이 나서 그리지 않는다(2026-09-06).
 개수가 다르면 덩어리 크기가 달라 3장은 작고 4장은 커 보인다. `flattenLookBoard`가
-그린 뒤 bbox를 `LOOK_PACK`(0.78)로 맞춘다. 캐시 키 `|flat4`(2026-09-06).
+그린 뒤 bbox를 `LOOK_PACK`(0.86)로 맞춘다. 0.86은 통일 전 4개짜리 2번 카드의
+약 95%. 캐시 키 `|flat5`(2026-09-06).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `lookPlacement` `drawLookCutout`.
