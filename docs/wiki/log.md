@@ -440,6 +440,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 `frontend/src/proto/05-screens-cde.jsx` `DetailScreen`.
 [[detail-wide-layout]] [[lookbook-card]]
 
+## [2026-09-06] fix | 룩북 선택 해제 시 기본 화면·더보기 빼기
+고른 코디가 없으면 선택 모드를 끄고 +직접 만들기를 다시 보여 준다. 더보기에
+「룩북에서 빼기」와 같은 확인 시트.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`. [[lookbook-card]]
+
+
 
 
 

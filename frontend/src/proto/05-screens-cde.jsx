@@ -836,6 +836,7 @@ function LookbookScreen({ ctx }) {
   const [selectMode, setSelectMode] = useSc(false);
   const [hoverId, setHoverId] = useSc(null);
   const [bulkAsk, setBulkAsk] = useSc(false);
+  const [askIds, setAskIds] = useSc(null);
   // 수동 조합도 추천과 같은 기준(상의+하의)이 필요해서, 옷장이 준비됐을 때만 연다.
   const canMake = hasWardrobe && (items || []).length >= 2;
   const openMake = () => setMakeOpen(true);
@@ -846,11 +847,17 @@ function LookbookScreen({ ctx }) {
   // 선택 중에는 개수 자리를 안내 문구가 대신한다. 문구를 따로 한 줄 깔면 켤 때마다
   // 아래 카드가 밀려서, 옷장처럼 자리는 그대로 두고 글자만 바뀌게 한다.
   const countLabel = inSelectUx ? '코디를 눌러 고르세요' : saved.length + '개';
-  const toggleSel = (id) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
-  const exitSelectMode = () => { setSel([]); setSelectMode(false); setBulkAsk(false); };
-  const runBulkUnsave = () => { bulkUnsave(sel); exitSelectMode(); };
+  const toggleSel = (id) => setSel((arr) => {
+    const next = arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+    if (next.length === 0) setSelectMode(false);
+    return next;
+  });
+  const exitSelectMode = () => { setSel([]); setSelectMode(false); setBulkAsk(false); setAskIds(null); };
+  const askList = askIds || sel;
+  const askCount = askList.length;
+  const runBulkUnsave = () => { bulkUnsave(askList); exitSelectMode(); };
   // 직접 만든 코디가 섞여 있으면 되돌릴 수 없다는 걸 확인 단계에서 알려준다.
-  const manualCount = sel.filter((id) => {
+  const manualCount = askList.filter((id) => {
     const lk = saved.find((l) => l.id === id);
     return lk && (LB_DATA.OUTFIT_BY_ID[lk.outfitId] || {}).manual;
   }).length;
@@ -986,7 +993,7 @@ function LookbookScreen({ ctx }) {
             backdropFilter: 'blur(10px)',
           }}>
             <span className="tnum" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>{selCount}개 선택됨</span>
-            <button onClick={() => setSel([])} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px' }}>선택 해제</button>
+            <button onClick={exitSelectMode} style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px' }}>선택 해제</button>
             <Btn size="sm" icon="x" onClick={() => setBulkAsk(true)}
               style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: '7px 12px' }}>룩북에서 빼기</Btn>
           </div>
@@ -1006,6 +1013,11 @@ function LookbookScreen({ ctx }) {
                 setRenameVal(moreLook.label || '');
                 setMoreLook(null);
               }}>이름 수정하기</Btn>
+              <Btn full size="lg" icon="x" onClick={() => {
+                setAskIds([moreLook.id]);
+                setMoreLook(null);
+                setBulkAsk(true);
+              }} style={{ background: '#B0573C', color: '#fff' }}>룩북에서 빼기</Btn>
               <Btn full variant="ghost" onClick={() => setMoreLook(null)}>취소</Btn>
             </div>
           </div>
@@ -1051,9 +1063,11 @@ function LookbookScreen({ ctx }) {
         )}
       </BottomSheet>
 
-      <BottomSheet open={bulkAsk} onClose={() => setBulkAsk(false)}>
+      <BottomSheet open={bulkAsk} onClose={() => { setBulkAsk(false); setAskIds(null); }}>
         <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 {selCount}개를 룩북에서 뺄까요?</h3>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+            {askCount > 1 ? `선택한 ${askCount}개를 룩북에서 뺄까요?` : '룩북에서 뺄까요?'}
+          </h3>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
             {manualCount > 0
               ? <>직접 만든 코디 {manualCount}개가 있어요. 다른 곳에 남지 않아 <b style={{ color: 'var(--ink)', fontWeight: 700 }}>되돌릴 수 없어요.</b></>
