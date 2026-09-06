@@ -2255,9 +2255,16 @@ function App() {
     return { done, failed, skipped };
   };
 
-  const openDetail = (look, looks, label) => {
+  const openDetail = (look, looks, label, opts) => {
     setDetailLook(look);
-    setDetailList(looks && looks.length ? { looks, label: label || '다른 코디' } : null);
+    const fromLookbook = !!(opts && opts.fromLookbook);
+    if (looks && looks.length) {
+      setDetailList({ looks, label: label || (fromLookbook ? '룩북의 다른 코디' : '다른 코디'), fromLookbook });
+    } else {
+      setDetailList(fromLookbook
+        ? { looks: savedLooks, label: label || '룩북의 다른 코디', fromLookbook: true }
+        : null);
+    }
     setView('detail');
   };
   const gotoLook = (dir) => {
@@ -2333,7 +2340,7 @@ function App() {
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
     detailLooks: (detailList && detailList.looks) || savedLooks,
     detailListLabel: (detailList && detailList.label) || '룩북의 다른 코디',
-    detailFromLookbook: !detailList,
+    detailFromLookbook: detailList ? !!detailList.fromLookbook : true,
     detailIndex: ((detailList && detailList.looks) || savedLooks).findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: ((detailList && detailList.looks) || savedLooks).length, gotoLook,
     hasWardrobe: comboReady,

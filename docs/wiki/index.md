@@ -19,7 +19,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
 - [coord-clash](coord-clash.md) — 셔츠+카고+첼시 감점. 신발은 맞는 켤레 안에서 돌아가며 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
-- [detail-wide-layout](detail-wide-layout.md) — 데스크탑 코디 상세: 왼쪽 사진, 오른쪽에 가로 한 줄 코디 레일. 레일 카드는 같은 폭. 품목 줄 높이는 62px로 통일
+- [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: gpt-image-2 high, 서버 마스크 4장, 캐시 `tryon5-`, 차콜 반팔. 착장은 옷만, 상의/하의/전체에서만 카메라
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋

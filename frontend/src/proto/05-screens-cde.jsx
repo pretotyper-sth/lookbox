@@ -956,7 +956,7 @@ function LookbookScreen({ ctx }) {
                   onMouseLeave={() => wide && setHoverId((h) => (h === lk.id ? null : h))}>
                   <SavedCard
                     look={lk}
-                    onOpen={() => (inSelectUx ? toggleSel(lk.id) : openDetail(lk))}
+                    onOpen={() => (inSelectUx ? toggleSel(lk.id) : openDetail(lk, saved, '룩북의 다른 코디', { fromLookbook: true }))}
                     onMore={(look) => setMoreLook(look)}
                     selected={on}
                     showSel={wide ? (on || inSelectUx || hoverId === lk.id) : (selectMode || on)}
@@ -1322,40 +1322,38 @@ function DetailScreen({ ctx }) {
         <div className="lb-scrollable" style={{ flex: 1,  padding: 'var(--gap-header) 0 40px' }}>
           <div style={{
             display: 'grid', gap: 28, alignItems: 'start', padding: '0 22px',
-            gridTemplateColumns: multi ? 'minmax(300px, 400px) minmax(0, 1fr)' : 'minmax(300px, 440px)',
-            justifyContent: multi ? 'start' : 'center',
+            gridTemplateColumns: 'minmax(300px, 400px) minmax(0, 1fr)',
+            justifyContent: 'start',
           }}>
             <div key={detailLook.id} className="lb-anim-in">
-              {multi ? surface(photoBlock) : card}
+              {surface(photoBlock)}
             </div>
-            {multi ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>{detailListLabel}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>{detailIndex + 1} / {detailTotal}</span>
-                    <RailPageBtn dir={-1} />
-                    <RailPageBtn dir={1} />
-                  </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>{detailListLabel}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="tnum" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)' }}>{detailIndex + 1} / {detailTotal}</span>
+                  <RailPageBtn dir={-1} />
+                  <RailPageBtn dir={1} />
                 </div>
-                {/* 코디가 늘면 세로로 쌓지 않고 이 줄에 가로로 붙는다. 넘치면 화살표로 넘긴다. */}
-                <div ref={railRef} onScroll={syncRail} className="lb-scrollable" style={{
-                  display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
-                  scrollBehavior: 'smooth', padding: '2px 0 4px',
-                }}>
-                  {looks.map((lk) => (
-                    // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전
-                    // auto-fill 그리드가 한 칸에 줄 수 있던 최대 폭이라, 코디가 둘뿐일 때도
-                    // 카드가 혼자 커지지 않는다.
-                    <div key={lk.id} style={{ flex: '1 1 148px', minWidth: 148, maxWidth: 188, overflow: 'hidden' }}>
-                      <RailCard look={lk} active={lk.id === detailLook.id}
-                        onClick={() => openDetail(lk, detailFromLookbook ? null : looks, detailListLabel)} />
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 20 }}>{surface(itemsBlock)}</div>
               </div>
-            ) : null}
+              {/* 코디가 늘면 세로로 쌓지 않고 이 줄에 가로로 붙는다. 넘치면 화살표로 넘긴다. */}
+              <div ref={railRef} onScroll={syncRail} className="lb-scrollable" style={{
+                display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
+                scrollBehavior: 'smooth', padding: '2px 0 4px',
+              }}>
+                {looks.map((lk) => (
+                  // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전
+                  // auto-fill 그리드가 한 칸에 줄 수 있던 최대 폭이라, 코디가 둘뿐일 때도
+                  // 카드가 혼자 커지지 않는다.
+                  <div key={lk.id} style={{ flex: '1 1 148px', minWidth: 148, maxWidth: 188, overflow: 'hidden' }}>
+                    <RailCard look={lk} active={lk.id === detailLook.id}
+                      onClick={() => openDetail(lk, looks, detailListLabel, { fromLookbook: detailFromLookbook })} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 20 }}>{surface(itemsBlock)}</div>
+            </div>
           </div>
         </div>
       </div>

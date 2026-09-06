@@ -433,6 +433,14 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 같이 가운데 제목·채운 버튼·취소.
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`. [[lookbook-card]]
 
+## [2026-09-06] fix | 시트 빈 상자·PC 룩북 상세
+닫을 때 children을 비우면 손잡이만 남은 상자가 깜빡인다. BottomSheet가
+닫히는 동안 마지막 내용을 유지한다. PC 룩북 상세는 오늘과 같이 두 칼럼.
+근거: `frontend/src/proto/02-shared.jsx` BottomSheet;
+`frontend/src/proto/05-screens-cde.jsx` `DetailScreen`.
+[[detail-wide-layout]] [[lookbook-card]]
+
+
 
 
 

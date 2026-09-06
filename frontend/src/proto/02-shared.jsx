@@ -667,6 +667,9 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true, zIndex = 60, tightBottom = false }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
+  // 닫는 동안 children을 비우면 손잡이만 남은 작은 상자가 한 프레임 보인다.
+  const kidsRef = useRef(children);
+  if (open) kidsRef.current = children;
   // 손잡이를 아래로 끌어 닫는다. 시트 안이 스크롤되는 경우(요금제 등) 배경을 누를 자리가
   // 거의 없어서 닫기가 어려웠다. 손잡이에서 시작한 드래그만 잡아 스크롤과 겹치지 않게 한다.
   const [dragY, setDragY] = useState(0);
@@ -718,7 +721,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
           </div>
         )}
         <div style={{ height: wide ? 14 : 0 }} />
-        {children}
+        {kidsRef.current}
       </div>
     </div>
   );
