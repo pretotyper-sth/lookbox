@@ -380,24 +380,21 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
     minWidth: 0, minHeight: 0, objectFit: 'contain', objectPosition: 'center',
     display: 'block', userSelect: 'none',
   };
+  const lookFill = !!(outfit && outfit.lookImg);
   const media = isOutfit ? (
     outfit.lookImg ? (
-      <div style={{
-        width: '100%', height: '100%', minWidth: 0, minHeight: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{
-          position: 'relative', display: 'inline-flex',
-          maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-        }}>
-          <img
-            src={outfit.lookImg}
-            alt={title}
-            draggable={false}
-            style={mediaFit}
-          />
-          <span className="lb-look-ai-mark">✦ AI로 생성</span>
-        </div>
+      <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
+        <img
+          src={outfit.lookImg}
+          alt={title}
+          draggable={false}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center', display: 'block',
+            userSelect: 'none',
+          }}
+        />
+        <span className="lb-look-ai-mark">✦ AI로 생성</span>
       </div>
     ) : (Composite ? (
       <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
@@ -480,7 +477,12 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         ref={stageRef}
         onClick={(e) => e.stopPropagation()}
         style={{
-          position: 'relative', width: '100%', maxWidth: 440, flex: '1 1 auto',
+          position: 'relative',
+          width: lookFill ? 'min(100%, calc(min(72vh, 640px) * 0.8))' : '100%',
+          maxWidth: 440,
+          flex: lookFill ? 'none' : '1 1 auto',
+          aspectRatio: lookFill ? '4 / 5' : undefined,
+          height: lookFill ? 'auto' : undefined,
           minHeight: 0, maxHeight: 'min(72vh, 640px)',
           background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
           boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
@@ -501,6 +503,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
             else applyZoom(2);
           }}
           style={{
+            position: 'absolute', inset: 0,
             width: '100%', height: '100%', minWidth: 0, minHeight: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,

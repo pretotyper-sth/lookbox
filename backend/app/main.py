@@ -3733,9 +3733,9 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
   not a stiff frontal mannequin
 - keep the source photo's body proportions exactly. Do not lengthen the legs or torso,
   raise the waist, or shrink the head to make the model read taller.
-- frame for a 4:5 card crop: person vertically centered in the middle ~70% of the height
-- leave about 15% of the frame empty above the hair and 15% empty below the shoes
-- the top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes
+- frame for a 4:5 card crop: person vertically centered in the middle ~64% of the height
+- leave about 18% of the frame empty above the hair and 18% empty below the shoes
+- the top 14% and bottom 14% must be empty studio only — never hair, chin, or shoes
 - never crop the chin, crown, or shoes in this source frame
 - one continuous soft gray studio backdrop, wall blending into floor, reaching all four
   edges of the frame. no second plate, letterbox, border, or framed inset
@@ -3975,9 +3975,9 @@ Keep Image 1's camera height, studio lighting, gray studio,
 gray studio floor, shadow, and color grading.
 Do not copy a tight head-to-toe crop from Image 1.
 Frame for a 4:5 lookbook card. The person is vertically centered.
-Leave about 15% of the frame empty above the hair and 15% empty below the shoes.
-The top 12% and bottom 12% must be empty studio only — never hair, chin, or shoes.
-Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle 70%.
+Leave about 18% of the frame empty above the hair and 18% empty below the shoes.
+The top 14% and bottom 14% must be empty studio only — never hair, chin, or shoes.
+Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle 64%.
 One person, centered.
 Reproduce Image 1's studio backdrop exactly — the same soft gray wall blending into the
 same floor, the same soft contact shadow under the shoes — and let it reach all four
@@ -4186,7 +4186,7 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
 
 # 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 스튜디오 여백만 잘라 칸을 채운다.
 _LOOK_CARD_RATIO = 4 / 5
-_LOOK_CROP_PAD = 0.08
+_LOOK_CROP_PAD = 0.12
 
 
 # 배경은 레퍼런스 스튜디오라 위아래로 밝기가 변한다. 고정색과 비교하면 바닥이
@@ -7730,7 +7730,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 ids = [*ids, wish_id]
             outfit = {
                 "id": None,
-                "label": combo.get("label") or f"추천 코디 {idx + 1}",
+                "label": f"추천 코디 {idx + 1}",
                 "mood": combo.get("mood") or "",
                 "styles": combo.get("styles") or [],
                 "itemIds": ids,
@@ -7760,6 +7760,13 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             except Exception as exc:  # noqa: BLE001
                 print(f"[coordinate] outfit persist failed: {exc}", flush=True)
                 outfit["id"] = f"live-{uuid.uuid4().hex[:8]}"
+            if wish_item and outfit.get("id"):
+                stable = f"wish-{str(outfit['id'])[:8]}"
+                wish_item["id"] = stable
+                outfit["itemIds"] = [
+                    stable if str(i).startswith("wish-") else i
+                    for i in outfit["itemIds"]
+                ]
             outfits.append(outfit)
             piece_items = [live_item_payload(used[i]) for i in ids if i in used]
             if wish_item:

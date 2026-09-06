@@ -23,12 +23,12 @@ function MetaChips({ item }) {
    개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
 /* 4사분면 플랫레이: 상의 | 하의 / 신발 | 악세서리.
-   악세서리는 우하단을 다시 2×2로 나눠 안 겹치게 둔다.
-   값은 코디 가로폭 대비 정사각 프레임 비율(%). */
+   가방이 우하단을 잡고, 선글라스 같은 소품은 더 작게 모서리에 둔다.
+   같은 색·비슷한 크기면 가운데에 포개지 않는다. 값은 가로폭 대비 %. */
 const LOOK_SIZE = {
   '아우터': 46, '상의': 44, '하의': 44, '스커트': 42, '원피스': 52,
-  '신발': 36, '가방': 28, '모자': 26, '소품': 24,
-  '액세서리': 26, // 구버전 데이터 호환
+  '신발': 36, '가방': 30, '모자': 22, '소품': 16,
+  '액세서리': 16, // 구버전 데이터 호환
 };
 /* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
    벽에 붙고 잘린다. 1.16이면 상의·하의가 겹치면서도 가장자리 여백이 남는다. */
@@ -65,12 +65,17 @@ const LOOK_SPOT = {
   // 좌하 · 신발
   shoes:  { cx: 32, cy: 74, z: 5 },
 };
-/* 우하 · 악세서리. 벽에 붙이지 않고 안쪽으로 겹친다. */
-const LOOK_ACC_SPOTS = [
+/* 우하 · 악세서리 후보. 0번은 가방 자리, 나머지는 모서리·옆이라
+   검정 선글라스가 검정 가방 한가운데에 앉지 않는다. */
+const LOOK_ACC_CANDIDATES = [
   { cx: 70, cy: 76, z: 6 },
-  { cx: 76, cy: 82, z: 7 },
-  { cx: 66, cy: 82, z: 6 },
-  { cx: 74, cy: 74, z: 6 },
+  { cx: 88, cy: 56, z: 8 },
+  { cx: 50, cy: 60, z: 8 },
+  { cx: 84, cy: 64, z: 8 },
+  { cx: 54, cy: 66, z: 8 },
+  { cx: 82, cy: 86, z: 7 },
+  { cx: 56, cy: 86, z: 7 },
+  { cx: 74, cy: 60, z: 8 },
 ];
 const LOOK_ROLE = {
   '하의': 'bottom', '스커트': 'bottom', '원피스': 'dress',
@@ -78,6 +83,83 @@ const LOOK_ROLE = {
   '신발': 'shoes',
   '가방': 'acc', '모자': 'acc', '액세서리': 'acc', '소품': 'acc',
 };
+
+function lookItemSize(it, scale) {
+  return Math.min(100, (LOOK_SIZE[it && it.category] || LOOK_SIZE['상의']) * (scale || LOOK_SCALE));
+}
+
+function lookTone(it) {
+  const s = `${(it && it.color) || ''} ${(it && it.name) || ''}`;
+  if (/검|블랙|흑|차콜|네이비|잉크|black|navy|charcoal/i.test(s)) return 'dark';
+  if (/흰|화이트|아이보리|베이지|크림|실버|회색|그레이|white|ivory|beige|cream|silver|grey|gray/i.test(s)) return 'light';
+  return 'other';
+}
+
+function lookAccRank(it) {
+  if (it.category === '가방') return 0;
+  if (it.category === '모자') return 1;
+  return 2;
+}
+
+function pickAccSpot(placed, size, tone) {
+  if (!placed.length) return { ...LOOK_ACC_CANDIDATES[0] };
+  let best = LOOK_ACC_CANDIDATES[1];
+  let bestScore = -1e9;
+  LOOK_ACC_CANDIDATES.forEach((c, idx) => {
+    if (idx === 0) return;
+    let minD = 99;
+    let clash = 0;
+    placed.forEach((p) => {
+      const d = Math.hypot(c.cx - p.cx, c.cy - p.cy);
+      minD = Math.min(minD, d);
+      const same = tone === p.tone && tone !== 'other';
+      const need = (size + p.size) * (same ? 0.42 : 0.28);
+      if (d < need) clash += same ? 4 : 1;
+    });
+    const score = minD * 2 - clash * 14 - idx * 0.15;
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  });
+  return { cx: best.cx, cy: best.cy, z: 6 + placed.length };
+}
+
+function lookNeedsEdge(it, items, place, scale) {
+  const a = place[it.id];
+  if (!a) return false;
+  const sa = lookItemSize(it, scale);
+  const ta = lookTone(it);
+  return (items || []).some((other) => {
+    if (!other || other.id === it.id) return false;
+    const b = place[other.id];
+    if (!b) return false;
+    const sb = lookItemSize(other, scale);
+    const dx = Math.abs(a.cx - b.cx);
+    const dy = Math.abs(a.cy - b.cy);
+    if (dx > (sa + sb) * 0.4 || dy > (sa + sb) * 0.4) return false;
+    const tb = lookTone(other);
+    return ta === tb || LOOK_ROLE[it.category] === 'acc';
+  });
+}
+
+const LOOK_EDGE_FILTER = 'drop-shadow(0 0 1px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(20,18,16,0.45)) drop-shadow(0 2px 3px rgba(20,18,16,0.18))';
+
+function drawLookCutout(ctx, im, x, y, dw, dh, edge) {
+  if (!edge) {
+    ctx.drawImage(im, x, y, dw, dh);
+    return;
+  }
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,255,255,0.92)';
+  ctx.shadowBlur = 5;
+  ctx.drawImage(im, x, y, dw, dh);
+  ctx.shadowColor = 'rgba(20,18,16,0.3)';
+  ctx.shadowBlur = 2;
+  ctx.shadowOffsetY = 1;
+  ctx.drawImage(im, x, y, dw, dh);
+  ctx.restore();
+}
 
 /** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
 function lookPlacement(items) {
@@ -90,29 +172,28 @@ function lookPlacement(items) {
   const dy = hasLower ? 0 : 12;
   const taken = {};
   const out = {};
-  let accIdx = 0;
   owned.forEach((it) => {
     const role = LOOK_ROLE[it.category] || 'top';
-    if (role === 'acc') {
-      const base = LOOK_ACC_SPOTS[accIdx % LOOK_ACC_SPOTS.length];
-      const lap = Math.floor(accIdx / LOOK_ACC_SPOTS.length);
-      out[it.id] = {
-        cx: base.cx + lap * 3,
-        cy: base.cy + lap * 3,
-        z: base.z + accIdx,
-      };
-      accIdx += 1;
-      return;
-    }
+    if (role === 'acc') return;
     const spot = role === 'top' && hasOuter ? 'layer' : role;
     const base = LOOK_SPOT[spot] || LOOK_SPOT.top;
     const n = taken[spot] || 0;
     taken[spot] = n + 1;
     out[it.id] = { cx: base.cx + n * 4, cy: base.cy + n * 4 + dy, z: base.z + n };
   });
+  const accs = owned.filter((it) => LOOK_ROLE[it.category] === 'acc')
+    .slice()
+    .sort((a, b) => lookAccRank(a) - lookAccRank(b));
+  const placedAcc = [];
+  accs.forEach((it) => {
+    const size = lookItemSize(it);
+    const at = pickAccSpot(placedAcc, size, lookTone(it));
+    out[it.id] = at;
+    placedAcc.push({ cx: at.cx, cy: at.cy, size, tone: lookTone(it) });
+  });
   Object.keys(out).forEach((id) => {
     const it = owned.find((x) => x.id === id);
-    const size = Math.min(100, (LOOK_SIZE[it && it.category] || LOOK_SIZE['상의']) * LOOK_SCALE);
+    const size = lookItemSize(it);
     const half = size / 2;
     const minC = LOOK_PAD + half * 0.55;
     const maxC = 100 - LOOK_PAD - half * 0.55;
@@ -184,7 +265,7 @@ function flattenLookBoard(items, place, scale, ratio) {
     if (layered.length !== items.length) return '';
     layered.forEach(({ it, im }) => {
       const at = place[it.id] || LOOK_SPOT.top;
-      const size = Math.min(100, (LOOK_SIZE[it.category] || LOOK_SIZE['상의']) * scale);
+      const size = lookItemSize(it, scale);
       const zoom = lookImageZoom(it.category);
       const box = (size / 100) * Math.min(w, h) * zoom;
       const cx = (at.cx / 100) * w;
@@ -192,7 +273,7 @@ function flattenLookBoard(items, place, scale, ratio) {
       const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
       const dw = im.naturalWidth * s;
       const dh = im.naturalHeight * s;
-      ctx.drawImage(im, cx - dw / 2, cy - dh / 2, dw, dh);
+      drawLookCutout(ctx, im, cx - dw / 2, cy - dh / 2, dw, dh, lookNeedsEdge(it, items, place, scale));
     });
     try {
       return canvas.toDataURL('image/png');
@@ -202,19 +283,28 @@ function flattenLookBoard(items, place, scale, ratio) {
   });
 }
 
+const LOOK_FLAT_CACHE = {};
+
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const [flat, setFlat] = useSc('');
   const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|');
+  const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
       setFlat('');
       return undefined;
     }
+    if (LOOK_FLAT_CACHE[key]) {
+      setFlat(LOOK_FLAT_CACHE[key]);
+      return undefined;
+    }
     let dead = false;
-    flattenLookBoard(shown, place, scale, ratio).then((url) => { if (!dead) setFlat(url); });
+    flattenLookBoard(shown, place, scale, ratio).then((url) => {
+      if (url) LOOK_FLAT_CACHE[key] = url;
+      if (!dead) setFlat(url);
+    });
     return () => { dead = true; };
   }, [key, scale, ratio, !!(outfit && outfit.lookImg)]);
 
@@ -259,7 +349,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         />
       ) : shown.map((it) => {
         const at = place[it.id] || LOOK_SPOT.top;
-        const size = Math.min(100, (LOOK_SIZE[it.category] || LOOK_SIZE['상의']) * scale);
+        const size = lookItemSize(it, scale);
         const frame = {
           position: 'absolute', left: at.cx + '%', top: at.cy + '%', width: size + '%', aspectRatio: '1',
           transform: 'translate(-50%,-50%)', zIndex: at.z,
@@ -270,6 +360,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
               width: '100%', height: '100%', objectFit: 'contain', display: 'block',
               transform: `scale(${lookImageZoom(it.category)})`,
+              filter: lookNeedsEdge(it, shown, place, scale) ? LOOK_EDGE_FILTER : undefined,
             }} />
           </div>
         );

@@ -339,13 +339,8 @@ function filterDailyOutfitsByOwned(outfits, ownedItems) {
   return out;
 }
 if (typeof window !== 'undefined') window.filterDailyOutfitsByOwned = filterDailyOutfitsByOwned;
-function dailyCacheItemsFromOwned(ownedItems, outfits) {
-  const used = new Set();
-  (outfits || []).forEach((o) => (o.itemIds || []).forEach((id) => used.add(String(id))));
-  const owned = (ownedItems || []).filter((it) => it && used.has(String(it.id || it.serverId)));
-  // 제안 아이템은 옷장에 없으니 LB_DATA에 기억된 값으로 캐시에 함께 담는다.
-  const wish = [...used].filter(isWishId).map((id) => LB_DATA.ALL[id]).filter(Boolean);
-  return [...owned, ...wish];
+function dailyCacheItemsFromOwned(ownedItems, outfits, extraItems) {
+  return snapshotItemsForOutfits(outfits, extraItems, ownedItems);
 }
 /** LB_DATA.DAILY + 로컬 캐시를 현재 owned 옷장에 맞게 정리. 제거된 코디 수를 반환. */
 function pruneDailyAgainstOwned(ownedItems) {
@@ -356,13 +351,13 @@ function pruneDailyAgainstOwned(ownedItems) {
     if (hydrated.length) {
       liveApplyPayload({
         outfits: hydrated,
-        items: dailyCacheItemsFromOwned(ownedItems, hydrated),
+        items: dailyCacheItemsFromOwned(ownedItems, hydrated, cached.items),
       }, 'daily');
       if (hydrated.length !== cached.outfits.length) {
         writeDailyCache({
           style: cached.style || '',
           outfits: hydrated,
-          items: dailyCacheItemsFromOwned(ownedItems, hydrated),
+          items: dailyCacheItemsFromOwned(ownedItems, hydrated, cached.items),
           wardrobeSig: cached.wardrobeSig,
           wardrobeCount: cached.wardrobeCount,
         });
@@ -404,11 +399,13 @@ function pruneDailyAgainstOwned(ownedItems) {
   }
   return removed;
 }
-/** owned + archived만 LB_DATA.ALL에 남기고 데일리 잔상 아이템 제거 */
+/** owned + archived만 LB_DATA.ALL에 남기고 데일리 잔상 아이템 제거.
+   wish-* 는 옷장에 없어도 오늘 코디 카드가 쓰므로 지우지 않는다. */
 function syncAllFromWardrobe(ownedItems, archivedItems) {
   const keep = ownedIdSet([...(ownedItems || []), ...(archivedItems || [])]);
   if (LB_DATA.ANCHOR && LB_DATA.ANCHOR.id) keep.add(String(LB_DATA.ANCHOR.id));
   Object.keys(LB_DATA.ALL || {}).forEach((id) => {
+    if (isWishId(id)) return;
     if (!keep.has(String(id))) delete LB_DATA.ALL[id];
   });
   (ownedItems || []).forEach(liveRememberItem);
@@ -1214,6 +1211,9 @@ function App() {
           wardrobeSig: (cached && cached.wardrobeSig) || wardrobeSigOf(ownedItems),
           wardrobeCount: cached && cached.wardrobeCount != null ? cached.wardrobeCount : (ownedItems || []).length,
         });
+        kept.forEach((o) => {
+          if (o && o.id && !outfitWishPending(o)) delete LB_DATA.WISH_STAGE[o.id];
+        });
         LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...kept);
       }
     } else {
@@ -1654,13 +1654,13 @@ function App() {
           stampOutfitStyle(outfits);
           liveApplyPayload({
             outfits,
-            items: dailyCacheItemsFromOwned(items, outfits),
+            items: dailyCacheItemsFromOwned(items, outfits, cached.items),
           }, 'daily');
           // wardrobeSig는 추천 시점 값을 유지 → 옷 추가 후 CTA만 뜨고 자동 재추천 안 함
           writeDailyCache({
             style: cached.style || style,
             outfits,
-            items: dailyCacheItemsFromOwned(items, outfits),
+            items: dailyCacheItemsFromOwned(items, outfits, cached.items),
             wardrobeSig: cached.wardrobeSig,
             wardrobeCount: cached.wardrobeCount != null ? cached.wardrobeCount : items.length,
           });

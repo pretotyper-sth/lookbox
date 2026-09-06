@@ -87,6 +87,13 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
   );
 }
 
+function todayWishDrawing(outfit) {
+  if (!outfit || !LB_DATA.WISH_STAGE[outfit.id]) return false;
+  const id = (outfit.itemIds || []).find((x) => String(x).indexOf('wish-') === 0);
+  const it = id && LB_DATA.ALL[id];
+  return !(it && it.img);
+}
+
 /* ============================================================
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
@@ -125,11 +132,9 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, it
       </div>
 
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 14.5, fontWeight: 700, lineHeight: 1.35, textWrap: 'pretty',
-          minHeight: 'calc(1.35em * 2)',
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>{outfit.label}</div>
+        <div style={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.35 }}>
+          {outfit.cardTitle || outfit.label}
+        </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3 }}>
           {moodBasis ? `${moodBasis} · ` : ''}{items.filter((it) => it.img).length}개 조합{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
         </div>
@@ -598,17 +603,14 @@ function TodayScreen({ ctx }) {
           : (
             <>
               {shown.map((o, i) => (
-                <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={o}
+                <TodayCard key={(isToday ? '' : ymd(selected) + '-') + o.id + '-' + i} outfit={{ ...o, cardTitle: `추천 코디 ${i + 1}` }}
                   styleLabel={preferredStyleLabel}
                   saved={savedOutfitIds.includes(o.id)} onSave={() => toggleSaveOutfit(o.id)}
                   worn={isToday ? wornToday.includes(o.id) : pastWorn.includes(o.id)}
                   onWear={isToday ? () => wearToday(o.id) : null}
                   itemsById={isToday ? null : pastItemsById}
                   // 테스트(limit>0): 대기 오버레이는 만들 1장만. 실서비스(0): 상품컷 카드마다 대기, 끝나는 장부터 착장으로 바뀐다.
-                  looking={isToday && (
-                    (!!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId))
-                    || !!(o.wish && (!(o.itemIds || []).some((id) => String(id).indexOf('wish-') === 0 && LB_DATA.ALL[id] && LB_DATA.ALL[id].img)))
-                  )}
+                  looking={isToday && (todayWishDrawing(o) || (!!modelLook && !o.lookImg && (lookCap <= 0 || o.id === lookBusyId)))}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

@@ -380,4 +380,26 @@ wish 이유 문장을 줄에서 빼 이름·카테고리 두 줄만. `minHeight:
 근거: `backend/app/main.py` `_TRYON_BODY_PROMPT` `_tryon_seed_component`;
 `frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`. [[tryon-setup-from-mypage]]
 
+## [2026-09-06] fix | wish 안내 문구는 그리는 중에만
+새로고침마다 `제안 아이템을 그리는 중`이 다시 뜨던 건, 이미지 없는 wish를
+생성하는 중으로 본 탓이다. 스테이지가 있을 때만 띄우고 `wish-*`는 ALL에서
+지우지 않는다. [[model-look-toggle]]
+
+## [2026-09-06] change | 플랫레이 소품은 가방에 묻히지 않게
+검정 선글라스가 검정 가방 한가운데에 같은 크기로 앉지 않게. 소품은 작게
+모서리로, 같은 톤이 겹치면 테두리. [[look-flatlay-overlap]]
+
+## [2026-09-06] fix | 착장 확대 위아래가 thumb-bg와 붙던 것
+뷰어 lookImg는 4:5 스테이지+cover. 생성은 위아래 18% 스튜디오, 크롭 패드 0.12.
+`✦ AI로 생성`은 `--ink` 76%라 스튜디오에서도 읽힌다.
+근거: `frontend/src/proto/02-shared.jsx` ImageViewer; `backend/app/main.py` `_LOOK_CROP_PAD`.
+[[look-img-flex-min]] [[image-viewer-gestures]]
+
+## [2026-09-06] fix | wish 카드 새로고침마다 다시 그리던 것
+캐시 복원이 ALL만 봐서 제안 아이템이 빠지고, 서버가 wish id를 바꿔 플랫레이가
+다시 조립됐다. 캐시 items를 같이 심고 id를 코디 id에 고정. 오늘 카드는
+`추천 코디 N`, 제목 2줄 칸을 없애 부제와 바로 붙인다.
+근거: `frontend/src/proto/09-app.jsx` `dailyCacheItemsFromOwned`;
+`backend/app/main.py` `persist_combo`. [[model-look-toggle]]
+
 

@@ -9,11 +9,12 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 
 ## Features
-- [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. 100%에서도 핀치가 먹게 touch-action none
-- [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 2:3은 인물 여백을 두고 4:5로 자른다. 안 들어가면 축소해 넣는다
+- [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
+- [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 2:3은 위아래 18% 스튜디오를 두고 4:5로 자른다. 크롭 패드 0.12
+- [look-flatlay-overlap](look-flatlay-overlap.md) — 플랫레이 소품은 가방 중심에 같은 색·크기로 올리지 않는다. 모서리 + 테두리
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 포즈·착용감은 룩북식으로, 얼굴은 같은 사람·실사 피부. 카드에 `✦ AI로 생성`. `LOOK_TEST_LIMIT=1`은 품질 테스트용. 캐시 `model-id16`
+- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 오늘 카드는 `추천 코디 N`. wish는 캐시 items+고정 id. `LOOK_TEST_LIMIT=1`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
 - [coord-clash](coord-clash.md) — 셔츠+카고+첼시 같은 격식 충돌을 이름 키워드로 감점. GPT 규칙에도 같은 금지
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 배경을 단색으로 맞추길 포기하고 후처리를 자르기만 남겼다
