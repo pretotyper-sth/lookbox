@@ -19,9 +19,9 @@
 끝 색**을 기준으로 한다(`_look_row_backdrop`) — 고정색으로 재면 어두운 바닥이
 통째로 인물로 잡혀 크롭이 망가진다.
 
-2026-09-06: `_fit_look_to_card`는 인물만 축소한 뒤 가장자리를 늘리지 않는다.
-원본에서 4:5 창을 잡아 그 스튜디오 픽셀을 그대로 쓴다. 이미 저장된 늘림 띠는
-카드·뷰어가 좌우 9%를 잘라 가린다(`left: -9%`, `width: 118%`).
+2026-09-06: `_fit_look_to_card`는 원본에서 4:5 창을 잡는다. 카드·뷰어는
+`inset: 0` + `object-fit: cover` + `object-position: center`다. 좌우를
+키워 자르면(`-9%` / `118%`) 위아래 스튜디오가 사라지고 확대 때 왼쪽로 밀린다.
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`;
 `backend/app/main.py` `_crop_look_to_card`. 관련 [[image-viewer-gestures]]

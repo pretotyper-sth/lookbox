@@ -383,13 +383,14 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
   const lookFill = !!(outfit && outfit.lookImg);
   const media = isOutfit ? (
     outfit.lookImg ? (
-      <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
+      <div style={{ position: 'absolute', inset: 0, minWidth: 0, minHeight: 0 }}>
         <img
           src={outfit.lookImg}
           alt={title}
           draggable={false}
           style={{
-            position: 'absolute', top: 0, bottom: 0, left: '-9%', width: '118%', height: '100%',
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
             objectFit: 'cover', objectPosition: 'center', display: 'block',
             userSelect: 'none',
           }}
@@ -505,7 +506,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           style={{
             position: 'absolute', inset: 0,
             width: '100%', height: '100%', minWidth: 0, minHeight: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'block',
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
             transformOrigin: 'center center',
             transition: (dragging || pinching) ? 'none' : 'transform 120ms var(--ease)',

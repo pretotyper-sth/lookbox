@@ -1,13 +1,12 @@
-# 룩북 카드는 하트 없이 더보기·선택 빼기
+# 룩북 카드는 옷장과 같은 뼈대다
 
-룩북 그리드 우상단 하트는 쓰지 않는다(2026-09-06). 빼기는 헤더 「선택」으로
-고른 뒤 하단 「룩북에서 빼기」만. 오늘 코디 카드·오늘에서 연 상세의 하트는
-그대로 담기용이다. 룩북에서 연 상세에도 하트를 두지 않는다.
+그리드는 옷장과 같다. 맨 앞 `lb-addtile`은 「직접 만들기」. 카드는 정사각
+썸네일 + 아래 두 줄(이름 / `N개 품목 · 며칠 전`). 점 3개는 썸네일 우상단
+`right: 4; top: 4`. 흰 카드 패딩은 쓰지 않는다. 상세는 기존 구조를 유지한다.
 
-카드 우상단은 옷장과 같은 점 3개. 시트에서 「이름 수정하기」→ 입력 후 저장.
-`renameSavedLook`이 `savedLooks`·`OUTFIT_BY_ID.label`을 바꾸고
-`POST /api/live/outfits/{id}/state`에 `{label}`을 보낸다. 40자.
+하트는 없다. 빼기는 「선택」→「룩북에서 빼기」. 더보기에서 이름 수정.
+`renameSavedLook` → `POST /api/live/outfits/{id}/state` `{label}`, 40자.
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `SavedCard` `LookbookScreen`;
-`frontend/src/proto/09-app.jsx` `renameSavedLook`;
-`backend/app/main.py` `LiveOutfitState.label`.
+`frontend/src/proto/04-screens-ab.jsx` 옷장 그리드;
+`frontend/src/proto/09-app.jsx` `renameSavedLook`.

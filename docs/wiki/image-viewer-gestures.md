@@ -12,7 +12,7 @@
 2026-08-30: 착장 `lookImg`는 원본이 커서 flex `min-width: auto`에 막혔다.
 뷰어 미디어는 `max-width/height: 100%`로 스테이지에 맞춘다. [[look-img-flex-min]]
 
-2026-09-06: `lookImg` 스테이지는 `aspect-ratio: 4/5` + `object-fit: cover`.
-스테이지가 세로로 더 길면 `--thumb-bg` 띠가 스튜디오 회색과 붙었다.
+2026-09-06: `lookImg` 스테이지는 `aspect-ratio: 4/5` + `object-fit: cover` +
+가운데. 이미지를 118%로 키우면 확대 때 왼쪽로 밀리고 오른쪽이 `--thumb-bg`다.
 
 관련: [[chiprow-sheet-scroll]] [[look-img-flex-min]]

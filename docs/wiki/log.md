@@ -421,5 +421,13 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 `frontend/src/proto/05-screens-cde.jsx` `SavedCard`.
 [[look-img-flex-min]] [[lookbook-card]] [[model-look-toggle]]
 
+## [2026-09-06] fix | 착장 여백·확대 가운데·플랫레이 테두리·룩북=옷장
+좌우 9% 크롭을 걷어 위아래 스튜디오와 확대 가운데를 되돌렸다. 플랫레이는
+자리로만 구분하고 흰 발광을 뺀다. 룩북 그리드는 옷장과 같은 +타일·두 줄 카드.
+근거: `frontend/src/proto/02-shared.jsx` ImageViewer;
+`frontend/src/proto/05-screens-cde.jsx` `SavedCard` `drawLookCutout`.
+[[look-img-flex-min]] [[look-flatlay-overlap]] [[lookbook-card]]
+
+
 
 

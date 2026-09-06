@@ -125,40 +125,8 @@ function pickAccSpot(placed, size, tone) {
   return { cx: best.cx, cy: best.cy, z: 6 + placed.length };
 }
 
-function lookNeedsEdge(it, items, place, scale) {
-  const a = place[it.id];
-  if (!a) return false;
-  const sa = lookItemSize(it, scale);
-  const ta = lookTone(it);
-  return (items || []).some((other) => {
-    if (!other || other.id === it.id) return false;
-    const b = place[other.id];
-    if (!b) return false;
-    const sb = lookItemSize(other, scale);
-    const dx = Math.abs(a.cx - b.cx);
-    const dy = Math.abs(a.cy - b.cy);
-    if (dx > (sa + sb) * 0.4 || dy > (sa + sb) * 0.4) return false;
-    const tb = lookTone(other);
-    return ta === tb || LOOK_ROLE[it.category] === 'acc';
-  });
-}
-
-const LOOK_EDGE_FILTER = 'drop-shadow(0 0 1px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(20,18,16,0.45)) drop-shadow(0 2px 3px rgba(20,18,16,0.18))';
-
-function drawLookCutout(ctx, im, x, y, dw, dh, edge) {
-  if (!edge) {
-    ctx.drawImage(im, x, y, dw, dh);
-    return;
-  }
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,255,255,0.92)';
-  ctx.shadowBlur = 5;
+function drawLookCutout(ctx, im, x, y, dw, dh) {
   ctx.drawImage(im, x, y, dw, dh);
-  ctx.shadowColor = 'rgba(20,18,16,0.3)';
-  ctx.shadowBlur = 2;
-  ctx.shadowOffsetY = 1;
-  ctx.drawImage(im, x, y, dw, dh);
-  ctx.restore();
 }
 
 /** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
@@ -273,7 +241,7 @@ function flattenLookBoard(items, place, scale, ratio) {
       const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
       const dw = im.naturalWidth * s;
       const dh = im.naturalHeight * s;
-      drawLookCutout(ctx, im, cx - dw / 2, cy - dh / 2, dw, dh, lookNeedsEdge(it, items, place, scale));
+      drawLookCutout(ctx, im, cx - dw / 2, cy - dh / 2, dw, dh);
     });
     try {
       return canvas.toDataURL('image/png');
@@ -285,11 +253,11 @@ function flattenLookBoard(items, place, scale, ratio) {
 
 const LOOK_FLAT_CACHE = {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat3';
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
@@ -316,13 +284,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       <div style={{
         position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
         background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
+        boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
         <img
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
           style={{
-            position: 'absolute', top: 0, bottom: 0, left: '-9%', width: '118%', height: '100%',
-            maxWidth: 'none', maxHeight: '100%', minWidth: 0, minHeight: 0,
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
             objectFit: 'cover', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
@@ -336,7 +305,10 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     <div
       aria-busy={pending ? 'true' : undefined}
       aria-label={pending ? '코디 이미지를 만드는 중' : undefined}
-      style={{ position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio }}
+      style={{
+        position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
+        boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
+      }}
     >
       {flat ? (
         <img
@@ -360,7 +332,6 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
               width: '100%', height: '100%', objectFit: 'contain', display: 'block',
               transform: `scale(${lookImageZoom(it.category)})`,
-              filter: lookNeedsEdge(it, shown, place, scale) ? LOOK_EDGE_FILTER : undefined,
             }} />
           </div>
         );
@@ -652,56 +623,62 @@ function ResultsScreen({ ctx }) {
 /* ============================================================
    D · Lookbook (saved coordis)
    ============================================================ */
-/* 우상단은 옷장과 같이 더보기. 빼기는 선택 모드에서만. */
+/* 옷장 카드와 같은 뼈대: 정사각 썸네일 + 아래 두 줄. 빼기는 선택 모드에서만. */
 function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSelectUx, wide }) {
   const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId];
-  const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]);
+  const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div className="lb-anim-in lb-savedcard" style={{ position: 'relative', minWidth: 0, background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-      <button onClick={onOpen} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', padding: 0 }}>
-        <LookComposite outfit={outfit} items={items} ratio="1 / 1" />
-        <div style={{ padding: '10px 4px 4px' }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700 }}>{look.label}</div>
-          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 3 }}>{items.length}개 품목 · {look.savedAt}</div>
-        </div>
+    <div className="lb-anim-in" style={{ position: 'relative', minWidth: 0 }}>
+      <div style={{ position: 'relative' }}>
+        <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
+          <LookComposite outfit={outfit} items={items} ratio="1 / 1" lined />
+        </button>
+        {onToggleSel && (showSel || wide) && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleSel(); }}
+            aria-label={selected ? '선택 해제' : '선택'}
+            aria-pressed={selected}
+            style={{
+              position: 'absolute', left: 5, top: 5, width: 18, height: 18, borderRadius: '50%',
+              display: 'grid', placeItems: 'center', zIndex: 3,
+              opacity: showSel ? 1 : 0,
+              pointerEvents: showSel ? 'auto' : 'none',
+              background: selected ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 90%, transparent)',
+              color: selected ? 'var(--accent-ink)' : 'transparent',
+              boxShadow: selected ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
+              backdropFilter: 'blur(6px)',
+              transition: 'opacity var(--dur) var(--ease), background var(--dur) var(--ease)',
+            }}
+          >
+            {selected && <Icon name="check" size={10} stroke={2.6} />}
+          </button>
+        )}
+        {!inSelectUx && onMore && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMore(look); }}
+            aria-label={look.label + ' 더보기'}
+            style={{
+              position: 'absolute', right: 4, top: 4, width: 24, height: 20, borderRadius: 6,
+              display: 'grid', placeItems: 'center', color: 'var(--ink)', zIndex: 2,
+              background: 'transparent',
+            }}
+          >
+            <Icon name="more" size={15} stroke={2.8} />
+          </button>
+        )}
+      </div>
+      <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
+        <div style={{
+          fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{look.label}</div>
+        <div style={{
+          fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{items.length}개 품목 · {look.savedAt}</div>
       </button>
-
-      {onToggleSel && (showSel || wide) && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleSel(); }}
-          aria-label={selected ? '선택 해제' : '선택'}
-          aria-pressed={selected}
-          style={{
-            position: 'absolute', left: 14, top: 14, width: 20, height: 20, borderRadius: '50%',
-            display: 'grid', placeItems: 'center', zIndex: 3,
-            opacity: showSel ? 1 : 0,
-            pointerEvents: showSel ? 'auto' : 'none',
-            background: selected ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 90%, transparent)',
-            color: selected ? 'var(--accent-ink)' : 'transparent',
-            boxShadow: selected ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
-            backdropFilter: 'blur(6px)',
-            transition: 'opacity var(--dur) var(--ease), background var(--dur) var(--ease)',
-          }}
-        >
-          {selected && <Icon name="check" size={11} stroke={2.6} />}
-        </button>
-      )}
-
-      {!inSelectUx && onMore && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onMore(look); }}
-          aria-label={look.label + ' 더보기'}
-          style={{
-            position: 'absolute', right: 4, top: 4, width: 24, height: 20, borderRadius: 6,
-            display: 'grid', placeItems: 'center', zIndex: 2,
-            color: 'var(--ink)', background: 'transparent',
-          }}
-        >
-          <Icon name="more" size={15} stroke={2.8} />
-        </button>
-      )}
     </div>
   );
 }
@@ -925,12 +902,10 @@ function LookbookScreen({ ctx }) {
         disabled={wide || !refreshLive}
         style={{
         flex: 1,
-        // 단축(padding)과 롱핸드(paddingBottom)를 같이 주면 나머지 방향이 비어 버린다.
-        // 하단은 '직접 코디 만들기' 도크(약 90px)를 가리지 않을 만큼 반드시 비워 둔다.
         paddingTop: wide ? 28 : 'calc(env(safe-area-inset-top, 0px) + 22px)',
         paddingLeft: wide ? 0 : 18,
         paddingRight: wide ? 0 : 18,
-        paddingBottom: wide ? (selecting ? 88 : 36) : (selecting ? 148 : 124),
+        paddingBottom: wide ? (selecting ? 88 : 36) : (selecting ? 96 : 88),
       }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
           {wide ? (
@@ -939,17 +914,7 @@ function LookbookScreen({ ctx }) {
                 <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>룩북</h1>
                 <span style={{ fontSize: 13.5, color: 'var(--ink-3)', fontWeight: 600 }}>{countLabel}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {selectBtn}
-                {/* 선택 중에는 감추되 자리는 남긴다. 버튼이 통째로 빠지면 이 줄 높이가
-                    제목 높이로 줄면서 아래 카드가 몇 px 딸려 올라간다.
-                    visibility만 끄면 탭 순서에서도 빠져서 눌릴 일이 없다. */}
-                {canMake && (
-                  <div style={{ visibility: inSelectUx ? 'hidden' : 'visible' }} aria-hidden={inSelectUx || undefined}>
-                    <Btn size="sm" variant="secondary" icon="plus" onClick={openMake}>직접 만들기</Btn>
-                  </div>
-                )}
-              </div>
+              {selectBtn}
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--gap-header)' }}>
@@ -961,6 +926,28 @@ function LookbookScreen({ ctx }) {
             </div>
           )}
           <div className="lb-grid">
+            {!inSelectUx && (
+              <button
+                onClick={canMake ? openMake : startComboOrWardrobe}
+                className="lb-addtile"
+                style={{
+                  position: 'relative', display: 'block', width: '100%', textAlign: 'center',
+                  borderRadius: 'var(--r-md)', color: 'var(--ink-3)',
+                  boxShadow: 'inset 0 0 0 1.5px var(--line)', background: 'transparent',
+                }}
+              >
+                <div aria-hidden="true" style={{ visibility: 'hidden' }}>
+                  <div style={{ aspectRatio: '1 / 1' }}></div>
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, height: '1.3em' }}>코디</div>
+                    <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.3 }}>코디</div>
+                  </div>
+                </div>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Icon name="plus" size={26} /><span style={{ fontSize: 12.5, fontWeight: 600 }}>직접 만들기</span>
+                </div>
+              </button>
+            )}
             {saved.map((lk) => {
               const on = sel.includes(lk.id);
               return (
@@ -1088,12 +1075,6 @@ function LookbookScreen({ ctx }) {
         </div>
       </BottomSheet>
 
-      {/* 모바일은 상단바가 없어서 진입점을 하단 도크에 둔다 */}
-      {!wide && canMake && !inSelectUx && (
-        <div className="lb-cta-dock">
-          <Btn full size="lg" variant="primary" icon="plus" onClick={openMake}>직접 코디 만들기</Btn>
-        </div>
-      )}
       {sheet}
     </div>
   );
