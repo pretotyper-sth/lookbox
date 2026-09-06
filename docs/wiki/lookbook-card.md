@@ -13,6 +13,9 @@ PC는 오늘 코디와 같은 왼쪽 사진·오른쪽 레일.
 제목·입력·취소/저장.
 `renameSavedLook` → `POST /api/live/outfits/{id}/state` `{label}`, 40자.
 
+탭을 다시 열 때 카드 `lb-anim-in`(밑에서 올라옴)은 쓰지 않는다. 숨긴 탭을
+`display:flex`로 켜면 애니가 다시 돈다. 옷장처럼 그대로 보이게 한다(2026-09-06).
+
 목록은 옷장과 같이 계정 캐시(`lb_lookbook_v1`)를 먼저 그린다. 서버는
 `GET /api/live/outfits?saved=1`로 저장된 코디만 먼저 받고, 오늘 기록용 전체
 목록은 뒤에서 덮는다. 예전에는 전체 `/outfits`가 실패하면 `.catch(() => null)`로

@@ -101,7 +101,7 @@ function todayWishDrawing(outfit) {
 function TodayCard({ outfit, saved, onSave, worn, onWear, styleLabel, onOpen, itemsById, looking }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
         <div

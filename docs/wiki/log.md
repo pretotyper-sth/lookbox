@@ -479,6 +479,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `frontend/src/proto/09-app.jsx` `refreshLive`;
 `backend/app/main.py` `live_list_outfits`. [[lookbook-card]]
 
+## [2026-09-06] fix | 오늘·룩북 카드 재입장 애니 제거
+사이드 메뉴로 다시 들어가면 `display:none→flex` 때문에 rise 애니가 반복됐다.
+TodayCard·SavedCard·OutfitCard에서 `lb-anim-in`을 뺀다.
+근거: `frontend/src/proto/06-today.jsx` `TodayCard`;
+`frontend/src/proto/05-screens-cde.jsx` `SavedCard`. [[lookbook-card]]
+
 
 
 

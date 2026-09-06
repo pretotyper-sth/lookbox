@@ -494,7 +494,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
 function OutfitCard({ outfit, saved, onSave, styleLabel, onView }) {
   const items = outfit.itemIds.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div className="lb-anim-in" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ position: 'relative' }}>
         <button
           type="button"
@@ -628,7 +628,7 @@ function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSel
   if (!outfit) return null;
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div className="lb-anim-in" style={{ position: 'relative', minWidth: 0 }}>
+    <div style={{ position: 'relative', minWidth: 0 }}>
       <div style={{ position: 'relative' }}>
         <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
           <LookComposite outfit={outfit} items={items} ratio="1 / 1" lined />
