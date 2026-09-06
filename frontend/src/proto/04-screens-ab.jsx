@@ -1240,7 +1240,7 @@ function AddSheet({ ctx }) {
     }
     if (gen !== tryOnLaunchGen.current) return;
     if (!body) {
-      setTryOnErr('바로 보기 이미지를 만들지 못했어요. 잠시 후 다시 시도해주세요.');
+      setTryOnErr('바로 보기 이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.');
       return;
     }
     if (typeof startTryOn === 'function') {
@@ -1900,6 +1900,7 @@ function AddSheet({ ctx }) {
                             fontWeight: tryOnErr ? 600 : 400,
                             color: tryOnErr ? '#9D472F' : 'var(--ink-3)',
                             textAlign: 'center', wordBreak: 'keep-all',
+                            whiteSpace: tryOnErr ? 'pre-line' : undefined,
                           }}>
                             {tryOnErr
                               ? tryOnErr

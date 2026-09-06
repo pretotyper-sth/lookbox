@@ -455,6 +455,13 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `frontend/src/proto/proto.css` `.lb-look-ai-mark`;
 `frontend/src/proto/06-today.jsx` `TodayCard`. [[model-look-toggle]]
 
+## [2026-09-06] fix | 바로 보기 스켈레톤 원형·실패 문구 두 줄
+생성 중 스켈레톤을 불상형(64×96, 윗원 아래각)에서 프사와 같은 80px 원형으로 바꿨다.
+실패 문구는 지정한 두 줄. PC `wide`는 생성을 안 돌리고, Chrome 검사 모바일은 `innerWidth`가
+줄어 전신 생성이 나간다.
+근거: `frontend/src/proto/proto.css` `.lb-tryon-skel`;
+`frontend/src/proto/04-screens-ab.jsx` `launchTryOnFromSheet`. [[tryon-setup-from-mypage]]
+
 
 
 

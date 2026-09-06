@@ -284,9 +284,9 @@ img { display: block; max-width: 100%; }
 }
 
 .lb-tryon-skel {
-  width: 64px;
-  height: 96px;
-  border-radius: 32px 32px 16px 16px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
 }
 .lb-tryon-frame {
   position: relative;
