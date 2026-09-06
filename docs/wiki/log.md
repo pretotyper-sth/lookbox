@@ -473,6 +473,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `frontend/src/proto/proto.css` `.lb-search-input`;
 `frontend/src/proto/04-screens-ab.jsx` `searchField`. [[mobile-page-zoom]]
 
+## [2026-09-06] fix | 룩북을 옷장처럼 캐시·saved=1로 먼저 그린다
+전체 `/outfits`를 기다리다가 실패하면 빈 화면이 남았다. 계정 캐시를 먼저 그리고
+저장된 코디만 따로 받는다. IN 목록은 80개씩.
+근거: `frontend/src/proto/09-app.jsx` `refreshLive`;
+`backend/app/main.py` `live_list_outfits`. [[lookbook-card]]
+
 
 
 

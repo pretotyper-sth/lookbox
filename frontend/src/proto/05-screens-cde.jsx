@@ -625,6 +625,7 @@ function ResultsScreen({ ctx }) {
 /* 옷장 카드와 같은 뼈대: 정사각 썸네일 + 아래 두 줄. 빼기는 선택 모드에서만. */
 function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSelectUx, wide }) {
   const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId];
+  if (!outfit) return null;
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   return (
     <div className="lb-anim-in" style={{ position: 'relative', minWidth: 0 }}>
@@ -824,7 +825,7 @@ function ManualLookSheet({ open, onClose, items, onSave }) {
 }
 
 function LookbookScreen({ ctx }) {
-  const { saved, openDetail, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, bulkUnsave, refreshLive, renameSavedLook } = ctx;
+  const { saved, openDetail, hasWardrobe, startComboOrWardrobe, wide, items, createManualLook, bulkUnsave, refreshLive, renameSavedLook, lookbookLoading } = ctx;
   const [makeOpen, setMakeOpen] = useSc(false);
   const [moreLook, setMoreLook] = useSc(null);
   const [renameLook, setRenameLook] = useSc(null);
@@ -872,6 +873,34 @@ function LookbookScreen({ ctx }) {
     <ManualLookSheet open={makeOpen} onClose={() => setMakeOpen(false)}
       items={items || []} onSave={createManualLook} />
   );
+
+  if (lookbookLoading && saved.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+        <div style={{
+          flex: 1,
+          paddingTop: wide ? 28 : 'calc(env(safe-area-inset-top, 0px) + 22px)',
+          paddingLeft: wide ? 0 : 18,
+          paddingRight: wide ? 0 : 18,
+        }}>
+          <div className={wide ? 'lb-wide-inner' : undefined}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: wide ? 10 : 8, marginBottom: 'var(--gap-header)' }}>
+              <h1 style={{ margin: 0, fontSize: wide ? 25 : 20, fontWeight: 800 }}>룩북</h1>
+            </div>
+            <div className="lb-grid">
+              {[0, 1, 2].map((i) => (
+                <div key={'sk' + i} aria-hidden="true">
+                  <div className="lb-skel" style={{ aspectRatio: '1 / 1', borderRadius: 'var(--r-md)' }} />
+                  <div className="lb-skel" style={{ height: 12, marginTop: 8, borderRadius: 6, width: '80%' }} />
+                  <div className="lb-skel" style={{ height: 10, marginTop: 6, borderRadius: 6, width: '55%' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (saved.length === 0) {
     return (

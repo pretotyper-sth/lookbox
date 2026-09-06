@@ -13,6 +13,12 @@ PC는 오늘 코디와 같은 왼쪽 사진·오른쪽 레일.
 제목·입력·취소/저장.
 `renameSavedLook` → `POST /api/live/outfits/{id}/state` `{label}`, 40자.
 
+목록은 옷장과 같이 계정 캐시(`lb_lookbook_v1`)를 먼저 그린다. 서버는
+`GET /api/live/outfits?saved=1`로 저장된 코디만 먼저 받고, 오늘 기록용 전체
+목록은 뒤에서 덮는다. 예전에는 전체 `/outfits`가 실패하면 `.catch(() => null)`로
+룩북이 빈 채로 남았다(2026-09-06).
+
 근거: `frontend/src/proto/05-screens-cde.jsx` `SavedCard` `LookbookScreen`;
 `frontend/src/proto/04-screens-ab.jsx` 옷장 그리드;
-`frontend/src/proto/09-app.jsx` `renameSavedLook`.
+`frontend/src/proto/09-app.jsx` `renameSavedLook` `refreshLive`;
+`backend/app/main.py` `live_list_outfits`.

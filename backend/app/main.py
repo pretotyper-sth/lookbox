@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 # OpenAI 호출이 전부 CERTIFICATE_VERIFY_FAILED로 끊기고, 토큰 검증 실패로 이어져
 # 화면에는 멀쩡한 세션이 invalid_session으로 보인다. 클라이언트를 만들기 전에 실행해야 한다.
 truststore.inject_into_ssl()
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
@@ -8083,37 +8083,53 @@ def live_reset_daily(body: LiveDailyReset, user: UserContext = Depends(current_u
     return {"deleted": deleted}
 
 
+def _wardrobe_rows_by_ids(user_id: str, item_ids: list[str]) -> list[dict[str, Any]]:
+    """IN 목록이 길면 PostgREST가 끊긴다. 80개씩 나눠 읽는다."""
+    out: list[dict[str, Any]] = []
+    cols = "id,name,category,color,image_url,status,note,created_at,updated_at,metadata"
+    for i in range(0, len(item_ids), 80):
+        chunk = item_ids[i:i + 80]
+        out.extend(
+            supabase_admin.table("wardrobe_items")
+            .select(cols)
+            .eq("user_id", user_id)
+            .in_("id", chunk)
+            .neq("status", "deleted")
+            .execute()
+            .data
+            or []
+        )
+    return out
+
+
 @app.get("/api/live/outfits")
-def live_list_outfits(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+def live_list_outfits(
+    user: UserContext = Depends(current_user),
+    saved: bool | None = Query(None),
+) -> dict[str, Any]:
     """저장한 코디(룩북)와 최근 생성된 코디를 아이템까지 함께 돌려준다.
 
     기기를 옮기거나 다시 로그인해도 룩북과 날짜별 코디가 그대로 보이려면 이게 필요하다.
     프론트는 localStorage 캐시로 먼저 그리고, 여기 응답으로 덮어쓴다.
+    saved=1이면 룩북만 — 오늘 코디 전체보다 훨씬 짧다.
     """
     require_supabase()
-    rows = (
+    q = (
         supabase_admin.table("outfits")
-        .select("*")
+        .select("id,label,mood,item_ids,look_image_url,saved,worn_at,type,created_at,metadata")
         .eq("user_id", user.id)
-        .order("created_at", desc=True)
+    )
+    if saved:
+        q = q.eq("saved", True)
+    rows = (
+        q.order("created_at", desc=True)
         .limit(200)
         .execute()
         .data
         or []
     )
     item_ids = sorted({i for r in rows for i in (r.get("item_ids") or [])})
-    items: list[dict[str, Any]] = []
-    if item_ids:
-        items = (
-            supabase_admin.table("wardrobe_items")
-            .select("*")
-            .eq("user_id", user.id)
-            .in_("id", item_ids)
-            .neq("status", "deleted")
-            .execute()
-            .data
-            or []
-        )
+    items = _wardrobe_rows_by_ids(user.id, item_ids) if item_ids else []
     alive = {i["id"] for i in items}
     out = []
     wish_items: list[dict[str, Any]] = []

@@ -104,6 +104,56 @@ function writeBillingCache(uid, data) {
   try { localStorage.setItem(billingCacheKey(uid), JSON.stringify(data)); } catch (e) { /* noop */ }
 }
 
+// 룩북도 옷장처럼 캐시를 먼저 그린다. 서버 /outfits 전체를 기다리면 빈 화면이 길다.
+const LOOKBOOK_CACHE_KEY = 'lb_lookbook_v1';
+function lookbookCacheKey(uid) {
+  return LOOKBOOK_CACHE_KEY + ':' + (uid || (() => {
+    try { return localStorage.getItem(LAST_UID_KEY) || 'anon'; } catch (e) { return 'anon'; }
+  })());
+}
+function applyLookbookCache(cache) {
+  if (!cache) return [];
+  (cache.items || []).forEach(liveRememberItem);
+  (cache.outfits || []).forEach((o) => {
+    if (!o || !o.id) return;
+    LB_DATA.OUTFIT_BY_ID[o.id] = {
+      id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
+      itemIds: o.itemIds || [], lookImg: o.lookImg, manual: !!o.manual, wish: o.wish,
+    };
+  });
+  return Array.isArray(cache.looks) ? cache.looks : [];
+}
+function readLookbookCache(uid) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(lookbookCacheKey(uid)) || 'null');
+    if (!parsed || !Array.isArray(parsed.looks)) return null;
+    return parsed;
+  } catch (e) { return null; }
+}
+function writeLookbookCache(uid, looks) {
+  if (!uid) return;
+  try {
+    const outfits = (looks || []).map((l) => l && LB_DATA.OUTFIT_BY_ID[l.outfitId]).filter(Boolean);
+    const itemIds = new Set();
+    outfits.forEach((o) => (o.itemIds || []).forEach((id) => itemIds.add(id)));
+    const items = [...itemIds].map((id) => LB_DATA.ALL[id]).filter(Boolean);
+    localStorage.setItem(lookbookCacheKey(uid), JSON.stringify({ looks, outfits, items }));
+  } catch (e) { /* noop */ }
+}
+
+function applyOutfitRecords(data) {
+  const list = (data && data.outfits) || [];
+  ((data && data.items) || []).forEach(liveRememberItem);
+  list.forEach((o) => {
+    const prev = LB_DATA.OUTFIT_BY_ID[o.id] || {};
+    LB_DATA.OUTFIT_BY_ID[o.id] = {
+      id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
+      itemIds: o.itemIds, lookImg: o.lookImg || prev.lookImg, manual: !!o.manual, wish: o.wish,
+    };
+  });
+  return list;
+}
+
 // 당일 추천 코디 캐시 — v3: owned-only 스냅샷(삭제·보관 아이템 재유입 방지)
 // 옷장 캐시와 같은 이유로 계정별로 나눈다. 호출부가 많아 uid를 인자로 돌리지 않고
 // 로그인 시점에 스코프를 한 번 세팅한다.
@@ -750,7 +800,15 @@ function App() {
   // 옷장을 한 번이라도 받아 봤는지. 처음 안내 팝업은 이게 끝난 뒤에만 띄운다 —
   // 안 그러면 옷이 가득한 계정에서도 로딩 몇 백 ms 동안 팝업이 번쩍인다.
   const [wardrobeLoaded, setWardrobeLoaded] = useState(() => isShowcase || !!readWardrobeCache());
-  const [savedLooks, setSavedLooks] = useState(() => pSaved === 'empty' ? [] : LB_DATA.SAVED.slice());
+  const [savedLooks, setSavedLooks] = useState(() => {
+    if (pSaved === 'empty') return [];
+    if (!isShowcase) {
+      const cached = applyLookbookCache(readLookbookCache());
+      if (cached.length) return cached;
+    }
+    return LB_DATA.SAVED.slice();
+  });
+  const [lookbookLoading, setLookbookLoading] = useState(() => !isShowcase && !readLookbookCache());
   const [addSheet, setAddSheet] = useState({ open: pScreen === 'add' || !!pSheet, mode: pSheet || 'wardrobe' });
   const [loading, setLoading] = useState(pLoading);
   const [moreLoading, setMoreLoading] = useState(false);
@@ -1212,22 +1270,19 @@ function App() {
   // 저장·해제를 누른 뒤에 뒤늦게 도착한 응답이 화면을 되돌리지 않게 하는 카운터.
   const outfitMutRef = useRef(0);
   // 서버 코디 목록 → 룩북·날짜별 기록·오늘 코디 캐시. 로컬은 첫 페인트용 캐시일 뿐이다.
+  const paintSavedLooks = useCallback((list, mutAtStart) => {
+    if (mutAtStart !== outfitMutRef.current) return;
+    setSavedLooks(list.filter((o) => o.saved).map((o) => ({
+      id: 'look-' + o.id, outfitId: o.id, label: o.label,
+      savedAt: relativeSavedAt(o.createdAt),
+    })));
+  }, []);
+
   const hydrateOutfits = useCallback((data, ownedItems, mutAtStart) => {
-    const list = data.outfits || [];
-    (data.items || []).forEach(liveRememberItem);
-    list.forEach((o) => {
-      LB_DATA.OUTFIT_BY_ID[o.id] = {
-        id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-        itemIds: o.itemIds, lookImg: o.lookImg, manual: !!o.manual, wish: o.wish,
-      };
-    });
+    const list = applyOutfitRecords(data);
     // 요청을 보낸 뒤에 사용자가 저장·해제를 눌렀다면 그 결과가 최신이다. 덮지 않는다.
-    if (mutAtStart === outfitMutRef.current) {
-      setSavedLooks(list.filter((o) => o.saved).map((o) => ({
-        id: 'look-' + o.id, outfitId: o.id, label: o.label,
-        savedAt: relativeSavedAt(o.createdAt),
-      })));
-    }
+    paintSavedLooks(list, mutAtStart);
+    if (!ownedItems) return;
     // 서버는 최신순으로 준다. 오늘 코디는 만든 순서대로 보여야 해서 되돌린다.
     const byDate = hydrateDailyHistoryFromServer(data, ownedItems);
     const todayKey = localYmd();
@@ -1261,7 +1316,7 @@ function App() {
       clearDailyCache();
       overwriteDailyRecord(todayKey, { outfits: [], items: [], wornIds: [] });
     }
-  }, []);
+  }, [paintSavedLooks]);
 
   // 요금제·크레딧 — 서버가 정본이다. 마이페이지가 서버를 기다리지 않게
   // 마지막 값을 먼저 그리고, 받은 뒤에 덮는다.
@@ -1286,29 +1341,57 @@ function App() {
   const refreshLive = useCallback(async () => {
     if (isShowcase || !authUid) return;
     const mutAtStart = outfitMutRef.current;
-    // 사용량도 옷장과 동시에 요청한다 — 옷장 응답을 기다렸다가 뒤이어 부르면
-    // 마이페이지 사용량이 그만큼 늦게 뜬다(직렬 대기 → 병렬 요청).
     reloadBilling();
-    try {
-      const [ownedData, archData, outfitData] = await Promise.all([
+
+    const wardrobeP = (async () => {
+      const [ownedData, archData] = await Promise.all([
         liveJSON('/api/live/wardrobe'),
         liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
-        liveJSON('/api/live/outfits').catch(() => null),
       ]);
       const liveItems = (ownedData.items || []).map(liveRememberItem);
       const archItems = (archData.items || []).map(liveRememberItem);
       setItems(liveItems);
       setArchived(archItems);
       syncAllFromWardrobe(liveItems, archItems);
-      if (outfitData) hydrateOutfits(outfitData, liveItems, mutAtStart);
       const removed = pruneDailyAgainstOwned(liveItems);
       if (LB_DATA.DAILY.length) setDailyAllowed(true);
       else if (removed) setDailyAllowed(false);
       bumpDaily();
+      return liveItems;
+    })();
+
+    // 룩북은 저장된 코디만 먼저 받는다. 전체 /outfits(오늘 기록 포함)를 기다리지 않는다.
+    const savedP = liveJSON('/api/live/outfits?saved=1').then((data) => {
+      applyOutfitRecords(data);
+      paintSavedLooks(data.outfits || [], mutAtStart);
+      setLookbookLoading(false);
+      return true;
+    });
+    const allP = liveJSON('/api/live/outfits');
+
+    let liveItems = null;
+    try {
+      liveItems = await wardrobeP;
     } catch (e) {
       showToast(e.message || '옷장을 불러오지 못했어요');
     }
-  }, [isShowcase, authUid, hydrateOutfits, bumpDaily, reloadBilling, showToast]);
+
+    let savedOk = false;
+    try {
+      savedOk = !!(await savedP);
+    } catch (e) { /* 전체 목록이 이어서 채운다 */ }
+
+    try {
+      const outfitData = await allP;
+      hydrateOutfits(outfitData, liveItems, mutAtStart);
+      setLookbookLoading(false);
+    } catch (e) {
+      if (!savedOk) {
+        setLookbookLoading(false);
+        showToast(e.message || '룩북을 불러오지 못했어요');
+      }
+    }
+  }, [isShowcase, authUid, hydrateOutfits, paintSavedLooks, bumpDaily, reloadBilling, showToast]);
 
   useEffect(() => {
     if (isShowcase) return;
@@ -1405,6 +1488,12 @@ function App() {
     if (isShowcase) return;
     writeWardrobeCache(authUid, items, archived);
   }, [authUid, items, archived, isShowcase]);
+
+  useEffect(() => {
+    if (isShowcase) return;
+    if (lookbookLoading && !(savedLooks && savedLooks.length)) return;
+    writeLookbookCache(authUid, savedLooks);
+  }, [authUid, savedLooks, isShowcase, lookbookLoading]);
 
   // 원본 이미지 미리 받기 — 목록 전체를 한꺼번에 받으면(예전 동작) 옷이 늘수록 첫 화면이
   // 느려진다. 43개에 1.7MB, 200개면 8MB를 그리드 썸네일과 동시에 경쟁시키는 셈이었다.
@@ -2382,7 +2471,7 @@ function App() {
     detailIndex: ((detailList && detailList.looks) || savedLooks).findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: ((detailList && detailList.looks) || savedLooks).length, gotoLook,
     hasWardrobe: comboReady,
-    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, lookbookLoading,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     // 코디 개수·제안 코디 수는 계정 설정(prefs)을 따른다. 기기별 tweak은 쇼케이스용 폴백.
     dailyCount, wishCount, setDailyCount, setWishCount,
