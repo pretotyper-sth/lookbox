@@ -428,6 +428,12 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 `frontend/src/proto/05-screens-cde.jsx` `SavedCard` `drawLookCutout`.
 [[look-img-flex-min]] [[look-flatlay-overlap]] [[lookbook-card]]
 
+## [2026-09-06] fix | 룩북 더보기 시트를 다른 팝업과 맞춤
+썸네일+얇은 테두리 버튼이 옷장 더보기 반쪽처럼 보였다. 오늘 다시 받기와
+같이 가운데 제목·채운 버튼·취소.
+근거: `frontend/src/proto/05-screens-cde.jsx` `LookbookScreen`. [[lookbook-card]]
+
+
 
 
 

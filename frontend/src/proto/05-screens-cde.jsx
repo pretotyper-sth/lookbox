@@ -994,31 +994,22 @@ function LookbookScreen({ ctx }) {
       )}
 
       <BottomSheet open={!!moreLook} onClose={() => setMoreLook(null)}>
-        {moreLook && (() => {
-          const o = LB_DATA.OUTFIT_BY_ID[moreLook.outfitId];
-          const its = o ? (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean) : [];
-          return (
-            <div style={{ padding: '10px 24px 26px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-                <div style={{ width: 56, flex: 'none' }}>
-                  {o ? <LookComposite outfit={o} items={its} ratio="1 / 1" /> : null}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 16.5, fontWeight: 700, lineHeight: 1.25, textWrap: 'pretty' }}>{moreLook.label}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>{its.length}개 품목</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 22 }}>
-                <Btn full size="lg" variant="soft" icon="pencil" onClick={() => {
-                  setRenameLook(moreLook);
-                  setRenameVal(moreLook.label || '');
-                  setMoreLook(null);
-                }}>이름 수정하기</Btn>
-                <Btn full variant="ghost" onClick={() => setMoreLook(null)}>취소</Btn>
-              </div>
+        {moreLook && (
+          <div style={{ padding: '28px 24px 26px', textAlign: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{moreLook.label}</h3>
+            <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              {((LB_DATA.OUTFIT_BY_ID[moreLook.outfitId] || {}).itemIds || []).length}개 품목
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 20 }}>
+              <Btn full size="lg" icon="pencil" onClick={() => {
+                setRenameLook(moreLook);
+                setRenameVal(moreLook.label || '');
+                setMoreLook(null);
+              }}>이름 수정하기</Btn>
+              <Btn full variant="ghost" onClick={() => setMoreLook(null)}>취소</Btn>
             </div>
-          );
-        })()}
+          </div>
+        )}
       </BottomSheet>
 
       <BottomSheet open={!!renameLook} onClose={() => setRenameLook(null)}>
