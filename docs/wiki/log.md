@@ -526,6 +526,11 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 근거: `backend/app/main.py` `ensure_within_limit` `_reset_free_action_usage`.
 [[tryon-setup-from-mypage]] [[mypage-usage-in-account]]
 
+## [2026-09-06] change | 구매내역 웹뷰 로그인 + PC  Dual-pane 담기
+세션을 풀스크린에서 가운데 모달 웹뷰로 바꿨다. 로그인 후 주문내역으로 이동하고, CTA를 누르면 옷이 한 줄씩 쌓인다. PC는 왼쪽 웹뷰·오른쪽 카드. 「담기」는 목록이 끝나기 전에 가능하다.
+근거: `frontend/src/proto/order-import-session.jsx`, `backend/app/main.py` `ITEM`/`_order`.
+[[order-import-webview]]
+
 
 
 

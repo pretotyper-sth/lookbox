@@ -179,6 +179,7 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     "tryon_save": ("바로 보기를 준비하고 있어요", 92, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
+    "orders_ready": ("주문내역으로 이동했어요", 35, 40, 4),
     "collect": ("주문내역에서 옷을 찾고 있어요", 40, 90, 30),
 }
 
@@ -7586,9 +7587,17 @@ def live_orders_collect(
                 line = proc.stderr.readline()
                 if line:
                     err_chunks.append(line)
+                    if line.startswith("ITEM "):
+                        try:
+                            item = json.loads(line.strip().split(" ", 1)[-1])
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(item, dict) and item.get("url"):
+                            report({"_order": item})
+                        continue
                     if line.startswith("STEP "):
                         key = line.strip().split(" ", 1)[-1]
-                        if key in ("open", "need_login", "collect"):
+                        if key in ("open", "need_login", "orders_ready", "collect"):
                             report(key)
                     continue
                 if proc.poll() is not None:
@@ -7597,6 +7606,18 @@ def live_orders_collect(
             leftover = proc.stderr.read()
             if leftover:
                 err_chunks.append(leftover)
+                for extra in leftover.splitlines():
+                    if extra.startswith("ITEM "):
+                        try:
+                            item = json.loads(extra.strip().split(" ", 1)[-1])
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(item, dict) and item.get("url"):
+                            report({"_order": item})
+                    elif extra.startswith("STEP "):
+                        key = extra.strip().split(" ", 1)[-1]
+                        if key in ("open", "need_login", "orders_ready", "collect"):
+                            report(key)
             stdout = proc.stdout.read() if proc.stdout else ""
         except subprocess.TimeoutExpired as exc:
             raise HTTPException(

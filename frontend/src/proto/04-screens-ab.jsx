@@ -1290,7 +1290,7 @@ function AddSheet({ ctx }) {
     }
     return true;
   };
-  const collectOrderItems = async ({ platform, onProgress }) => {
+  const collectOrderItems = async ({ platform, onProgress, onItem }) => {
     const shopId = (platform && platform.id) || orderShop;
     setErr('');
     setOrderNeedLogin(false);
@@ -1299,7 +1299,11 @@ function AddSheet({ ctx }) {
       const native = window.LookboxNative && typeof window.LookboxNative.collectOrders === 'function'
         ? await window.LookboxNative.collectOrders(platform, onProgress)
         : null;
-      if (native && native.items) return native.items;
+      if (native && native.items) {
+        if (onProgress) onProgress({ key: 'orders_ready' });
+        if (onItem) native.items.forEach(onItem);
+        return native.items;
+      }
 
       let usedExt = false;
       try {
@@ -1316,10 +1320,18 @@ function AddSheet({ ctx }) {
           const err = new Error('NEED_LOGIN');
           throw err;
         }
-        return (res && res.items) || [];
+        const items = (res && res.items) || [];
+        if (onProgress) onProgress({ key: 'orders_ready' });
+        if (onItem) {
+          for (let i = 0; i < items.length; i++) {
+            onItem(items[i]);
+            await new Promise((r) => setTimeout(r, 90));
+          }
+        }
+        return items;
       }
       if (onThisComputer() && typeof liveCollectOrders === 'function') {
-        const data = await liveCollectOrders({ platform: shopId, onProgress });
+        const data = await liveCollectOrders({ platform: shopId, onProgress, onOrder: onItem });
         return (data && data.items) || [];
       }
       throw new Error('ORDER_READ_BLOCKED');
@@ -1689,7 +1701,7 @@ function AddSheet({ ctx }) {
     sub = anchor
       ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'
       : (tab === 'orders'
-        ? (wide ? '산 옷을 골라 한 번에 담아요.' : '이 기능은 컴퓨터에서 사용할 수 있어요.')
+        ? '산 옷을 골라 하나씩 담아요.'
         : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.');
   }
 
@@ -1697,6 +1709,7 @@ function AddSheet({ ctx }) {
 
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
+    <>
     <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'} tightBottom={stage === 'input'}>
       <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: stage === 'input' ? '10px 24px 12px' : '10px 24px 26px' }}>
         {/* header */}
@@ -2117,7 +2130,7 @@ function AddSheet({ ctx }) {
                         <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {orderNeedLogin
                             ? '로그인한 뒤 다시 눌러 주세요.'
-                            : '쇼핑몰을 고른 뒤 아래 버튼으로 열어요.'}
+                            : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
                         </div>
                         <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                           {ORDER_PLATFORMS.map((p) => (
@@ -2369,7 +2382,7 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name={tab === 'orders' ? 'bag' : 'sparkle'} size={15} />
                 {tab === 'orders'
-                  ? '내역 확인 후 고른 옷만 옷장에 담아요'
+                  ? '로그인 후 옷을 하나씩 담아요'
                   : '사진 속 상의·하의·신발까지 따로따로 찾아드려요'}
               </div>
             ) : null}
@@ -2590,11 +2603,26 @@ function AddSheet({ ctx }) {
             </div>
           </div>
         )}
-      <OrderImportSession
+      </div>
+    </BottomSheet>
+    <OrderImportSession
         open={!!orderSession}
         platform={orderSession || orderPlatformById(orderShop)}
+        wide={!!wide}
         onClose={() => setOrderSession(null)}
         collectOrders={collectOrderItems}
+        onSaveOne={async (item) => {
+          if (!importOrders) throw new Error('담을 수 없어요');
+          const r = await importOrders([item]);
+          if (r && r.skipped && r.skipped.length) {
+            return { status: 'dup', reason: r.skipped[0].reason || '이미 옷장에 있어요' };
+          }
+          if (r && r.failed && r.failed.length) {
+            throw new Error(r.failed[0].error || '담지 못했어요');
+          }
+          if (typeof showToast === 'function') showToast('옷장에 담았어요', 'check');
+          return { status: 'ok' };
+        }}
         onConfirm={(picked) => {
           setOrderSession(null);
           applyCollectedRows(picked.map((it) => ({
@@ -2607,8 +2635,7 @@ function AddSheet({ ctx }) {
           })));
         }}
       />
-      </div>
-    </BottomSheet>
+    </>
   );
 }
 

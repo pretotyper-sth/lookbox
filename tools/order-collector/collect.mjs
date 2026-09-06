@@ -102,6 +102,10 @@ const waitUntilLoggedIn = async (page, ms) => {
   return false;
 };
 
+const emitItem = (it) => {
+  if (AUTO) process.stderr.write(`ITEM ${JSON.stringify(it)}\n`);
+};
+
 async function collectFromAuto(page, platform) {
   const found = [];
   for (const url of platform.urls) {
@@ -119,16 +123,26 @@ async function collectFromAuto(page, platform) {
         err.code = 'NEED_LOGIN';
         throw err;
       }
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      } catch { /* 지금 페이지가 주문내역이면 그대로 둔다 */ }
+      await page.waitForTimeout(800);
     }
+    step('orders_ready');
     step('collect');
     await page.evaluate(PAGE_EXPAND).catch(() => {});
     const items = await page.evaluate(PAGE_EXTRACTOR).catch(() => []);
     if (items.length) {
-      found.push(...items);
+      for (const it of items) {
+        const row = { ...it, platform: platform.name };
+        found.push(row);
+        emitItem(row);
+        await page.waitForTimeout(90);
+      }
       break;
     }
   }
-  return found.map((it) => ({ ...it, platform: platform.name }));
+  return found;
 }
 
 (async () => {
