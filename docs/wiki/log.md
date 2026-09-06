@@ -468,6 +468,11 @@ Vercel·Render는 `main`. 피처 브랜치 푸시만으로는 강력 새로고�
 근거: `backend/app/main.py` `_TRYON_FAIL_MSG`;
 `frontend/src/proto/09-app.jsx` `formatTryOnErr`. [[tryon-setup-from-mypage]]
 
+## [2026-09-06] fix | 모바일 검색 힌트를 PC 크기로
+옷장 검색 placeholder만 13.5px. 입력 글자는 iOS 확대 때문에 16px.
+근거: `frontend/src/proto/proto.css` `.lb-search-input`;
+`frontend/src/proto/04-screens-ab.jsx` `searchField`. [[mobile-page-zoom]]
+
 
 
 

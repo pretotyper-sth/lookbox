@@ -22,7 +22,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: gpt-image-2 high, 캐시 `tryon5-`. 실패는 이유별 두 줄. 스켈레톤 80px 원형. PC `wide`는 생성 안 함
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
-- [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px + viewport 리셋
+- [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용. 착장 인물은 `assets/mood` 남·여 예시. 분류 id는 `_STYLE_IDS`와 같음

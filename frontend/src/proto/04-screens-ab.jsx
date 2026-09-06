@@ -313,7 +313,7 @@ function WardrobeScreen({ ctx }) {
         <Icon name="search" size={15} stroke={2.2} />
       </span>
       <input
-        className="lb-input"
+        className="lb-input lb-search-input"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="이름·브랜드·색·구매처 검색"

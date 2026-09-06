@@ -6,6 +6,8 @@ iOS Safari는 16px 미만 input에 포커스하면 페이지를 확대하고, �
 
 모바일 input은 16px, `touch-action: pan-x pan-y`로 페이지 핀치·더블탭 줌을
 막고, 로드/`pageshow` 때 viewport `initial-scale`을 다시 심는다.
+옷장 검색 힌트만 `::placeholder` 13.5px로 PC와 맞춘다. 입력 글자는 16px를 유지한다
+(2026-09-06).
 
 근거: `frontend/index.html` viewport, `frontend/src/main.jsx` `resetMobilePageZoom`,
 `frontend/src/proto/proto.css` `.lb-input`.
