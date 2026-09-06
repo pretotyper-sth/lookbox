@@ -149,9 +149,20 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
           variant={worn ? 'soft' : 'primary'}
           icon={worn ? 'check' : 'hanger'}
           onClick={onWear}
-          style={wearLocked ? { opacity: 0.4 } : undefined}
+          style={
+            wearLocked && worn
+              ? {
+                  opacity: 0.55,
+                  background: 'color-mix(in srgb, var(--good) 18%, var(--surface))',
+                  color: 'var(--good)',
+                  boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--good) 32%, transparent)',
+                }
+              : wearLocked
+                ? { opacity: 0.4 }
+                : undefined
+          }
         >
-          {worn ? '오늘 입음' : '오늘 입기'}
+          {wearLocked && worn ? '당일 입었음' : worn ? '오늘 입음' : '오늘 입기'}
         </Btn>
       </div>
     </div>
