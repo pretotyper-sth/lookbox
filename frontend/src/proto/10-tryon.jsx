@@ -498,6 +498,12 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
                 <div className="lb-tryon-bar" aria-hidden>
                   <i style={{ width: `${Math.max(2, Math.min(100, (progress && progress.pct) || 6))}%` }} />
                 </div>
+                <div style={{
+                  marginTop: 10, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)',
+                  textAlign: 'center', wordBreak: 'keep-all', lineHeight: 1.4,
+                }}>
+                  처음 한 번만 만들면 돼요
+                </div>
               </div>
             ) : checking ? (
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-2)' }}>사진 확인 중…</div>

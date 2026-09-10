@@ -287,6 +287,7 @@ img { display: block; max-width: 100%; }
   width: 80px;
   height: 80px;
   border-radius: 50%;
+  transform: translateY(-10px);
 }
 .lb-tryon-frame {
   position: relative;
@@ -551,10 +552,10 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
 }
 .lb-order-webview {
   flex: 1; min-height: 0;
-  margin: 0 18px var(--s3);
+  margin: 0 18px 12px;
   border-radius: var(--r-md);
   box-shadow: inset 0 0 0 1px var(--line);
-  background: var(--ivory);
+  background: #fff;
   display: flex; flex-direction: column;
   overflow: hidden;
 }
@@ -574,6 +575,38 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
   align-items: center; justify-content: center;
   padding: 24px 22px;
   text-align: center;
+}
+.lb-order-webbody.live {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+.lb-order-stage {
+  position: relative;
+  flex: 1; min-height: 0;
+  background: #fff;
+}
+.lb-order-frame {
+  width: 100%; height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  display: block;
+}
+.lb-order-wait {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px 22px;
+  text-align: center;
+}
+.lb-order-webhit {
+  position: absolute; inset: 0;
+  outline: none;
+  caret-color: transparent;
+  color: transparent;
+  overflow: hidden;
+  cursor: default;
+  touch-action: none;
 }
 .lb-order-privacy {
   flex: none;

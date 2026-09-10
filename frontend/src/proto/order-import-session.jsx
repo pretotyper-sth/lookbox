@@ -1,7 +1,7 @@
 /* 구매내역 세션. 몰은 시트에서 고르고, 여기서는 웹뷰로 로그인한 뒤 옷을 하나씩 담는다.
    비밀번호는 받지 않는다. 쇼핑몰 창(네이티브 웹뷰·확장 탭·로컬 크롬)에서만 로그인한다. */
 const React = window.React;
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useLayoutEffect } = React;
 
 const CARD_H = 'min(640px, calc(100dvh - 48px))';
 
@@ -12,6 +12,22 @@ function barUrl(platform, phase) {
   return String(raw).replace(/^https?:\/\//, '');
 }
 
+function formatOrderErr(raw, wide) {
+  const s = String(raw || '').trim();
+  if (s === 'ORDER_READ_BLOCKED') {
+    return '이 기기에서는 쇼핑몰 창을 열 수 없어요.\n컴퓨터에서 다시 시도해 주세요.';
+  }
+  if (s === 'ORDER_OPEN_FAILED' || s === 'NEED_SETUP' || s === 'NO_EXT') {
+    return wide
+      ? '쇼핑몰 창을 열지 못했어요.\n이 컴퓨터에서 다시 열어 주세요.'
+      : '이 기기에서는 쇼핑몰 창을 열 수 없어요.\n컴퓨터에서 다시 시도해 주세요.';
+  }
+  if (s.includes('\n')) return s;
+  const parts = s.split(/(?<=다\.|요\.)\s+/).filter(Boolean);
+  if (parts.length >= 2) return parts[0] + '\n' + parts.slice(1).join(' ');
+  return s;
+}
+
 function OrderImportSession({
   open,
   platform,
@@ -20,6 +36,8 @@ function OrderImportSession({
   onConfirm,
   onSaveOne,
   collectOrders,
+  sendInput,
+  cancelCollect,
 }) {
   const Icon = window.Icon;
   // login: 웹뷰에서 로그인 대기
@@ -31,6 +49,9 @@ function OrderImportSession({
   const [found, setFound] = useState([]);
   const [doneCollect, setDoneCollect] = useState(false);
   const [savingUrl, setSavingUrl] = useState('');
+  const [embedOrigin, setEmbedOrigin] = useState('');
+  const [pageUrl, setPageUrl] = useState('');
+  const [stageSize, setStageSize] = useState(null);
   const cancelRef = useRef(false);
   const startedRef = useRef(false);
   const collectRef = useRef(collectOrders);
@@ -38,8 +59,19 @@ function OrderImportSession({
   const seenRef = useRef(new Set());
   const platformRef = useRef(platform);
   platformRef.current = platform;
-  window.useEscapeClose(open, () => {
+  const sendRef = useRef(sendInput);
+  sendRef.current = sendInput;
+  const embedRef = useRef('');
+  const viewBoxRef = useRef(null);
+  const hitRef = useRef(null);
+  const stageRef = useRef(null);
+  stageRef.current = stageSize;
+  const stopCollect = () => {
     cancelRef.current = true;
+    if (typeof cancelCollect === 'function') cancelCollect();
+  };
+  window.useEscapeClose(open, () => {
+    stopCollect();
     onClose();
   });
 
@@ -72,6 +104,8 @@ function OrderImportSession({
     try {
       const items = await collectRef.current({
         platform: shop,
+        width: stageSize && stageSize.w,
+        height: stageSize && stageSize.h,
         onProgress: (step) => {
           if (cancelRef.current) return;
           const key = (step && (step.key || step)) || '';
@@ -84,24 +118,27 @@ function OrderImportSession({
           setPhase((p) => (p === 'login' ? 'orders' : p));
           pushItem(it);
         },
+        onEmbed: (info) => {
+          if (cancelRef.current || !info || !info.origin) return;
+          embedRef.current = info.origin;
+          setEmbedOrigin(info.origin);
+        },
       });
       if (cancelRef.current) return;
       (items || []).forEach(pushItem);
       setDoneCollect(true);
       setPhase((p) => (p === 'login' ? 'orders' : p));
       if (!(items && items.length) && !seenRef.current.size) {
-        setErr('주문내역이 보이면 다시 불러오세요.');
+        setErr('주문내역이 보이면\n다시 불러오세요.');
       }
     } catch (e) {
       if (cancelRef.current) return;
       const msg = String((e && e.message) || '');
       if (msg === 'NEED_LOGIN' || /로그인/.test(msg)) {
-        setErr('열린 창에서 로그인한 뒤 다시 눌러 주세요.');
+        setErr('이 화면에서 로그인한 뒤\n다시 눌러 주세요.');
         setPhase('login');
-      } else if (msg === 'ORDER_READ_BLOCKED') {
-        setErr('이 기기에서는 쇼핑몰 창을 열 수 없어요. 컴퓨터에서 다시 시도해 주세요.');
       } else {
-        setErr(msg || '주문 내역을 가져오지 못했어요.');
+        setErr(formatOrderErr(msg || '주문 내역을 가져오지 못했어요.', wide));
       }
     } finally {
       if (!cancelRef.current) setBusy(false);
@@ -111,6 +148,11 @@ function OrderImportSession({
   useEffect(() => {
     if (!open) {
       startedRef.current = false;
+      embedRef.current = '';
+      setEmbedOrigin('');
+      setPageUrl('');
+      setStageSize(null);
+      if (typeof cancelCollect === 'function') cancelCollect();
       return undefined;
     }
     cancelRef.current = false;
@@ -121,18 +163,86 @@ function OrderImportSession({
     setFound([]);
     setDoneCollect(false);
     setSavingUrl('');
-    if (startedRef.current) return undefined;
+    return undefined;
+  }, [open, platform && platform.id]);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const el = viewBoxRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 40) return;
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      setStageSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    measure();
+    const id = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !stageSize || startedRef.current) return undefined;
     startedRef.current = true;
     begin();
     return () => { cancelRef.current = true; };
-  }, [open, platform && platform.id]);
+  }, [open, stageSize]);
+
+  useEffect(() => {
+    if (!embedOrigin) return undefined;
+    let on = true;
+    const tick = () => {
+      fetch(`${embedOrigin}/meta`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (!on || !d || !d.url) return;
+          setPageUrl(String(d.url));
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => { on = false; clearInterval(id); };
+  }, [embedOrigin]);
+
+  useEffect(() => {
+    const el = hitRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const origin = embedRef.current;
+      const box = viewBoxRef.current;
+      const r = box ? box.getBoundingClientRect() : null;
+      const size = stageRef.current;
+      const vw = (size && size.w) || (r && r.width) || 1;
+      const vh = (size && size.h) || (r && r.height) || 1;
+      const x = r ? ((e.clientX - r.left) / r.width) * vw : vw / 2;
+      const y = r ? ((e.clientY - r.top) / r.height) * vh : vh / 2;
+      const payload = (e.ctrlKey || e.metaKey)
+        ? { t: 'zoom', scale: e.deltaY < 0 ? 1.08 : 0.93 }
+        : { t: 'scroll', dx: e.deltaX, dy: e.deltaY, x, y };
+      if (origin) {
+        fetch(`${origin}/input`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      } else if (typeof sendRef.current === 'function') {
+        sendRef.current(payload);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [embedOrigin]);
 
   if (!open || !platform) return null;
 
   const picked = found.filter((x) => x.pick && x.state !== 'saved' && x.state !== 'dup');
   const savedN = found.filter((x) => x.state === 'saved').length;
   const close = () => {
-    cancelRef.current = true;
+    stopCollect();
     onClose();
   };
 
@@ -169,7 +279,63 @@ function OrderImportSession({
   };
 
   const trayOn = phase === 'tray';
-  const urlText = barUrl(platform, phase === 'login' ? 'login' : 'orders');
+  const urlText = pageUrl
+    ? pageUrl.replace(/^https?:\/\//, '')
+    : barUrl(platform, phase === 'login' ? 'login' : 'orders');
+
+  const toPageXY = (e) => {
+    const box = viewBoxRef.current;
+    if (!box) return null;
+    const r = box.getBoundingClientRect();
+    const vw = (stageSize && stageSize.w) || r.width;
+    const vh = (stageSize && stageSize.h) || r.height;
+    return {
+      x: ((e.clientX - r.left) / r.width) * vw,
+      y: ((e.clientY - r.top) / r.height) * vh,
+    };
+  };
+
+  const send = (payload) => {
+    const origin = embedRef.current;
+    if (origin) {
+      fetch(`${origin}/input`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+      return;
+    }
+    if (typeof sendRef.current === 'function') sendRef.current(payload);
+  };
+
+  const onHit = (e) => {
+    e.preventDefault();
+    const xy = toPageXY(e);
+    if (!xy) return;
+    send({ t: 'click', x: xy.x, y: xy.y });
+    e.currentTarget.focus();
+  };
+
+  const onKey = (e) => {
+    if (e.isComposing) return;
+    if (e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Tab' || e.key === 'Escape') {
+      e.preventDefault();
+      send({ t: 'key', key: e.key });
+      return;
+    }
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      send({ t: 'type', text: e.key });
+    }
+  };
+
+  const onCompEnd = (e) => {
+    const text = e.data;
+    if (text) send({ t: 'type', text });
+    e.currentTarget.textContent = '';
+  };
+
+  const live = !!embedOrigin;
 
   const privacy = (
     <div className="lb-order-privacy">
@@ -184,26 +350,37 @@ function OrderImportSession({
         <Icon name="lock" size={12} stroke={2.2} />
         <span>{urlText}</span>
       </div>
-      <div className="lb-order-webbody">
-        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em' }}>{platform.name}</div>
-          {err ? (
-          <div style={{
-            marginTop: 10, fontSize: 13, fontWeight: 600, color: '#B0573C',
-            lineHeight: 1.4, wordBreak: 'keep-all',
-          }}>
-            {err}
-          </div>
-        ) : (
-          <div style={{
-            marginTop: 10, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all',
-          }}>
-            {phase === 'login'
-              ? (busy
-                ? '로그인 화면을 열고 있어요. 열린 창에서 로그인해 주세요.'
-                : '로그인하면 주문내역으로 바로 이동해요.')
-              : '주문내역으로 이동했어요. 옷을 가져오려면 아래 버튼을 눌러 주세요.'}
-          </div>
-        )}
+      <div className="lb-order-webbody live">
+        <div ref={viewBoxRef} className="lb-order-stage">
+          {embedOrigin ? (
+            <img className="lb-order-frame" alt="" src={`${embedOrigin}/stream`} />
+          ) : (
+            <div className="lb-order-wait">
+              {err ? (
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: '#B0573C',
+                  lineHeight: 1.45, wordBreak: 'keep-all', whiteSpace: 'pre-line',
+                }}>
+                  {err}
+                </div>
+              ) : (
+                <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
+                  {busy ? '로그인 화면을 열고 있어요.' : '로그인하면 주문내역으로 바로 이동해요.'}
+                </div>
+              )}
+            </div>
+          )}
+          <div
+            ref={hitRef}
+            className="lb-order-webhit"
+            tabIndex={0}
+            contentEditable
+            suppressContentEditableWarning
+            onMouseDown={onHit}
+            onKeyDown={onKey}
+            onCompositionEnd={onCompEnd}
+          />
+        </div>
       </div>
       {privacy}
     </div>
@@ -220,7 +397,15 @@ function OrderImportSession({
       </div>
       {webview}
       <div className="lb-order-foot">
-        {phase === 'login' ? (
+        {phase === 'login' && live ? (
+          <div style={{
+            height: 52, display: 'grid', placeItems: 'center',
+            fontSize: 13, fontWeight: 700, color: 'var(--ink-3)',
+            wordBreak: 'keep-all', textAlign: 'center',
+          }}>
+            위 화면에서 로그인해 주세요
+          </div>
+        ) : phase === 'login' ? (
           <button
             type="button"
             onClick={begin}

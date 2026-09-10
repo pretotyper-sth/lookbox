@@ -241,9 +241,10 @@ def stream_with_keepalive(work) -> StreamingResponse:
         t.start()
         idle = 0.0
         while t.is_alive():
-            t.join(timeout=0.4)
+            t.join(timeout=0.05 if steps else 0.4)
+            had = bool(steps)
             yield from drain()
-            idle += 0.4
+            idle = 0.0 if had else idle + 0.4
             if t.is_alive() and idle >= 10:
                 idle = 0.0
                 yield ": ping\n\n"  # 단계 변화가 없어도 연결 유지
@@ -4924,6 +4925,20 @@ class LiveImportUrl(BaseModel):
 
 class LiveOrderCollect(BaseModel):
     platform: str = "musinsa"
+    width: int = 384
+    height: int = 520
+
+
+class LiveOrderInput(BaseModel):
+    t: str
+    x: float | None = None
+    y: float | None = None
+    text: str | None = None
+    key: str | None = None
+    dy: float | None = None
+
+
+_order_proc: dict[str, subprocess.Popen] = {}
 
 
 class LiveCoordinate(BaseModel):
@@ -7540,14 +7555,16 @@ def live_orders_extension_zip(user: UserContext = Depends(current_user)) -> Resp
 def live_orders_collect(
     body: LiveOrderCollect, request: Request, user: UserContext = Depends(current_user)
 ) -> StreamingResponse:
-    """이 컴퓨터에서 크롬을 띄워 쇼핑몰 주문내역을 읽는다. Render에서는 막는다."""
+    """이 컴퓨터에서 쇼핑몰 화면을 모달에 그린다. Render에서는 막는다."""
     host = (request.client.host if request.client else "") or ""
     if host not in ("127.0.0.1", "::1"):
         raise HTTPException(
             status_code=403,
-            detail="이 컴퓨터에서 실행 중인 RealCloset에서만 크롬을 열 수 있어요.",
+            detail="이 컴퓨터에서 실행 중인 RealCloset에서만 쇼핑몰 창을 열 수 있어요.",
         )
     platform = re.sub(r"[^a-z0-9]", "", (body.platform or "musinsa").lower()) or "musinsa"
+    view_w = max(280, min(720, int(body.width or 384)))
+    view_h = max(320, min(960, int(body.height or 520)))
     collector = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "tools", "order-collector")
     )
@@ -7560,22 +7577,31 @@ def live_orders_collect(
             raise HTTPException(status_code=422, detail="NEED_SETUP")
         if not os.path.isdir(playwright):
             raise HTTPException(status_code=422, detail="NEED_SETUP")
+        prev = _order_proc.pop(user.id, None)
+        if prev and prev.poll() is None:
+            prev.kill()
         try:
             proc = subprocess.Popen(
                 [
                     "node",
                     script,
                     "--stdout",
+                    "--embed",
                     f"--platform={platform}",
+                    f"--width={view_w}",
+                    f"--height={view_h}",
                     "--login-wait=180000",
                 ],
                 cwd=collector,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                bufsize=1,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=422, detail="NEED_SETUP") from exc
+        _order_proc[user.id] = proc
         err_chunks: list[str] = []
         deadline = time.time() + 210
         try:
@@ -7586,6 +7612,13 @@ def live_orders_collect(
                     raise subprocess.TimeoutExpired(proc.args, 210)
                 line = proc.stderr.readline()
                 if line:
+                    if line.startswith("EMBED "):
+                        origin = line.strip().split(" ", 1)[-1].strip()
+                        if origin.startswith("http://127.0.0.1:"):
+                            report({"_embed": {"origin": origin}})
+                        continue
+                    if line.startswith("VIEW "):
+                        continue
                     err_chunks.append(line)
                     if line.startswith("ITEM "):
                         try:
@@ -7607,6 +7640,8 @@ def live_orders_collect(
             if leftover:
                 err_chunks.append(leftover)
                 for extra in leftover.splitlines():
+                    if extra.startswith("VIEW "):
+                        continue
                     if extra.startswith("ITEM "):
                         try:
                             item = json.loads(extra.strip().split(" ", 1)[-1])
@@ -7622,8 +7657,12 @@ def live_orders_collect(
         except subprocess.TimeoutExpired as exc:
             raise HTTPException(
                 status_code=422,
-                detail="시간이 너무 오래 걸렸어요. 크롬에서 로그인한 뒤 다시 눌러 주세요.",
+                detail="시간이 너무 오래 걸렸어요. 화면에서 로그인한 뒤 다시 눌러 주세요.",
             ) from exc
+        finally:
+            held = _order_proc.get(user.id)
+            if held is proc:
+                _order_proc.pop(user.id, None)
         stderr = "".join(err_chunks)
         if proc.returncode == 2:
             raise HTTPException(status_code=422, detail="NEED_LOGIN")
@@ -7638,6 +7677,46 @@ def live_orders_collect(
         return {"items": items or []}
 
     return stream_with_keepalive(work)
+
+
+def _order_local_only(request: Request) -> None:
+    host = (request.client.host if request.client else "") or ""
+    if host not in ("127.0.0.1", "::1"):
+        raise HTTPException(status_code=403, detail="이 컴퓨터에서만 쓸 수 있어요.")
+
+
+@app.post("/api/live/orders/input")
+def live_orders_input(
+    body: LiveOrderInput, request: Request, user: UserContext = Depends(current_user)
+) -> dict[str, bool]:
+    _order_local_only(request)
+    proc = _order_proc.get(user.id)
+    if not proc or proc.poll() is not None or not proc.stdin:
+        raise HTTPException(status_code=404, detail="쇼핑몰 창이 없어요.")
+    payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    try:
+        proc.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        proc.stdin.flush()
+    except BrokenPipeError as exc:
+        raise HTTPException(status_code=404, detail="쇼핑몰 창이 없어요.") from exc
+    return {"ok": True}
+
+
+@app.post("/api/live/orders/cancel")
+def live_orders_cancel(
+    request: Request, user: UserContext = Depends(current_user)
+) -> dict[str, bool]:
+    _order_local_only(request)
+    proc = _order_proc.pop(user.id, None)
+    if proc and proc.poll() is None:
+        try:
+            if proc.stdin:
+                proc.stdin.write(json.dumps({"t": "close"}) + "\n")
+                proc.stdin.flush()
+        except Exception:
+            pass
+        proc.kill()
+    return {"ok": True}
 
 
 def _filled_daily_looks_today(user_id: str) -> int:

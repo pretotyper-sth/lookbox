@@ -17,6 +17,7 @@
  */
 import { chromium } from 'playwright';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -35,7 +36,11 @@ const opt = (name) => {
   return i >= 0 ? args[i + 1] : '';
 };
 const AUTO = flag('stdout') || flag('json');
+const EMBED = flag('embed');
+const VIEW_W = Math.max(280, parseInt(opt('width') || '384', 10) || 384);
+const VIEW_H = Math.max(320, parseInt(opt('height') || '520', 10) || 520);
 const LOGIN_WAIT_MS = Math.max(15_000, parseInt(opt('login-wait') || '180000', 10) || 180_000);
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 
 const step = (key) => {
   if (AUTO) process.stderr.write(`STEP ${key}\n`);
@@ -145,6 +150,160 @@ async function collectFromAuto(page, platform) {
   return found;
 }
 
+async function applyEmbedCmd(getPage, cmd, cdp) {
+  const page = getPage();
+  if (!page || !cmd || !cmd.t) return;
+  if (cmd.t === 'close') {
+    await page.context().close().catch(() => {});
+    process.exit(0);
+  }
+  if (cmd.t === 'click') await page.mouse.click(Number(cmd.x) || 0, Number(cmd.y) || 0);
+  if (cmd.t === 'type' && cmd.text) await page.keyboard.insertText(String(cmd.text));
+  if (cmd.t === 'key' && cmd.key) await page.keyboard.press(String(cmd.key));
+  if (cmd.t === 'scroll') {
+    const x = Number.isFinite(Number(cmd.x)) ? Number(cmd.x) : VIEW_W / 2;
+    const y = Number.isFinite(Number(cmd.y)) ? Number(cmd.y) : VIEW_H / 2;
+    const dx = Number(cmd.dx) || 0;
+    const dy = Number(cmd.dy) || 0;
+    if (cdp) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x,
+        y,
+        deltaX: dx,
+        deltaY: dy,
+      });
+    } else {
+      await page.mouse.move(x, y).catch(() => {});
+      await page.mouse.wheel(dx, dy);
+    }
+  }
+  if (cmd.t === 'zoom') {
+    const cur = await page.evaluate(() => {
+      const z = document.documentElement.style.zoom;
+      return z ? parseFloat(z) : 1;
+    }).catch(() => 1);
+    const next = Math.min(2.4, Math.max(1, (cur || 1) * (Number(cmd.scale) || 1)));
+    await page.evaluate((z) => {
+      document.documentElement.style.zoom = String(z);
+    }, next).catch(() => {});
+  }
+}
+
+function startEmbedServer(getPage, getCdp) {
+  let lastJpeg = Buffer.alloc(0);
+  const clients = new Set();
+  const pushFrame = (b64) => {
+    let buf;
+    try { buf = Buffer.from(b64, 'base64'); } catch { return; }
+    if (!buf.length) return;
+    lastJpeg = buf;
+    for (const res of clients) {
+      try {
+        res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${buf.length}\r\n\r\n`);
+        res.write(buf);
+        res.write('\r\n');
+      } catch {
+        clients.delete(res);
+      }
+    }
+  };
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type');
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    const pathName = String(req.url || '').split('?')[0];
+    if (pathName === '/stream') {
+      res.writeHead(200, {
+        'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Connection: 'keep-alive',
+      });
+      if (lastJpeg.length) {
+        res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${lastJpeg.length}\r\n\r\n`);
+        res.write(lastJpeg);
+        res.write('\r\n');
+      }
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+      return;
+    }
+    if (pathName === '/frame.jpg') {
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'no-store',
+      });
+      res.end(lastJpeg);
+      return;
+    }
+    if (pathName === '/meta') {
+      const page = getPage();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ url: page ? page.url() : '', w: VIEW_W, h: VIEW_H }));
+      return;
+    }
+    if (pathName === '/input' && req.method === 'POST') {
+      let raw = '';
+      req.on('data', (c) => { raw += c; });
+      req.on('end', async () => {
+        try { await applyEmbedCmd(getPage, JSON.parse(raw || '{}'), getCdp()); } catch { /* 한 입력 실패는 무시 */ }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{"ok":true}');
+      });
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      process.stderr.write(`EMBED http://127.0.0.1:${port}\n`);
+      resolve({
+        pushFrame,
+        close: () => {
+          for (const res of clients) {
+            try { res.end(); } catch { /* already closed */ }
+          }
+          clients.clear();
+          server.close();
+        },
+      });
+    });
+  });
+}
+
+async function attachScreencast(page, pushFrame) {
+  const client = await page.context().newCDPSession(page);
+  await client.send('Page.startScreencast', {
+    format: 'jpeg',
+    quality: 58,
+    maxWidth: VIEW_W,
+    maxHeight: VIEW_H,
+    everyNthFrame: 2,
+  });
+  client.on('Page.screencastFrame', async (frame) => {
+    if (pushFrame) pushFrame(frame.data);
+    await client.send('Page.screencastFrameAck', { sessionId: frame.sessionId }).catch(() => {});
+  });
+  await page.evaluate(() => {
+    if (!document.documentElement.style.zoom) document.documentElement.style.zoom = '1.2';
+  }).catch(() => {});
+  return client;
+}
+
+function listenEmbedInput(getPage, getCdp) {
+  const rlIn = readline.createInterface({ input: process.stdin });
+  rlIn.on('line', async (line) => {
+    try { await applyEmbedCmd(getPage, JSON.parse(line), getCdp()); } catch { /* 한 입력 실패는 무시 */ }
+  });
+}
+
 (async () => {
   const platforms = AUTO ? await (async () => {
     const named = (opt('platform') || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -162,11 +321,41 @@ async function collectFromAuto(page, platform) {
 
   const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
     channel: 'chrome',
-    headless: false,
-    viewport: null,
-    args: ['--start-maximized'],
+    headless: EMBED,
+    viewport: EMBED ? { width: VIEW_W, height: VIEW_H } : null,
+    userAgent: EMBED ? IPHONE_UA : undefined,
+    isMobile: EMBED,
+    hasTouch: EMBED,
+    args: EMBED ? ['--headless=new'] : ['--start-maximized'],
   });
-  const page = ctx.pages()[0] || (await ctx.newPage());
+  let page = ctx.pages()[0] || (await ctx.newPage());
+  let embedCdp = null;
+  let embedHub = null;
+  if (EMBED) {
+    await ctx.addInitScript(() => {
+      const apply = () => {
+        if (!document.documentElement.style.zoom) document.documentElement.style.zoom = '1.2';
+      };
+      apply();
+      document.addEventListener('DOMContentLoaded', apply);
+    });
+    embedHub = await startEmbedServer(() => page, () => embedCdp);
+    embedCdp = await attachScreencast(page, embedHub.pushFrame);
+    page.on('load', () => {
+      page.evaluate(() => {
+        if (!document.documentElement.style.zoom) document.documentElement.style.zoom = '1.2';
+      }).catch(() => {});
+    });
+    ctx.on('page', async (p) => {
+      page = p;
+      embedCdp = await attachScreencast(p, embedHub.pushFrame).catch(() => embedCdp);
+      p.on('close', () => {
+        const left = ctx.pages()[0];
+        if (left) page = left;
+      });
+    });
+    listenEmbedInput(() => page, () => embedCdp);
+  }
 
   const all = [];
   for (const p of platforms) {
@@ -203,7 +392,10 @@ async function collectFromAuto(page, platform) {
     console.log('RealCloset에서 [아이템 추가 → URL] 칸에 붙여넣으면 고를 수 있어요.\n');
   }
 
-  if (!flag('keep-open')) await ctx.close();
+  if (!flag('keep-open')) {
+    if (embedHub) embedHub.close();
+    await ctx.close();
+  }
 })().catch((e) => {
   if (e && (e.code === 'NEED_LOGIN' || e.message === 'NEED_LOGIN')) {
     process.stderr.write('STEP need_login\n');

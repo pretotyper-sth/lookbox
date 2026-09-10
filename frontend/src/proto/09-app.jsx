@@ -590,14 +590,14 @@ function lastResultLine(text) {
   const lines = String(text || '').split('\n').map(streamPayload).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     // 진행(_step)·착장 한 장(_look)·코디 한 장(_outfit)·주문 한 줄(_order)은 결과가 아니다.
-    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1 && lines[i].indexOf('"_outfit"') === -1 && lines[i].indexOf('"_wish"') === -1 && lines[i].indexOf('"_order"') === -1) return lines[i];
+    if (lines[i].indexOf('"_step"') === -1 && lines[i].indexOf('"_look"') === -1 && lines[i].indexOf('"_outfit"') === -1 && lines[i].indexOf('"_wish"') === -1 && lines[i].indexOf('"_order"') === -1 && lines[i].indexOf('"_view"') === -1 && lines[i].indexOf('"_embed"') === -1) return lines[i];
   }
   return '';
 }
 
 // 스트림을 읽으면서 _step / _look / _outfit 이벤트가 도착할 때마다 콜백. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
-async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder) {
+async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed) {
   if (!res.body || !res.body.getReader) return res.text();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -614,12 +614,14 @@ async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onO
       const payload = streamPayload(buf.slice(0, nl));
       buf = buf.slice(nl + 1);
       if (!payload) continue;
+      const isView = payload.indexOf('"_view"') !== -1 && payload.indexOf('"_view"') < 16;
+      const isEmbed = payload.indexOf('"_embed"') !== -1 && payload.indexOf('"_embed"') < 16;
       const isStep = payload.indexOf('"_step"') !== -1;
       const isLook = payload.indexOf('"_look"') !== -1;
       const isOutfit = payload.indexOf('"_outfit"') !== -1;
       const isWish = payload.indexOf('"_wish"') !== -1;
       const isOrder = payload.indexOf('"_order"') !== -1;
-      if (!isStep && !isLook && !isOutfit && !isWish && !isOrder) continue;
+      if (!isStep && !isLook && !isOutfit && !isWish && !isOrder && !isView && !isEmbed) continue;
       try {
         const row = JSON.parse(payload);
         if (row._step && onProgress) onProgress(row._step);
@@ -627,6 +629,8 @@ async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onO
         if (row._outfit && onOutfit) onOutfit(row._outfit);
         if (row._wish && onWish) onWish(row._wish);
         if (row._order && onOrder) onOrder(row._order);
+        if (row._view && onView) onView(row._view);
+        if (row._embed && onEmbed) onEmbed(row._embed);
       } catch (e) { /* 부분 수신 줄은 무시 */ }
     }
   }
@@ -637,7 +641,7 @@ async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
   const timeoutMs = options.timeoutMs || 165000;
-  const { timeoutMs: _t, onProgress, onLook, onOutfit, onWish, onOrder, ...fetchOpts } = options;
+  const { timeoutMs: _t, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, ...fetchOpts } = options;
   const headers = { ...(options.headers || {}) };
   // GET에 application/json을 붙이면 매번 CORS preflight가 나간다.
   // Render가 잠든 직후 OPTIONS가 실패하면 '네트워크가 불안정해요'로 떨어진다.
@@ -671,8 +675,8 @@ async function liveJSON(url, options = {}) {
   // 본문은 줄 단위: {"_step":…} 진행 알림이 흐르고 마지막 줄이 결과다.
   let text = '';
   try {
-    text = (onProgress || onLook || onOutfit || onWish || onOrder)
-      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder)
+    text = (onProgress || onLook || onOutfit || onWish || onOrder || onView || onEmbed)
+      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed)
       : await res.text();
   } catch (e) {
     throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
@@ -747,14 +751,28 @@ async function liveImportSource({ sourceType, file, url, status, extractHint, on
   return liveJSON('/api/live/import/photo', { method: 'POST', body: fd, onProgress });
 }
 
-async function liveCollectOrders({ platform, onProgress, onOrder }) {
+async function liveCollectOrders({ platform, width, height, onProgress, onOrder, onView, onEmbed }) {
   return liveJSON('/api/live/orders/collect', {
     method: 'POST',
-    body: JSON.stringify({ platform }),
+    body: JSON.stringify({ platform, width, height }),
     onProgress,
     onOrder,
+    onView,
+    onEmbed,
     timeoutMs: 210000,
   });
+}
+
+function liveOrderInput(body) {
+  return fetch('/api/live/orders/input', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => null);
+}
+
+function liveOrderCancel() {
+  return fetch('/api/live/orders/cancel', { method: 'POST' }).catch(() => null);
 }
 
 let _newId = 100;
@@ -1019,6 +1037,7 @@ function App() {
   // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
   const [tryOnMaking, setTryOnMaking] = useState(false);
   const [tryOnProgress, setTryOnProgress] = useState(null);
+  const tryOnMakingRef = useRef(false);
   const makeTryOnBody = async (opts) => {
     const silent = !!(opts && opts.silent);
     const onFail = opts && opts.onFail;
@@ -1028,8 +1047,9 @@ function App() {
       if (!silent) showToast(msg.replace(/\n/g, ' '));
       return msg;
     };
-    if (tryOnMaking) return '';
+    if (tryOnMakingRef.current) return '';
     if (!prefs.avatar) { fail('프로필 사진을 먼저 올려 주세요.'); return ''; }
+    tryOnMakingRef.current = true;
     setTryOnMaking(true);
     setTryOnProgress({ key: 'tryon_profile', label: '프로필을 확인하고 있어요', pct: 0, until: 8, eta: 3 });
     try {
@@ -1055,12 +1075,13 @@ function App() {
         return np;
       });
       reloadBilling();
-      if (!silent) showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
+      showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
       fail(e.message);
       return '';
     } finally {
+      tryOnMakingRef.current = false;
       setTryOnMaking(false);
       setTryOnProgress(null);
     }
@@ -2484,7 +2505,7 @@ function App() {
     wornToday, wearToday, getDayRecord: readDailyRecord,
     addItemsBatch, discardLiveItems, liveImportSource, showToast,
     billing, reloadBilling, refreshLive,
-    requestPickedOutfits, importOrders, checkDuplicates, liveCollectOrders,
+    requestPickedOutfits, importOrders, checkDuplicates, liveCollectOrders, liveOrderInput, liveOrderCancel,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
       .filter(Boolean),

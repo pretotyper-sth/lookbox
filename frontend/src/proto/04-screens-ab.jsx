@@ -847,7 +847,10 @@ const URL_IMPORT_BLOCKED_MSG = '이미지 불러오기가 제한되는 URL이에
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
 
 function onThisComputer() {
-  return /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+  const h = window.location.hostname || '';
+  if (/^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(h)) return true;
+  // 같은 맥을 LAN 주소로 연 경우. Vite Network URL이 localhost가 아니다.
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
 }
 
 function looksLikeProductUrl(s) {
@@ -1020,6 +1023,7 @@ function AddSheet({ ctx }) {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
     detectCount, liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem, showToast,
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
+    liveOrderInput, liveOrderCancel,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
     tryOnMaking, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar,
   } = ctx;
@@ -1229,6 +1233,11 @@ function AddSheet({ ctx }) {
   // 바로 보기는 계정 프사를 쓴다. 탭에서 따로 올리는 장은 두지 않는다.
   const tryOnAvatar = (prefs && prefs.avatar) || '';
   const canTryOn = !!tryOnAvatar;
+  const tryOnBodyReady = canTryOn
+    && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon6')
+    && !!(prefs.tryOnBody || prefs.tryOnFrame);
+  const tryOnStayRef = useR(false);
+  tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
   const launchTryOnFromSheet = async () => {
     if (wide || !tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
@@ -1238,13 +1247,13 @@ function AddSheet({ ctx }) {
     if (!body && typeof makeTryOnBody === 'function') {
       let fail = '';
       body = await makeTryOnBody({ silent: true, onFail: (msg) => { fail = msg; } });
-      if (gen !== tryOnLaunchGen.current) return;
+      if (gen !== tryOnLaunchGen.current || !tryOnStayRef.current) return;
       if (!body) {
         setTryOnErr(fail || (formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.'));
         return;
       }
     }
-    if (gen !== tryOnLaunchGen.current) return;
+    if (gen !== tryOnLaunchGen.current || !tryOnStayRef.current) return;
     if (!body) {
       setTryOnErr(formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.');
       return;
@@ -1290,7 +1299,7 @@ function AddSheet({ ctx }) {
     }
     return true;
   };
-  const collectOrderItems = async ({ platform, onProgress, onItem }) => {
+  const collectOrderItems = async ({ platform, width, height, onProgress, onItem, onView, onEmbed }) => {
     const shopId = (platform && platform.id) || orderShop;
     setErr('');
     setOrderNeedLogin(false);
@@ -1331,14 +1340,14 @@ function AddSheet({ ctx }) {
         return items;
       }
       if (onThisComputer() && typeof liveCollectOrders === 'function') {
-        const data = await liveCollectOrders({ platform: shopId, onProgress, onOrder: onItem });
+        const data = await liveCollectOrders({ platform: shopId, width, height, onProgress, onOrder: onItem, onView, onEmbed });
         return (data && data.items) || [];
       }
-      throw new Error('ORDER_READ_BLOCKED');
+      throw new Error(window.innerWidth >= 760 ? 'ORDER_OPEN_FAILED' : 'ORDER_READ_BLOCKED');
     } catch (err) {
       const msg = String((err && err.message) || '');
       if (msg === 'NEED_SETUP' || msg === 'NO_EXT') {
-        throw new Error('ORDER_READ_BLOCKED');
+        throw new Error(window.innerWidth >= 760 ? 'ORDER_OPEN_FAILED' : 'ORDER_READ_BLOCKED');
       }
       throw err;
     } finally {
@@ -1756,14 +1765,11 @@ function AddSheet({ ctx }) {
                 return (
                   <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
                     if (comboLocked) return;
-                    const switched = tab !== id;
                     setTab(id); setErr(''); setTryOnErr('');
                     if (id === 'tryon') setShowHint(false);
                     // 후보 목록은 URL·구매내역이 같이 쓴다. 사진/바로 보기로 나갈 때만 비운다.
                     if (id === 'photo' || id === 'tryon') { setBulk(null); setBulkResult(null); }
-                    // 모바일에서 바로 보기 탭을 누르면 프사가 있을 때만 카메라를 연다.
-                    // 이미 그 탭에 있는 채 다시 누르면 시트가 유지된다(카메라에서 돌아와 사진을 바꿀 때).
-                    if (id === 'tryon' && switched && !wide && tryOnAvatar) launchTryOnFromSheet();
+                    // 바로 보기 탭은 확인 한 번을 거친 뒤에만 전신을 만든다. 탭만 눌러서는 생성하지 않는다.
                   }} style={{
                     flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     padding: '11px 4px', borderRadius: 'var(--r-pill)', fontSize: anchor ? 12.5 : 13, fontWeight: 600,
@@ -1874,6 +1880,12 @@ function AddSheet({ ctx }) {
                             <div className="lb-tryon-bar" aria-hidden>
                               <i style={{ width: `${Math.max(2, Math.min(100, tryOnUi.pct))}%` }} />
                             </div>
+                            <div style={{
+                              marginTop: 10, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)',
+                              textAlign: 'center', wordBreak: 'keep-all', lineHeight: 1.4,
+                            }}>
+                              처음 한 번만 만들면 돼요
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -1897,7 +1909,7 @@ function AddSheet({ ctx }) {
                       >
                         <div style={{
                           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                          padding: '0 16px', pointerEvents: 'none',
+                          padding: '0 12px', pointerEvents: 'none',
                         }}>
                           <div style={{ pointerEvents: 'auto' }}>
                             {ProfileAvatar ? (
@@ -1909,11 +1921,19 @@ function AddSheet({ ctx }) {
                               />
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
-                          <span style={{ fontSize: 14, fontWeight: 600, textAlign: 'center', wordBreak: 'keep-all' }}>
+                          <span style={{
+                            fontSize: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'clamp(12px, 3.6vw, 13.5px)' : 14,
+                            fontWeight: 600,
+                            textAlign: 'center',
+                            letterSpacing: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? '-0.03em' : undefined,
+                            whiteSpace: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'nowrap' : undefined,
+                            wordBreak: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'normal' : 'keep-all',
+                          }}>
                             {tryOnAvatar
-                              ? '이 사진으로 옷을 바로 비춰 볼 수 있어요'
+                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : '프로필 사진으로 전신 바로보기 이미지 만들기')
                               : '프로필 사진 올리기'}
                           </span>
+                          {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
                           <span style={{
                             fontSize: tryOnErr ? 12.5 : 12,
                             fontWeight: tryOnErr ? 600 : 400,
@@ -1926,6 +1946,7 @@ function AddSheet({ ctx }) {
                               ? tryOnErr
                               : tryOnAvatar ? '모바일 전용' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
                           </span>
+                          )}
                         </div>
                       </div>
                       )
@@ -2611,6 +2632,8 @@ function AddSheet({ ctx }) {
         wide={!!wide}
         onClose={() => setOrderSession(null)}
         collectOrders={collectOrderItems}
+        sendInput={liveOrderInput}
+        cancelCollect={liveOrderCancel}
         onSaveOne={async (item) => {
           if (!importOrders) throw new Error('담을 수 없어요');
           const r = await importOrders([item]);

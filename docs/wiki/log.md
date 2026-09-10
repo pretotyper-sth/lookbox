@@ -531,6 +531,36 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 근거: `frontend/src/proto/order-import-session.jsx`, `backend/app/main.py` `ITEM`/`_order`.
 [[order-import-webview]]
 
+## [2026-09-06] change | 몰 주문내역 URL 갱신
+무신사 첫 주소가 404(`/mypage/orders`)라 아이템 0개였다. [`/order/order-list`](https://www.musinsa.com/order/order-list)로 바꿨다. 29CM·지그재그·W컨셉·SSG·머스트잇도 로그인 리다이렉트가 있는 현재 경로로 맞춤. 더현대 GNB는 비로그인 404.
+근거: `frontend/src/proto/order-platforms.js`, `tools/order-collector/platforms.mjs`.
+[[order-import-webview]]
+
+## [2026-09-06] fix | 구매내역 창 실패 문구 두 줄·PC 오안내
+수집기가 안 열리면 휴대폰용 「컴퓨터에서 다시」가 PC에도 나왔다. 실패는 `\n` 두 줄. PC는 「쇼핑몰 창을 열지 못했어요」. localhost만이 아니라 LAN 주소도 로컬 수집기를 탄다.
+근거: `frontend/src/proto/order-import-session.jsx` `formatOrderErr`, `04-screens-ab.jsx` `onThisComputer`.
+[[order-import-webview]]
+
+## [2026-09-06] change | 구매내역 로그인을 모달 안에 그림
+무신사 로그인은 iframe이 막혀 별도 크롬이 뜨고 있었다. 수집기를 `--embed` 헤드리스로 바꾸고 화면을 모달에 그린다. 클릭·키는 localhost 입력 API로만 전달하고 비밀번호는 저장하지 않는다.
+근거: `tools/order-collector/collect.mjs` `--embed`, `backend/app/main.py` `live_orders_input`.
+[[order-import-webview]]
+
+## [2026-09-06] fix | 모달 웹뷰 비율·렉
+390×720 스크린샷을 contain으로 그려 옆이 비고 잘렸다. 칸 크기로 뷰포트를 맞추고 아이폰 UA, 화면은 로컬 MJPEG로 바로 붙인다. 클릭은 그 포트로 보낸다.
+근거: `tools/order-collector/collect.mjs` `startEmbedServer`, `order-import-session.jsx` `/stream`.
+[[order-import-webview]]
+
+## [2026-09-06] fix | 모달 웹뷰 스크롤·확대·안내
+휠은 커서 위치에서 페이지가 스크롤되게 했다. 핀치/ctrl+휠로 확대. 기본 1.2배. 안내는 「위 화면에서 로그인해 주세요」.
+근거: `collect.mjs` `Input.dispatchMouseEvent` mouseWheel, `order-import-session.jsx` footer.
+[[order-import-webview]]
+
+## [2026-09-10] change | 바로 보기 확인 단계 + 백그라운드 생성
+탭만 누르면 전신을 만들지 않는다. 「프로필 사진으로 전신 바로보기 이미지 만들기」를 본 뒤 칸/CTA를 눌러야 시작한다. 만들던 중 탭·시트를 나가도 요청은 앱에 남고, 다시 들어오면 진행/완료가 보인다. 진행 바 아래 「처음 한 번만 만들면 돼요」. 스켈레톤 원형은 위로 10px.
+근거: `04-screens-ab.jsx` `tryOnBodyReady`·`tryOnStayRef`, `09-app.jsx` `tryOnMakingRef`.
+[[tryon-setup-from-mypage]]
+
 
 
 
