@@ -173,7 +173,7 @@ const DEFAULT_PREFS = {
 };
 
 // 바로 보기 전신 캐시 세대. 프롬프트를 바꾸면 올려서 예전 컷을 다시 쓰지 않는다.
-const TRYON_BODY_REV = 'tryon6';
+const TRYON_BODY_REV = 'tryon7';
 
 // 착장 품질 테스트 게이트. 실유저는 0 — 오늘 코디 전부 착장, 카드마다 대기 후 1장씩 전환.
 // 「테스트 종료」라고 하기 전까지 1장만 만든다. 끄려면 여기와 서버 LOOK_TEST_LIMIT를 0.

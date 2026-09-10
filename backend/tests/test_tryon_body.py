@@ -91,11 +91,24 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon6-", chunk)
+        self.assertIn("tryon7-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
         self.assertNotIn("input_fidelity", chunk)
+
+    def test_mask_fail_retries_then_notes_daily_fail_not_monthly(self):
+        start = self.src.index("def live_tryon_body")
+        chunk = self.src[start:start + 7000]
+        self.assertIn("mask quality weak — retry gen", chunk)
+        self.assertIn('_TRYON_FAIL_MSG["mask"]', chunk)
+        self.assertIn("note_fail", chunk)
+        self.assertIn("ensure_within_daily_fail", chunk)
+        self.assertNotIn("save body anyway", chunk)
+        self.assertGreater(chunk.index("note_usage"), chunk.index("generated_images"))
+        self.assertGreater(chunk.index("note_usage"), chunk.index("images.edit"))
+        self.assertIn("_TRYON_BUSY", chunk)
+        self.assertIn('"mask": "이미지를 다듬지 못했어요', self.src)
 
 
 class TryOnAssetTest(unittest.TestCase):

@@ -391,7 +391,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'cover', objectPosition: 'center', display: 'block',
+            objectFit: 'cover', objectPosition: 'center top', display: 'block',
             userSelect: 'none',
           }}
         />

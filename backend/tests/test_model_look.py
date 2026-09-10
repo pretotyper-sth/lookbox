@@ -91,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id16-", src)
+        self.assertIn("model-id17-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -102,8 +102,9 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("De-age", src)
         self.assertNotIn("youthful early-to-mid-20s", src)
         self.assertIn("Keep the height and proportions of Image 1", src)
-        self.assertIn("18% of the frame empty", src)
-        self.assertIn("middle 64%", src)
+        self.assertIn("20% of the frame empty above the hair", src)
+        self.assertIn("Never crop the face", src)
+        self.assertNotIn("middle 64%", src)
         self.assertIn("MUST wear this suggested item", src)
         self.assertNotIn("다리가 길어 보이게", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
@@ -201,6 +202,33 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertGreaterEqual(navy_rows[0], 0)
         self.assertLessEqual(navy_rows[-1], h - 1)
 
+    def test_fit_keeps_head_when_person_taller_than_card(self):
+        """인물이 4:5 창보다 크면 발을 맞추지 않고 머리를 남긴다."""
+        w, h = 40, 60
+        im = Image.new("RGB", (w, h))
+        px = im.load()
+        for y in range(h):
+            base = 236 - int(34 * (y / h) ** 1.4)
+            for x in range(w):
+                px[x, y] = (base, base - 1, base - 5)
+        skin = (200, 160, 130)
+        navy = (28, 42, 72)
+        for y in range(1, 10):
+            for x in range(14, 26):
+                px[x, y] = skin
+        for y in range(10, 59):
+            for x in range(14, 26):
+                px[x, y] = navy
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        fitted = Image.open(io.BytesIO(self.ns["_crop_look_to_card"](buf.getvalue()))).convert("RGB")
+        skin_rows = [
+            y for y in range(fitted.height)
+            if any(fitted.getpixel((x, y))[:3] == skin for x in range(fitted.width))
+        ]
+        self.assertTrue(skin_rows)
+        self.assertLessEqual(skin_rows[0], 4)
+
     def test_crop_keeps_backdrop_gradient_smooth(self):
         """배경을 판 색으로 못박던 시절, 배경 밝기가 판 밝기를 지나는 줄에서
         얼룩진 띠가 생겼다. 신발 옆이 깨져 보이던 게 이거다(2026-09-02).
@@ -240,7 +268,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id16-", src)
+        self.assertIn("model-id17-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)

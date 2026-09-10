@@ -134,6 +134,8 @@ if LOOK_TEST_LIMIT > 0:
 # 장이 더 만들어지던 구멍을, 오늘 코디 전체 개수로 막는다.
 _LOOK_FILLING: set[str] = set()
 _LOOK_FILLING_LOCK = threading.Lock()
+_TRYON_BUSY: set[str] = set()
+_TRYON_BUSY_LOCK = threading.Lock()
 
 
 def _vision_client():
@@ -614,6 +616,10 @@ CREDIT_COSTS = {
 MONTHLY_LIMITS = {
     "tryon_body": 2,
 }
+# 실패는 고객 월 한도에 넣지 않는다. 같은 날 반복 실패는 제품 버그이므로 일일로만 막는다.
+DAILY_FAIL_LIMITS = {
+    "tryon_body": 3,
+}
 CREDIT_LABELS = {
     "import_url": "URL·구매내역으로 옷 등록",
     "import_photo": "사진으로 옷 등록",
@@ -688,6 +694,21 @@ def _period_key(now: datetime | None = None) -> str:
         d = d.replace(tzinfo=timezone.utc)
     local = d.astimezone(kst)
     return f"{local.year:04d}-{local.month:02d}"
+
+
+def _day_key(now: datetime | None = None) -> str:
+    """KST 달력 날짜(YYYY-MM-DD). 실패 일일 한도에 쓴다."""
+    kst = timezone(timedelta(hours=9))
+    d = now or datetime.now(timezone.utc)
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d.astimezone(kst).date().isoformat()
+
+
+def _day_start(day: str) -> str:
+    kst = timezone(timedelta(hours=9))
+    year, month, date = (int(x) for x in day.split("-"))
+    return datetime(year, month, date, tzinfo=kst).isoformat()
 
 
 def _period_end(period: str) -> str:
@@ -938,6 +959,54 @@ def note_usage(user_id: str, action: str, metadata: dict[str, Any] | None = None
         }).execute()
     except Exception as exc:  # noqa: BLE001
         print(f"[billing] note failed ({action}): {exc}", flush=True)
+
+
+def daily_fail_count(user_id: str, action: str) -> int:
+    """오늘(KST) 이 작업이 몇 번 실패했는지."""
+    day = _day_key()
+    reason = f"{action}_fail"
+    try:
+        rows = (
+            supabase_admin.table("credit_ledger")
+            .select("id, metadata")
+            .eq("user_id", user_id)
+            .eq("reason", reason)
+            .gte("created_at", _day_start(day))
+            .limit(50)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] daily fail read failed ({action}): {exc}", flush=True)
+        return 0
+    return sum(1 for r in rows if (r.get("metadata") or {}).get("day") == day)
+
+
+def note_fail(user_id: str, action: str, metadata: dict[str, Any] | None = None) -> None:
+    """실패만 따로 적는다. 월 성공 한도와 섞이지 않게 reason을 가른다."""
+    try:
+        supabase_admin.table("credit_ledger").insert({
+            "user_id": user_id, "delta": 0, "reason": f"{action}_fail",
+            "metadata": {**(metadata or {}), "day": _day_key(), "free": True},
+        }).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[billing] fail note failed ({action}): {exc}", flush=True)
+
+
+def ensure_within_daily_fail(user_id: str, action: str, email: str | None = None) -> None:
+    """같은 날 실패가 반복되면 멈춘다. 고객 월 한도가 아니라 운영 감지용."""
+    limit = DAILY_FAIL_LIMITS.get(action, 0)
+    if not limit:
+        return
+    em = (email or "").strip().lower() or _profile_email(user_id)
+    if action == "tryon_body" and _is_admin_credit_email(em):
+        return
+    if daily_fail_count(user_id, action) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="오늘은 더 시도하지 않아요.\n문제가 반복되면 알려 주세요.",
+        )
 
 
 def _reset_day(state: dict[str, Any]) -> str:
@@ -1292,7 +1361,7 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
   false로 둘 것: 안쪽 목·허리의 브랜드 라벨/택, 작은 모노그램/이니셜 1~2자, 케어라벨·사이즈택, 추상 마크(글자 없음), 가격표·워터마크·UI, 애매하면 false.
 - logo_text: has_text_logo가 true일 때만 원문 철자 (예: "IAB STUDIO"). 아니면 "".
 - seasons: 원단 두께·소재·기장·보온성으로 판단. 반팔/린넨/메시 → summer. 니트/코듀로이/기모 → winter.
-  얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
+  쪼리·슬리퍼·샌들·슬라이드·플립플랍은 summer만. 얇은 셔츠·가디건처럼 여러 계절에 걸치면 2개까지. 판단하기 애매하면 빈 배열 [].
 - is_fashion_item이 false여도 JSON 형식은 유지하되 name은 짧은 설명(예: "고양이 사진"), category는 misc.
 촬영 형태(옷장 카드를 정면 상품컷으로 통일하는 데 쓰인다):
 - shot: product = 사람 없이 옷만 있는 상품컷·플랫레이. worn = 사람이 입거나 들고 있음(마네킹 포함).
@@ -2696,6 +2765,8 @@ _TRYON_FAIL_MSG = {
     "no_openai": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
     "api_error": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
     "edit_failed": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
+    "mask": "이미지를 다듬지 못했어요.\n잠시 후 다시 시도해 주세요.",
+    "daily_fail": "오늘은 더 시도하지 않아요.\n문제가 반복되면 알려 주세요.",
 }
 
 
@@ -2874,7 +2945,8 @@ _COORD_RULES = """감각 규칙(이걸 지켜야 '그냥 되는 조합'이 아�
   패션 테러리스트 조합(셔츠+카고+첼시 같은)은 점수를 채워도 내지 말 것.
 - 패턴: 패턴 아이템은 코디당 1개. 나머지는 solid로 받친다. 로고/그래픽도 패턴으로 센다.
 - 실루엣: 위아래를 모두 오버사이즈/와이드로 두지 않는다. 한쪽이 크면 다른 쪽은 슬림·레귤러.
-- 계절: 여름 전용(린넨·메시·반팔)과 겨울 전용(니트·기모·코트)을 섞지 않는다.
+- 계절: 오늘 계절에 맞는 옷만. 여름 전용(린넨·메시·반팔)과 겨울 전용(니트·기모·코트)을 섞지 않는다.
+  쪼리·슬리퍼·샌들·슬라이드는 한여름(6–8월)에만. 봄·가을·겨울 코디에 넣지 말 것.
 - 소재: 광택·가죽은 코디당 1개까지. 캐주얼 데님 위에 정장 소재를 얹지 않는다.
 - 퍼스널 컬러: 맞는 색은 얼굴 근처(상의·아우터)에, 애매한 색은 하의·신발·가방으로.
 - label: 옷 이름을 나열하지 말고 그 코디를 한마디로 (예: "네이비로 정리한 출근룩").
@@ -3123,6 +3195,7 @@ def recommend_text(
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
 {_profile_block(profile)}{('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
+{_coord_season_note()}
 
 옷장(id | 카테고리 | 색 | 이름 | 종류 | 속성):
 {catalog}
@@ -3396,12 +3469,15 @@ def _shoe_pair_score(
     top: dict[str, Any] | None,
     bottom: dict[str, Any] | None,
     profile: dict[str, Any] | None,
+    now: datetime | None = None,
 ) -> float:
     score = 0.0
     if bottom:
         score += _pair_score(bottom, shoe, profile)
     if top:
         score += _pair_score(top, shoe, profile)
+    if _offseason_shoe(shoe, now):
+        score -= 5.0
     return score
 
 
@@ -3422,6 +3498,9 @@ def _pick_rotating_shoe(
     ranked = [(sh, _shoe_pair_score(sh, top, bottom, profile)) for sh in shoes]
     best = max(score for _sh, score in ranked)
     pool = [(sh, score) for sh, score in ranked if score >= best - _SHOE_ROTATE_SLACK]
+    in_season = [(sh, score) for sh, score in pool if not _offseason_shoe(sh)]
+    if in_season:
+        pool = in_season
     return max(
         pool,
         key=lambda row: row[1] - _SHOE_ROTATE_PENALTY * used_counts.get(row[0]["id"], 0),
@@ -3493,6 +3572,31 @@ def _rebalance_combo_shoes(
         combo["item_ids"] = [alt["id"] if i == sid else i for i in (combo.get("item_ids") or [])]
 
 
+def _replace_offseason_shoes(
+    combos: list[dict[str, Any]],
+    by_id: dict[str, Any],
+    profile: dict[str, Any] | None,
+    used_shoes: dict[str, int],
+) -> None:
+    """GPT가 쪼리를 골라도, 지금 계절이 여름이 아니면 다른 켤레로 바꾼다."""
+    shoes = [it for it in by_id.values() if _item_bucket(it) == "shoes"]
+    alts = [sh for sh in shoes if not _offseason_shoe(sh)]
+    if not alts:
+        return
+    for combo in combos:
+        ids = [i for i in (combo.get("item_ids") or []) if i in by_id]
+        sid = _combo_shoe_id(ids, by_id)
+        if not sid or not _offseason_shoe(by_id[sid]):
+            continue
+        top, bottom = _combo_top_bottom(ids, by_id)
+        alt = _pick_rotating_shoe(alts, top, bottom, profile, used_shoes)
+        if not alt or alt["id"] == sid:
+            continue
+        used_shoes[sid] = max(0, used_shoes.get(sid, 1) - 1)
+        used_shoes[alt["id"]] = used_shoes.get(alt["id"], 0) + 1
+        combo["item_ids"] = [alt["id"] if i == sid else i for i in ids]
+
+
 def _finish_combos(
     combos: list[dict[str, Any]],
     items: list[dict[str, Any]],
@@ -3512,6 +3616,7 @@ def _finish_combos(
         want = (sum(ord(c) for c in "".join(ids)) % 5) != 0
         _ensure_core_slots(combo, by_id, extras, want, profile, used_shoes)
     _rebalance_combo_shoes(combos, by_id, profile)
+    _replace_offseason_shoes(combos, by_id, profile, used_shoes)
     _fill_wish_quota(combos, wish_combos, by_id)
     ok = [
         c for c in combos
@@ -3521,6 +3626,49 @@ def _finish_combos(
 
 
 _NEUTRAL_COLORS = ("블랙", "화이트", "그레이", "네이비", "아이보리", "베이지", "차콜")
+_SUMMER_SHOE = ("쪼리", "플립플랍", "플립플롭", "샌들", "슬리퍼", "슬라이드")
+
+
+def _calendar_seasons(now: datetime | None = None) -> set[str]:
+    """KST 달력 기준 지금 계절. 9월은 가을로 본다."""
+    kst = timezone(timedelta(hours=9))
+    d = now or datetime.now(timezone.utc)
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    month = d.astimezone(kst).month
+    if month in (3, 4, 5):
+        return {"spring"}
+    if month in (6, 7, 8):
+        return {"summer"}
+    if month in (9, 10, 11):
+        return {"autumn"}
+    return {"winter"}
+
+
+def _coord_season_note(now: datetime | None = None) -> str:
+    kst = timezone(timedelta(hours=9))
+    d = now or datetime.now(timezone.utc)
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    local = d.astimezone(kst)
+    names = {"spring": "봄", "summer": "여름", "autumn": "가을", "winter": "겨울"}
+    season = "·".join(names[s] for s in sorted(_calendar_seasons(now)))
+    extra = ""
+    if "summer" not in _calendar_seasons(now):
+        extra = " 쪼리·슬리퍼·샌들·슬라이드는 넣지 말 것."
+    return f"오늘(KST) {local.month}월 {local.day}일, 계절 {season}.{extra}\n"
+
+
+def _is_summer_shoe(item: dict[str, Any]) -> bool:
+    seasons = {(str(s) or "").strip().lower() for s in ((item.get("metadata") or {}).get("seasons") or [])}
+    seasons.discard("")
+    if seasons and seasons <= {"summer"}:
+        return True
+    return _clue_has(_item_clue(item), _SUMMER_SHOE)
+
+
+def _offseason_shoe(item: dict[str, Any], now: datetime | None = None) -> bool:
+    return "summer" not in _calendar_seasons(now) and _is_summer_shoe(item)
 
 
 def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | None) -> float:
@@ -4120,11 +4268,11 @@ COMPOSITION:
 Keep Image 1's camera height, studio lighting, gray studio,
 gray studio floor, shadow, and color grading.
 Do not copy a tight head-to-toe crop from Image 1.
-Frame for a 4:5 lookbook card. The person is vertically centered.
-Leave about 18% of the frame empty above the hair and 18% empty below the shoes.
-The top 14% and bottom 14% must be empty studio only — never hair, chin, or shoes.
-Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle 64%.
-One person, centered.
+Frame for a 4:5 lookbook card. Keep the full head in frame — hair crown, forehead, and chin.
+Leave about 20% of the frame empty above the hair and 16% empty below the shoes.
+The top 16% must be empty studio only — never hair. The bottom 12% must be empty studio only — never shoes.
+Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle. Never crop the face.
+One person, centered horizontally. The face sits in the upper third of the remaining frame.
 Reproduce Image 1's studio backdrop exactly — the same soft gray wall blending into the
 same floor, the same soft contact shadow under the shoes — and let it reach all four
 edges of the frame. One continuous backdrop: no second plate, letterbox, inset
@@ -4398,12 +4546,9 @@ def _fit_look_to_card(
     else:
         need_h = int(round(img.width / ratio))
         if need_h <= img.height:
-            cy = (ty0 + ty1) // 2
-            ny0 = max(0, min(img.height - need_h, cy - need_h // 2))
-            if ny0 > ty0:
-                ny0 = max(0, min(ty0, img.height - need_h))
-            if ny0 + need_h < ty1:
-                ny0 = max(0, min(ty1 - need_h, img.height - need_h))
+            # 창보다 인물이 크면 머리를 남긴다. 가운데 맞춘 뒤 발 맞추려고
+            # 내리면 4:5 카드에서 얼굴이 잘린다(2026-09-10).
+            ny0 = max(0, min(ty0, img.height - need_h))
             region = img.crop((0, ny0, img.width, ny0 + need_h))
         else:
             region = img.crop((tx0, ty0, tx1, ty1)).copy()
@@ -4583,7 +4728,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id16-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id17-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -7079,17 +7224,37 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         if kind == "top":
             ch = max(r, g, b) - min(r, g, b)
             # 차콜 반팔: 판·피부·중청과 떨어지게. 흰 티는 판(#F2F1EE)과 붙어 톱니가 난다.
-            return 16 <= L <= 110 and ch <= 36 and (b - r) <= 12
-        return b > r + 8 and b >= g - 4 and 35 < L < 170
+            return 14 <= L <= 118 and ch <= 40 and (b - r) <= 14
+        return b > r + 6 and b >= g - 6 and 32 < L < 175
 
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
         return r > 88 and r > b + 8 and r >= g - 8 and 72 < L < 210
 
+    def valid_seed(x: int, y: int) -> bool:
+        if not (y0 <= y < y1):
+            return False
+        if bg_px[x, y] > 128:
+            return False
+        r, g, b = px[x, y]
+        return match(r, g, b) and not skin(r, g, b)
+
     out = bytearray(w * h)
-    r0, g0, b0 = px[sx, sy]
-    if bg_px[sx, sy] > 128 or not match(r0, g0, b0) or not (y0 <= sy < y1):
+    seed = (sx, sy) if valid_seed(sx, sy) else None
+    if seed is None:
+        radius = max(6, min(w, h) // 14)
+        for dy in range(-radius, radius + 1, 2):
+            for dx in range(-radius, radius + 1, 2):
+                x = min(w - 1, max(0, sx + dx))
+                y = min(h - 1, max(0, sy + dy))
+                if valid_seed(x, y):
+                    seed = (x, y)
+                    break
+            if seed is not None:
+                break
+    if seed is None:
         return Image.frombytes("L", (w, h), bytes(out))
+    sx, sy = seed
     q: deque[tuple[int, int]] = deque([(sx, sy)])
     seen = bytearray(w * h)
     while q:
@@ -7214,11 +7379,13 @@ Arms slightly away from the torso so sleeves are visible. Not a stiff mannequin.
 FRAMING:
 Full body, crown of hair to shoes fully in frame, 2:3 portrait.
 Leave only about 4% empty studio above the hair and below the shoes.
-The clothing silhouette should fill most of the frame width — tight full-body crop, not a distant figure.
+The garments should fill most of the frame width — tight full-body crop, not a distant figure.
 
 OUTFIT:
-matte charcoal-gray short-sleeve crew-neck T-shirt, mid-blue straight-leg denim jeans, and white low-top sneakers only.
-The T-shirt is clearly darker than the background — never white, never the same color as the jeans.
+matte charcoal-gray short-sleeve crew-neck T-shirt (about RGB 50 50 55), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
+The T-shirt is a flat dark charcoal — clearly darker than the background, never white, never gray-blue, never the same color as the jeans.
+The jeans are distinctly blue denim, not charcoal and not black.
+Each garment is one solid color with a sharp edge against skin and against the other garment so they can be separated.
 No pattern, logo, extra garments, or black leather.
 
 - background is ONE continuous solid fill of #F2F1EE from edge to edge.
@@ -7267,7 +7434,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon6-{sig}"
+    key = f"tryon7-{sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7289,47 +7456,59 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 assets["body"] = body_url
                 return {"imageUrl": body_url, "assets": assets, "cached": True}
 
-        ensure_within_limit(uid, "tryon_body", email=user.email)
-        if not openai_client:
-            raise HTTPException(status_code=503, detail=_TRYON_FAIL_MSG["no_openai"])
-
-        last_info = None
-        for attempt in (0, 1):
-            report("tryon_generate")
-            try:
-                source = io.BytesIO(face)
-                source.name = "face.png"
-                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
-                    model=OPENAI_IMAGE_MODEL_TRYON,
-                    image=source,
-                    prompt=_TRYON_BODY_PROMPT,
-                    size="1024x1536",
-                    quality=OPENAI_IMAGE_QUALITY_TRYON,
-                )
-                out = base64.b64decode(result.data[0].b64_json)
-                log_ai_usage(
-                    uid, "tryon_body", OPENAI_IMAGE_MODEL_TRYON,
-                    {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt},
-                    usage=getattr(result, "usage", None),
-                )
-            except Exception as exc:  # noqa: BLE001
-                last_info = _openai_error_info(exc)
-                print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
-                if attempt == 0:
-                    continue
-                msg = _TRYON_FAIL_MSG.get(_openai_fail_key(last_info), _TRYON_FAIL_MSG["api_error"])
+        with _TRYON_BUSY_LOCK:
+            if uid in _TRYON_BUSY:
                 raise HTTPException(
-                    status_code=502,
-                    detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
-                ) from exc
+                    status_code=429,
+                    detail="이미 만들고 있어요.\n끝날 때까지 기다려 주세요.",
+                )
+            _TRYON_BUSY.add(uid)
+        try:
+            ensure_within_limit(uid, "tryon_body", email=user.email)
+            ensure_within_daily_fail(uid, "tryon_body", email=user.email)
+            if not openai_client:
+                raise HTTPException(status_code=503, detail=_TRYON_FAIL_MSG["no_openai"])
 
-            report("tryon_segment")
-            assets_bytes = _tryon_make_assets(out)
-            if not _tryon_assets_valid(assets_bytes):
-                print(f"[tryon] mask quality failed attempt={attempt}", flush=True)
-                if attempt == 0:
-                    continue
-                raise HTTPException(status_code=502, detail="이미지를 다듬지 못했어요.\n잠시 후 다시 시도해 주세요.")
+            last_info = None
+            assets_bytes = None
+            for attempt in (0, 1):
+                report("tryon_generate")
+                try:
+                    source = io.BytesIO(face)
+                    source.name = "face.png"
+                    result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
+                        model=OPENAI_IMAGE_MODEL_TRYON,
+                        image=source,
+                        prompt=_TRYON_BODY_PROMPT,
+                        size="1024x1536",
+                        quality=OPENAI_IMAGE_QUALITY_TRYON,
+                    )
+                    out = base64.b64decode(result.data[0].b64_json)
+                    log_ai_usage(
+                        uid, "tryon_body", OPENAI_IMAGE_MODEL_TRYON,
+                        {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt},
+                        usage=getattr(result, "usage", None),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    last_info = _openai_error_info(exc)
+                    print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
+                    if attempt == 0:
+                        continue
+                    note_fail(uid, "tryon_body", {"key": key, "why": "api"})
+                    msg = _TRYON_FAIL_MSG.get(_openai_fail_key(last_info), _TRYON_FAIL_MSG["api_error"])
+                    raise HTTPException(
+                        status_code=502,
+                        detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
+                    ) from exc
+                report("tryon_segment")
+                assets_bytes = _tryon_make_assets(out)
+                if _tryon_assets_valid(assets_bytes):
+                    break
+                print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
+                assets_bytes = None
+            if not assets_bytes:
+                note_fail(uid, "tryon_body", {"key": key, "why": "mask"})
+                raise HTTPException(status_code=502, detail=_TRYON_FAIL_MSG["mask"])
 
             report("tryon_save")
             urls: dict[str, str] = {}
@@ -7344,7 +7523,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon6",
+                        "mask": "tryon7",
                         "assets": urls,
                     },
                 }).execute()
@@ -7352,8 +7531,9 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 print(f"[tryon] cache save failed: {exc}", flush=True)
             note_usage(uid, "tryon_body", {"key": key})
             return {"imageUrl": urls["body"], "assets": urls, "cached": False}
-
-        raise HTTPException(status_code=502, detail=_TRYON_FAIL_MSG["api_error"])
+        finally:
+            with _TRYON_BUSY_LOCK:
+                _TRYON_BUSY.discard(uid)
 
     return stream_with_keepalive(work)
 

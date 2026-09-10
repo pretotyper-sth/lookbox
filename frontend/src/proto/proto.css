@@ -282,6 +282,10 @@ img { display: block; max-width: 100%; }
   pointer-events: none;
   user-select: none;
 }
+.lb-look-ai-mark.icon {
+  font-size: 13px;
+  letter-spacing: 0;
+}
 
 .lb-tryon-skel {
   width: 80px;

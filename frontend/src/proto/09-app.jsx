@@ -709,9 +709,11 @@ function formatTryOnErr(raw) {
     const day = s.match(/(\d+월\s*\d+일)/);
     return '한 달에 2번까지예요.\n' + (day ? `${day[1]}부터 다시 만들 수 있어요.` : '다음 달부터 다시 만들 수 있어요.');
   }
+  if (s.includes('오늘은 더 시도')) return '오늘은 더 시도하지 않아요.\n문제가 반복되면 알려 주세요.';
   if (s.includes('만료')) return '로그인이 만료됐어요.\n다시 로그인해 주세요.';
   if (s.includes('로그인이 필요')) return '로그인이 필요해요.\n로그인 후 다시 시도해 주세요.';
   if (s.includes('몰려')) return '지금 요청이 몰려 있어요.\n1~2분 뒤에 다시 눌러 주세요.';
+  if (s.includes('이미 만들고')) return '이미 만들고 있어요.\n끝날 때까지 기다려 주세요.';
   if (s.includes('오래')) return '시간이 너무 오래 걸렸어요.\n잠시 후 다시 시도해 주세요.';
   if (s.includes('네트워크')) return '네트워크가 불안정해요.\n잠시 후 다시 시도해 주세요.';
   if (s.includes('연결이 끊겼') || s.includes('연결하지 못')) return '서버와 연결이 끊겼어요.\n잠시 후 다시 시도해 주세요.';
@@ -1019,7 +1021,7 @@ function App() {
         tryOnBody: body || '',
         tryOnFrame: frame || '',
         tryOnCut: cut || '',
-        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon6') : '',
+        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon7') : '',
         tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
       };
       persistPrefs(np);
@@ -1068,7 +1070,7 @@ function App() {
           tryOnBody: url,
           tryOnFrame: url,
           tryOnCut: 'auto',
-          tryOnRev: window.TRYON_BODY_REV || 'tryon6',
+          tryOnRev: window.TRYON_BODY_REV || 'tryon7',
           tryOnAssets: assets,
         };
         persistPrefs(np);
@@ -1128,7 +1130,7 @@ function App() {
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
-    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon6')) {
+    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon7')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (prefs.avatar) {
         const made = await makeTryOnBody();

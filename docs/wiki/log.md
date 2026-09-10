@@ -561,6 +561,24 @@ LOOK_PACK 0.78은 작았다. 0.86으로 올려 통일 전 4개짜리 2번 카드
 근거: `04-screens-ab.jsx` `tryOnBodyReady`·`tryOnStayRef`, `09-app.jsx` `tryOnMakingRef`.
 [[tryon-setup-from-mypage]]
 
+## [2026-09-10] query | 바로 보기 「다듬지 못했어요」는 타임아웃 아님
+실측 화면(2026-09-10 15:49) 「이미지를 다듬지 못했어요」는 OpenAI 생성 후 구멍 마스크 검증 실패. 타임아웃 문구는 「시간이 너무 오래 걸렸어요」. 실패는 캐시되지 않아 구버전은 탭 재진입마다 `images.edit`를 다시 불렀다.
+근거: `backend/app/main.py` `_tryon_assets_valid`, 프론트 `timeoutMs: 180000`.
+[[tryon-setup-from-mypage]]
+
+## [2026-09-10] change | 바로 보기 92% 실패를 저장으로 바꾸고 시도도 한도에 넣음
+구멍 검증이 약해도 전신을 버린다. OpenAI를 부른 요청은 실패여도 월 2회. 같은 계정 동시 요청은 막는다.
+근거: `backend/app/main.py` `live_tryon_body` `_TRYON_BUSY`, `note_usage`를 `images.edit` 앞.
+[[tryon-setup-from-mypage]]
+
+## [2026-09-10] fix | 바로 보기 품질·일일 실패 + 오늘 코디 버그
+구멍 약하면 약 마스크를 저장하지 않고 생성을 한 번 더 한다. 월 2회는 성공만.
+실패는 그날 3회. 「추가로 코디」 스켈레톤 2칸은 버튼을 눌렀을 때만. 9월 쪼리 감점.
+PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-id17` / `tryon7`.
+근거: `backend/app/main.py` `live_tryon_body`·`_fit_look_to_card`·`_replace_offseason_shoes`;
+`06-today.jsx` `fillingMore`.
+[[tryon-setup-from-mypage]] [[coord-clash]] [[model-look-toggle]] [[look-img-flex-min]]
+
 
 
 

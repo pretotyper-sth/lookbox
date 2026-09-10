@@ -6,6 +6,7 @@
 
 import ast
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
     "_shoe_pair_score", "_pick_rotating_shoe",
+    "_calendar_seasons", "_coord_season_note", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
     "_STYLE_IDS", "_FITS", "_PATTERNS", "_MATERIALS", "_PC_GUIDE",
@@ -21,6 +23,7 @@ CONSTS = (
     "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
     "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_ATH_TOP",
     "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY",
+    "_SUMMER_SHOE",
 )
 
 
@@ -31,7 +34,13 @@ def load():
         if (isinstance(n, ast.FunctionDef) and n.name in FNS)
         or (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in CONSTS)
     ]
-    ns = {"Any": object, "_category_display": lambda c: {"top": "상의", "bottom": "하의"}.get(c, c or "")}
+    ns = {
+        "Any": object,
+        "_category_display": lambda c: {"top": "상의", "bottom": "하의"}.get(c, c or ""),
+        "datetime": datetime,
+        "timezone": timezone,
+        "timedelta": timedelta,
+    }
     exec(compile(ast.Module(body=body, type_ignores=[]), "<coord>", "exec"), ns)
     return ns
 
@@ -175,6 +184,25 @@ class ShoeRotateTest(unittest.TestCase):
         }
         picked = self.pick([chelsea, sneaker], hoodie, cargo, None, {sneaker["id"]: 2})
         self.assertEqual(picked["id"], sneaker["id"])
+
+    def test_flipflop_loses_to_loafer_in_september(self):
+        sept = datetime(2026, 9, 10, tzinfo=timezone(timedelta(hours=9)))
+        shirt = item(cat="top", color="블루", name="스트라이프 셔츠", subtype="셔츠")
+        jeans = item(cat="bottom", color="네이비", name="와이드 데님", subtype="데님")
+        flop = {
+            **item(cat="shoes", color="블랙", name="블랙 쪼리", subtype="쪼리", _seasons=["summer"]),
+            "id": "sh-flop",
+        }
+        loafer = {
+            **item(cat="shoes", color="블랙", name="블랙 로퍼", subtype="로퍼"),
+            "id": "sh-loafer",
+        }
+        self.assertGreater(
+            self.ns["_shoe_pair_score"](loafer, shirt, jeans, None, sept),
+            self.ns["_shoe_pair_score"](flop, shirt, jeans, None, sept),
+        )
+        picked = self.pick([flop, loafer], shirt, jeans, None, {})
+        self.assertEqual(picked["id"], loafer["id"])
 
 
 class IncludeAndWishTest(unittest.TestCase):

@@ -405,7 +405,7 @@ function TodayScreen({ ctx }) {
   void dailyTick; // prune/append 후 리렌더 트리거
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
   const fillingFirst = isToday && (dailyLoading || loading) && picks.length > 0 && picks.length < COLS;
-  const fillingMore = isToday && (dailyLoading || loading) && picks.length >= COLS;
+  const fillingMore = isToday && loading && dailyLoading && picks.length >= COLS;
   const emptySlots = isToday && !fillingFirst && picks.length < COLS ? COLS - picks.length : 0;
   const wardrobeGrew = !!dailyWardrobeGrew;
 

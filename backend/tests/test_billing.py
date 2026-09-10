@@ -12,7 +12,7 @@ from pathlib import Path
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = ("_period_key", "_period_end", "plan_perks", "_grant_window", "_is_admin_credit_email")
-CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS", "ADMIN_CREDIT_EMAILS")
+CONSTS = ("CREDIT_COSTS", "CREDIT_LABELS", "PLANS", "DEFAULT_PLAN", "MONTHLY_LIMITS", "DAILY_FAIL_LIMITS", "ADMIN_CREDIT_EMAILS")
 
 
 def load():
@@ -76,6 +76,7 @@ class PlanShapeTest(unittest.TestCase):
         self.assertNotIn("tryon_body", self.ns["CREDIT_COSTS"])
         self.assertNotIn("tryon_body", self.ns["CREDIT_LABELS"])
         self.assertEqual(self.ns["MONTHLY_LIMITS"].get("tryon_body"), 2)
+        self.assertEqual(self.ns["DAILY_FAIL_LIMITS"].get("tryon_body"), 3)
         # 반대로 코디 이미지처럼 매번 새로 그리는 건 크레딧을 받는다
         self.assertIn("model_look", self.ns["CREDIT_COSTS"])
 
@@ -90,10 +91,11 @@ class PlanShapeTest(unittest.TestCase):
     def test_tryon_cache_is_checked_before_monthly_limit(self):
         src = MAIN_PATH.read_text()
         start = src.index("def live_tryon_body")
-        chunk = src[start:start + 4500]
+        chunk = src[start:start + 7500]
         self.assertLess(chunk.index("generated_images"), chunk.index("ensure_within_limit"))
         self.assertGreater(chunk.index("note_usage"), chunk.index("generated_images"))
         self.assertIn("assets", chunk)
+        self.assertIn("ensure_within_daily_fail", chunk)
 
     def test_free_plan_covers_a_real_first_month(self):
         # 무료로도 '옷장을 만들고 코디를 받아보는' 경험은 끝까지 가야 한다:

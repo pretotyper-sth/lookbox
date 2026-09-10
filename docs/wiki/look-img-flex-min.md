@@ -9,8 +9,9 @@
 
 2026-08-31: 생성본은 1024×1536(2:3)이라 4:5 카드 contain 시 양옆 회색이 달랐다.
 색을 덧대지 않는다. `_crop_look_to_card`는 인물 박스를 보고 스튜디오 여백만 잘라
-4:5로 맞춘다. 인물이 창보다 크면 자르지 않고 축소해 넣는다. 프롬프트는
-위아래 18% 빈 스튜디오를 요구해서 보통은 여백만 잘린다. 카드는 `objectFit: cover`.
+4:5로 맞춘다. 인물이 창보다 크면 **머리를 남기고** 아래를 자른다. 발을 맞추려고
+창을 내리면 얼굴이 잘렸다(2026-09-10). 프롬프트는 머리 위 20% 빈 스튜디오.
+카드·뷰어는 `objectFit: cover` + `objectPosition: center top`.
 크롭 여백 `_LOOK_CROP_PAD`는 0.12(2026-09-06). 뷰어는 4:5 스테이지에 cover로 채워
 `--thumb-bg` 레터박스가 스튜디오와 붙지 않게 한다.
 
@@ -19,9 +20,10 @@
 끝 색**을 기준으로 한다(`_look_row_backdrop`) — 고정색으로 재면 어두운 바닥이
 통째로 인물로 잡혀 크롭이 망가진다.
 
-2026-09-06: `_fit_look_to_card`는 원본에서 4:5 창을 잡는다. 카드·뷰어는
-`inset: 0` + `object-fit: cover` + `object-position: center`다. 좌우를
-키워 자르면(`-9%` / `118%`) 위아래 스튜디오가 사라지고 확대 때 왼쪽로 밀린다.
+2026-09-06: `_fit_look_to_card`는 원본에서 4:5 창을 잡는다. 인물이 더 크면
+`ty0`(머리)를 창 위에 둔다. 카드는 `inset: 0` + `object-fit: cover` +
+`object-position: center top`. 좌우를 키워 자르면(`-9%` / `118%`) 위아래
+스튜디오가 사라지고 확대 때 왼쪽으로 밀린다.
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`;
 `backend/app/main.py` `_crop_look_to_card`. 관련 [[image-viewer-gestures]]

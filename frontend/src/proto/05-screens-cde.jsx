@@ -293,7 +293,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 
 const LOOK_FLAT_CACHE = {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full' }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
@@ -316,7 +316,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     return () => { dead = true; };
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
 
-  // 서버가 4:5로 가운데 자른다. cover로 칸을 채워 양옆 다른 색이 안 비친다.
+  // 서버가 4:5로 자르되 머리를 남긴다. cover + center top으로 칸을 채운다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
@@ -332,11 +332,13 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'cover', objectPosition: 'center',
+            objectFit: 'cover', objectPosition: 'center top',
             boxSizing: 'border-box',
           }}
         />
-        <span className="lb-look-ai-mark">✦ AI로 생성</span>
+        <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')}>
+          {aiMark === 'icon' ? '✦' : '✦ AI로 생성'}
+        </span>
       </div>
     );
   }
@@ -1177,7 +1179,7 @@ function RailCard({ look, active, onClick }) {
       border: active ? '2px solid var(--ink)' : '2px solid transparent',
       opacity: active ? 1 : 0.45,
     }}>
-      <LookComposite outfit={o} items={its} ratio="1 / 1" />
+      <LookComposite outfit={o} items={its} ratio="1 / 1" aiMark="icon" />
       <div style={{
         padding: '8px 2px 0', fontSize: 12.5, fontWeight: 700, lineHeight: 1.3,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
