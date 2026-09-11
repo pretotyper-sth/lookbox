@@ -260,7 +260,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#E5E3DE';
   ctx.fillRect(0, 0, w, h);
   return Promise.all(items.map((it) => loadLookImage(it.thumb || it.img))).then((images) => {
     const layered = items.map((it, i) => ({ it, im: images[i], z: (place[it.id] || LOOK_SPOT.top).z }))

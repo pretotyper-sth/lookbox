@@ -343,6 +343,14 @@ AI 착장은 `model-id18`로 캐시를 갱신했다. 생성본의 정수리·발
 근거: `backend/app/main.py` `_look_needs_reshoot`, `_fit_look_to_card`, `_recent_daily_exclusions`, `fallback_combos`.
 [[model-look-toggle]]
 
+## [2026-09-11] change | 코디 판·AI 착장 원래 색감 복원
+흰색 상품판과 AI 착장 배경은 과하게 쨍해 모두 이전의 아이보리 상품판·연회색 스튜디오
+색감으로 되돌렸다. 흰 배경 캐시는 다시 쓰지 않도록 `model-id20`으로 분리했다. 전신
+보존, 우측 레일 contain, 추가 추천 스켈레톤 분리는 유지한다.
+근거: `frontend/src/proto/proto.css`, `05-screens-cde.jsx`, `09-app.jsx`,
+`backend/app/main.py` `_model_identity_prompt`·`_model_look_prompt_with_reference`.
+[[model-look-toggle]]
+
 ## [2026-09-03] change | 바로 보기 구멍은 블러가 아니라 옷 실루엣
 블러·4px 팽창을 뺀다. 구멍은 옷 픽셀 그대로, 안쪽 핀홀만 1px closing.
 하의는 잡힌 폭 그대로 발 아래까지. [[tryon-setup-from-mypage]]
@@ -602,7 +610,6 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 근거: `frontend/src/proto/06-today.jsx` `appending`, `proto.css` shimmer clock,
 `05-screens-cde.jsx` `LookComposite`, `backend/app/main.py` `_white_look_backdrop`.
 [[model-look-toggle]]
-
 
 
 
