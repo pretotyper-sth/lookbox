@@ -663,3 +663,8 @@ Chrome 확장 v0.3.0은 로그인된 브라우저에서 주문내역 썸네일�
 Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문에 Lookbox 안에 URL 바·로그인 상태를 흉내 낸 두 번째 모달을 띄우지 않는다. 기존 아이템 추가 시트가 「쇼핑몰 로그인 / 주문내역 열기 / 옷 가져오기」 3단계로 바뀌고, 수집 뒤 같은 시트에서 상품 썸네일·구매처·가격·구매일 후보 목록을 보여준다. Electron WebView만 실제 로그인 화면이 필요해 기존 세션 UI를 유지한다.
 근거: `frontend/src/proto/04-screens-ab.jsx` `startInlineOrder`·`collectInlineOrders`.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-12] fix | 구매내역 뒤로가기 초기화·모바일 안내 정리
+구매내역 후보의 상세 확인에서 입력 화면으로 뒤로 돌아오면 남아 있던 `done` 단계를 초기화해 쇼핑몰 선택 화면을 다시 보여준다. 모바일 PC 전용 안내에서는 단독 가방 픽토그램을 빼고 문구만 남겼다.
+근거: `frontend/src/proto/04-screens-ab.jsx` `goBack`·모바일 구매내역 안내.
+[[order-import-webview]] [[add-item-bulk]]

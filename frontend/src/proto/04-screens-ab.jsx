@@ -1892,6 +1892,7 @@ function AddSheet({ ctx }) {
     if (stage === 'select' || stage === 'anchor-ready') {
       discardDraftIds(detected.map((d) => d && d.id));
       draftIdsRef.current = [];
+      if (stage === 'select' && tab === 'orders') chooseOtherOrderShop();
       setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
     } else if (stage === 'register') {
       if (stepIdx > 0) setStepIdx(stepIdx - 1);
@@ -1899,6 +1900,7 @@ function AddSheet({ ctx }) {
       else {
         discardDraftIds(detected.map((d) => d && d.id));
         draftIdsRef.current = [];
+        if (tab === 'orders') chooseOtherOrderShop();
         setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0);
       }
     } else if (stage === 'reextract-confirm') {
@@ -2046,6 +2048,7 @@ function AddSheet({ ctx }) {
                   login: ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
                   ready: ['주문내역을 열었어요', '이제 주문내역에서 옷만 가져올게요.'],
                   collecting: ['옷을 가져오고 있어요', orderFlow.count ? `${orderFlow.count}개를 찾았어요.` : '주문내역을 읽는 중이에요.'],
+                  done: ['주문내역을 불러왔어요', '담을 옷을 확인해 주세요.'],
                   error: ['쇼핑몰에 연결하지 못했어요', '다시 연결하거나 다른 쇼핑몰을 선택해 주세요.'],
                 }[orderFlow.phase] || ['', ''];
                 const orderStepsDone = ['ready', 'collecting', 'done'].includes(orderFlow.phase) ? 2 : 0;
@@ -2408,8 +2411,7 @@ function AddSheet({ ctx }) {
                         {!wide ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <div>
-                              <Icon name="bag" size={24} stroke={1.7} />
-                              <div style={{ marginTop: 10, fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
+                              <div style={{ fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
                               <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>Chrome 확장 프로그램으로 쇼핑몰에 안전하게 연결해요.</div>
                             </div>
                           </div>
