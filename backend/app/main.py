@@ -4019,9 +4019,8 @@ def _face_image_bytes(src: str | None) -> bytes | None:
     return None
 
 
-# 옷장·코디 카드 `--thumb-bg`와 같은 색. 참고 보드 바탕에만 쓴다.
-# 착장 배경은 이 색으로 강요하지 않는다 — 레퍼런스 스튜디오를 그대로 둔다.
-_LOOK_PLATE_RGB = (229, 227, 222)
+# 참고 보드와 카드의 바탕은 흰색으로 통일한다.
+_LOOK_PLATE_RGB = (255, 255, 255)
 _LOOK_IDENTITY_DIR = Path(__file__).resolve().parent.parent / "assets" / "look-identity"
 
 
@@ -4065,10 +4064,10 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - leave about 18% of the frame empty above the hair and 18% empty below the shoes
 - the top 14% and bottom 14% must be empty studio only — never hair, chin, or shoes
 - never crop the chin, crown, or shoes in this source frame
-- one continuous soft gray studio backdrop, wall blending into floor, reaching all four
-  edges of the frame. no second plate, letterbox, border, or framed inset
-- keep the soft contact shadow under the shoes smooth. no banding, posterization,
-  dithering, or blotchy patches anywhere in the backdrop or shadow
+- one continuous pure white (#FFFFFF) studio backdrop reaching all four edges. No wall,
+  floor, horizon line, seam, second plate, letterbox, border, or framed inset
+- no visible cast shadow, banding, posterization, dithering, or blotchy patches in the
+  white backdrop
 - simple base garments already in the photo; do not invent logos or extra people
 - clothes wrap the body with gravity and natural folds — not pasted on
 - soft studio lighting, photorealistic contemporary Korean fashion lookbook
@@ -4298,14 +4297,16 @@ entire shoes must be visible. Never crop or hide the feet. No walking, sitting,
 jumping, dramatic pose, or fashion-illustration proportions.
 
 COMPOSITION:
-Match Image 1's camera height, centered full-body framing, studio lighting, soft gray
-wall-to-floor backdrop, contact shadow, and restrained mood. Do not make a tight crop.
+Match Image 1's camera height, centered full-body framing, studio lighting, and restrained
+mood. Replace its backdrop with an edge-to-edge pure white (#FFFFFF) studio background.
+There must be no wall-to-floor transition, ground line, texture, or visible contact shadow.
+Do not make a tight crop.
 This output will be converted to a 4:5 card: leave at least 8% clear studio above the
 hair and 8% clear floor below the soles. If space is tight, make the person smaller;
 never solve it by cutting off the legs or shoes. Keep the person centered horizontally.
-Use one continuous, smooth matte studio backdrop reaching all four edges: no texture,
-grain, side streaks, noise, banding, posterization, dithering, blotches, second plate,
-letterbox, inset photograph, white border, or framed picture-in-picture.
+Use one continuous, pure white studio backdrop reaching all four edges: no texture, grain,
+side streaks, noise, banding, posterization, dithering, blotches, second plate, letterbox,
+inset photograph, border, or framed picture-in-picture.
 {hem}
 White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
 
@@ -4526,6 +4527,20 @@ def _look_row_backdrop(px, w: int, y: int) -> tuple[int, int, int]:
     )
 
 
+def _white_look_backdrop(img: Image.Image) -> Image.Image:
+    """줄 양끝과 같은 스튜디오 픽셀을 흰색으로 바꿔 벽·바닥 경계가 남지 않게 한다."""
+    out = img.copy()
+    px = out.load()
+    w, h = out.size
+    for y in range(h):
+        br, bg, bb = _look_row_backdrop(px, w, y)
+        for x in range(w):
+            r, g, b = px[x, y]
+            if abs(r - br) + abs(g - bg) + abs(b - bb) <= _LOOK_BACKDROP_TOL:
+                px[x, y] = (255, 255, 255)
+    return out
+
+
 def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     """스튜디오 배경이 아닌 픽셀(인물)의 박스. 없으면 None."""
     w, h = img.size
@@ -4633,18 +4648,24 @@ def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int) -> 
 
 def _crop_look_to_card(png_bytes: bytes) -> bytes:
     """생성본을 카드 비율(4:5)로 맞춘다. 인물은 자르지 않고 스튜디오 여백만 자른다."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    img = _white_look_backdrop(Image.open(io.BytesIO(png_bytes)).convert("RGB"))
     w, h = img.size
     if w < 8 or h < 8:
-        return png_bytes
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
     current = w / h
     if abs(current - _LOOK_CARD_RATIO) < 0.02:
-        return png_bytes
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
     box = _look_content_box(img)
     if current < _LOOK_CARD_RATIO:
         new_w, new_h = w, int(round(w / _LOOK_CARD_RATIO))
         if new_h >= h:
-            return png_bytes
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
         pad = max(8, int(round(new_h * _LOOK_CROP_PAD)))
         if not box:
             top = max(0, (h - new_h) // 2)
@@ -4662,7 +4683,9 @@ def _crop_look_to_card(png_bytes: bytes) -> bytes:
     else:
         new_w, new_h = int(round(h * _LOOK_CARD_RATIO)), h
         if new_w >= w:
-            return png_bytes
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
         pad = max(8, int(round(new_w * _LOOK_CROP_PAD)))
         if not box:
             left = max(0, (w - new_w) // 2)
@@ -4773,7 +4796,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id18-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id19-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")

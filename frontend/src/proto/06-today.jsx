@@ -363,6 +363,7 @@ function TodayScreen({ ctx }) {
   const COLS = Math.max(1, parseInt(dailyCount, 10) || 4);
 
   const [loading, setLoading] = useTd(false);
+  const [appending, setAppending] = useTd(false);
   const [needMoreOpen, setNeedMoreOpen] = useTd(false);
   // exhausted | grewButNone — API 실패 없이 0건일 때 팝업 문구 분기
   const [needMoreKind, setNeedMoreKind] = useTd('exhausted');
@@ -405,7 +406,7 @@ function TodayScreen({ ctx }) {
   void dailyTick; // prune/append 후 리렌더 트리거
   // 첫 줄(COLS)을 못 채울 때만 빈 슬롯. 4개 이상은 빈 칸 없이 아래 CTA로 2개씩 추가
   const fillingFirst = isToday && (dailyLoading || loading) && picks.length > 0 && picks.length < COLS;
-  const fillingMore = isToday && loading && dailyLoading && picks.length >= COLS;
+  const fillingMore = isToday && appending && dailyLoading && picks.length >= COLS;
   const emptySlots = isToday && !fillingFirst && picks.length < COLS ? COLS - picks.length : 0;
   const wardrobeGrew = !!dailyWardrobeGrew;
 
@@ -425,10 +426,16 @@ function TodayScreen({ ctx }) {
   };
   const [resetOpen, setResetOpen] = useTd(false);
   const reshuffle = async () => {
+    setAppending(true);
     setLoading(true);
     scrollToBottom();
-    const result = await requestDailyOutfits(preferredDailyStyle, { force: true, quiet: true });
-    setLoading(false);
+    let result;
+    try {
+      result = await requestDailyOutfits(preferredDailyStyle, { force: true, quiet: true });
+    } finally {
+      setLoading(false);
+      setAppending(false);
+    }
     if (!result || result.error) return;
     if (result.added > 0) { scrollToBottom(); return; }
     setNeedMoreKind(result.wardrobeGrew || wardrobeGrew ? 'grewButNone' : 'exhausted');

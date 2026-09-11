@@ -260,7 +260,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#E5E3DE';
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, w, h);
   return Promise.all(items.map((it) => loadLookImage(it.thumb || it.img))).then((images) => {
     const layered = items.map((it, i) => ({ it, im: images[i], z: (place[it.id] || LOOK_SPOT.top).z }))
@@ -316,7 +316,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     return () => { dead = true; };
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
 
-  // 서버가 4:5로 자르되 머리를 남긴다. cover + center top으로 칸을 채운다.
+  // 착장 원본은 4:5 전체 전신이다. 레일의 정사각형에서도 발끝을 자르지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
@@ -332,7 +332,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'cover', objectPosition: 'center top',
+            objectFit: 'contain', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
         />

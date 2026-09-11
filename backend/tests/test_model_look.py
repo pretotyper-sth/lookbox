@@ -1,4 +1,4 @@
-"""AI 착장은 canonical 인물 + 옷장 실물. 배경은 레퍼런스 스튜디오를 그대로 쓴다."""
+"""AI 착장은 canonical 인물 + 옷장 실물, 흰색 스튜디오 배경을 쓴다."""
 
 import ast
 import io
@@ -21,6 +21,7 @@ FNS = (
     '_model_look_garment_lines',
     '_model_look_outfit_block',
     '_look_row_backdrop',
+    '_white_look_backdrop',
     '_look_content_box',
     '_look_needs_reshoot',
     '_fit_look_to_card',
@@ -74,10 +75,8 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn("identity lock", prompt)
-        # 배경은 단색 판이 아니라 레퍼런스 스튜디오. 판 색을 강요하면 그라데이션이
-        # 계단처럼 뭉개진다(2026-09-02).
-        self.assertNotIn("#E5E3DE", prompt)
-        self.assertIn("one continuous soft gray studio backdrop", prompt)
+        self.assertIn("pure white (#FFFFFF) studio backdrop", prompt)
+        self.assertNotIn("soft gray studio backdrop", prompt)
         self.assertIn("18% of the frame empty", prompt)
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
@@ -85,7 +84,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("photogenic", prompt)
         self.assertIn("three-quarter", prompt)
         self.assertNotIn("beautify", prompt)
-        self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
+        self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (255, 255, 255))
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
@@ -93,7 +92,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id18-", src)
+        self.assertIn("model-id19-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -231,25 +230,17 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertTrue(skin_rows)
         self.assertLessEqual(skin_rows[0], 4)
 
-    def test_crop_keeps_backdrop_gradient_smooth(self):
-        """배경을 판 색으로 못박던 시절, 배경 밝기가 판 밝기를 지나는 줄에서
-        얼룩진 띠가 생겼다. 신발 옆이 깨져 보이던 게 이거다(2026-09-02).
-        이제 후처리는 자르기뿐이라 그라데이션이 그대로 남아야 한다.
-        """
+    def test_crop_whitens_backdrop_without_a_horizon(self):
         src = studio_look(80, 120, (30, 20, 50, 100))
         out = self.ns['_crop_look_to_card'](src)
         img = Image.open(io.BytesIO(out)).convert("RGB")
         col = [img.getpixel((2, y))[0] for y in range(img.height)]
-        self.assertGreater(col[0] - col[-1], 4)          # 그라데이션이 살아 있다
-        self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 2)
+        self.assertEqual(set(col), {255})
 
-    def test_fit_pads_with_backdrop_not_flat_plate(self):
-        """인물이 커서 넣기로 갈 때도 단색을 깔면 카드에 배경이 둘이 된다."""
+    def test_fit_pads_with_white_backdrop(self):
         out = self.ns['_crop_look_to_card'](studio_look(40, 60, (14, 1, 26, 59)))
         img = Image.open(io.BytesIO(out)).convert("RGB")
-        self.assertNotEqual(img.getpixel((1, 1)), self.ns['_LOOK_PLATE_RGB'])
-        col = [img.getpixel((1, y))[0] for y in range(img.height)]
-        self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 2)
+        self.assertEqual(img.getpixel((1, 1)), self.ns['_LOOK_PLATE_RGB'])
 
     def test_generate_signature_has_gender_not_face(self):
         tree = ast.parse(MAIN_PATH.read_text())
@@ -270,7 +261,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id18-", src)
+        self.assertIn("model-id19-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)

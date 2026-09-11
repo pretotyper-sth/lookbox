@@ -79,7 +79,7 @@ http://scripts.sil.org/OFL
 :root {
   /* ---- Color ---- */
   --ivory:      #EFEDE8;   /* page — garments float above this */
-  --thumb-bg:   #E5E3DE;   /* product plate — 옷장·코디 카드. 흰 옷이 읽히게 */
+  --thumb-bg:   #FFFFFF;   /* product plate — 옷장·코디 카드 */
   --surface:    #F7F5F0;   /* cards / sheets, a touch lighter than page */
   --surface-2:  #FBFAF7;
   --ink:        #1A1A1A;   /* primary text */
@@ -220,12 +220,24 @@ img { display: block; max-width: 100%; }
 }
 
 /* ---- skeleton shimmer ---- */
+@property --lb-shimmer-x {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 180%;
+}
+:root {
+  --lb-shimmer-x: 180%;
+  animation: lb-shimmer-clock 1.25s linear infinite;
+}
+@keyframes lb-shimmer-clock {
+  from { --lb-shimmer-x: 180%; }
+  to { --lb-shimmer-x: -60%; }
+}
 .lb-skel {
   background: linear-gradient(100deg, var(--line) 30%, color-mix(in srgb, var(--line) 40%, var(--surface-2)) 50%, var(--line) 70%);
   background-size: 220% 100%;
-  animation: lb-shimmer 1.25s var(--ease) infinite;
+  background-position: var(--lb-shimmer-x) 0;
 }
-@keyframes lb-shimmer { from { background-position: 180% 0; } to { background-position: -60% 0; } }
 
 /* 컷아웃 위에 스켈레톤과 같은 물결만. 옷을 가리는 회색 레이어는 두지 않는다. */
 .lb-look-wave {
@@ -242,10 +254,11 @@ img { display: block; max-width: 100%; }
     transparent 100%
   );
   background-size: 220% 100%;
-  animation: lb-shimmer 1.25s var(--ease) infinite;
+  background-position: var(--lb-shimmer-x) 0;
 }
 @media (prefers-reduced-motion: reduce) {
-  .lb-look-wave { animation: none; background: color-mix(in srgb, var(--surface) 18%, transparent); }
+  :root { animation: none; --lb-shimmer-x: 50%; }
+  .lb-look-wave { background: color-mix(in srgb, var(--surface) 18%, transparent); }
 }
 
 .lb-look-status {

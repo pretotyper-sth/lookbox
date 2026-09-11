@@ -594,6 +594,14 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 근거: `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/10-tryon.jsx`, `backend/app/main.py`.
 [[tryon-setup-from-mypage]]
 
+## [2026-09-11] fix | 추천 로딩 카드·AI 착장 배경 통일
+추가 추천 스켈레톤은 「추가로 코디 추천받기」를 눌러 생긴 상태에서만 보인다. 모든
+스켈레톤과 AI 착장 대기 물결은 페이지 공용 시계로 같은 위상을 쓴다. 상품컷·AI 착장은
+흰 바탕으로 통일했고, AI 출력은 행 배경을 흰색으로 정리해 벽·바닥 경계선을 없앤다.
+우측 정사각 레일은 AI 착장을 contain으로 그려 전신을 자르지 않는다. 캐시 `model-id19`.
+근거: `frontend/src/proto/06-today.jsx` `appending`, `proto.css` shimmer clock,
+`05-screens-cde.jsx` `LookComposite`, `backend/app/main.py` `_white_look_backdrop`.
+[[model-look-toggle]]
 
 
 
