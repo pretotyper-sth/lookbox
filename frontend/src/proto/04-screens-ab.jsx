@@ -1441,6 +1441,11 @@ function AddSheet({ ctx }) {
     const platform = orderFlowPlatform();
     setErr('');
     setOrderFlow({ phase: 'opening', shopId: platform.id, demo: !!platform.demo, count: 0 });
+    if (platform.demo) {
+      setOrderNeedLogin(true);
+      setOrderFlow({ phase: 'login', shopId: platform.id, demo: true, count: 0 });
+      return;
+    }
     try {
       await collectOrderItems({
         platform,
@@ -1509,6 +1514,15 @@ function AddSheet({ ctx }) {
     setOrderSession(platform);
   };
   const onOrderPrimary = () => {
+    if (orderFlow.demo && orderFlow.phase === 'login') {
+      setOrderNeedLogin(false);
+      setOrderFlow((cur) => ({ ...cur, phase: 'authenticated' }));
+      return;
+    }
+    if (orderFlow.demo && orderFlow.phase === 'authenticated') {
+      setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
+      return;
+    }
     if (orderFlow.phase === 'ready') {
       collectInlineOrders();
       return;
@@ -2045,14 +2059,20 @@ function AddSheet({ ctx }) {
                 };
                 const orderFlowCopy = {
                   opening: ['쇼핑몰 연결 중', 'Chrome 로그인 창을 준비하고 있어요.'],
-                  login: ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
+                  login: orderFlow.demo
+                    ? ['Chrome 로그인 창을 열었어요', '쇼핑몰에서 로그인을 마쳤다고 가정하고 다음으로 넘어가세요.']
+                    : ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
+                  authenticated: ['로그인을 확인했어요', '이제 확장이 쇼핑몰의 주문내역 페이지를 열어요.'],
                   ready: ['주문내역을 열었어요', '이제 주문내역에서 옷만 가져올게요.'],
                   collecting: ['옷을 가져오고 있어요', orderFlow.count ? `${orderFlow.count}개를 찾았어요.` : '주문내역을 읽는 중이에요.'],
                   done: ['주문내역을 불러왔어요', '담을 옷을 확인해 주세요.'],
                   error: ['쇼핑몰에 연결하지 못했어요', '다시 연결하거나 다른 쇼핑몰을 선택해 주세요.'],
                 }[orderFlow.phase] || ['', ''];
-                const orderStepsDone = ['ready', 'collecting', 'done'].includes(orderFlow.phase) ? 2 : 0;
-                const orderStepActive = ['opening', 'login', 'error'].includes(orderFlow.phase) ? 0 : 2;
+                const orderStepState = {
+                  opening: [0, 0], login: [0, 0], authenticated: [1, 1],
+                  ready: [2, 2], collecting: [2, 2], done: [3, 2], error: [0, 0],
+                }[orderFlow.phase] || [0, 0];
+                const [orderStepsDone, orderStepActive] = orderStepState;
                 const errBanner = (msg) => (
                   <div
                     role="alert"
@@ -2711,8 +2731,9 @@ function AddSheet({ ctx }) {
                                 ? `${bulkPicked.length}개 옷장에 담기`
                                 : `${bulkPicked.length}개 확인하고 담기`)
                             : orderFlow.phase === 'opening' ? 'Chrome 여는 중…'
-                            : orderFlow.phase === 'login' ? (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요')
-                            : orderFlow.phase === 'ready' ? '주문내역 가져오기'
+                            : orderFlow.phase === 'login' ? (orderFlow.demo ? '로그인 완료' : (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요'))
+                            : orderFlow.phase === 'authenticated' ? '주문내역 열기'
+                            : orderFlow.phase === 'ready' ? (orderFlow.demo ? '옷 가져오기' : '주문내역 가져오기')
                             : orderFlow.phase === 'collecting' ? (orderFlow.count ? `${orderFlow.count}개 찾는 중…` : '옷을 찾는 중…')
                             : orderFlow.phase === 'error' ? '다시 연결하기'
                             : orderBusy ? '로그인 창을 여는 중…'

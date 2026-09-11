@@ -668,3 +668,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 구매내역 후보의 상세 확인에서 입력 화면으로 뒤로 돌아오면 남아 있던 `done` 단계를 초기화해 쇼핑몰 선택 화면을 다시 보여준다. 모바일 PC 전용 안내에서는 단독 가방 픽토그램을 빼고 문구만 남겼다.
 근거: `frontend/src/proto/04-screens-ab.jsx` `goBack`·모바일 구매내역 안내.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-12] change | 샘플 구매내역을 실제 확장 순서로 수동 진행
+샘플 구매내역은 첫 CTA 뒤 결과까지 자동 재생하지 않는다. 사용자가 「로그인 완료 → 주문내역 열기 → 옷 가져오기」를 각각 눌러 확장이 로그인 팝업을 열고 주문내역으로 이동한 뒤 상품을 순차 수집하는 전 과정을 확인한다.
+근거: `frontend/src/proto/04-screens-ab.jsx` `startInlineOrder`·`onOrderPrimary`.
+[[order-import-webview]] [[add-item-bulk]]
