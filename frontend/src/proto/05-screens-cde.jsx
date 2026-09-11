@@ -316,7 +316,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     return () => { dead = true; };
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
 
-  // 생성본은 레일 정사각형의 cover 크롭에도 전신이 남을 여백을 확보한다.
+  // 착장 원본은 4:5 전체 전신이다. 레일도 같은 비율로 보여 잘라내지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
@@ -332,7 +332,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: ratio === '1 / 1' ? 'cover' : 'contain', objectPosition: 'center',
+            objectFit: 'contain', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
         />
@@ -1179,7 +1179,7 @@ function RailCard({ look, active, onClick }) {
       border: active ? '2px solid var(--ink)' : '2px solid transparent',
       opacity: active ? 1 : 0.45,
     }}>
-      <LookComposite outfit={o} items={its} ratio="1 / 1" aiMark="icon" />
+      <LookComposite outfit={o} items={its} ratio="4 / 5" aiMark="icon" />
       <div style={{
         padding: '8px 2px 0', fontSize: 12.5, fontWeight: 700, lineHeight: 1.3,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

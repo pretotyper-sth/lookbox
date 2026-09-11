@@ -343,6 +343,15 @@ AI 착장은 `model-id18`로 캐시를 갱신했다. 생성본의 정수리·발
 근거: `backend/app/main.py` `_look_needs_reshoot`, `_fit_look_to_card`, `_recent_daily_exclusions`, `fallback_combos`.
 [[model-look-toggle]]
 
+## [2026-09-11] fix | AI 픽셀 후처리·레일 크롭 회수
+정사각 레일 `cover`는 전신의 머리·발을 잘라서 제거했다. 레일 자체를 4:5로 맞추고
+원본을 contain으로 보인다. 배경선을 없애려던 픽셀 단위 평탄화도 결과 질감을 깨뜨릴 수
+있어 제거했다. 새 생성은 프롬프트의 매끈한 스튜디오 규칙만 따르고 원본 AI 픽셀을
+보존한다. 캐시 `model-id22`.
+근거: `frontend/src/proto/05-screens-cde.jsx` `RailCard`·`LookComposite`,
+`backend/app/main.py` `_crop_look_to_card`.
+[[model-look-toggle]]
+
 ## [2026-09-11] fix | AI 착장 배경선·정사각 레일 여백
 AI 착장 배경은 원래 연회색 톤을 유지하되, 인물 밖 픽셀만 부드러운 세로 그라데이션으로
 정리해 바닥 실선과 자글자글한 노이즈를 없앤다. 생성 인물은 4:5에서 위아래 18% 여백을
@@ -619,7 +628,6 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 근거: `frontend/src/proto/06-today.jsx` `appending`, `proto.css` shimmer clock,
 `05-screens-cde.jsx` `LookComposite`, `backend/app/main.py` `_white_look_backdrop`.
 [[model-look-toggle]]
-
 
 
 

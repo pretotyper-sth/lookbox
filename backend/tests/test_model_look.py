@@ -21,7 +21,6 @@ FNS = (
     '_model_look_garment_lines',
     '_model_look_outfit_block',
     '_look_row_backdrop',
-    '_smooth_look_backdrop',
     '_look_content_box',
     '_look_needs_reshoot',
     '_fit_look_to_card',
@@ -92,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id21-", src)
+        self.assertIn("model-id22-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -238,19 +237,6 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertGreater(col[0] - col[-1], 4)
         self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 2)
 
-    def test_crop_smooths_a_hard_floor_line(self):
-        src = Image.open(io.BytesIO(studio_look(80, 120, (30, 20, 50, 100)))).convert("RGB")
-        px = src.load()
-        for y in range(82, 120):
-            for x in range(80):
-                if not (30 <= x < 50 and 20 <= y < 100):
-                    px[x, y] = (180, 179, 175)
-        buf = io.BytesIO()
-        src.save(buf, format="PNG")
-        out = Image.open(io.BytesIO(self.ns['_crop_look_to_card'](buf.getvalue()))).convert("RGB")
-        col = [out.getpixel((2, y))[0] for y in range(out.height)]
-        self.assertLessEqual(max(abs(a - b) for a, b in zip(col, col[1:])), 3)
-
     def test_fit_pads_with_backdrop_not_flat_plate(self):
         out = self.ns['_crop_look_to_card'](studio_look(40, 60, (14, 1, 26, 59)))
         img = Image.open(io.BytesIO(out)).convert("RGB")
@@ -277,7 +263,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id21-", src)
+        self.assertIn("model-id22-", src)
+        self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)

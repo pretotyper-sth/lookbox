@@ -4529,28 +4529,6 @@ def _look_row_backdrop(px, w: int, y: int) -> tuple[int, int, int]:
     )
 
 
-def _smooth_look_backdrop(img: Image.Image) -> Image.Image:
-    """회색 스튜디오만 부드러운 세로 그라데이션으로 만들어 바닥 실선·노이즈를 없앤다."""
-    out = img.copy()
-    px = out.load()
-    w, h = out.size
-    strip = Image.new("RGB", (1, h))
-    strip_px = strip.load()
-    rows = []
-    for y in range(h):
-        color = _look_row_backdrop(px, w, y)
-        rows.append(color)
-        strip_px[0, y] = color
-    smooth = strip.filter(ImageFilter.GaussianBlur(max(8, h // 30))).load()
-    for y, (br, bg, bb) in enumerate(rows):
-        target = smooth[0, y]
-        for x in range(w):
-            r, g, b = px[x, y]
-            if abs(r - br) + abs(g - bg) + abs(b - bb) <= _LOOK_BACKDROP_TOL:
-                px[x, y] = target
-    return out
-
-
 def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     """스튜디오 배경이 아닌 픽셀(인물)의 박스. 없으면 None."""
     w, h = img.size
@@ -4658,24 +4636,18 @@ def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int) -> 
 
 def _crop_look_to_card(png_bytes: bytes) -> bytes:
     """생성본을 카드 비율(4:5)로 맞춘다. 인물은 자르지 않고 스튜디오 여백만 자른다."""
-    img = _smooth_look_backdrop(Image.open(io.BytesIO(png_bytes)).convert("RGB"))
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
     if w < 8 or h < 8:
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
+        return png_bytes
     current = w / h
     if abs(current - _LOOK_CARD_RATIO) < 0.02:
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
+        return png_bytes
     box = _look_content_box(img)
     if current < _LOOK_CARD_RATIO:
         new_w, new_h = w, int(round(w / _LOOK_CARD_RATIO))
         if new_h >= h:
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            return buf.getvalue()
+            return png_bytes
         pad = max(8, int(round(new_h * _LOOK_CROP_PAD)))
         if not box:
             top = max(0, (h - new_h) // 2)
@@ -4693,9 +4665,7 @@ def _crop_look_to_card(png_bytes: bytes) -> bytes:
     else:
         new_w, new_h = int(round(h * _LOOK_CARD_RATIO)), h
         if new_w >= w:
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            return buf.getvalue()
+            return png_bytes
         pad = max(8, int(round(new_w * _LOOK_CROP_PAD)))
         if not box:
             left = max(0, (w - new_w) // 2)
@@ -4806,7 +4776,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id21-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id22-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
