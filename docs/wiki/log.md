@@ -658,3 +658,8 @@ Chrome 확장 v0.3.0은 로그인된 브라우저에서 주문내역 썸네일�
 개발 서버와 `?orderDemo=1`은 실제 확장 설치 없이 가짜 로그인·주문내역 6건·선택·순차 상세입력·완료까지 재현한다. 미리보기 데이터는 서버를 호출하거나 옷장에 저장하지 않는다. 로컬 실제 확장 검수는 `?orderReal=1`로 전환한다.
 근거: `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-import-session.jsx`.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-11] change | 웹 구매내역 중첩 모달 제거
+Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문에 Lookbox 안에 URL 바·로그인 상태를 흉내 낸 두 번째 모달을 띄우지 않는다. 기존 아이템 추가 시트가 「쇼핑몰 로그인 / 주문내역 열기 / 옷 가져오기」 3단계로 바뀌고, 수집 뒤 같은 시트에서 상품 썸네일·구매처·가격·구매일 후보 목록을 보여준다. Electron WebView만 실제 로그인 화면이 필요해 기존 세션 UI를 유지한다.
+근거: `frontend/src/proto/04-screens-ab.jsx` `startInlineOrder`·`collectInlineOrders`.
+[[order-import-webview]] [[add-item-bulk]]

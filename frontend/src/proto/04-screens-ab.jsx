@@ -1035,7 +1035,7 @@ function bulkRowMeta(b) {
   try { host = new URL(b.url).hostname.replace(/^www\./, ''); } catch (e) { /* keep raw */ }
   const title = b.name || host;
   const bits = [];
-  if (b.name) bits.push(host);
+  if (b.name && !b.purchasedAt) bits.push(host);
   if (b.store && b.store !== host && b.store !== b.name) bits.push(b.store);
   if (b.price) bits.push(b.price);
   if (b.purchasedAt) bits.push(b.purchasedAt);
@@ -1099,6 +1099,7 @@ function AddSheet({ ctx }) {
   const orderDemo = typeof window !== 'undefined'
     && (import.meta.env.DEV || new URLSearchParams(window.location.search).get('orderDemo') === '1')
     && new URLSearchParams(window.location.search).get('orderReal') !== '1';
+  const [orderFlow, setOrderFlow] = useS({ phase: 'idle', shopId: '', demo: false, count: 0 });
   const orderDraftRef = useR({ bulk: null, result: null });
   const previewUrlRef = useR('');
   const [tryOnErr, setTryOnErr] = useS('');
@@ -1150,6 +1151,7 @@ function AddSheet({ ctx }) {
     setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderTabId(null); setOrderExtImage(false); setOrderSession(null);
+    setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
     orderDraftRef.current = { bulk: null, result: null };
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
@@ -1163,6 +1165,7 @@ function AddSheet({ ctx }) {
 
   const requestClose = () => {
     cancelledRef.current = true;
+    if (orderFlow.phase !== 'idle') cancelOrderCollection();
     const ids = [
       ...draftIdsRef.current,
       ...detectedRef.current.map((d) => d && d.id),
@@ -1424,11 +1427,97 @@ function AddSheet({ ctx }) {
     }
   };
   const cancelOrderCollection = () => {
-    if (orderSession && orderSession.demo) return;
+    if ((orderSession && orderSession.demo) || orderFlow.demo) return;
     if (typeof liveOrderCancel === 'function') liveOrderCancel();
     if (Number.isInteger(orderTabId)) {
       extCall({ type: 'CANCEL', tabId: orderTabId }, 1000).catch(() => {});
     }
+  };
+  const orderFlowPlatform = () => {
+    const platform = orderPlatformById(orderShop);
+    return orderDemo ? { ...platform, demo: true } : platform;
+  };
+  const startInlineOrder = async () => {
+    const platform = orderFlowPlatform();
+    setErr('');
+    setOrderFlow({ phase: 'opening', shopId: platform.id, demo: !!platform.demo, count: 0 });
+    try {
+      await collectOrderItems({
+        platform,
+        action: 'open',
+        onProgress: (step) => {
+          const key = (step && (step.key || step)) || '';
+          if (key === 'extension_login') {
+            setOrderFlow((cur) => ({ ...cur, phase: 'login' }));
+          } else if (key === 'orders_ready') {
+            setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
+          }
+        },
+      });
+      setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
+    } catch (e) {
+      const message = String((e && e.message) || '');
+      if (message === 'NEED_LOGIN' || /로그인/.test(message)) {
+        setOrderFlow((cur) => ({ ...cur, phase: 'login' }));
+        setOrderNeedLogin(true);
+      } else {
+        setOrderFlow((cur) => ({ ...cur, phase: 'error' }));
+        setErr(message === 'ORDER_OPEN_FAILED' || message === 'NO_EXT'
+          ? '구매내역 연결 확장 프로그램이 필요해요. 설치한 뒤 새로고침해 주세요.'
+          : '쇼핑몰에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+    }
+  };
+  const collectInlineOrders = async () => {
+    const platform = orderFlowPlatform();
+    const found = new Map();
+    setErr('');
+    setOrderFlow((cur) => ({ ...cur, phase: 'collecting', count: 0 }));
+    try {
+      const items = await collectOrderItems({
+        platform,
+        action: 'collect',
+        onItem: (item) => {
+          if (!item || !item.url) return;
+          found.set(item.url, item);
+          setOrderFlow((cur) => ({ ...cur, count: found.size }));
+        },
+      });
+      (items || []).forEach((item) => {
+        if (item && item.url) found.set(item.url, item);
+      });
+      const rows = [...found.values()];
+      if (!rows.length) {
+        setOrderFlow((cur) => ({ ...cur, phase: 'ready', count: 0 }));
+        setErr('주문내역에서 옷을 찾지 못했어요. 주문내역을 확인한 뒤 다시 가져와 주세요.');
+        return;
+      }
+      applyCollectedRows(rows);
+      setOrderFlow((cur) => ({ ...cur, phase: 'done', count: rows.length }));
+    } catch (e) {
+      setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
+      setErr((e && e.message) || '주문내역을 가져오지 못했어요.');
+    }
+  };
+  const launchOrderFlow = () => {
+    const platform = orderFlowPlatform();
+    const nativeWebview = !!(window.LookboxNative && window.LookboxNative.embeddedWebview);
+    if (platform.demo || (!onThisComputer() && !nativeWebview)) {
+      startInlineOrder();
+      return;
+    }
+    setOrderSession(platform);
+  };
+  const onOrderPrimary = () => {
+    if (orderFlow.phase === 'ready') {
+      collectInlineOrders();
+      return;
+    }
+    if (orderFlow.phase === 'error' || (orderFlow.phase === 'login' && orderNeedLogin)) {
+      startInlineOrder();
+      return;
+    }
+    if (orderFlow.phase === 'idle') launchOrderFlow();
   };
   const URL_ROW_MAX = 20;
   const setUrlAt = (idx, value) => {
@@ -1697,6 +1786,7 @@ function AddSheet({ ctx }) {
     if (id === 'tryon') setShowHint(false);
   };
   const chooseOtherOrderShop = () => {
+    cancelOrderCollection();
     orderDraftRef.current = { bulk: null, result: null };
     setBulk(null);
     setBulkResult(null);
@@ -1704,6 +1794,7 @@ function AddSheet({ ctx }) {
     setOrderNeedLogin(false);
     setOrderTabId(null);
     setOrderExtImage(false);
+    setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
   };
   const handlePasteImage = (e) => {
     const items = (e.clipboardData && e.clipboardData.items) || [];
@@ -1950,6 +2041,15 @@ function AddSheet({ ctx }) {
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   gap: 10, color: 'var(--ink-2)', outline: 'none',
                 };
+                const orderFlowCopy = {
+                  opening: ['쇼핑몰 연결 중', 'Chrome 로그인 창을 준비하고 있어요.'],
+                  login: ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
+                  ready: ['주문내역을 열었어요', '이제 주문내역에서 옷만 가져올게요.'],
+                  collecting: ['옷을 가져오고 있어요', orderFlow.count ? `${orderFlow.count}개를 찾았어요.` : '주문내역을 읽는 중이에요.'],
+                  error: ['쇼핑몰에 연결하지 못했어요', '다시 연결하거나 다른 쇼핑몰을 선택해 주세요.'],
+                }[orderFlow.phase] || ['', ''];
+                const orderStepsDone = ['ready', 'collecting', 'done'].includes(orderFlow.phase) ? 2 : 0;
+                const orderStepActive = ['opening', 'login', 'error'].includes(orderFlow.phase) ? 0 : 2;
                 const errBanner = (msg) => (
                   <div
                     role="alert"
@@ -2232,6 +2332,11 @@ function AddSheet({ ctx }) {
                                     {b.pick ? <Icon name="check" size={11} stroke={2.6} /> : null}
                                   </span>
                                 </span>
+                                {tab === 'orders' && b.thumb ? (
+                                  <span style={{ width: 38, height: 38, flex: 'none', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)', display: 'grid', placeItems: 'center' }}>
+                                    <img src={b.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                  </span>
+                                ) : null}
                                 <span style={{ flex: 1, minWidth: 0 }}>
                                   <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {title}
@@ -2308,6 +2413,46 @@ function AddSheet({ ctx }) {
                               <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>Chrome 확장 프로그램으로 쇼핑몰에 안전하게 연결해요.</div>
                             </div>
                           </div>
+                        ) : orderFlow.phase !== 'idle' ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                              <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>{orderFlowCopy[0]}</div>
+                              <button
+                                type="button"
+                                onClick={chooseOtherOrderShop}
+                                style={{ flex: 'none', padding: '4px 0', fontSize: 12, fontWeight: 650, color: 'var(--ink-3)' }}
+                              >
+                                다른 쇼핑몰
+                              </button>
+                            </div>
+                            <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>
+                              {orderFlowCopy[1]}
+                            </div>
+                            <div style={{ display: 'grid', gap: 7, marginTop: 15 }}>
+                              {['쇼핑몰 로그인', '주문내역 열기', '옷 가져오기'].map((label, index) => {
+                                const done = index < orderStepsDone;
+                                const active = index === orderStepActive;
+                                return (
+                                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 24 }}>
+                                    <span style={{
+                                      width: 22, height: 22, flex: 'none', borderRadius: '50%',
+                                      display: 'grid', placeItems: 'center',
+                                      background: done ? 'var(--ink)' : active ? 'var(--surface-2)' : 'transparent',
+                                      color: done ? 'var(--surface)' : active ? 'var(--ink)' : 'var(--ink-3)',
+                                      boxShadow: done ? 'none' : `inset 0 0 0 ${active ? 1.5 : 1}px ${active ? 'var(--ink)' : 'var(--line-2)'}`,
+                                      fontSize: 11.5, fontWeight: 750,
+                                    }}>
+                                      {done ? <Icon name="check" size={11} stroke={2.7} /> : index + 1}
+                                    </span>
+                                    <span style={{ fontSize: 12.5, fontWeight: active || done ? 650 : 550, color: active || done ? 'var(--ink)' : 'var(--ink-3)' }}>
+                                      {label}
+                                    </span>
+                                    {active && orderFlow.phase === 'collecting' ? <span className="lb-spin" style={{ width: 13, height: 13, marginLeft: 'auto' }} /> : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
                         ) : (
                           <>
                             <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
@@ -2551,14 +2696,11 @@ function AddSheet({ ctx }) {
                       ) : (
                         <Btn
                           full size="lg" icon={tab === 'orders' ? 'bag' : 'sparkle'}
-                          onClick={bulk ? runBulk : (tab === 'orders' ? () => {
-                            const platform = orderPlatformById(orderShop);
-                            setOrderSession(orderDemo ? { ...platform, demo: true } : platform);
-                          } : onSubmitAdd)}
+                          onClick={bulk ? runBulk : (tab === 'orders' ? onOrderPrimary : onSubmitAdd)}
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
                             : tab === 'orders'
-                              ? (!wide || orderBusy || busy || !!bulkRun)
+                              ? (!wide || busy || !!bulkRun || ['opening', 'collecting'].includes(orderFlow.phase) || (orderFlow.phase === 'login' && !orderNeedLogin))
                               : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
@@ -2566,6 +2708,11 @@ function AddSheet({ ctx }) {
                               ? (bulkAuto
                                 ? `${bulkPicked.length}개 옷장에 담기`
                                 : `${bulkPicked.length}개 확인하고 담기`)
+                            : orderFlow.phase === 'opening' ? 'Chrome 여는 중…'
+                            : orderFlow.phase === 'login' ? (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요')
+                            : orderFlow.phase === 'ready' ? '주문내역 가져오기'
+                            : orderFlow.phase === 'collecting' ? (orderFlow.count ? `${orderFlow.count}개 찾는 중…` : '옷을 찾는 중…')
+                            : orderFlow.phase === 'error' ? '다시 연결하기'
                             : orderBusy ? '로그인 창을 여는 중…'
                             : busy ? '인식 중…'
                             : (tab === 'orders'
