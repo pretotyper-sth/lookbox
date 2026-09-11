@@ -1,0 +1,13 @@
+{
+  "name": "lookbox-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "LOOKBOX_DESKTOP_URL=http://127.0.0.1:5173 LOOKBOX_DESKTOP_DEV_BYPASS=1 electron .",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.3.0"
+  }
+}

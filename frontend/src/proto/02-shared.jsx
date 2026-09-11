@@ -601,7 +601,7 @@ function Btn({ children, variant = 'primary', size = 'md', icon, full, onClick, 
     soft:      { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1px var(--line)' },
   };
   return (
-    <button onClick={onClick} className="lb-btn"
+    <button onClick={onClick} disabled={disabled} className="lb-btn"
       style={{ ...base, ...variants[variant], ...style }}>
       {icon && <Icon name={icon} size={size === 'lg' ? 20 : 17} />}
       {children}

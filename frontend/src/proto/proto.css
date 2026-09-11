@@ -558,6 +558,7 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
   overflow: hidden;
 }
 .lb-order-card.login { width: 420px; max-width: 100%; flex: none; }
+.lb-order-card.login.extension { width: 360px; }
 .lb-order-card.tray { width: 560px; max-width: 100%; flex: none; }
 .lb-order-head {
   display: flex; align-items: center; height: 48px;
@@ -608,6 +609,12 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
   object-fit: fill;
   pointer-events: none;
   display: block;
+}
+.lb-order-native-view {
+  width: 100%; height: 100%;
+  display: flex;
+  border: 0;
+  background: #fff;
 }
 .lb-order-wait {
   flex: 1;

@@ -629,5 +629,22 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 `05-screens-cde.jsx` `LookComposite`, `backend/app/main.py` `_white_look_backdrop`.
 [[model-look-toggle]]
 
+## [2026-09-11] fix | 구매내역 네이티브 WebView·선택 후 상세입력
+Electron 데스크톱 래퍼가 쇼핑몰 로그인을 실제 WebView에 띄우고 로그인 뒤 주문내역으로 자동 이동한다. 수집한 옷은 직접 저장하지 않고 선택 후 URL 다건 추가와 같은 상세입력 단계로 넘어간다. 쿠팡은 홈의 로그인 링크를 경유하고 데스크톱 Chrome 요청 헤더를 사용하며, 빈 화면인 브랜디는 지원 목록에서 제거했다.
+근거: `desktop/main.cjs`, `frontend/src/proto/order-import-session.jsx`, `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-platforms.js`, `tools/order-collector/platforms.mjs`.
+[[order-import-webview]] [[add-item-bulk]]
 
+## [2026-09-11] change | 웹 구매내역 Chrome 확장 팝업
+일반 웹은 확장 프로그램이 520×760 쇼핑몰 로그인 팝업을 연다. 로그인 뒤 주문내역으로 다시 이동하고 상품을 한 개씩 기존 구매내역 모달에 전달하며, 성공하면 팝업을 자동으로 닫는다. 웹과 확장 사이 이벤트는 요청 ID로 묶고 Lookbox 출처에서 온 요청만 처리한다. 확장이 없으면 설치 후 새로고침 안내를 보여준다.
+근거: `extensions/lookbox-orders/background.js`, `lookbox-bridge.js`, `frontend/src/proto/04-screens-ab.jsx`, `order-import-session.jsx`.
+[[order-import-webview]]
 
+## [2026-09-11] fix | 쿠팡 확장 로그인 반환 주소
+쿠팡 확장은 주문내역 URL을 로그인 반환 주소로 넣지 않고, 실제 Chrome에서 확인한 홈 반환 로그인 주소를 연 뒤 인증 완료 시 주문내역으로 이동한다. Akamai `Access Denied` 화면은 주문내역 준비 완료로 오인하지 않고 즉시 안내한다. Lookbox 모달을 닫으면 열어 둔 로그인 팝업도 함께 닫는다.
+근거: `extensions/lookbox-orders/platforms.js`, `extensions/lookbox-orders/background.js`, `extensions/lookbox-orders/extract.js`, `frontend/src/proto/04-screens-ab.jsx`.
+[[order-import-webview]]
+
+## [2026-09-11] change | 구매내역 확장 등록 준비·직접 이미지 등록·UX 정리
+Chrome 확장 v0.3.0은 로그인된 브라우저에서 주문내역 썸네일을 받아 사진 등록 경로로 전달한다. 상품 페이지 서버 요청이 막혀도 이미지·상품명·가격·구매처·출처 URL을 보존하고, 중복은 저장 전에 검사한다. Chrome 안내 모달은 360×310px로 줄이고 목록 CTA를 「취소 / N개 담기」로 바꿨다. 구매내역은 다른 소스 탭을 다녀와도 유지하며 「다른 쇼핑몰」에서만 비운다. 모바일 웹은 PC 전용 안내를 표시한다. 웹스토어용 아이콘·화면·설명·개인정보 처리방침도 준비했다.
+근거: `extensions/lookbox-orders/`, `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-import-session.jsx`, `frontend/src/proto/09-app.jsx`, `backend/app/main.py`, `frontend/public/extension-privacy.html`.
+[[order-import-webview]] [[add-item-bulk]] [[url-import-fetch]] [[chrome-extension-publish]]

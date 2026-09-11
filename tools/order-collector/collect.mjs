@@ -41,6 +41,7 @@ const VIEW_W = Math.max(280, parseInt(opt('width') || '384', 10) || 384);
 const VIEW_H = Math.max(320, parseInt(opt('height') || '520', 10) || 520);
 const LOGIN_WAIT_MS = Math.max(15_000, parseInt(opt('login-wait') || '180000', 10) || 180_000);
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
 
 const step = (key) => {
   if (AUTO) process.stderr.write(`STEP ${key}\n`);
@@ -72,8 +73,26 @@ const looksLoggedOut = async (page) => {
   return /로그인이 필요|로그인 해주세요|로그인하세요|로그인 후 이용/.test(body);
 };
 
+const startLoginBootstrap = async (page, platform) => {
+  if (!platform.bootstrapUrl) return false;
+  try {
+    await page.goto(platform.bootstrapUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    const login = page.locator('a[href*="login.coupang.com/login/login.pang"]').first();
+    if (!(await login.count())) return false;
+    await login.click();
+    await page.waitForTimeout(800);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 async function collectFrom(page, platform) {
   const found = [];
+  if (await startLoginBootstrap(page, platform)) {
+    console.log(`\n  → ${platform.name}: 로그인이 필요해요. 열려 있는 창에서 직접 로그인해 주세요.`);
+    await ask('     로그인하고 구매내역이 보이면 Enter: ');
+  }
   for (const url of platform.urls) {
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -113,6 +132,15 @@ const emitItem = (it) => {
 
 async function collectFromAuto(page, platform) {
   const found = [];
+  if (await startLoginBootstrap(page, platform)) {
+    step('need_login');
+    const ok = await waitUntilLoggedIn(page, LOGIN_WAIT_MS);
+    if (!ok) {
+      const err = new Error('NEED_LOGIN');
+      err.code = 'NEED_LOGIN';
+      throw err;
+    }
+  }
   for (const url of platform.urls) {
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -323,9 +351,9 @@ function listenEmbedInput(getPage, getCdp) {
     channel: 'chrome',
     headless: EMBED,
     viewport: EMBED ? { width: VIEW_W, height: VIEW_H } : null,
-    userAgent: EMBED ? IPHONE_UA : undefined,
-    isMobile: EMBED,
-    hasTouch: EMBED,
+    userAgent: EMBED ? (platforms.length === 1 && platforms[0].desktopUa ? DESKTOP_UA : IPHONE_UA) : undefined,
+    isMobile: EMBED && !(platforms.length === 1 && platforms[0].desktopUa),
+    hasTouch: EMBED && !(platforms.length === 1 && platforms[0].desktopUa),
     args: EMBED ? ['--headless=new'] : ['--start-maximized'],
   });
   let page = ctx.pages()[0] || (await ctx.newPage());

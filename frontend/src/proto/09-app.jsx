@@ -735,7 +735,7 @@ async function uploadAvatarToAccount(dataUrl) {
   return (res && res.avatarUrl) || '';
 }
 
-async function liveImportSource({ sourceType, file, url, status, extractHint, onProgress }) {
+async function liveImportSource({ sourceType, file, url, status, extractHint, onProgress, sourceUrl, name, brand, store, price, material, color, skipDuplicate }) {
   const hint = (extractHint || '').trim();
   if (sourceType === 'url') {
     if (!url || !url.trim()) throw new Error('상품 URL을 입력해주세요');
@@ -750,6 +750,14 @@ async function liveImportSource({ sourceType, file, url, status, extractHint, on
   fd.append('image', file);
   fd.append('status', status || 'owned');
   fd.append('extract_hint', hint);
+  if (sourceUrl) fd.append('source_url', sourceUrl);
+  if (name) fd.append('name', name);
+  if (brand) fd.append('brand', brand);
+  if (store) fd.append('store', store);
+  if (price) fd.append('price', price);
+  if (material) fd.append('material', material);
+  if (color) fd.append('color', color);
+  if (skipDuplicate) fd.append('skip_duplicate', 'true');
   return liveJSON('/api/live/import/photo', { method: 'POST', body: fd, onProgress });
 }
 

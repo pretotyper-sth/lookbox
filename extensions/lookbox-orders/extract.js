@@ -8,6 +8,12 @@ export function pageLooksLoggedOut() {
   return /로그인이 필요|로그인 해주세요|로그인하세요|로그인 후 이용|로그인하고/.test(body);
 }
 
+export function pageAccessDenied() {
+  const title = document.title || '';
+  const body = ((document.body && document.body.innerText) || '').slice(0, 1200);
+  return /access denied|permission to access|사용권한이 없습니다|접근이 거부/i.test(`${title}\n${body}`);
+}
+
 export async function pageExpandList() {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const MORE = /^(더보기|더 보기|더 불러오기|see more|more|load more)$/i;

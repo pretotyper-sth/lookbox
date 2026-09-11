@@ -4,6 +4,85 @@ const React = window.React;
 const { useState, useEffect, useRef, useLayoutEffect } = React;
 
 const CARD_H = 'min(640px, calc(100dvh - 48px))';
+const NATIVE_WEBVIEW_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+const NATIVE_DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+
+function nativePageLooksLoggedOut() {
+  const url = location.href.toLowerCase();
+  if (/login|signin|auth|member\/login/.test(url)) return true;
+  const body = ((document.body && document.body.innerText) || '').slice(0, 800);
+  return /로그인이 필요|로그인 해주세요|로그인하세요|로그인 후 이용|로그인하고/.test(body);
+}
+
+function nativePageStartCoupangLogin() {
+  const login = Array.from(document.querySelectorAll('a[href]'))
+    .find((a) => /login\.coupang\.com\/login\/login\.pang/i.test(a.href || ''));
+  if (!login) return false;
+  login.click();
+  return true;
+}
+
+async function nativePageExpandList() {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const morePattern = /^(더보기|더 보기|더 불러오기|see more|more|load more)$/i;
+  let last = 0;
+  for (let round = 0; round < 12; round += 1) {
+    window.scrollTo(0, document.body.scrollHeight);
+    await sleep(700);
+    const more = Array.from(document.querySelectorAll('button, a, div[role=button]'))
+      .find((el) => morePattern.test((el.innerText || '').trim()) && el.offsetParent);
+    if (more) {
+      more.click();
+      await sleep(1200);
+    }
+    const now = document.querySelectorAll('a[href]').length;
+    if (now === last && !more) break;
+    last = now;
+  }
+  window.scrollTo(0, 0);
+  return last;
+}
+
+function nativePageExtractItems() {
+  const productPattern = /(\/goods\/|goodsNo=|\/products?\/|\/product\/|\/catalog\/|\/pd\/|productNo=|itemId=|\/item\/|prdNo=|\/detail\/)/i;
+  const skipPattern = /(review|리뷰|문의|교환|반품|취소|배송조회|장바구니|쿠폰|이벤트|login|logout)/i;
+  const moneyPattern = /[0-9][0-9,]{2,}\s*원/;
+  const datePattern = /\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}/;
+  const out = new Map();
+  for (const a of Array.from(document.querySelectorAll('a[href]'))) {
+    const href = a.href || '';
+    if (!productPattern.test(href) || skipPattern.test(href)) continue;
+    let box = a;
+    for (let i = 0; i < 6 && box.parentElement; i += 1) {
+      box = box.parentElement;
+      if (box.querySelector('img') && (box.innerText || '').trim().length > 12) break;
+    }
+    const lines = (box.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const anchorText = (a.innerText || '').trim();
+    const name = (anchorText.length > 3 && !skipPattern.test(anchorText) ? anchorText
+      : lines.find((t) => t.length > 5 && !moneyPattern.test(t) && !datePattern.test(t) && !skipPattern.test(t))) || '';
+    if (!name) continue;
+    const img = a.querySelector('img') || box.querySelector('img');
+    const item = {
+      url: a.href,
+      name: name.slice(0, 120),
+      thumb: (img && (img.currentSrc || img.src)) || '',
+      price: (lines.find((t) => moneyPattern.test(t)) || '').match(moneyPattern)?.[0] || '',
+      purchasedAt: (lines.find((t) => datePattern.test(t)) || '').match(datePattern)?.[0] || '',
+      store: location.hostname.replace(/^www\./, ''),
+    };
+    let key = href;
+    try {
+      const u = new URL(href, location.href);
+      const id = (u.search.match(/(goodsNo|productNo|itemId|prdNo|goods_no)=[^&]+/i) || [''])[0];
+      key = u.origin + u.pathname + (id ? `?${id}` : '');
+    } catch { /* keep href */ }
+    const prev = out.get(key);
+    const score = (x) => (x.thumb ? 2 : 0) + (x.price ? 1 : 0) + (x.purchasedAt ? 1 : 0);
+    if (!prev || score(item) > score(prev)) out.set(key, item);
+  }
+  return Array.from(out.values());
+}
 
 function barUrl(platform, phase) {
   const raw = phase === 'login'
@@ -17,7 +96,10 @@ function formatOrderErr(raw, wide) {
   if (s === 'ORDER_READ_BLOCKED') {
     return '이 기기에서는 쇼핑몰 창을 열 수 없어요.\n컴퓨터에서 다시 시도해 주세요.';
   }
-  if (s === 'ORDER_OPEN_FAILED' || s === 'NEED_SETUP' || s === 'NO_EXT') {
+  if (s === 'NO_EXT') {
+    return '구매내역 연결 확장 프로그램이 필요해요.\n설치한 뒤 이 페이지를 새로고침해 주세요.';
+  }
+  if (s === 'ORDER_OPEN_FAILED' || s === 'NEED_SETUP') {
     return wide
       ? '쇼핑몰 창을 열지 못했어요.\n이 컴퓨터에서 다시 열어 주세요.'
       : '이 기기에서는 쇼핑몰 창을 열 수 없어요.\n컴퓨터에서 다시 시도해 주세요.';
@@ -34,7 +116,6 @@ function OrderImportSession({
   wide,
   onClose,
   onConfirm,
-  onSaveOne,
   collectOrders,
   sendInput,
   cancelCollect,
@@ -48,14 +129,18 @@ function OrderImportSession({
   const [err, setErr] = useState('');
   const [found, setFound] = useState([]);
   const [doneCollect, setDoneCollect] = useState(false);
-  const [savingUrl, setSavingUrl] = useState('');
   const [embedOrigin, setEmbedOrigin] = useState('');
   const [pageUrl, setPageUrl] = useState('');
   const [stageSize, setStageSize] = useState(null);
+  const [sessionMode, setSessionMode] = useState('');
+  const nativeWebview = !!(window.LookboxNative && window.LookboxNative.embeddedWebview);
+  const platformId = platform && platform.id;
   const cancelRef = useRef(false);
   const startedRef = useRef(false);
   const collectRef = useRef(collectOrders);
   collectRef.current = collectOrders;
+  const cancelCollectRef = useRef(cancelCollect);
+  cancelCollectRef.current = cancelCollect;
   const seenRef = useRef(new Set());
   const platformRef = useRef(platform);
   platformRef.current = platform;
@@ -66,9 +151,15 @@ function OrderImportSession({
   const hitRef = useRef(null);
   const stageRef = useRef(null);
   stageRef.current = stageSize;
+  const nativeViewRef = useRef(null);
+  const nativeOrdersOpenedRef = useRef(false);
+  const extensionRef = useRef(false);
+  const extensionPreparedRef = useRef(false);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const stopCollect = () => {
     cancelRef.current = true;
-    if (typeof cancelCollect === 'function') cancelCollect();
+    if (typeof cancelCollectRef.current === 'function') cancelCollectRef.current();
   };
   window.useEscapeClose(open, () => {
     stopCollect();
@@ -93,7 +184,7 @@ function OrderImportSession({
     }]));
   };
 
-  const begin = async () => {
+  const begin = async (action = 'open') => {
     const shop = platformRef.current;
     if (!shop || !collectRef.current) return;
     setErr('');
@@ -104,11 +195,18 @@ function OrderImportSession({
     try {
       const items = await collectRef.current({
         platform: shop,
+        action,
         width: stageSize && stageSize.w,
         height: stageSize && stageSize.h,
         onProgress: (step) => {
           if (cancelRef.current) return;
           const key = (step && (step.key || step)) || '';
+          if (key === 'extension_login') {
+            extensionRef.current = true;
+            setSessionMode('extension');
+          }
+          if (key === 'orders_ready' && extensionRef.current) extensionPreparedRef.current = true;
+          if (step && step.url) setPageUrl(String(step.url));
           if (key === 'orders_ready' || key === 'collect') {
             setPhase((p) => (p === 'login' ? 'orders' : p));
           }
@@ -126,6 +224,10 @@ function OrderImportSession({
       });
       if (cancelRef.current) return;
       (items || []).forEach(pushItem);
+      if (action === 'open' && extensionPreparedRef.current) {
+        setPhase('orders');
+        return;
+      }
       setDoneCollect(true);
       setPhase((p) => (p === 'login' ? 'orders' : p));
       if (!(items && items.length) && !seenRef.current.size) {
@@ -152,7 +254,7 @@ function OrderImportSession({
       setEmbedOrigin('');
       setPageUrl('');
       setStageSize(null);
-      if (typeof cancelCollect === 'function') cancelCollect();
+      if (typeof cancelCollectRef.current === 'function') cancelCollectRef.current();
       return undefined;
     }
     cancelRef.current = false;
@@ -162,9 +264,12 @@ function OrderImportSession({
     setErr('');
     setFound([]);
     setDoneCollect(false);
-    setSavingUrl('');
+    setSessionMode('');
+    nativeOrdersOpenedRef.current = false;
+    extensionRef.current = false;
+    extensionPreparedRef.current = false;
     return undefined;
-  }, [open, platform && platform.id]);
+  }, [open, platformId]);
 
   useLayoutEffect(() => {
     if (!open) return undefined;
@@ -183,11 +288,75 @@ function OrderImportSession({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !stageSize || startedRef.current) return undefined;
+    if (nativeWebview || !open || !stageSize || startedRef.current) return undefined;
     startedRef.current = true;
     begin();
     return () => { cancelRef.current = true; };
-  }, [open, stageSize]);
+  }, [open, stageSize, nativeWebview]);
+
+  useLayoutEffect(() => {
+    if (!open || !nativeWebview) return undefined;
+    const view = nativeViewRef.current;
+    if (!view) return undefined;
+    const syncPage = async () => {
+      let url = '';
+      try { url = view.getURL(); } catch { return; }
+      if (!/^https?:/i.test(url)) return;
+      setPageUrl(url);
+      setBusy(false);
+      const shop = platformRef.current;
+      if (shop && shop.id === 'coupang' && /^https:\/\/(www\.)?coupang\.com\/?(?:[?#].*)?$/i.test(url)) {
+        const startedLogin = await view.executeJavaScript(`(${nativePageStartCoupangLogin.toString()})()`)
+          .catch(() => false);
+        if (startedLogin) {
+          setPhase('login');
+          return;
+        }
+      }
+      let loggedOut = true;
+      try {
+        loggedOut = await view.executeJavaScript(`(${nativePageLooksLoggedOut.toString()})()`);
+      } catch { return; }
+      if (cancelRef.current) return;
+      if (loggedOut) {
+        setPhase('login');
+        return;
+      }
+      if (!shop || !shop.ordersUrl) return;
+      if (!nativeOrdersOpenedRef.current && url !== shop.ordersUrl) {
+        nativeOrdersOpenedRef.current = true;
+        setBusy(true);
+        view.loadURL(shop.ordersUrl);
+        return;
+      }
+      setErr('');
+      setPhase('orders');
+    };
+    const onStart = () => setBusy(true);
+    const syncUrl = () => {
+      try {
+        const url = view.getURL();
+        if (/^https?:/i.test(url)) setPageUrl(url);
+      } catch { /* webview가 닫히는 중이면 무시 */ }
+    };
+    const onFail = (event) => {
+      if (event && event.errorCode === -3) return;
+      setBusy(false);
+      setErr('로그인 화면을 열지 못했어요.\n다시 열어 주세요.');
+    };
+    view.addEventListener('did-start-loading', onStart);
+    view.addEventListener('did-stop-loading', syncPage);
+    view.addEventListener('did-navigate', syncUrl);
+    view.addEventListener('did-navigate-in-page', syncUrl);
+    view.addEventListener('did-fail-load', onFail);
+    return () => {
+      view.removeEventListener('did-start-loading', onStart);
+      view.removeEventListener('did-stop-loading', syncPage);
+      view.removeEventListener('did-navigate', syncUrl);
+      view.removeEventListener('did-navigate-in-page', syncUrl);
+      view.removeEventListener('did-fail-load', onFail);
+    };
+  }, [open, nativeWebview, platformId]);
 
   useEffect(() => {
     if (!embedOrigin) return undefined;
@@ -239,43 +408,53 @@ function OrderImportSession({
 
   if (!open || !platform) return null;
 
-  const picked = found.filter((x) => x.pick && x.state !== 'saved' && x.state !== 'dup');
-  const savedN = found.filter((x) => x.state === 'saved').length;
+  const picked = found.filter((x) => x.pick && x.state !== 'dup');
   const close = () => {
     stopCollect();
     onClose();
   };
 
-  const openTray = () => setPhase('tray');
+  const collectNativeOrders = async () => {
+    const view = nativeViewRef.current;
+    if (!view || busy) return;
+    setErr('');
+    setFound([]);
+    setDoneCollect(false);
+    seenRef.current = new Set();
+    setPhase('tray');
+    setBusy(true);
+    try {
+      await view.executeJavaScript(`(${nativePageExpandList.toString()})()`);
+      const items = await view.executeJavaScript(`(${nativePageExtractItems.toString()})()`);
+      if (cancelRef.current) return;
+      for (const item of (items || [])) {
+        pushItem({ ...item, platform: platformRef.current.name });
+        await new Promise((resolve) => setTimeout(resolve, 90));
+      }
+      setDoneCollect(true);
+      if (!(items && items.length)) setErr('주문내역에서 옷을 찾지 못했어요.');
+    } catch {
+      if (!cancelRef.current) setErr('주문내역을 읽지 못했어요.\n페이지를 확인한 뒤 다시 시도해 주세요.');
+    } finally {
+      if (!cancelRef.current) setBusy(false);
+    }
+  };
+
+  const openTray = () => {
+    if (nativeWebview) {
+      collectNativeOrders();
+      return;
+    }
+    if (extensionMode) {
+      setPhase('tray');
+      begin('collect');
+      return;
+    }
+    setPhase('tray');
+  };
 
   const togglePick = (url) => {
     setFound((arr) => arr.map((x) => (x.url === url ? { ...x, pick: !x.pick } : x)));
-  };
-
-  const saveOne = async (it) => {
-    if (!onSaveOne || savingUrl || it.state === 'saved' || it.state === 'dup') return;
-    setSavingUrl(it.url);
-    setFound((arr) => arr.map((x) => (x.url === it.url ? { ...x, state: 'saving', error: '' } : x)));
-    try {
-      const res = await onSaveOne(it);
-      if (cancelRef.current) return;
-      if (res && res.status === 'dup') {
-        setFound((arr) => arr.map((x) => (x.url === it.url
-          ? { ...x, state: 'dup', pick: false, error: res.reason || '이미 옷장에 있어요' }
-          : x)));
-        return;
-      }
-      setFound((arr) => arr.map((x) => (x.url === it.url
-        ? { ...x, state: 'saved', pick: false, error: '' }
-        : x)));
-    } catch (e) {
-      if (cancelRef.current) return;
-      setFound((arr) => arr.map((x) => (x.url === it.url
-        ? { ...x, state: 'idle', error: (e && e.message) || '담지 못했어요' }
-        : x)));
-    } finally {
-      if (!cancelRef.current) setSavingUrl('');
-    }
   };
 
   const trayOn = phase === 'tray';
@@ -335,12 +514,13 @@ function OrderImportSession({
     e.currentTarget.textContent = '';
   };
 
-  const live = !!embedOrigin;
+  const extensionMode = sessionMode === 'extension';
+  const live = nativeWebview || !!embedOrigin || (extensionMode && !err);
 
   const privacy = (
     <div className="lb-order-privacy">
       <Icon name="shield" size={13} stroke={2} />
-      <span>로그인은 쇼핑몰에서만 이뤄져요. 아이디·비밀번호는 저장하지 않아요.</span>
+      <span>선택한 상품 정보와 이미지만 옷장 등록에 사용해요. 로그인 정보는 읽거나 저장하지 않아요.</span>
     </div>
   );
 
@@ -352,8 +532,31 @@ function OrderImportSession({
       </div>
       <div className="lb-order-webbody live">
         <div ref={viewBoxRef} className="lb-order-stage">
-          {embedOrigin ? (
+          {nativeWebview ? (
+            <webview
+              ref={nativeViewRef}
+              className="lb-order-native-view"
+              src={platform.loginUrl || `https://${platform.host}`}
+              partition="persist:lookbox-orders"
+              useragent={platform.desktopUa ? NATIVE_DESKTOP_UA : NATIVE_WEBVIEW_UA}
+              allowpopups="true"
+            />
+          ) : embedOrigin ? (
             <img className="lb-order-frame" alt="" src={`${embedOrigin}/stream`} />
+          ) : extensionMode && !err ? (
+            <div className="lb-order-wait">
+              <Icon name="lock" size={24} stroke={1.8} />
+              <div style={{ fontSize: 14, fontWeight: 750, color: 'var(--ink)', lineHeight: 1.45 }}>
+                {phase === 'login' ? 'Chrome에 로그인 창을 열었어요.' : '주문내역 화면을 준비했어요.'}
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
+                {phase === 'login' ? (
+                  <>로그인하면 주문내역으로 자동 이동해요.</>
+                ) : (
+                  <>가져오기를 누르면 찾은 옷이<br />여기에 차례로 표시돼요.</>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="lb-order-wait">
               {err ? (
@@ -370,16 +573,18 @@ function OrderImportSession({
               )}
             </div>
           )}
-          <div
-            ref={hitRef}
-            className="lb-order-webhit"
-            tabIndex={0}
-            contentEditable
-            suppressContentEditableWarning
-            onMouseDown={onHit}
-            onKeyDown={onKey}
-            onCompositionEnd={onCompEnd}
-          />
+          {!nativeWebview && !extensionMode ? (
+            <div
+              ref={hitRef}
+              className="lb-order-webhit"
+              tabIndex={0}
+              contentEditable
+              suppressContentEditableWarning
+              onMouseDown={onHit}
+              onKeyDown={onKey}
+              onCompositionEnd={onCompEnd}
+            />
+          ) : null}
         </div>
       </div>
       {privacy}
@@ -387,7 +592,10 @@ function OrderImportSession({
   );
 
   const loginCard = (
-    <div className="lb-order-card login" style={{ height: wide ? CARD_H : 'min(92dvh, 760px)' }}>
+    <div
+      className={`lb-order-card login${extensionMode ? ' extension' : ''}`}
+      style={{ height: extensionMode ? 310 : (wide ? CARD_H : 'min(92dvh, 760px)') }}
+    >
       <div className="lb-order-head">
         <button type="button" aria-label="닫기" onClick={close} style={iconHit}>
           <Icon name="x" size={20} stroke={2} />
@@ -403,7 +611,7 @@ function OrderImportSession({
             fontSize: 13, fontWeight: 700, color: 'var(--ink-3)',
             wordBreak: 'keep-all', textAlign: 'center',
           }}>
-            위 화면에서 로그인해 주세요
+            {extensionMode ? '열린 Chrome 창에서 로그인해 주세요' : '위 화면에서 로그인해 주세요'}
           </div>
         ) : phase === 'login' ? (
           <button
@@ -491,10 +699,7 @@ function OrderImportSession({
           <OrderItemRow
             key={it.url}
             it={it}
-            locked={!!savingUrl}
             onToggle={() => togglePick(it.url)}
-            onSave={() => saveOne(it)}
-            canSave={typeof onSaveOne === 'function'}
           />
         ))}
         {(!doneCollect && busy) ? (
@@ -505,24 +710,20 @@ function OrderImportSession({
         ) : null}
       </div>
       <div className="lb-order-foot row">
-        {picked.length && typeof onConfirm === 'function' ? (
+        <button type="button" onClick={close} className="lb-order-cta ghost" style={{ flex: 1 }}>
+          취소
+        </button>
+        {typeof onConfirm === 'function' ? (
           <button
             type="button"
-            disabled={busy && !found.length}
+            disabled={!picked.length || (busy && !found.length)}
             onClick={() => onConfirm(picked)}
-            className="lb-order-cta ghost"
-            style={{ flex: 'none', width: 'auto', padding: '0 16px' }}
+            className="lb-order-cta"
+            style={{ flex: 1.6 }}
           >
-            {picked.length}개 확인
+            {picked.length ? `${picked.length}개 담기` : '담을 옷 선택'}
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={close}
-          className="lb-order-cta"
-        >
-          {savedN ? `${savedN}개 담고 완료` : '완료'}
-        </button>
       </div>
     </>
   );
@@ -538,7 +739,7 @@ function OrderImportSession({
         className={`lb-order-pair${trayOn && wide ? ' split' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {(!trayOn || wide) ? loginCard : null}
+        {(!trayOn || (wide && !extensionMode)) ? loginCard : null}
         {trayOn ? (
           <div className="lb-order-card tray" style={{ height: wide ? CARD_H : 'min(92dvh, 760px)' }}>
             {trayBody}
@@ -549,28 +750,26 @@ function OrderImportSession({
   );
 }
 
-function OrderItemRow({ it, onToggle, onSave, locked, canSave }) {
+function OrderItemRow({ it, onToggle }) {
   const Icon = window.Icon;
-  const saved = it.state === 'saved';
   const dup = it.state === 'dup';
-  const saving = it.state === 'saving';
   return (
-    <div className={`lb-order-row${it.pick && !saved && !dup ? ' on' : ''}`}>
+    <div className={`lb-order-row${it.pick && !dup ? ' on' : ''}`}>
       <button
         type="button"
         onClick={onToggle}
-        disabled={saved || dup}
+        disabled={dup}
         aria-label={it.pick ? '선택 해제' : '선택'}
         style={{
           width: 22, height: 22, borderRadius: 6, flex: 'none',
           display: 'grid', placeItems: 'center',
-          background: saved || it.pick ? 'var(--ink)' : 'transparent',
-          boxShadow: saved || it.pick ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
+          background: it.pick ? 'var(--ink)' : 'transparent',
+          boxShadow: it.pick ? 'none' : 'inset 0 0 0 1.5px var(--line-2)',
           color: 'var(--surface)',
           opacity: dup ? 0.4 : 1,
         }}
       >
-        {(saved || it.pick) ? <Icon name="check" size={12} stroke={2.6} /> : null}
+        {it.pick ? <Icon name="check" size={12} stroke={2.6} /> : null}
       </button>
       <div className="lb-order-thumb">
         {it.thumb ? (
@@ -597,20 +796,7 @@ function OrderItemRow({ it, onToggle, onSave, locked, canSave }) {
             {it.error}
           </div>
         ) : null}
-        {saved ? (
-          <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: 'var(--good)' }}>옷장에 담았어요</div>
-        ) : null}
       </div>
-      {canSave && !saved && !dup ? (
-        <button
-          type="button"
-          disabled={locked || saving}
-          onClick={onSave}
-          className="lb-order-add"
-        >
-          {saving ? '담는 중…' : '담기'}
-        </button>
-      ) : null}
     </div>
   );
 }

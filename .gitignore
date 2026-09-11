@@ -8,3 +8,4 @@ __pycache__/
 uploads/
 tools/order-collector/node_modules/
 tools/order-collector/orders.json
+desktop/node_modules/

@@ -8,8 +8,17 @@ window.addEventListener('message', (event) => {
       replyTo: data.id,
       result: result || null,
       lastError: (chrome.runtime.lastError && chrome.runtime.lastError.message) || '',
-    }, '*');
+    }, window.location.origin);
   });
 });
 
-window.postMessage({ source: 'lookbox-ext', type: 'ready' }, '*');
+chrome.runtime.onMessage.addListener((message) => {
+  if (!message || message.type !== 'LOOKBOX_ORDER_EVENT') return;
+  window.postMessage({
+    source: 'lookbox-ext',
+    eventFor: message.requestId,
+    event: message.event || null,
+  }, window.location.origin);
+});
+
+window.postMessage({ source: 'lookbox-ext', type: 'ready' }, window.location.origin);

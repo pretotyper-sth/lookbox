@@ -869,7 +869,7 @@ function toHttpsUrl(raw) {
   return /^https?:\/\//i.test(t) ? t : ('https://' + t.replace(/^\/+/, ''));
 }
 
-function extCall(payload, timeoutMs) {
+function extCall(payload, timeoutMs, onEvent) {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
     const timer = setTimeout(() => {
@@ -878,6 +878,10 @@ function extCall(payload, timeoutMs) {
     }, timeoutMs);
     function onMsg(e) {
       if (e.source !== window || !e.data || e.data.source !== 'lookbox-ext') return;
+      if (e.data.eventFor === id) {
+        if (typeof onEvent === 'function' && e.data.event) onEvent(e.data.event);
+        return;
+      }
       if (e.data.replyTo !== id) return;
       clearTimeout(timer);
       window.removeEventListener('message', onMsg);
@@ -887,6 +891,16 @@ function extCall(payload, timeoutMs) {
     window.addEventListener('message', onMsg);
     window.postMessage({ source: 'lookbox-app', id, ...payload }, '*');
   });
+}
+
+async function extensionImageFile(item) {
+  if (!item || !item.thumb) return null;
+  const result = await extCall({ type: 'FETCH_IMAGE', url: item.thumb }, 30000);
+  if (!result || result.error || !result.dataUrl) throw new Error((result && result.error) || '상품 이미지를 가져오지 못했어요.');
+  const response = await fetch(result.dataUrl);
+  const blob = await response.blob();
+  const subtype = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9.+-]/gi, '');
+  return new File([blob], `order-item.${subtype}`, { type: blob.type || 'image/jpeg' });
 }
 
 const EXTRACT_HINT_KEY = 'lb_extract_hints_v1';
@@ -1059,6 +1073,8 @@ function AddSheet({ ctx }) {
   const [orderBusy, setOrderBusy] = useS(false);
   const [orderNeedLogin, setOrderNeedLogin] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
+  const [orderExtImage, setOrderExtImage] = useS(false);
+  const orderDraftRef = useR({ bulk: null, result: null });
   const previewUrlRef = useR('');
   const [tryOnErr, setTryOnErr] = useS('');
   const tryOnLaunchGen = useR(0);
@@ -1108,7 +1124,8 @@ function AddSheet({ ctx }) {
     setBusy(false); setErr('');
     setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
-    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderTabId(null); setOrderSession(null);
+    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderTabId(null); setOrderExtImage(false); setOrderSession(null);
+    orderDraftRef.current = { bulk: null, result: null };
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
   };
@@ -1274,7 +1291,7 @@ function AddSheet({ ctx }) {
   };
   // 붙여넣기·입력에서 상품이 2개 이상 잡히면 단건 입력을 후보 목록으로 바꾼다.
   const applyCollectedRows = (found) => {
-    if (!found.length) return false;
+    if (!found.length) return [];
     const known = new Set(knownSourceUrls);
     const rows = found.map((it) => {
       const dup = known.has(normalizeForDup(it.url));
@@ -1297,9 +1314,9 @@ function AddSheet({ ctx }) {
         })
         .finally(() => setBulkChecking(false));
     }
-    return true;
+    return rows;
   };
-  const collectOrderItems = async ({ platform, width, height, onProgress, onItem, onView, onEmbed }) => {
+  const collectOrderItems = async ({ platform, action = 'open', width, height, onProgress, onItem, onView, onEmbed }) => {
     const shopId = (platform && platform.id) || orderShop;
     setErr('');
     setOrderNeedLogin(false);
@@ -1316,14 +1333,28 @@ function AddSheet({ ctx }) {
 
       let usedExt = false;
       try {
-        await extCall({ type: 'PING' }, 700);
-        usedExt = true;
+        const ping = await extCall({ type: 'PING' }, 700);
+        usedExt = !!(ping && ping.ok);
+        const version = String((ping && ping.version) || '').split('.').map(Number);
+        setOrderExtImage((version[0] || 0) > 0 || (version[1] || 0) >= 3);
       } catch (e) {
         usedExt = false;
       }
       if (usedExt) {
-        const res = await extCall({ type: 'COLLECT', platform: shopId, tabId: orderTabId }, 210000);
+        if (onProgress) onProgress({ key: 'extension_login', url: platform && platform.loginUrl });
+        const res = await extCall(
+          { type: action === 'collect' ? 'COLLECT' : 'OPEN', platform: shopId, tabId: orderTabId },
+          330000,
+          async (event) => {
+            if (event.type === 'progress') {
+              if (Number.isInteger(event.tabId)) setOrderTabId(event.tabId);
+              if (onProgress) onProgress(event);
+            }
+            if (event.type === 'item' && event.item && onItem) onItem(event.item);
+          },
+        );
         if (res && res.tabId) setOrderTabId(res.tabId);
+        if (res && res.status === 'error') throw new Error(res.error || '주문 내역을 가져오지 못했어요.');
         if (res && res.status === 'need_login') {
           setOrderNeedLogin(true);
           const err = new Error('NEED_LOGIN');
@@ -1346,12 +1377,18 @@ function AddSheet({ ctx }) {
       throw new Error(window.innerWidth >= 760 ? 'ORDER_OPEN_FAILED' : 'ORDER_READ_BLOCKED');
     } catch (err) {
       const msg = String((err && err.message) || '');
-      if (msg === 'NEED_SETUP' || msg === 'NO_EXT') {
+      if (msg === 'NEED_SETUP') {
         throw new Error(window.innerWidth >= 760 ? 'ORDER_OPEN_FAILED' : 'ORDER_READ_BLOCKED');
       }
       throw err;
     } finally {
       setOrderBusy(false);
+    }
+  };
+  const cancelOrderCollection = () => {
+    if (typeof liveOrderCancel === 'function') liveOrderCancel();
+    if (Number.isInteger(orderTabId)) {
+      extCall({ type: 'CANCEL', tabId: orderTabId }, 1000).catch(() => {});
     }
   };
   const URL_ROW_MAX = 20;
@@ -1425,15 +1462,41 @@ function AddSheet({ ctx }) {
       skipped: [...skipped, ...preSkipped.map((b) => ({ ...b, reason: b.dupReason || '이미 옷장에 있어요' }))],
     });
   };
+  const importBulkItem = async (it, status) => {
+    if (tab === 'orders' && orderExtImage && Number.isInteger(orderTabId) && it.thumb) {
+      let image = null;
+      try {
+        image = await extensionImageFile(it);
+      } catch { /* 구버전 확장 또는 이미지 CDN 실패 시 기존 URL 경로로 폴백 */ }
+      if (image) {
+        return await liveImportSource({
+          sourceType: 'photo',
+          file: image,
+          status,
+          sourceUrl: it.url,
+          name: it.name || '',
+          brand: it.brand || '',
+          store: it.store || '',
+          price: it.price || '',
+          material: it.material || '',
+          color: it.color || '',
+          skipDuplicate: true,
+        });
+      }
+    }
+    return liveImportSource({ sourceType: 'url', url: it.url, status });
+  };
   // 기본: 추출만 pending으로 한 뒤 사진과 같이 하나씩 확인·담기
-  const runBulkReview = async () => {
-    if (!liveImportSource || !bulkPicked.length) return;
+  const runBulkReview = async (explicitRows = null) => {
+    const sourceRows = explicitRows || bulk || [];
+    const targets = explicitRows ? sourceRows.filter((b) => b.pick && !b.dup) : bulkPicked.slice();
+    if (!liveImportSource || !targets.length) return;
     cancelledRef.current = false;
     setErr('');
-    const targets = bulkPicked.slice();
-    const preSkipped = (bulk || []).filter((b) => b.dup && !b.pick);
+    const preSkipped = sourceRows.filter((b) => b.dup && !b.pick);
     setBulkRun({ index: 0, total: targets.length });
-    setBulk((arr) => arr.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
+    if (explicitRows) setBulk(sourceRows.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
+    else setBulk((arr) => arr.map((b) => (b.pick ? { ...b, state: 'wait', error: '' } : b)));
     const mark = (url2, patch) => setBulk((arr) => arr.map((b) => (b.url === url2 ? { ...b, ...patch } : b)));
     const collected = [];
     const failed = [];
@@ -1450,7 +1513,7 @@ function AddSheet({ ctx }) {
       setBulkRun({ index: i, total: targets.length, label: it.name || it.url });
       mark(it.url, { state: 'run' });
       try {
-        const res = await liveImportSource({ sourceType: 'url', url: it.url, status: 'pending' });
+        const res = await importBulkItem(it, 'pending');
         if (cancelledRef.current) {
           const ids = ((res && res.items) || []).map((d) => d && d.id).filter(Boolean);
           discardDraftIds([...draftIdsRef.current, ...ids]);
@@ -1561,6 +1624,36 @@ function AddSheet({ ctx }) {
   bulkRef.current = bulk;
   const bulkResultRef = useR(bulkResult);
   bulkResultRef.current = bulkResult;
+  useE(() => {
+    if (tab === 'orders') orderDraftRef.current = { bulk, result: bulkResult };
+  }, [tab, bulk, bulkResult]);
+  const switchSourceTab = (id) => {
+    if (tab === 'orders') orderDraftRef.current = { bulk, result: bulkResult };
+    if (id === 'orders') {
+      setBulk(orderDraftRef.current.bulk);
+      setBulkResult(orderDraftRef.current.result);
+      setBulkAuto(false);
+    } else if (tab === 'orders') {
+      setBulk(null);
+      setBulkResult(null);
+    } else if (id === 'photo' || id === 'tryon') {
+      setBulk(null);
+      setBulkResult(null);
+    }
+    setTab(id);
+    setErr('');
+    setTryOnErr('');
+    if (id === 'tryon') setShowHint(false);
+  };
+  const chooseOtherOrderShop = () => {
+    orderDraftRef.current = { bulk: null, result: null };
+    setBulk(null);
+    setBulkResult(null);
+    setBulkRun(null);
+    setOrderNeedLogin(false);
+    setOrderTabId(null);
+    setOrderExtImage(false);
+  };
   const handlePasteImage = (e) => {
     const items = (e.clipboardData && e.clipboardData.items) || [];
     for (let i = 0; i < items.length; i++) {
@@ -1765,10 +1858,7 @@ function AddSheet({ ctx }) {
                 return (
                   <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
                     if (comboLocked) return;
-                    setTab(id); setErr(''); setTryOnErr('');
-                    if (id === 'tryon') setShowHint(false);
-                    // 후보 목록은 URL·구매내역이 같이 쓴다. 사진/바로 보기로 나갈 때만 비운다.
-                    if (id === 'photo' || id === 'tryon') { setBulk(null); setBulkResult(null); }
+                    switchSourceTab(id);
                     // 바로 보기 탭은 확인 한 번을 거친 뒤에만 전신을 만든다. 탭만 눌러서는 생성하지 않는다.
                   }} style={{
                     flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -1991,9 +2081,14 @@ function AddSheet({ ctx }) {
                           }}>
                             <Icon name={bulkResult.ok ? 'check' : 'hanger'} size={16} stroke={2.4} />
                           </span>
-                          <span style={{ fontSize: 15.5, fontWeight: 800 }}>
+                          <span style={{ flex: 1, fontSize: 15.5, fontWeight: 800 }}>
                             {bulkResult.ok ? `${bulkResult.ok}개를 옷장에 담았어요` : '새로 담을 옷이 없었어요'}
                           </span>
+                          {tab === 'orders' ? (
+                            <button type="button" onClick={chooseOtherOrderShop} style={{ flex: 'none', padding: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)' }}>
+                              다른 쇼핑몰
+                            </button>
+                          ) : null}
                         </div>
                         <div style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
                           {bulkResult.dup > 0 && (
@@ -2041,8 +2136,8 @@ function AddSheet({ ctx }) {
                               style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: 0 }}>전체</button>
                             <button type="button" onClick={() => setBulk((arr) => arr.map((b) => ({ ...b, pick: false })))}
                               style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', padding: 0 }}>해제</button>
-                            <button type="button" onClick={() => { setBulk(null); setBulkRun(null); }}
-                              style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', padding: 0 }}>지우기</button>
+                            <button type="button" onClick={tab === 'orders' ? chooseOtherOrderShop : () => { setBulk(null); setBulkRun(null); }}
+                              style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-3)', padding: 0 }}>{tab === 'orders' ? '다른 쇼핑몰' : '지우기'}</button>
                           </div>
                           {bulkChecking && (
                             <div style={{ marginTop: 'var(--s2)', fontSize: 12, color: 'var(--ink-3)' }}>중복 확인 중…</div>
@@ -2116,7 +2211,7 @@ function AddSheet({ ctx }) {
                               {bulkRun.index + 1} / {bulkRun.total} · {String(bulkRun.label || '').slice(0, 28)}
                             </div>
                           </div>
-                        ) : (
+                        ) : tab === 'url' ? (
                           <label style={{
                             display: 'flex', alignItems: 'flex-start', gap: 10,
                             padding: '12px var(--s4) var(--s4)', borderTop: '1px solid var(--line)',
@@ -2137,6 +2232,10 @@ function AddSheet({ ctx }) {
                               </span>
                             </span>
                           </label>
+                        ) : (
+                          <div style={{ padding: '12px var(--s4) var(--s4)', borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>
+                            선택한 옷은 상세 정보를 하나씩 확인한 뒤 담아요.
+                          </div>
                         )}
                       </div>
                     ) : tab === 'orders' ? (
@@ -2145,35 +2244,47 @@ function AddSheet({ ctx }) {
                         background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
                         padding: 'var(--s4)', display: 'flex', flexDirection: 'column',
                       }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
-                          어디서 산 옷을 가져올까요?
-                        </div>
-                        <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {orderNeedLogin
-                            ? '로그인한 뒤 다시 눌러 주세요.'
-                            : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
-                        </div>
-                        <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
-                          {ORDER_PLATFORMS.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setOrderShop(p.id);
-                                setErr('');
-                                setOrderNeedLogin(false);
-                              }}
-                              style={{
-                                padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
-                                background: orderShop === p.id ? 'var(--surface-2)' : 'var(--ivory)',
-                                color: orderShop === p.id ? 'var(--ink)' : 'var(--ink-2)',
-                                boxShadow: orderShop === p.id ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--line)',
-                              }}
-                            >
-                              {p.name}
-                            </button>
-                          ))}
-                        </div>
+                        {!wide ? (
+                          <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
+                            <div>
+                              <Icon name="lock" size={26} stroke={1.6} />
+                              <div style={{ marginTop: 10, fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
+                              <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>Chrome 확장 프로그램으로 쇼핑몰에 안전하게 연결해요.</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
+                              어디서 산 옷을 가져올까요?
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {orderNeedLogin
+                                ? '로그인한 뒤 다시 눌러 주세요.'
+                                : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
+                            </div>
+                            <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
+                              {ORDER_PLATFORMS.map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setOrderShop(p.id);
+                                    setErr('');
+                                    setOrderNeedLogin(false);
+                                  }}
+                                  style={{
+                                    padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
+                                    background: orderShop === p.id ? 'var(--surface-2)' : 'var(--ivory)',
+                                    color: orderShop === p.id ? 'var(--ink)' : 'var(--ink-2)',
+                                    boxShadow: orderShop === p.id ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--line)',
+                                  }}
+                                >
+                                  {p.name}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <div className="lb-scrollable" style={{
@@ -2367,6 +2478,18 @@ function AddSheet({ ctx }) {
                             )}
                             <Btn icon="check" onClick={closeAdd} style={{ flex: 1 }}>확인</Btn>
                           </div>
+                      ) : tab === 'orders' && bulk ? (
+                        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                          <Btn variant="soft" onClick={chooseOtherOrderShop} style={{ flex: 1 }}>취소</Btn>
+                          <Btn
+                            icon="plus"
+                            onClick={runBulk}
+                            disabled={busy || !!bulkRun || !bulkPicked.length}
+                            style={{ flex: 1.6 }}
+                          >
+                            {bulkRun ? '담는 중…' : `${bulkPicked.length}개 담기`}
+                          </Btn>
+                        </div>
                       ) : (
                         <Btn
                           full size="lg" icon="sparkle"
@@ -2374,7 +2497,7 @@ function AddSheet({ ctx }) {
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
                             : tab === 'orders'
-                              ? (orderBusy || busy || !!bulkRun)
+                              ? (!wide || orderBusy || busy || !!bulkRun)
                               : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
@@ -2385,7 +2508,7 @@ function AddSheet({ ctx }) {
                             : orderBusy ? '로그인 창을 여는 중…'
                             : busy ? '인식 중…'
                             : (tab === 'orders'
-                              ? (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')
+                              ? (!wide ? 'PC에서만 가능' : (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기'))
                               : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
@@ -2633,22 +2756,9 @@ function AddSheet({ ctx }) {
         onClose={() => setOrderSession(null)}
         collectOrders={collectOrderItems}
         sendInput={liveOrderInput}
-        cancelCollect={liveOrderCancel}
-        onSaveOne={async (item) => {
-          if (!importOrders) throw new Error('담을 수 없어요');
-          const r = await importOrders([item]);
-          if (r && r.skipped && r.skipped.length) {
-            return { status: 'dup', reason: r.skipped[0].reason || '이미 옷장에 있어요' };
-          }
-          if (r && r.failed && r.failed.length) {
-            throw new Error(r.failed[0].error || '담지 못했어요');
-          }
-          if (typeof showToast === 'function') showToast('옷장에 담았어요', 'check');
-          return { status: 'ok' };
-        }}
-        onConfirm={(picked) => {
-          setOrderSession(null);
-          applyCollectedRows(picked.map((it) => ({
+        cancelCollect={cancelOrderCollection}
+        onConfirm={async (picked) => {
+          const rows = applyCollectedRows(picked.map((it) => ({
             url: it.url,
             name: it.name || '',
             store: it.store || '',
@@ -2656,6 +2766,9 @@ function AddSheet({ ctx }) {
             purchasedAt: it.purchasedAt || '',
             thumb: it.thumb || '',
           })));
+          if (!rows.length) return;
+          setOrderSession(null);
+          await runBulkReview(rows);
         }}
       />
     </>

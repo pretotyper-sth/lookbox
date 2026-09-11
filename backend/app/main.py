@@ -7672,6 +7672,14 @@ async def live_import_photo(
     image: UploadFile = File(...),
     status: str = Form("owned"),
     extract_hint: str = Form(""),
+    source_url: str = Form(""),
+    name: str = Form(""),
+    brand: str = Form(""),
+    store: str = Form(""),
+    price: str = Form(""),
+    material: str = Form(""),
+    color: str = Form(""),
+    skip_duplicate: bool = Form(False),
     user: UserContext = Depends(current_user),
 ) -> StreamingResponse:
     require_supabase()
@@ -7683,8 +7691,42 @@ async def live_import_photo(
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         t0 = time.perf_counter()
+        if skip_duplicate:
+            hit = _match_duplicate(
+                _wardrobe_dupe_index(uid),
+                url=source_url,
+                name=name,
+                brand=brand,
+                store=store,
+                color=color,
+                fp=_image_fingerprint(raw),
+            )
+            if hit:
+                row, reason = hit
+                return {
+                    "items": [],
+                    "duplicate": True,
+                    "reason": _DUP_REASON_KO.get(reason, "이미 옷장에 있어요"),
+                    "reasonCode": reason,
+                    "matchedId": row["id"],
+                    "matchedName": row["name"],
+                }
         row = _store_uploaded_item(
-            uid, raw, suffix, content_type, status, extract_hint=extract_hint, report=report
+            uid,
+            raw,
+            suffix,
+            content_type,
+            status,
+            source="order" if source_url else "upload",
+            name_override=name or None,
+            source_url=source_url or None,
+            brand=brand or None,
+            store=store or None,
+            price=price or None,
+            material=material or None,
+            color_override=color or None,
+            extract_hint=extract_hint,
+            report=report,
         )
         items = [live_item_payload(row)]
         meta = row.get("metadata") or {}
