@@ -634,6 +634,11 @@ Electron 데스크톱 래퍼가 쇼핑몰 로그인을 실제 WebView에 띄우�
 근거: `desktop/main.cjs`, `frontend/src/proto/order-import-session.jsx`, `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-platforms.js`, `tools/order-collector/platforms.mjs`.
 [[order-import-webview]] [[add-item-bulk]]
 
+## [2026-09-11] fix | 모바일 구매내역 아이콘을 기능 의미로 통일
+모바일 구매내역은 선택 가능한 탭인데 잠금 아이콘이 탭·안내 카드에 반복돼 별도 잠금 기능처럼 보였다. 탭, 안내 카드, PC 전용 CTA를 모두 구매내역 의미의 `bag` 아이콘으로 통일했다.
+근거: `frontend/src/proto/04-screens-ab.jsx`.
+[[add-item-bulk]]
+
 ## [2026-09-11] change | 웹 구매내역 Chrome 확장 팝업
 일반 웹은 확장 프로그램이 520×760 쇼핑몰 로그인 팝업을 연다. 로그인 뒤 주문내역으로 다시 이동하고 상품을 한 개씩 기존 구매내역 모달에 전달하며, 성공하면 팝업을 자동으로 닫는다. 웹과 확장 사이 이벤트는 요청 ID로 묶고 Lookbox 출처에서 온 요청만 처리한다. 확장이 없으면 설치 후 새로고침 안내를 보여준다.
 근거: `extensions/lookbox-orders/background.js`, `lookbox-bridge.js`, `frontend/src/proto/04-screens-ab.jsx`, `order-import-session.jsx`.

@@ -1927,7 +1927,7 @@ function AddSheet({ ctx }) {
                     opacity: (comboLocked || (ordersOff && tab !== id)) ? 0.45 : 1,
                     cursor: comboLocked ? 'default' : 'pointer',
                   }}>
-                    {comboLocked || ordersOff ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
+                    {comboLocked ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
                   </button>
                 );
               })}
@@ -2303,7 +2303,7 @@ function AddSheet({ ctx }) {
                         {!wide ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <div>
-                              <Icon name="lock" size={26} stroke={1.6} />
+                              <Icon name="bag" size={24} stroke={1.7} />
                               <div style={{ marginTop: 10, fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
                               <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>Chrome 확장 프로그램으로 쇼핑몰에 안전하게 연결해요.</div>
                             </div>
@@ -2550,7 +2550,7 @@ function AddSheet({ ctx }) {
                         </div>
                       ) : (
                         <Btn
-                          full size="lg" icon="sparkle"
+                          full size="lg" icon={tab === 'orders' ? 'bag' : 'sparkle'}
                           onClick={bulk ? runBulk : (tab === 'orders' ? () => {
                             const platform = orderPlatformById(orderShop);
                             setOrderSession(orderDemo ? { ...platform, demo: true } : platform);
