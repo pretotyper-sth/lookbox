@@ -1424,6 +1424,7 @@ function AddSheet({ ctx }) {
     }
   };
   const cancelOrderCollection = () => {
+    if (orderSession && orderSession.demo) return;
     if (typeof liveOrderCancel === 'function') liveOrderCancel();
     if (Number.isInteger(orderTabId)) {
       extCall({ type: 'CANCEL', tabId: orderTabId }, 1000).catch(() => {});
