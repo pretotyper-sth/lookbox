@@ -343,6 +343,15 @@ AI 착장은 `model-id18`로 캐시를 갱신했다. 생성본의 정수리·발
 근거: `backend/app/main.py` `_look_needs_reshoot`, `_fit_look_to_card`, `_recent_daily_exclusions`, `fallback_combos`.
 [[model-look-toggle]]
 
+## [2026-09-11] fix | AI 착장 배경선·정사각 레일 여백
+AI 착장 배경은 원래 연회색 톤을 유지하되, 인물 밖 픽셀만 부드러운 세로 그라데이션으로
+정리해 바닥 실선과 자글자글한 노이즈를 없앤다. 생성 인물은 4:5에서 위아래 18% 여백을
+두고 다리·전체 키를 아주 조금 줄인다. 이 여백 덕분에 정사각 「오늘의 다른 코디」 레일도
+cover로 전신을 채워 좌우 다른 바탕색 띠가 보이지 않는다. 캐시 `model-id21`.
+근거: `backend/app/main.py` `_smooth_look_backdrop`, `_model_look_prompt_with_reference`;
+`frontend/src/proto/05-screens-cde.jsx` `LookComposite`.
+[[model-look-toggle]]
+
 ## [2026-09-11] change | 코디 판·AI 착장 원래 색감 복원
 흰색 상품판과 AI 착장 배경은 과하게 쨍해 모두 이전의 아이보리 상품판·연회색 스튜디오
 색감으로 되돌렸다. 흰 배경 캐시는 다시 쓰지 않도록 `model-id20`으로 분리했다. 전신
@@ -610,7 +619,6 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 근거: `frontend/src/proto/06-today.jsx` `appending`, `proto.css` shimmer clock,
 `05-screens-cde.jsx` `LookComposite`, `backend/app/main.py` `_white_look_backdrop`.
 [[model-look-toggle]]
-
 
 
 
