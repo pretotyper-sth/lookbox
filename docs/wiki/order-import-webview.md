@@ -8,6 +8,8 @@
 
 확장으로 수집한 상품은 서버가 상품 페이지를 다시 긁지 않는다. 확장이 로그인된 Chrome에서 주문내역 썸네일을 받고 사진 등록 API로 보내며, 상품명·구매처·가격·원본 상품 URL도 함께 저장한다. 따라서 무신사 등 서버의 상품 페이지 요청을 제한하는 쇼핑몰도 주문내역에서 이미 보인 이미지로 등록할 수 있다. 구매내역 후보·결과는 사진/URL 탭을 다녀와도 메모리에 유지하고, 「다른 쇼핑몰」을 눌렀을 때만 비운다. 모바일 웹은 구매내역 탭에 PC 전용 안내와 비활성 CTA를 표시한다.
 
+웹스토어 공개 전 UX 검수는 개발 서버 또는 `?orderDemo=1`에서 가짜 확장 모드를 쓴다. 몰 선택부터 축소 로그인 안내, 순차 수집, 「취소 / N개 담기」, 한 벌씩 상세입력, 완료 토스트까지 실제 흐름과 같지만 서버를 호출하거나 옷장에 저장하지 않는다. 실제 확장을 로컬에서 확인할 때는 `?orderReal=1`로 가짜 모드를 끈다.
+
 구현: `frontend/src/proto/order-import-session.jsx`, `04-screens-ab.jsx` `collectOrderItems`, `backend/app/main.py` `live_orders_collect`, `frontend/src/proto/09-app.jsx` `_order`·`_view` 스트림.
 
 주문내역 URL은 사용자가 찾지 않는다. UI는 `frontend/src/proto/order-platforms.js` `ordersUrl`, 수집기는 `tools/order-collector/platforms.mjs`와 `extensions/lookbox-orders/platforms.js`의 `urls` 첫 주소. 몰이 경로를 바꾸면 세 파일을 같이 고친다. 수집 로직은 DOM 상품 링크를 줍지만, 첫 goto가 404면 빈 목록이 된다.

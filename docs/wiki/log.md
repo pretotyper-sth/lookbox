@@ -648,3 +648,8 @@ Electron 데스크톱 래퍼가 쇼핑몰 로그인을 실제 WebView에 띄우�
 Chrome 확장 v0.3.0은 로그인된 브라우저에서 주문내역 썸네일을 받아 사진 등록 경로로 전달한다. 상품 페이지 서버 요청이 막혀도 이미지·상품명·가격·구매처·출처 URL을 보존하고, 중복은 저장 전에 검사한다. Chrome 안내 모달은 360×310px로 줄이고 목록 CTA를 「취소 / N개 담기」로 바꿨다. 구매내역은 다른 소스 탭을 다녀와도 유지하며 「다른 쇼핑몰」에서만 비운다. 모바일 웹은 PC 전용 안내를 표시한다. 웹스토어용 아이콘·화면·설명·개인정보 처리방침도 준비했다.
 근거: `extensions/lookbox-orders/`, `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-import-session.jsx`, `frontend/src/proto/09-app.jsx`, `backend/app/main.py`, `frontend/public/extension-privacy.html`.
 [[order-import-webview]] [[add-item-bulk]] [[url-import-fetch]] [[chrome-extension-publish]]
+
+## [2026-09-11] change | 웹스토어 공개 전 구매내역 UX 미리보기
+개발 서버와 `?orderDemo=1`은 실제 확장 설치 없이 가짜 로그인·주문내역 6건·선택·순차 상세입력·완료까지 재현한다. 미리보기 데이터는 서버를 호출하거나 옷장에 저장하지 않는다. 로컬 실제 확장 검수는 `?orderReal=1`로 전환한다.
+근거: `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/order-import-session.jsx`.
+[[order-import-webview]] [[add-item-bulk]]

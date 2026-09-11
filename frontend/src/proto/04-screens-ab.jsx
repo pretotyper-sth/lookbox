@@ -903,6 +903,28 @@ async function extensionImageFile(item) {
   return new File([blob], `order-item.${subtype}`, { type: blob.type || 'image/jpeg' });
 }
 
+const ORDER_DEMO_ITEMS = [
+  { slug: 'navy-knit', name: '메리노 울 하프 크루넥 니트', brand: 'POTTERY', price: '129,000원', category: '상의', color: '네이비', material: '울', thumb: '/prototype-assets/topNavy.png' },
+  { slug: 'indigo-denim', name: '와이드 데님 팬츠 인디고', brand: 'MUSINSA STANDARD', price: '49,900원', category: '하의', color: '인디고', material: '데님', thumb: '/prototype-assets/denimIndigo.png' },
+  { slug: 'check-shirt', name: '오버핏 체크 셔츠', brand: 'DRAW FIT', price: '62,000원', category: '상의', color: '브라운 체크', material: '코튼', thumb: '/prototype-assets/shirtCheck.png' },
+  { slug: 'black-denim', name: '레귤러 블랙 데님', brand: 'TOFFEE', price: '58,000원', category: '하의', color: '블랙', material: '데님', thumb: '/prototype-assets/denimBlack.png' },
+  { slug: 'white-skirt', name: '코튼 플레어 스커트', brand: 'REST & RECREATION', price: '88,000원', category: '스커트', color: '오프화이트', material: '코튼', thumb: '/prototype-assets/skirtWhite.png' },
+  { slug: 'black-sandal', name: '레더 스트랩 샌들', brand: 'EENK', price: '178,000원', category: '신발', color: '블랙', material: '가죽', thumb: '/prototype-assets/sandalBlack.png' },
+];
+
+function fakeOrderItems(platform) {
+  const shop = (platform && platform.name) || '쇼핑몰';
+  const shopId = (platform && platform.id) || 'shop';
+  return ORDER_DEMO_ITEMS.map((item, index) => ({
+    ...item,
+    demo: true,
+    store: shop,
+    platform: shop,
+    purchasedAt: `2026.0${9 - Math.floor(index / 3)}.${String(8 - index).padStart(2, '0')}`,
+    url: `https://demo.realcloset.app/${shopId}/${item.slug}`,
+  }));
+}
+
 const EXTRACT_HINT_KEY = 'lb_extract_hints_v1';
 const EXTRACT_HINT_MAX = 8;
 function readExtractHints() {
@@ -1074,6 +1096,9 @@ function AddSheet({ ctx }) {
   const [orderNeedLogin, setOrderNeedLogin] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
   const [orderExtImage, setOrderExtImage] = useS(false);
+  const orderDemo = typeof window !== 'undefined'
+    && (import.meta.env.DEV || new URLSearchParams(window.location.search).get('orderDemo') === '1')
+    && new URLSearchParams(window.location.search).get('orderReal') !== '1';
   const orderDraftRef = useR({ bulk: null, result: null });
   const previewUrlRef = useR('');
   const [tryOnErr, setTryOnErr] = useS('');
@@ -1302,7 +1327,7 @@ function AddSheet({ ctx }) {
     setErr('');
     setBulkResult(null);
     setOrderNeedLogin(false);
-    if (checkDuplicates) {
+    if (checkDuplicates && !rows.every((it) => it.demo)) {
       setBulkChecking(true);
       checkDuplicates(rows)
         .then((map) => {
@@ -1322,6 +1347,19 @@ function AddSheet({ ctx }) {
     setOrderNeedLogin(false);
     setOrderBusy(true);
     try {
+      if (platform && platform.demo) {
+        setOrderExtImage(false);
+        if (onProgress) onProgress({ key: 'extension_login', url: platform.loginUrl });
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        if (onProgress) onProgress({ key: 'orders_ready', url: platform.ordersUrl });
+        if (action === 'open') return [];
+        const items = fakeOrderItems(platform);
+        for (const item of items) {
+          if (onItem) onItem(item);
+          await new Promise((resolve) => setTimeout(resolve, 180));
+        }
+        return items;
+      }
       const native = window.LookboxNative && typeof window.LookboxNative.collectOrders === 'function'
         ? await window.LookboxNative.collectOrders(platform, onProgress)
         : null;
@@ -1463,6 +1501,18 @@ function AddSheet({ ctx }) {
     });
   };
   const importBulkItem = async (it, status) => {
+    if (it.demo) {
+      return {
+        items: [{
+          ...it,
+          id: `demo-order-${it.slug || Date.now()}`,
+          img: it.thumb,
+          sourceUrl: it.url,
+          status: status || 'pending',
+          conf: 1,
+        }],
+      };
+    }
     if (tab === 'orders' && orderExtImage && Number.isInteger(orderTabId) && it.thumb) {
       let image = null;
       try {
@@ -1534,7 +1584,7 @@ function AddSheet({ ctx }) {
         }));
         if (!list.length) throw new Error('이 주소에서 옷을 찾지 못했어요');
         collected.push(...list);
-        draftIdsRef.current = [...draftIdsRef.current, ...list.map((d) => d.id).filter(Boolean)];
+        draftIdsRef.current = [...draftIdsRef.current, ...list.filter((d) => !d.demo).map((d) => d.id).filter(Boolean)];
         mark(it.url, { state: 'ok', pick: false });
       } catch (e) {
         failed.push({ ...it, error: (e && e.message) || '등록하지 못했어요' });
@@ -1734,6 +1784,11 @@ function AddSheet({ ctx }) {
     if (stepIdx >= steps.length - 1) {
       const kept = updated.filter((s) => s.added).map(toItem);
       kept.forEach((it) => rememberStore(it.store));
+      if (updated.some((s) => s.demo)) {
+        closeAdd();
+        if (typeof showToast === 'function') showToast('미리보기 완료 · 저장되지 않았어요', 'check');
+        return;
+      }
       const skipped = detected.filter((d) => !updated.some((s) => s.id === d.id && s.added)).map((d) => d.id);
       draftIdsRef.current = [];
       addItemsBatch(kept, skipped);
@@ -2260,7 +2315,9 @@ function AddSheet({ ctx }) {
                             <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {orderNeedLogin
                                 ? '로그인한 뒤 다시 눌러 주세요.'
-                                : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
+                                : orderDemo
+                                  ? '샘플 주문내역 · 실제 옷장에는 저장하지 않아요.'
+                                  : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
                             </div>
                             <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                               {ORDER_PLATFORMS.map((p) => (
@@ -2493,7 +2550,10 @@ function AddSheet({ ctx }) {
                       ) : (
                         <Btn
                           full size="lg" icon="sparkle"
-                          onClick={bulk ? runBulk : (tab === 'orders' ? () => setOrderSession(orderPlatformById(orderShop)) : onSubmitAdd)}
+                          onClick={bulk ? runBulk : (tab === 'orders' ? () => {
+                            const platform = orderPlatformById(orderShop);
+                            setOrderSession(orderDemo ? { ...platform, demo: true } : platform);
+                          } : onSubmitAdd)}
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
                             : tab === 'orders'
@@ -2508,7 +2568,7 @@ function AddSheet({ ctx }) {
                             : orderBusy ? '로그인 창을 여는 중…'
                             : busy ? '인식 중…'
                             : (tab === 'orders'
-                              ? (!wide ? 'PC에서만 가능' : (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기'))
+                              ? (!wide ? 'PC에서만 가능' : (orderDemo ? '샘플 주문내역 보기' : (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')))
                               : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
@@ -2759,6 +2819,7 @@ function AddSheet({ ctx }) {
         cancelCollect={cancelOrderCollection}
         onConfirm={async (picked) => {
           const rows = applyCollectedRows(picked.map((it) => ({
+            ...it,
             url: it.url,
             name: it.name || '',
             store: it.store || '',

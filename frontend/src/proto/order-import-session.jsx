@@ -172,6 +172,7 @@ function OrderImportSession({
     if (!url || seenRef.current.has(url)) return;
     seenRef.current.add(url);
     setFound((prev) => prev.concat([{
+      ...it,
       url,
       name: it.name || '',
       store: it.platform || it.store || (shop && shop.name) || '',
@@ -600,7 +601,7 @@ function OrderImportSession({
         <button type="button" aria-label="닫기" onClick={close} style={iconHit}>
           <Icon name="x" size={20} stroke={2} />
         </button>
-        <div className="lb-order-head-title">{platform.name}</div>
+        <div className="lb-order-head-title">{platform.name}{platform.demo ? ' · 미리보기' : ''}</div>
         <div style={{ width: 44 }} />
       </div>
       {webview}
