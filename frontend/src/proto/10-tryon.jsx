@@ -148,7 +148,7 @@ function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode, plate) {
   const x1 = Math.min(W, Math.ceil(dx + dw * band.x1));
   const y0 = Math.max(0, Math.floor(dy + dh * band.y0));
   const y1 = Math.min(H, Math.ceil(dy + dh * band.y1));
-  const yBot = Math.min(H, dy + dh);
+  const yBot = Math.min(H, dy + (mode === 'bottom' || mode === 'full' ? Math.round(dh * 0.92) : dh));
   const punch = new Uint8Array(W * H);
   const src = srcData.data;
   for (let y = y0; y < y1; y += 1) {
@@ -240,6 +240,11 @@ function stopTryOnCamStream() {
   if (!tryOnCamStream) return;
   tryOnCamStream.getTracks().forEach((t) => t.stop());
   tryOnCamStream = null;
+}
+
+function pauseTryOnCamStream() {
+  if (!tryOnCamStream) return;
+  tryOnCamStream.getTracks().forEach((t) => { t.enabled = false; });
 }
 
 async function acquireTryOnCamStream() {
@@ -500,9 +505,9 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
                 </div>
                 <div style={{
                   marginTop: 10, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)',
-                  textAlign: 'center', wordBreak: 'keep-all', lineHeight: 1.4,
+                  textAlign: 'left', wordBreak: 'keep-all', lineHeight: 1.4,
                 }}>
-                  처음 한 번만 만들면 돼요
+                  좀만 기다려 주세요. 한 번만 하면 돼요
                 </div>
               </div>
             ) : checking ? (
@@ -592,7 +597,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
 /* ============================================================
    TryOnCameraOverlay — 후면 카메라 + 투명 프레임 오버레이
    ============================================================ */
-function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, wide }) {
+function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const streamRef = useRef(null);
@@ -601,7 +606,6 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
   const [mode, setMode] = useState('');
   const [overlay, setOverlay] = useState('');
   const [stage, setStage] = useState({ w: 0, h: 0 });
-  const [resetAsk, setResetAsk] = useState(false);
   const swipeX = useRef(null);
   const serverAssets = assets && (assets.body || assets.top || assets.bottom || assets.full) ? assets : null;
 
@@ -619,7 +623,6 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
   useEffect(() => {
     if (!open) {
       setMode('');
-      setResetAsk(false);
     }
   }, [open]);
 
@@ -662,15 +665,22 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
     setReady(false);
   };
 
+  const pause = () => {
+    if (videoRef.current) videoRef.current.srcObject = null;
+    pauseTryOnCamStream();
+    streamRef.current = null;
+    setReady(false);
+  };
+
   useEffect(() => {
     if (!open || wide) {
-      stop();
+      pause();
       return undefined;
     }
     // 착장만 볼 때는 카메라를 켜지 않는다. 상의·하의·전체에서만 요청해서
     // 켤 때마다 브라우저 권한 배너가 뜨지 않게 한다.
     if (!mode) {
-      stop();
+      pause();
       return undefined;
     }
     let dead = false;
@@ -752,10 +762,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
             ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요`
             : '기본 착장을 보고 있어요'}
         </div>
-        <button type="button" onClick={() => setResetAsk(true)} aria-label="사진 다시 고르기"
-          style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.14)', color: '#fff' }}>
-          <Icon name="refresh" size={18} />
-        </button>
+        <div aria-hidden style={{ width: 40, height: 40 }} />
       </div>
 
       <div
@@ -844,25 +851,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, onEdit, 
             ))}
           </div>
         ) : null}
-        <p style={{ margin: 0, fontSize: 12.5, textAlign: 'center', lineHeight: 1.45, opacity: 0.85, wordBreak: 'keep-all' }}>
-          {bodySrc
-            ? (mode
-              ? '같은 부위를 다시 누르면 옷만 입은 착장으로 돌아가요'
-              : '착장은 옷만 보여요. 상의·하의·전체를 누르면 카메라에 맞춰 봐요')
-            : '뚫린 부분에 옷을 맞추면 색 조합이 바로 보여요.'}
-        </p>
       </div>
-      <BottomSheet open={resetAsk} onClose={() => setResetAsk(false)}>
-        <div style={{ padding: '8px 24px 26px', textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3 }}>사진을 다시 고를까요?</div>
-          <p style={{ margin: '10px auto 0', maxWidth: 300, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, wordBreak: 'keep-all' }}>
-            프로필 사진을 바꾸면 바로 보기 이미지도 다시 만들어요. 지금 만든 전신은 그대로 둘 수 있어요.
-          </p>
-          <Btn full size="lg" icon="refresh" onClick={() => { setResetAsk(false); onEdit && onEdit(); }} style={{ marginTop: 22 }}>
-            사진 다시 고르기
-          </Btn>
-        </div>
-      </BottomSheet>
     </div>
   );
 }

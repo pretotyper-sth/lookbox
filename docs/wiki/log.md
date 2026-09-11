@@ -338,6 +338,11 @@ SSE로 끝나는 장부터 착장. 실유저 기본은 4장. [[model-look-toggle
 전신 프롬프트는 얼굴 고정·배경 한 색·비율만 조금. 캐시 `tryon3-`.
 [[tryon-setup-from-mypage]]
 
+## [2026-09-11] fix | AI 착장 전신 보존·데일리 코디 다양화
+AI 착장은 `model-id18`로 캐시를 갱신했다. 생성본의 정수리·발끝이 경계에 닿으면 한 번 재생성하고, 4:5 카드가 세로로 긴 전신을 만났을 때는 머리 우선 크롭 대신 전체를 축소해 발끝까지 남긴다. 프롬프트는 무드 레퍼런스의 균형 잡힌 전신·매끈한 스튜디오를 강제하며, 장다리·거친 좌우 배경을 금지한다. 데일리 추천은 최근 7일의 상·하의(또는 원피스) 골격을 제외해 신발·가방만 바꾼 반복 코디를 새 추천으로 보지 않는다.
+근거: `backend/app/main.py` `_look_needs_reshoot`, `_fit_look_to_card`, `_recent_daily_exclusions`, `fallback_combos`.
+[[model-look-toggle]]
+
 ## [2026-09-03] change | 바로 보기 구멍은 블러가 아니라 옷 실루엣
 블러·4px 팽창을 뺀다. 구멍은 옷 픽셀 그대로, 안쪽 핀홀만 1px closing.
 하의는 잡힌 폭 그대로 발 아래까지. [[tryon-setup-from-mypage]]
@@ -579,7 +584,15 @@ PC 레일 AI 배지는 ✦만. 착장 4:5는 머리를 남기고, 캐시 `model-
 `06-today.jsx` `fillingMore`.
 [[tryon-setup-from-mypage]] [[coord-clash]] [[model-look-toggle]] [[look-img-flex-min]]
 
+## [2026-09-10] query | 착장 얼굴 잘림은 양옆 늘림 제거의 부작용
+2026-09-06 `a7f8ddb`가 가장자리 늘림 대신 원본 4:5 창을 쓰면서, 창보다 인물이 크면 발을 맞추러 창을 내렸다. 타이트 생성본에서 얼굴이 잘렸다. 머리 우선으로 바꿨고, 여백이 있으면 다리도 안 자른다.
+근거: `backend/app/main.py` `_fit_look_to_card`; 커밋 `a7f8ddb`.
+[[look-img-flex-min]] [[look-plate-shadow]]
 
+## [2026-09-11] change | 바로 보기 전신 생성·카메라 화면 정리
+바로 보기 생성 캐시를 `tryon8`로 올려 기존 결과를 재사용하지 않게 했다. 생성 프롬프트는 셀카의 기울기를 따르지 않는 정면 포즈와 위아래 6% 여백을 사용한다. 상·하의 투명화 범위를 넓히고 하의 구멍은 신발 윗선 직전에서 멈춘다. 진행 안내를 왼쪽 정렬하고, 카메라 화면의 리셋 아이콘과 하단 설명을 제거했다. 카메라 스트림은 화면을 다시 열 때 재사용해 브라우저 설정 안내가 반복되지 않게 했다.
+근거: `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/10-tryon.jsx`, `backend/app/main.py`.
+[[tryon-setup-from-mypage]]
 
 
 

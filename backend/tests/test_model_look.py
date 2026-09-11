@@ -6,7 +6,7 @@ import unittest
 from collections import deque
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
@@ -22,14 +22,16 @@ FNS = (
     '_model_look_outfit_block',
     '_look_row_backdrop',
     '_look_content_box',
+    '_look_needs_reshoot',
     '_fit_look_to_card',
+    '_pad_look_edges',
     '_crop_look_to_card',
     '_bottom_hem_note',
 )
 CONSTS = (
     '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
     '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER', '_LOOK_CARD_RATIO',
-    '_LOOK_CROP_PAD', '_LOOK_BACKDROP_TOL',
+    '_LOOK_CROP_PAD', '_LOOK_BACKDROP_TOL', '_LOOK_FRAME_EDGE_MARGIN',
 )
 
 
@@ -41,7 +43,7 @@ def load():
         or (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in CONSTS)
         or (isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") in CONSTS)
     ]
-    ns = {"Image": Image, "io": io, "deque": deque, "Any": object}
+    ns = {"Image": Image, "ImageFilter": ImageFilter, "io": io, "deque": deque, "Any": object}
     exec(compile(ast.Module(body=body, type_ignores=[]), "<model-look>", "exec"), ns)
     return ns
 
@@ -91,7 +93,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id17-", src)
+        self.assertIn("model-id18-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -102,8 +104,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("De-age", src)
         self.assertNotIn("youthful early-to-mid-20s", src)
         self.assertIn("Keep the height and proportions of Image 1", src)
-        self.assertIn("20% of the frame empty above the hair", src)
-        self.assertIn("Never crop the face", src)
+        self.assertIn("at least 8% clear studio above the", src)
+        self.assertIn("entire shoes must be visible", src)
         self.assertNotIn("middle 64%", src)
         self.assertIn("MUST wear this suggested item", src)
         self.assertNotIn("다리가 길어 보이게", src)
@@ -113,7 +115,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("키 크고 비율 좋은 카탈로그", src)
         # 시드 실루엣·정면 포즈를 고정하면 옷이 마네킹에 붙은 것처럼 나온다(2026-09-06).
         self.assertNotIn("clothing silhouette", src)
-        self.assertIn("three-quarter", src)
+        self.assertIn("full-body frame weak", src)
         self.assertIn("worn on a real body", src)
         self.assertIn("Do not paint any caption", src)
         self.assertNotIn("MUSINSA", src)
@@ -268,7 +270,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id17-", src)
+        self.assertIn("model-id18-", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertIn("_crop_look_to_card(out)", src)

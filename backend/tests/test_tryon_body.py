@@ -83,7 +83,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("charcoal-gray short-sleeve", prompt)
         self.assertIn("mid-blue straight-leg denim", prompt)
         self.assertIn("white low-top sneakers", prompt)
-        self.assertIn("4% empty", prompt)
+        self.assertIn("6% empty", prompt)
         self.assertIn("SAME person", prompt)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
@@ -91,7 +91,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon7-", chunk)
+        self.assertIn("tryon8-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)

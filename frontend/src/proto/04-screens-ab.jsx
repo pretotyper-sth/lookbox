@@ -1234,7 +1234,7 @@ function AddSheet({ ctx }) {
   const tryOnAvatar = (prefs && prefs.avatar) || '';
   const canTryOn = !!tryOnAvatar;
   const tryOnBodyReady = canTryOn
-    && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon7')
+    && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon8')
     && !!(prefs.tryOnBody || prefs.tryOnFrame);
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
@@ -1242,7 +1242,7 @@ function AddSheet({ ctx }) {
     if (wide || !tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon7');
+    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon8');
     let body = stale ? '' : ((prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       let fail = '';
@@ -1882,9 +1882,9 @@ function AddSheet({ ctx }) {
                             </div>
                             <div style={{
                               marginTop: 10, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)',
-                              textAlign: 'center', wordBreak: 'keep-all', lineHeight: 1.4,
+                              textAlign: 'left', wordBreak: 'keep-all', lineHeight: 1.4,
                             }}>
-                              처음 한 번만 만들면 돼요
+                              좀만 기다려 주세요. 한 번만 하면 돼요
                             </div>
                           </div>
                         </div>

@@ -3179,6 +3179,13 @@ def recommend_text(
         for ids in (exclude_item_ids or [])
         if ids
     }
+    by_id = {item["id"]: item for item in items}
+    excluded_cores = {
+        _combo_core_key([str(x) for x in ids if x], by_id)
+        for ids in (exclude_item_ids or [])
+        if ids
+    }
+    excluded_cores.discard(())
     exclude_note = ""
     if exclude_keys:
         lines = [", ".join(k) for k in list(exclude_keys)[:20]]
@@ -3210,7 +3217,7 @@ def recommend_text(
 - 한 코디는 3~5개 구성 (필수 3 + 소품)
 - 기준 아이템이 있으면 반드시 포함
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
-- 이미 보여준 조합은 절대 다시 쓰지 말 것
+- 이미 보여준 조합은 절대 다시 쓰지 말 것. 신발·가방만 바뀌고 상의+하의가 같으면 같은 코디로 취급해 제외할 것
 - 만들 수 있는 고유 조합이 max보다 적으면 적은 수만큼만 반환 (억지로 채우지 말 것)
 - 각 코디는 선호 무드 중 1~2개에만 맞춰 만들고, styles에 그 무드 id만 넣기 (전체 선호 무드를 한 코디에 몰아넣지 말 것)
 - 여러 코디가 있으면 선호 무드를 가능한 한 나눠 배정
@@ -3230,10 +3237,11 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
             temperature=0.35,
         )
         data = json.loads(response.choices[0].message.content or "{}")
-        valid = {item["id"]: item for item in items}
+        valid = by_id
         allowed_styles = set(uniq_styles)
         combos = []
         seen: set[tuple[str, ...]] = set(exclude_keys)
+        seen_cores = set(excluded_cores)
         must = [str(i) for i in (include_ids or []) if str(i) in valid]
         wish_left = max(0, min(int(wish_combos or 0), max_combos))
         for combo in data.get("combos") or []:
@@ -3253,9 +3261,12 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
             if not _combo_has_top_and_bottom(ids, valid, wish):
                 continue
             key = tuple(sorted(ids) + ([f"wish:{wish['category']}:{wish['name']}"] if wish else []))
-            if key in seen:
+            core = _combo_core_key(ids, valid)
+            if key in seen or (core and core in seen_cores):
                 continue
             seen.add(key)
+            if core:
+                seen_cores.add(core)
             if wish:
                 wish_left -= 1
             combo_styles = [s for s in (combo.get("styles") or []) if s in allowed_styles][:2]
@@ -3325,6 +3336,18 @@ def _combo_has_top_and_bottom(
     if "dress" in buckets:
         return True
     return ("top" in buckets) and ("bottom" in buckets)
+
+
+def _combo_core_key(ids: list[str], by_id: dict[str, Any]) -> tuple[str, ...]:
+    """소품·신발을 빼고 코디의 골격(상의+하의 또는 원피스)을 비교한다."""
+    core = []
+    for item_id in ids:
+        item = by_id.get(item_id)
+        if not item:
+            continue
+        if _item_bucket(item) in ("top", "bottom", "dress"):
+            core.append(str(item_id))
+    return tuple(sorted(core))
 
 
 def _combo_has_shoes(
@@ -3812,6 +3835,17 @@ def fallback_combos(
     pairs.sort(key=lambda x: -x[2])
     decent = [p for p in pairs if p[2] >= -1.5]
     walk = decent if len(decent) >= max_combos else pairs
+    excluded_cores = {
+        _combo_core_key(list(ids), by_id)
+        for ids in (exclude_keys or ())
+        if ids
+    }
+    excluded_cores.discard(())
+    # 최근 코디와 같은 상·하의는 신발·가방만 달라도 뒤로 미룬다. 다른 골격이
+    # 하나라도 있으면 그쪽을 먼저 쓰고, 옷이 정말 부족할 때만 다시 허용한다.
+    fresh = [p for p in walk if _combo_core_key([p[0]["id"], p[1]["id"]], by_id) not in excluded_cores]
+    stale = [p for p in walk if _combo_core_key([p[0]["id"], p[1]["id"]], by_id) in excluded_cores]
+    walk = fresh + stale
     used_tops: dict[str, int] = {}
     used_shoes: dict[str, int] = {}
     for key in exclude_keys or ():
@@ -4206,9 +4240,9 @@ Keep the height and proportions of Image 1.
 Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
 do not de-age, age, slim, muscularize, or elongate the character.
 Do not replace them with a different person or a celebrity.
-Fashion lookbooks often stretch the legs — shorten them slightly so the figure
-reads as a real adult, not an illustration. Crotch closer to mid-body. Do not
-go stocky. This is a small correction, not a new body.
+Use ordinary real-adult proportions: a normal-sized head, crotch near the middle
+of the full height, and legs no longer than the torso plus head. Never use an
+editorial elongated-leg silhouette, a tiny head, or a raised waistline.
 
 FACE:
 A better photograph of the same person — photogenic Korean lookbook face,
@@ -4256,29 +4290,22 @@ fit, color, footwear, and accessories — not by adding garments that are not li
 Do NOT express the mood by changing the character, hair, body, or background.
 
 POSE:
-Editorial Korean lookbook stance — not a stiff frontal mannequin, not a passport photo.
-Three-quarter body angle (about 15–30°), weight on the back leg, the other leg relaxed.
-One hand in a pocket or hanging naturally; if there is a bag, a hand may hold the strap.
-Head slightly turned, gaze near the camera, calm expression, relaxed shoulders.
-Full-body standing, both feet on the floor. Crown of hair, chin, and shoes fully visible.
-No walking, sitting, jumping, or dramatic fashion poses.
-Do not copy a rigid locked pose from Image 1. Keep the person; use a natural lookbook pose.
+Use the same simple, balanced full-body lookbook stance as Image 1: upright,
+front-facing or a very slight natural angle, relaxed shoulders, and both feet on
+the studio floor. A hand may be in a pocket or hold a bag naturally.
+Full-body standing is mandatory: crown of hair, chin, both trouser hems, and both
+entire shoes must be visible. Never crop or hide the feet. No walking, sitting,
+jumping, dramatic pose, or fashion-illustration proportions.
 
 COMPOSITION:
-Keep Image 1's camera height, studio lighting, gray studio,
-gray studio floor, shadow, and color grading.
-Do not copy a tight head-to-toe crop from Image 1.
-Frame for a 4:5 lookbook card. Keep the full head in frame — hair crown, forehead, and chin.
-Leave about 20% of the frame empty above the hair and 16% empty below the shoes.
-The top 16% must be empty studio only — never hair. The bottom 12% must be empty studio only — never shoes.
-Those bands will be cropped off. Head, torso, legs, and shoes stay in the middle. Never crop the face.
-One person, centered horizontally. The face sits in the upper third of the remaining frame.
-Reproduce Image 1's studio backdrop exactly — the same soft gray wall blending into the
-same floor, the same soft contact shadow under the shoes — and let it reach all four
-edges of the frame. One continuous backdrop: no second plate, letterbox, inset
-photograph, white border, or framed picture-in-picture.
-Keep the backdrop and shadow smooth. No banding, posterization, dithering, or blotchy
-patches around the shoes.
+Match Image 1's camera height, centered full-body framing, studio lighting, soft gray
+wall-to-floor backdrop, contact shadow, and restrained mood. Do not make a tight crop.
+This output will be converted to a 4:5 card: leave at least 8% clear studio above the
+hair and 8% clear floor below the soles. If space is tight, make the person smaller;
+never solve it by cutting off the legs or shoes. Keep the person centered horizontally.
+Use one continuous, smooth matte studio backdrop reaching all four edges: no texture,
+grain, side streaks, noise, banding, posterization, dithering, blotches, second plate,
+letterbox, inset photograph, white border, or framed picture-in-picture.
 {hem}
 White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
 
@@ -4481,6 +4508,7 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
 # 착장 생성은 1024x1536(2:3). 오늘 카드는 4:5라 스튜디오 여백만 잘라 칸을 채운다.
 _LOOK_CARD_RATIO = 4 / 5
 _LOOK_CROP_PAD = 0.12
+_LOOK_FRAME_EDGE_MARGIN = 0.055
 
 
 # 배경은 레퍼런스 스튜디오라 위아래로 밝기가 변한다. 고정색과 비교하면 바닥이
@@ -4525,6 +4553,16 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
 
 
+def _look_needs_reshoot(img: Image.Image) -> bool:
+    """발끝·정수리가 잘린 생성본은 카드 크롭으로 고칠 수 없으니 다시 만든다."""
+    box = _look_content_box(img)
+    if not box:
+        return False
+    _, y0, _, y1 = box
+    margin = max(8, int(round(img.height * _LOOK_FRAME_EDGE_MARGIN)))
+    return y0 < margin or y1 > img.height - margin
+
+
 def _fit_look_to_card(
     img: Image.Image, cw: int, ch: int, box: tuple[int, int, int, int], pad: int,
 ) -> bytes:
@@ -4546,10 +4584,17 @@ def _fit_look_to_card(
     else:
         need_h = int(round(img.width / ratio))
         if need_h <= img.height:
-            # 창보다 인물이 크면 머리를 남긴다. 가운데 맞춘 뒤 발 맞추려고
-            # 내리면 4:5 카드에서 얼굴이 잘린다(2026-09-10).
-            ny0 = max(0, min(ty0, img.height - need_h))
-            region = img.crop((0, ny0, img.width, ny0 + need_h))
+            # 생성본이 카드보다 세로로 길고 인물까지 가득 찼다면 원본을 축소해
+            # 전신을 보존한다. 머리만 살리려 세로로 자르면 발·신발을 잃는다.
+            region = img.copy()
+            region.thumbnail((cw, ch), Image.Resampling.LANCZOS)
+            left, top = (cw - region.width) // 2, (ch - region.height) // 2
+            canvas = Image.new("RGB", (cw, ch))
+            canvas.paste(region, (left, top))
+            _pad_look_edges(canvas, left, top, left + region.width, top + region.height)
+            buf = io.BytesIO()
+            canvas.save(buf, format="PNG")
+            return buf.getvalue()
         else:
             region = img.crop((tx0, ty0, tx1, ty1)).copy()
             region.thumbnail((cw, ch))
@@ -4728,7 +4773,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id17-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id18-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4762,18 +4807,23 @@ def generate_model_look_image(
         elif identity:
             images = [_png_named(identity, "01-canonical.png")]
             images.extend(_garment_edit_images(items))
-            mark("dress")
-            kwargs: dict[str, Any] = {
-                "model": look_model,
-                "image": images,
-                "prompt": prompt,
-                "size": "1024x1536",
-                "quality": quality,
-            }
-            if "gpt-image-2" not in look_model:
-                kwargs["input_fidelity"] = "high"
-            result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
-            out = base64.b64decode(result.data[0].b64_json)
+            for attempt in range(2):
+                mark("dress")
+                kwargs: dict[str, Any] = {
+                    "model": look_model,
+                    "image": images,
+                    "prompt": prompt,
+                    "size": "1024x1536",
+                    "quality": quality,
+                }
+                if "gpt-image-2" not in look_model:
+                    kwargs["input_fidelity"] = "high"
+                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
+                out = base64.b64decode(result.data[0].b64_json)
+                generated = Image.open(io.BytesIO(out)).convert("RGB")
+                if not _look_needs_reshoot(generated):
+                    break
+                print(f"[model-look] full-body frame weak — retry attempt={attempt + 1}", flush=True)
         else:
             board = _model_look_board(items)
             mark("dress")
@@ -7217,7 +7267,7 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
     sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
     y0 = int(h * (0.14 if kind == "top" else 0.42))
-    y1 = int(h * (0.58 if kind == "top" else 0.87))
+    y1 = int(h * (0.64 if kind == "top" else 0.93))
 
     def match(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
@@ -7373,12 +7423,14 @@ Skin must look real: visible pores, subtle texture, faint natural variation.
 No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
 
 POSE:
-Natural standing pose, slight weight on one leg, relaxed shoulders.
-Arms slightly away from the torso so sleeves are visible. Not a stiff mannequin.
+Straight-on front-facing standing pose, shoulders and hips square to the camera.
+Keep the head and face naturally level even if the reference selfie is tilted.
+Use a slight natural weight shift, relaxed shoulders, and arms slightly away from
+the torso so sleeves are visible. Do not copy the selfie angle or tilt the face.
 
 FRAMING:
-Full body, crown of hair to shoes fully in frame, 2:3 portrait.
-Leave only about 4% empty studio above the hair and below the shoes.
+Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
+Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
 
 OUTFIT:
@@ -7434,7 +7486,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon7-{sig}"
+    key = f"tryon8-{sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7523,7 +7575,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon7",
+                        "mask": "tryon8",
                         "assets": urls,
                     },
                 }).execute()
@@ -8115,6 +8167,42 @@ def _wish_live_item(wish_id: str, wish: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _recent_daily_exclusions(user_id: str, for_date: str | None) -> list[list[str]]:
+    """오늘 요청 전에 최근 7일 데일리 코디 골격을 제외 대상으로 돌려준다."""
+    today = (for_date or "")[:10]
+    try:
+        cutoff = (datetime.fromisoformat(today).date() - timedelta(days=7)).isoformat()
+    except ValueError:
+        cutoff = ""
+    try:
+        rows = (
+            supabase_admin.table("outfits")
+            .select("item_ids,metadata,created_at")
+            .eq("user_id", user_id)
+            .eq("type", "daily")
+            .order("created_at", desc=True)
+            .limit(40)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[coordinate] recent daily read skip: {exc}", flush=True)
+        return []
+    out: list[list[str]] = []
+    for row in rows:
+        meta = row.get("metadata") or {}
+        day = str(meta.get("for_date") or row.get("created_at") or "")[:10]
+        if not day or day == today or (cutoff and day < cutoff):
+            continue
+        ids = [str(item_id) for item_id in (row.get("item_ids") or []) if item_id]
+        if ids:
+            out.append(ids)
+        if len(out) >= 28:
+            break
+    return out
+
+
 @app.post("/api/live/coordinate")
 def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)):
     t0 = time.perf_counter()
@@ -8160,6 +8248,8 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         max_combos = min(max(body.max_combos, 1), 10)
         wish_combos = body.wish_combos or 0
         by_id = {row["id"]: row for row in pool}
+        recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
+        exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
         outfits: list[dict[str, Any]] = []
         used: dict[str, Any] = {}
@@ -8258,7 +8348,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         if closet_n:
             quick = recommend_closet(
                 pool, anchor, closet_n, body.style,
-                body.exclude_item_ids or [], body.styles or None, profile,
+                exclusions, body.styles or None, profile,
                 body.include_item_ids or None,
             )
             for i, combo in enumerate(quick):
@@ -8271,7 +8361,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         rest_n = max(0, max_combos - len(outfits))
         if rest_n:
             _ensure_style_attrs(user.id, pool)
-            exclude = list(body.exclude_item_ids or []) + [
+            exclude = exclusions + [
                 [i for i in (o.get("itemIds") or []) if not str(i).startswith("wish-")]
                 for o in outfits
             ]
