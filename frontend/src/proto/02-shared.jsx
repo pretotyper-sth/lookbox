@@ -664,7 +664,7 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 /* ----------------------------------------------------------------
    BottomSheet — bottom sheet on mobile, centered modal on desktop
 ---------------------------------------------------------------- */
-function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = true, zIndex = 60, tightBottom = false }) {
+function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, dismissOnScrim = true, zIndex = 60, tightBottom = false }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   // 닫는 동안 children을 비우면 손잡이만 남은 작은 상자가 한 프레임 보인다.
@@ -694,7 +694,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, dismissOnScrim = tru
       transition: 'background var(--dur) var(--ease)', padding: wide ? 24 : 0,
     }} className="lb-sheet-scrim">
       <div onClick={(e) => e.stopPropagation()} className="lb-sheet" style={{
-        width: '100%', maxWidth: wide ? 420 : maxW, background: 'var(--surface)',
+        width: '100%', maxWidth: wide ? desktopMaxW : maxW, background: 'var(--surface)',
         borderRadius: wide ? 'var(--r-lg)' : 'var(--r-lg) var(--r-lg) 0 0',
         boxShadow: wide ? 'var(--pop-shadow)' : 'var(--sheet-shadow)',
         transform: shown ? (dragY ? `translateY(${dragY}px)` : 'translateY(0) scale(1)') : hiddenTf,

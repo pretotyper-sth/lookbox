@@ -673,3 +673,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 샘플 구매내역은 첫 CTA 뒤 결과까지 자동 재생하지 않는다. 사용자가 「로그인 완료 → 주문내역 열기 → 옷 가져오기」를 각각 눌러 확장이 로그인 팝업을 열고 주문내역으로 이동한 뒤 상품을 순차 수집하는 전 과정을 확인한다.
 근거: `frontend/src/proto/04-screens-ab.jsx` `startInlineOrder`·`onOrderPrimary`.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-12] change | 샘플 구매내역에 가상 Chrome 로그인 창 추가
+단계 문구만 보이던 샘플을 PC 단일 2열 시트로 확장했다. 왼쪽은 Lookbox 연결 단계, 오른쪽은 주소 표시줄·샘플 계정 입력칸·로그인 CTA가 있는 가상 Chrome이며, 로그인 완료 뒤 주문내역 와이어프레임과 상품별 읽기 완료 상태까지 같은 자리에서 보여준다. 실제 계정 입력과 서버 호출은 하지 않는다.
+근거: `frontend/src/proto/02-shared.jsx` `BottomSheet.desktopMaxW`, `frontend/src/proto/04-screens-ab.jsx` `OrderDemoBrowser`, `frontend/src/proto/proto.css` `.lb-order-demo-*`.
+[[order-import-webview]] [[add-item-bulk]]

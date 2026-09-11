@@ -1054,6 +1054,88 @@ function makeItemDraft(d = {}) {
   };
 }
 
+function OrderDemoBrowser({ platform, phase, count, onLogin }) {
+  const Icon = window.Icon;
+  const items = fakeOrderItems(platform).slice(0, 4);
+  const loginOn = phase === 'opening' || phase === 'login';
+  const ordersOn = phase === 'ready' || phase === 'collecting' || phase === 'done';
+  const pageUrl = loginOn
+    ? platform.loginUrl
+    : (ordersOn ? platform.ordersUrl : platform.loginUrl);
+  const progressText = phase === 'collecting'
+    ? `${count || 0}개 상품 정보를 읽는 중…`
+    : phase === 'done'
+      ? `${count || items.length}개 상품을 찾았어요`
+      : '';
+
+  return (
+    <section role="region" aria-label={`${platform.name} 가상 로그인 창`} className="lb-order-demo-browser">
+      <div className="lb-order-demo-chrome">
+        <div className="lb-order-demo-dots" aria-hidden><i /><i /><i /></div>
+        <span>Chrome · 샘플 화면</span>
+      </div>
+      <div className="lb-order-demo-urlbar">
+        <Icon name="lock" size={12} stroke={2.2} />
+        <span>{String(pageUrl || platform.host || '').replace(/^https?:\/\//, '')}</span>
+      </div>
+      <div className="lb-order-demo-page">
+        {loginOn ? (
+          <form className="lb-order-demo-login" onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
+            <div className="lb-order-demo-brand">{platform.name}</div>
+            <h3>로그인</h3>
+            <p>주문내역을 확인하려면 로그인해 주세요.</p>
+            <label>
+              <span>아이디</span>
+              <input aria-label="샘플 아이디" value="sample_user" readOnly />
+            </label>
+            <label>
+              <span>비밀번호</span>
+              <input aria-label="샘플 비밀번호" value="••••••••" readOnly />
+            </label>
+            <button type="submit">로그인</button>
+            <small>가상 로그인 화면이에요. 실제 계정 정보는 입력하지 않아요.</small>
+          </form>
+        ) : ordersOn ? (
+          <div className="lb-order-demo-orders">
+            <div className="lb-order-demo-shophead">
+              <strong>{platform.name}</strong>
+              <span>마이</span>
+            </div>
+            <div className="lb-order-demo-title">
+              <div>
+                <h3>주문 내역</h3>
+                <p>최근 구매한 상품</p>
+              </div>
+              {progressText ? <span className={phase === 'collecting' ? 'reading' : 'done'}>{progressText}</span> : null}
+            </div>
+            <div className="lb-order-demo-orderlist">
+              {items.map((item, index) => {
+                const read = phase === 'done' || (phase === 'collecting' && index < count);
+                return (
+                  <div key={item.slug} className={`lb-order-demo-order${read ? ' read' : ''}`}>
+                    <img src={item.thumb} alt="" />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.brand} · {item.price}</span>
+                    </div>
+                    {read ? <Icon name="check" size={13} stroke={2.5} /> : <span className="lb-order-demo-delivery">배송완료</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="lb-order-demo-success">
+            <span><Icon name="check" size={18} stroke={2.5} /></span>
+            <h3>로그인 완료</h3>
+            <p>Lookbox가 주문내역 페이지를 열 준비가 됐어요.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
@@ -1513,12 +1595,14 @@ function AddSheet({ ctx }) {
     }
     setOrderSession(platform);
   };
-  const onOrderPrimary = () => {
+  const completeOrderDemoLogin = () => {
     if (orderFlow.demo && orderFlow.phase === 'login') {
       setOrderNeedLogin(false);
       setOrderFlow((cur) => ({ ...cur, phase: 'authenticated' }));
-      return;
     }
+  };
+  const onOrderPrimary = () => {
+    if (orderFlow.demo && orderFlow.phase === 'login') return;
     if (orderFlow.demo && orderFlow.phase === 'authenticated') {
       setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
       return;
@@ -1971,12 +2055,22 @@ function AddSheet({ ctx }) {
   }
 
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready' || stage === 'reextract-confirm';
+  const showOrderDemoBrowser = !!(wide && stage === 'input' && tab === 'orders' && orderFlow.demo && orderFlow.phase !== 'idle');
+  const orderDemoPlatform = orderPlatformById(orderFlow.shopId || orderShop);
 
   return (
     // 추출(analyzing) 중에는 실수로 바깥을 눌러도 닫히지 않게 — X 버튼/ESC로만 닫기
     <>
-    <BottomSheet open={addSheet.open} onClose={requestClose} dismissOnScrim={stage !== 'analyzing'} tightBottom={stage === 'input'}>
+    <BottomSheet
+      open={addSheet.open}
+      onClose={requestClose}
+      dismissOnScrim={stage !== 'analyzing'}
+      tightBottom={stage === 'input'}
+      desktopMaxW={showOrderDemoBrowser ? 900 : 420}
+    >
       <div ref={sheetBodyRef} className="lb-sheet-body" style={{ padding: stage === 'input' ? '10px 24px 12px' : '10px 24px 26px' }}>
+        <div className={showOrderDemoBrowser ? 'lb-order-demo-layout' : ''}>
+          <div className={showOrderDemoBrowser ? 'lb-order-demo-controls' : ''}>
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {showBack && <IconBtn name="chevL" label="뒤로" onClick={goBack} style={{ marginLeft: -8, marginTop: -4, flex: 'none' }} />}
@@ -2060,7 +2154,7 @@ function AddSheet({ ctx }) {
                 const orderFlowCopy = {
                   opening: ['쇼핑몰 연결 중', 'Chrome 로그인 창을 준비하고 있어요.'],
                   login: orderFlow.demo
-                    ? ['Chrome 로그인 창을 열었어요', '쇼핑몰에서 로그인을 마쳤다고 가정하고 다음으로 넘어가세요.']
+                    ? ['Chrome 로그인 창을 열었어요', '오른쪽 샘플 화면에서 로그인 버튼을 눌러 보세요.']
                     : ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
                   authenticated: ['로그인을 확인했어요', '이제 확장이 쇼핑몰의 주문내역 페이지를 열어요.'],
                   ready: ['주문내역을 열었어요', '이제 주문내역에서 옷만 가져올게요.'],
@@ -2715,6 +2809,16 @@ function AddSheet({ ctx }) {
                             {bulkRun ? '담는 중…' : `${bulkPicked.length}개 담기`}
                           </Btn>
                         </div>
+                      ) : tab === 'orders' && orderFlow.demo && orderFlow.phase === 'login' ? (
+                        <div role="status" style={{
+                          width: '100%', height: 52, borderRadius: 'var(--r-pill)',
+                          display: 'grid', placeItems: 'center',
+                          background: 'var(--ivory)', color: 'var(--ink-2)',
+                          boxShadow: 'inset 0 0 0 1px var(--line)',
+                          fontSize: 13.5, fontWeight: 700,
+                        }}>
+                          오른쪽 로그인 화면에서 로그인해 주세요
+                        </div>
                       ) : (
                         <Btn
                           full size="lg" icon={tab === 'orders' ? 'bag' : 'sparkle'}
@@ -2731,7 +2835,7 @@ function AddSheet({ ctx }) {
                                 ? `${bulkPicked.length}개 옷장에 담기`
                                 : `${bulkPicked.length}개 확인하고 담기`)
                             : orderFlow.phase === 'opening' ? 'Chrome 여는 중…'
-                            : orderFlow.phase === 'login' ? (orderFlow.demo ? '로그인 완료' : (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요'))
+                            : orderFlow.phase === 'login' ? (orderFlow.demo ? '오른쪽에서 로그인해 주세요' : (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요'))
                             : orderFlow.phase === 'authenticated' ? '주문내역 열기'
                             : orderFlow.phase === 'ready' ? (orderFlow.demo ? '옷 가져오기' : '주문내역 가져오기')
                             : orderFlow.phase === 'collecting' ? (orderFlow.count ? `${orderFlow.count}개 찾는 중…` : '옷을 찾는 중…')
@@ -2978,6 +3082,16 @@ function AddSheet({ ctx }) {
             </div>
           </div>
         )}
+          </div>
+          {showOrderDemoBrowser ? (
+            <OrderDemoBrowser
+              platform={orderDemoPlatform}
+              phase={orderFlow.phase}
+              count={orderFlow.count}
+              onLogin={completeOrderDemoLogin}
+            />
+          ) : null}
+        </div>
       </div>
     </BottomSheet>
     <OrderImportSession
