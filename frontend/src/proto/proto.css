@@ -291,7 +291,7 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1;
-  color: color-mix(in srgb, var(--ink) 76%, transparent);
+  color: rgba(35, 35, 34, 0.58);
   pointer-events: none;
   user-select: none;
 }

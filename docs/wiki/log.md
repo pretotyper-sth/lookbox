@@ -6,6 +6,12 @@ Append-only. Newest at the bottom. Format: `## [YYYY-MM-DD] ingest|query|lint | 
 Empty scaffold created. No pages yet. Next: `ingest` the wardrobe and combo-recommendation
 subsystems so sessions can start from the index instead of reading `frontend/src/proto/`.
 
+## [2026-09-13] ingest | 코디 다양성·소품 판단·남성 비율·AI 라벨
+추천 프롬프트와 fallback에서 상의 베이스 반복을 줄이고 소품을 적합성 기준으로
+선택하게 했다. 남성 canonical 착장에는 다리선을 조금 짧게 보정하는 지시를 추가했고,
+`✦ AI로 생성` 라벨은 어두운 회색 반투명으로 낮췄다. 근거: `backend/app/main.py`,
+`frontend/src/proto/proto.css`.
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

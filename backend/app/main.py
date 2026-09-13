@@ -3213,7 +3213,10 @@ def recommend_text(
 - item_ids에는 위 목록에 있는 id만 넣기
 - 한 코디에는 반드시 상의(또는 아우터/원피스)와 하의(또는 스커트/원피스)와 신발을 포함. 상의+하의만, 신발 없는 조합 금지
 - 원피스 1벌이면 상의·하의 요건을 충족. 신발은 원피스여도 필수
-- 가방·모자·아우터·소품은 코디마다 0~1개 더한다. 전 코디가 상의+하의+신발 3종만이면 실패 — 최소 절반은 소품이나 겉옷을 섞을 것
+- 가방·모자·아우터·소품은 필요할 때만 0~1개 더한다. 소품 개수를 채우기 위해 억지로 넣지 말 것
+- 코디가 2개 이상이면 상의(또는 원피스/아우터)의 종류와 실루엣을 가능한 한 모두 다르게 한다. 같은 카라티·같은 상의를 반복하지 말고, 옷장에 티셔츠·셔츠·니트·후디·아우터가 있으면 서로 다른 베이스를 우선한다
+- 모자는 캐주얼·스트리트·스포티 무드에서만, 색·실루엣을 실제로 정리해 줄 때만 넣는다. 모자를 넣을 근거가 없으면 생략한다
+- 코디마다 소품을 넣을 필요가 없다. 잘 어울리는 코디에는 가방·모자·아우터 중 최대 1개를 더하고, 나머지는 필수 아이템만으로 완성한다
 - 한 코디는 3~5개 구성 (필수 3 + 소품)
 - 기준 아이템이 있으면 반드시 포함
 - 서로 다른 아이템 조합만. 같은 옷 세트를 반복한 코디는 금지
@@ -3304,6 +3307,7 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                 if len(combos) >= max_combos:
                     break
             print(f"[recommend] topped up {len(combos) - (max_combos - short)} combo(s) from wardrobe pairs", flush=True)
+        combos = _diversify_combo_bases(combos, valid, max_combos)
         combos = _finish_combos(combos, items, wish_combos, profile)
         print(f"[recommend] ok via=ai combos={len(combos)}", flush=True)
         return combos
@@ -3558,10 +3562,16 @@ def _ensure_core_slots(
                 if used_shoes is not None:
                     used_shoes[shoe["id"]] = used_shoes.get(shoe["id"], 0) + 1
     if want_accent and not any(_is_accent(by_id[i]) for i in ids if i in by_id):
-        pool = [e for e in extras if e.get("id") not in ids]
-        if pool:
-            salt = sum(ord(c) for c in "".join(ids))
-            ids.append(pool[salt % len(pool)]["id"])
+        top, bottom = _combo_top_bottom(ids, by_id)
+        if top and bottom:
+            extra = _pick_styling_accent(
+                [e for e in extras if e.get("id") not in ids],
+                top,
+                bottom,
+                sum(ord(c) for c in "".join(ids)),
+            )
+            if extra:
+                ids.append(extra["id"])
     combo["item_ids"] = ids[:5]
 
 
@@ -3636,7 +3646,7 @@ def _finish_combos(
             used_shoes[sid] = used_shoes.get(sid, 0) + 1
     for combo in combos:
         ids = combo.get("item_ids") or []
-        want = (sum(ord(c) for c in "".join(ids)) % 5) != 0
+        want = (sum(ord(c) for c in "".join(ids)) % 3) == 0
         _ensure_core_slots(combo, by_id, extras, want, profile, used_shoes)
     _rebalance_combo_shoes(combos, by_id, profile)
     _replace_offseason_shoes(combos, by_id, profile, used_shoes)
@@ -3746,6 +3756,36 @@ def _item_clue(item: dict[str, Any]) -> str:
             st.get("subtype"), *details,
         ) if x
     ).lower()
+
+
+def _accent_fit_score(
+    accent: dict[str, Any], top: dict[str, Any], bottom: dict[str, Any],
+) -> float:
+    """소품을 채우지 않고, 해당 골격에 자연스러운지 판단한다."""
+    clue = _item_clue(accent)
+    base = f"{_item_clue(top)} {_item_clue(bottom)}"
+    if _clue_has(clue, ("모자", "캡", "버킷", "비니", "hat")):
+        if not _clue_has(base, ("캐주얼", "스트리트", "스포티", "후디", "후드", "티셔츠", "데님", "카고", "조거", "스니커", "운동화")):
+            return -3.0
+        return 2.5 if _clue_has(base, ("후디", "후드", "스트리트", "스포티", "카고", "조거")) else 1.0
+    if _clue_has(clue, ("가방", "백", "bag")):
+        return 1.5 if _clue_has(base, ("캐주얼", "데님", "셔츠", "티셔츠", "니트", "스니커", "운동화")) else 0.5
+    if _clue_has(clue, ("아우터", "자켓", "재킷", "코트", "가디건", "점퍼", "outer")):
+        return 1.5 if not _clue_has(base, ("반팔", "민소매", "한여름")) else 0.0
+    return 0.5
+
+
+def _pick_styling_accent(
+    extras: list[dict[str, Any]], top: dict[str, Any], bottom: dict[str, Any], salt: int,
+) -> dict[str, Any] | None:
+    ranked = sorted(
+        ((item, _accent_fit_score(item, top, bottom)) for item in extras),
+        key=lambda row: (-row[1], (salt + sum(ord(c) for c in row[0]["id"])) % 997),
+    )
+    if not ranked or ranked[0][1] < 1.0:
+        return None
+    best = [row for row in ranked if row[1] >= ranked[0][1] - 0.5]
+    return best[salt % len(best)][0]
 
 
 _CLASH_DRESS_SHOE = ("첼시", "로퍼", "더비", "구두", "힐", "펌프스", "옥스퍼드화", "워커")
@@ -3862,9 +3902,9 @@ def fallback_combos(
             shoe = _pick_rotating_shoe(shoes, t, b, profile, used_shoes)
             if shoe:
                 ids.append(shoe["id"])
-        if extras and (sum(ord(c) for c in "".join(ids)) % 5) != 0:
-            extra = extras[len(combos) % len(extras)]
-            if extra["id"] not in ids:
+        if extras and len(ids) < 5:
+            extra = _pick_styling_accent(extras, t, b, sum(ord(c) for c in "".join(ids)) + len(combos))
+            if extra and extra["id"] not in ids:
                 ids.append(extra["id"])
         before = len(combos)
         _push(ids, f"추천 코디 {len(combos) + 1}")
@@ -3884,14 +3924,44 @@ def fallback_combos(
             shoe = _pick_rotating_shoe(shoes, d, d, profile, used_shoes)
             if shoe:
                 ids.append(shoe["id"])
-        if extras and extras[0]["id"] not in ids:
-            ids.append(extras[0]["id"])
+        if extras:
+            extra = _pick_styling_accent(extras, d, d, sum(ord(c) for c in d["id"]))
+            if extra and extra["id"] not in ids:
+                ids.append(extra["id"])
         if len(ids) >= 2:
             _push(ids, f"추천 코디 {len(combos) + 1}")
         if len(combos) >= max_combos:
             return combos
 
     return combos
+
+
+def _diversify_combo_bases(
+    combos: list[dict[str, Any]], by_id: dict[str, Any], max_combos: int,
+) -> list[dict[str, Any]]:
+    """같은 상의만 반복하는 AI 응답을 버리고, 서로 다른 상의 베이스를 먼저 쓴다."""
+    if len(combos) < 2:
+        return combos
+    unique: list[dict[str, Any]] = []
+    deferred: list[dict[str, Any]] = []
+    used_tops: set[str] = set()
+    for combo in combos:
+        top_id = next(
+            (item_id for item_id in combo.get("item_ids") or []
+             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
+            "",
+        )
+        if top_id and top_id in used_tops:
+            deferred.append(combo)
+            continue
+        unique.append(combo)
+        if top_id:
+            used_tops.add(top_id)
+    for combo in deferred:
+        if len(unique) >= max_combos:
+            break
+        unique.append(combo)
+    return unique[:max_combos]
 
 
 def recommend_closet(
@@ -4049,6 +4119,7 @@ def _model_look_prompt(gender: str | None) -> str:
 
 
 def _model_identity_prompt(gender: str | None) -> str:
+    male_proportion_note = "- For the male model only, make the leg line subtly shorter and more realistic than the reference impression; reduce it slightly, never dramatically.\n" if str(gender or "").strip().startswith("남") else ""
     return f"""This is an identity lock, not a character redesign.
 Keep the same person in the source photo: face structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, apparent age, shoulder width.
@@ -4067,7 +4138,7 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - never crop the chin, crown, or shoes in this source frame
 - make the apparent body height and inseam subtly shorter than a fashion illustration;
   keep a natural adult Korean lookbook proportion, never elongated legs
-- one continuous soft gray studio backdrop, wall blending into floor, reaching all four
+{male_proportion_note}- one continuous soft gray studio backdrop, wall blending into floor, reaching all four
   edges of the frame. no second plate, letterbox, border, or framed inset
 - keep the soft contact shadow under the shoes smooth. no banding, posterization,
   dithering, or blotchy patches anywhere in the backdrop or shadow
