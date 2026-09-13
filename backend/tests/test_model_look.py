@@ -17,6 +17,7 @@ FNS = (
     '_model_look_subject',
     '_model_identity_prompt',
     '_model_look_prompt',
+    '_normalize_look_background',
     '_garment_desc',
     '_model_look_garment_lines',
     '_model_look_outfit_block',
@@ -74,8 +75,9 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn("identity lock", prompt)
-        self.assertNotIn("#E5E3DE", prompt)
-        self.assertIn("one continuous soft gray studio backdrop", prompt)
+        self.assertIn("#E5E3DE", prompt)
+        self.assertIn("uniform matte light-gray backdrop", prompt)
+        self.assertIn("no wall-floor horizon or horizontal line", prompt)
         self.assertIn("22% of the frame empty", prompt)
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
@@ -127,6 +129,21 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("다리가 길어", note)
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
+
+    def test_generated_backdrop_line_is_removed(self):
+        normalize = self.ns['_normalize_look_background']
+        image = Image.new("RGB", (32, 48), (180, 178, 173))
+        px = image.load()
+        for x in range(32):
+            px[x, 28] = (150, 148, 143)
+        for y in range(8, 40):
+            for x in range(13, 20):
+                px[x, y] = (30, 42, 65)
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        result = Image.open(io.BytesIO(normalize(buf.getvalue()))).convert("RGB")
+        self.assertEqual(result.getpixel((2, 28)), result.getpixel((2, 10)))
+        self.assertLess(sum(result.getpixel((16, 20))), 180)
 
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([

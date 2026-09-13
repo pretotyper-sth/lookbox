@@ -12,6 +12,11 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 `✦ AI로 생성` 라벨은 어두운 회색 반투명으로 낮췄다. 근거: `backend/app/main.py`,
 `frontend/src/proto/proto.css`.
 
+## [2026-09-13] ingest | 착장 배경선 제거·카드 색 통일
+생성 착장 이미지의 벽·바닥 실선을 행별 배경 판정으로 제거하고, 상품컷·옷장 카드와
+같은 `#E5E3DE` 배경으로 합성한다. 프롬프트에도 수평선 없는 단색 배경을 명시했다.
+근거: `backend/app/main.py` `_normalize_look_background`.
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

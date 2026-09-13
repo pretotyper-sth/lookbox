@@ -4089,8 +4089,7 @@ def _face_image_bytes(src: str | None) -> bytes | None:
     return None
 
 
-# 옷장·코디 카드 `--thumb-bg`와 같은 색. 참고 보드 바탕에만 쓴다.
-# 착장 배경은 이 색으로 강요하지 않는다 — 레퍼런스 스튜디오를 그대로 둔다.
+# 옷장·코디 카드 `--thumb-bg`와 같은 색. 착장 결과도 이 색으로 통일한다.
 _LOOK_PLATE_RGB = (229, 227, 222)
 _LOOK_IDENTITY_DIR = Path(__file__).resolve().parent.parent / "assets" / "look-identity"
 
@@ -4138,8 +4137,9 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - never crop the chin, crown, or shoes in this source frame
 - make the apparent body height and inseam subtly shorter than a fashion illustration;
   keep a natural adult Korean lookbook proportion, never elongated legs
-{male_proportion_note}- one continuous soft gray studio backdrop, wall blending into floor, reaching all four
-  edges of the frame. no second plate, letterbox, border, or framed inset
+{male_proportion_note}- uniform matte light-gray backdrop matching RGB 229 227 222
+  (#E5E3DE), with no wall-floor horizon or horizontal line. no second plate, letterbox,
+  border, or framed inset
 - keep the soft contact shadow under the shoes smooth. no banding, posterization,
   dithering, or blotchy patches anywhere in the backdrop or shadow
 - simple base garments already in the photo; do not invent logos or extra people
@@ -4371,8 +4371,9 @@ entire shoes must be visible. Never crop or hide the feet. No walking, sitting,
 jumping, dramatic pose, or fashion-illustration proportions.
 
 COMPOSITION:
-Match Image 1's camera height, centered full-body framing, studio lighting, soft gray
-wall-to-floor backdrop, contact shadow, and restrained mood. Do not make a tight crop.
+Match Image 1's camera height, centered full-body framing, studio lighting, and restrained
+mood. Use a uniform matte #E5E3DE backdrop with no wall-floor horizon or horizontal line.
+Do not make a tight crop.
 This output will be converted to a 4:5 card and a square rail card: leave at least 18%
 clear studio above the hair and 18% clear floor below the soles. If space is tight, make
 the person smaller; never solve it by cutting off the legs or shoes. Keep the person
@@ -4625,6 +4626,29 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     if y1 < 0:
         return None
     return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
+
+
+def _normalize_look_background(png_bytes: bytes) -> bytes:
+    """생성본의 벽·바닥 경계와 색 편차를 카드 배경색으로 통일한다."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    w, h = img.size
+    src = img.load()
+    mask = Image.new("L", (w, h), 0)
+    out_mask = mask.load()
+    for y in range(h):
+        br, bg, bb = _look_row_backdrop(src, w, y)
+        for x in range(w):
+            distance = abs(src[x, y][0] - br) + abs(src[x, y][1] - bg) + abs(src[x, y][2] - bb)
+            if distance > _LOOK_BACKDROP_TOL:
+                out_mask[x, y] = 255
+            elif distance > _LOOK_BACKDROP_TOL * 0.72:
+                out_mask[x, y] = int(255 * (distance - _LOOK_BACKDROP_TOL * 0.72) / (_LOOK_BACKDROP_TOL * 0.28))
+    mask = mask.filter(ImageFilter.GaussianBlur(1.2))
+    canvas = Image.new("RGB", (w, h), _LOOK_PLATE_RGB)
+    canvas.paste(img, (0, 0), mask)
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _look_needs_reshoot(img: Image.Image) -> bool:
@@ -4911,6 +4935,7 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         mark("finish")
         try:
+            out = _normalize_look_background(out)
             out = _crop_look_to_card(out)
         except Exception as crop_exc:  # noqa: BLE001
             print(f"[model-look] crop skip: {crop_exc}", flush=True)
