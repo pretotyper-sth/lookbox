@@ -2239,7 +2239,7 @@ function AddSheet({ ctx }) {
                           <div className="lb-skel lb-tryon-skel" aria-hidden />
                           <div className="lb-look-wave" aria-hidden />
                           <div className="lb-tryon-progress" style={{
-                            zIndex: 2, width: '100%', padding: '0 16px',
+                            zIndex: 2,
                             pointerEvents: 'none',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
