@@ -2294,14 +2294,14 @@ function AddSheet({ ctx }) {
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
                           <span className={tryOnNeedsBody ? 'lb-tryon-static-copy' : undefined} style={{
-                            fontSize: tryOnNeedsBody ? 13.5 : 14,
-                            fontWeight: tryOnNeedsBody ? 700 : 600,
-                            color: tryOnNeedsBody ? 'var(--ink-2)' : undefined,
-                            textAlign: tryOnNeedsBody ? 'left' : 'center',
-                            letterSpacing: tryOnNeedsBody ? '-0.01em' : undefined,
+                            fontSize: tryOnNeedsBody ? 12 : 14,
+                            fontWeight: tryOnNeedsBody ? 400 : 600,
+                            color: tryOnNeedsBody ? 'var(--ink-3)' : undefined,
+                            textAlign: 'center',
+                            letterSpacing: undefined,
                             whiteSpace: tryOnNeedsBody ? 'pre-line' : undefined,
                             wordBreak: tryOnNeedsBody ? 'keep-all' : 'keep-all',
-                            lineHeight: tryOnNeedsBody ? 1.45 : undefined,
+                            lineHeight: tryOnNeedsBody ? 1.5 : undefined,
                           }}>
                             {tryOnAvatar
                               ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : '아직 전신 이미지가 없어요.\n바로 보기 클릭 시 프로필 사진으로 이미지를 만들어요')
