@@ -2713,11 +2713,8 @@ function AddSheet({ ctx }) {
                     <>
                     {tab === 'orders' && !wide ? (
                       <div style={{
-                        marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
-                        fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
-                      }}>
-                        로그인 정보는 저장하지 않아요
-                      </div>
+                        marginTop: 'var(--s4)', minHeight: 28,
+                      }} aria-hidden />
                     ) : tab !== 'orders' ? (
                       <div style={{
                         marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',

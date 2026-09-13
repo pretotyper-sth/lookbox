@@ -657,9 +657,9 @@ img { display: block; max-width: 100%; }
 
 /* ---- toast ---- */
 .lb-toast {
-  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%) translateY(8px);
+  position: absolute; left: 50%; bottom: 132px; transform: translateX(-50%) translateY(8px);
   z-index: 70; opacity: 0; pointer-events: none;
-  /* 토스트는 기본 CTA(담고 완료·조합 추천받기·저장) 위에 겹쳐 뜬다. 검정이면 버튼과
+  /* 토스트는 기본 CTA(담고 완료·조합 추천받기·저장)보다 충분히 위에서 뜬다. 검정이면 버튼과
      같은 계열이라 묻히고, 흰/아이보리면 페이지 배경과 같은 계열이라 또 묻힌다.
      그래서 팔레트에 이미 있는 테라코타(#B0573C — 선택 플로팅 메뉴의 삭제 버튼과
      같은 색)를 쓴다. 배경도 버튼도 아닌 유일한 색이라 확실히 눈에 든다. */
