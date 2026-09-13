@@ -7221,13 +7221,13 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
-_TRYON_PLATE_RGB = (242, 241, 238)
+_TRYON_PLATE_RGB = (216, 220, 226)
 _TRYON_TOP_SEED = (0.50, 0.39)
 _TRYON_BOTTOM_SEED = (0.50, 0.67)
 
 
 def _tryon_border_background(rgb: Image.Image) -> Image.Image:
-    """가장자리에서 이어진 판색만 배경으로 본다. 차콜 티는 판과 값이 멀어 안 먹는다."""
+    """가장자리에서 이어진 쿨그레이 판색만 배경으로 본다. 흰 티와도 값이 충분히 다르다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -7261,7 +7261,7 @@ def _tryon_border_background(rgb: Image.Image) -> Image.Image:
 
 
 def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """가슴·허벅지 시드에서 차콜 티 또는 중청만 4방향으로 모은다."""
+    """가슴·허벅지 시드에서 흰 티 또는 중청만 4방향으로 모은다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -7276,8 +7276,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         L = 0.299 * r + 0.587 * g + 0.114 * b
         if kind == "top":
             ch = max(r, g, b) - min(r, g, b)
-            # 차콜 반팔: 판·피부·중청과 떨어지게. 흰 티는 판(#F2F1EE)과 붙어 톱니가 난다.
-            return 14 <= L <= 118 and ch <= 40 and (b - r) <= 14
+            # 흰 반팔은 쿨그레이 판보다 충분히 밝게 고정한다. 배경은 연결 성분으로 이미 제외한다.
+            return L >= 180 and ch <= 34 and min(r, g, b) >= 168
         return b > r + 6 and b >= g - 6 and 32 < L < 175
 
     def skin(r: int, g: int, b: int) -> bool:
@@ -7424,10 +7424,13 @@ FACE:
 A sharper, well-lit photograph of the SAME person in Image 1 — not a different model.
 Skin must look real: visible pores, subtle texture, faint natural variation.
 No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
+Use the reference only as facial-identity evidence: never inherit its camera angle, head tilt, facial rotation, or pose.
 
 POSE:
-Straight-on front-facing standing pose, shoulders and hips square to the camera.
-Keep the head and face naturally level even if the reference selfie is tilted.
+Strictly straight-on, front-facing standing pose, shoulders and hips square to the camera.
+Face the lens directly: both eyes equally visible, eyes parallel to the horizon, facial midline vertical,
+and no head yaw, roll, pitch, or three-quarter view. Keep the head and face naturally level even if
+the reference selfie is tilted or diagonal.
 Use a slight natural weight shift, relaxed shoulders, and arms slightly away from
 the torso so sleeves are visible. Do not copy the selfie angle or tilt the face.
 
@@ -7437,13 +7440,13 @@ Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
 
 OUTFIT:
-matte charcoal-gray short-sleeve crew-neck T-shirt (about RGB 50 50 55), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
-The T-shirt is a flat dark charcoal — clearly darker than the background, never white, never gray-blue, never the same color as the jeans.
+clean optical-white short-sleeve crew-neck T-shirt (about RGB 245 245 242), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
+The T-shirt is a solid white, visibly brighter than the cool-gray background and never gray-blue or the same color as the jeans.
 The jeans are distinctly blue denim, not charcoal and not black.
 Each garment is one solid color with a sharp edge against skin and against the other garment so they can be separated.
 No pattern, logo, extra garments, or black leather.
 
-- background is ONE continuous solid fill of #F2F1EE from edge to edge.
+- background is ONE continuous solid fill of #D8DCE2 from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
 - minimal contact shadow under the shoes
 - no text, watermark, frame, or other people
@@ -7452,6 +7455,41 @@ No pattern, logo, extra garments, or black leather.
 
 class TryOnBody(BaseModel):
     face_data_url: str
+
+
+def _tryon_body_profile_note(user_id: str) -> str:
+    """계정에 저장한 수치만 전신 프레임의 느슨한 기준으로 쓴다."""
+    try:
+        res = supabase_admin.auth.admin.get_user_by_id(user_id)
+        account = getattr(res, "user", None) or res
+        prefs = dict((getattr(account, "user_metadata", None) or {}).get("prefs") or {})
+    except Exception as exc:  # noqa: BLE001
+        print(f"[tryon] profile metrics unavailable: {exc}", flush=True)
+        return ""
+
+    def metric(value: Any, low: int, high: int) -> int | None:
+        try:
+            number = int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return None
+        return number if low <= number <= high else None
+
+    height = metric(prefs.get("height"), 120, 230)
+    weight = metric(prefs.get("weight"), 30, 220)
+    if height is None and weight is None:
+        return ""
+    facts = []
+    if height is not None:
+        facts.append(f"recorded height is {height} cm")
+    if weight is not None:
+        facts.append(f"recorded weight is {weight} kg")
+    return (
+        "\nPROFILE PROPORTIONS:\n"
+        f"The account profile says {', '.join(facts)}. Use this only as a loose, respectful reference "
+        "for believable adult body scale. Give a subtly flattering, naturally elongated overall silhouette "
+        "(roughly one head taller in impression), especially a slightly longer leg line, while preserving "
+        "realistic anatomy. Do not make the person ultra-thin, change their age, or exaggerate body shape.\n"
+    )
 
 
 class ProfileAvatarIn(BaseModel):
@@ -7489,7 +7527,9 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    key = f"tryon8-{sig}"
+    profile_note = _tryon_body_profile_note(uid)
+    profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
+    key = f"tryon9-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7534,7 +7574,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
                         model=OPENAI_IMAGE_MODEL_TRYON,
                         image=source,
-                        prompt=_TRYON_BODY_PROMPT,
+                        prompt=_TRYON_BODY_PROMPT + profile_note,
                         size="1024x1536",
                         quality=OPENAI_IMAGE_QUALITY_TRYON,
                     )
@@ -7578,7 +7618,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon8",
+                        "mask": "tryon9",
                         "assets": urls,
                     },
                 }).execute()

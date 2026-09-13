@@ -693,3 +693,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 [[tryon-setup-from-mypage]]
 근거: `frontend/src/proto/04-screens-ab.jsx` `mobileOrderTab`·스테이지·힌트 슬롯.
 [[add-item-bulk]]
+
+## [2026-09-13] change | 바로 보기 전신의 정면 얼굴·은은한 개인 비율
+바로 보기 전신은 셀피의 신원만 유지하고 기울기·3/4 각도는 따라 하지 않아, 항상 정면 수평 얼굴과 정면 전신으로 만든다. 계정의 키·몸무게는 사실적인 성인 비율 안에서 다리선이 조금 더 길어 보이도록 느슨하게만 참고하며, 체형을 과장하지 않는다. 기본 착장은 흰 반팔·중청 데님·흰 스니커즈로 바꾸고, 흰 상의가 바로 보기 구멍과 섞이지 않도록 배경·마스크 기준도 쿨그레이와 밝은 상의에 맞췄다. 캐시 세대는 `tryon9`다.
+근거: `backend/app/main.py` `_TRYON_BODY_PROMPT`·`_tryon_body_profile_note`·`_tryon_seed_component`, `frontend/src/proto/03-data.jsx` `TRYON_BODY_REV`.
+[[tryon-setup-from-mypage]] [[profile-height-weight]]

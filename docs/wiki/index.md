@@ -24,7 +24,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
-- [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천·착장 프롬프트에는 안 넣음
+- [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천에는 안 넣고 바로 보기 전신만 자연스럽게 반영
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용. 착장 인물은 `assets/mood` 남·여 예시. 분류 id는 `_STYLE_IDS`와 같음
 - [order-import-webview](order-import-webview.md) — 구매내역: 실제 확장은 Chrome 팝업, 샘플은 추가 시트 2열 가상 Chrome. 썸네일 직접 등록·탭 이동 후 유지·선택 후 공용 상세입력. 모바일은 PC 안내
 - [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
