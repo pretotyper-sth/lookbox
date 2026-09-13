@@ -1617,6 +1617,9 @@ function AddSheet({ ctx }) {
     }
     if (orderFlow.phase === 'idle') launchOrderFlow();
   };
+  const onMobileOrderPrimary = () => {
+    if (typeof showToast === 'function') showToast('구매내역은 PC에서만 불러올 수 있어요');
+  };
   const URL_ROW_MAX = 20;
   const setUrlAt = (idx, value) => {
     setUrls((prev) => prev.map((u, i) => (i === idx ? value : u)));
@@ -2111,7 +2114,6 @@ function AddSheet({ ctx }) {
                 // 옷장에 맞춰 볼 옷이 없으면 사진·URL로 고민 중인 옷을 올려도 할 게 없다.
                 // 눌렀을 때 아무 일도 안 일어나는 것보다, 아직 못 쓴다는 걸 보여주고 잠근다.
                 const comboLocked = anchor && !comboReady && id !== 'tryon';
-                const ordersOff = id === 'orders' && !wide;
                 return (
                   <button key={id} disabled={comboLocked} aria-disabled={comboLocked} onClick={() => {
                     if (comboLocked) return;
@@ -2125,7 +2127,7 @@ function AddSheet({ ctx }) {
                     boxShadow: tab === id ? '0 1px 3px rgba(40,36,28,0.10)' : 'none',
                     transition: 'all var(--dur) var(--ease)',
                     whiteSpace: 'nowrap',
-                    opacity: (comboLocked || (ordersOff && tab !== id)) ? 0.45 : 1,
+                    opacity: comboLocked ? 0.45 : 1,
                     cursor: comboLocked ? 'default' : 'pointer',
                   }}>
                     {comboLocked ? <Icon name="lock" size={14} /> : <Icon name={ic} size={16} />}{label}
@@ -2526,7 +2528,6 @@ function AddSheet({ ctx }) {
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
-                              <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>Chrome 확장 프로그램으로 쇼핑몰에 안전하게 연결해요.</div>
                             </div>
                           </div>
                         ) : orderFlow.phase !== 'idle' ? (
@@ -2819,6 +2820,14 @@ function AddSheet({ ctx }) {
                         }}>
                           오른쪽 로그인 화면에서 로그인해 주세요
                         </div>
+                      ) : tab === 'orders' && !wide ? (
+                        <Btn
+                          full size="lg" icon="bag"
+                          onClick={onMobileOrderPrimary}
+                          style={{ opacity: 0.42 }}
+                        >
+                          {orderDemo ? '샘플 주문내역 보기' : '주문 내역 가져오기'}
+                        </Btn>
                       ) : (
                         <Btn
                           full size="lg" icon={tab === 'orders' ? 'bag' : 'sparkle'}
@@ -2857,7 +2866,7 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            ) : (!anchor && tab !== 'tryon') ? (
+            ) : (!anchor && tab !== 'tryon' && !(tab === 'orders' && !wide)) ? (
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name={tab === 'orders' ? 'bag' : 'sparkle'} size={15} />
                 {tab === 'orders'

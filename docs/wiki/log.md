@@ -678,3 +678,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 단계 문구만 보이던 샘플을 PC 단일 2열 시트로 확장했다. 왼쪽은 Lookbox 연결 단계, 오른쪽은 주소 표시줄·샘플 계정 입력칸·로그인 CTA가 있는 가상 Chrome이며, 로그인 완료 뒤 주문내역 와이어프레임과 상품별 읽기 완료 상태까지 같은 자리에서 보여준다. 실제 계정 입력과 서버 호출은 하지 않는다.
 근거: `frontend/src/proto/02-shared.jsx` `BottomSheet.desktopMaxW`, `frontend/src/proto/04-screens-ab.jsx` `OrderDemoBrowser`, `frontend/src/proto/proto.css` `.lb-order-demo-*`.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-13] fix | 모바일 구매내역 안내·CTA 단순화
+모바일 구매내역 안내에서 보조 Chrome 문구와 별도 가방 안내를 제거하고 「구매내역은 PC에서 불러올 수 있어요」만 남겼다. CTA는 PC와 같은 문구·형태를 낮은 대비로 보이게 하되 클릭은 막지 않아, 탭하면 PC 전용 토스트를 띄운다.
+근거: `frontend/src/proto/04-screens-ab.jsx` 모바일 `orders` 패널·CTA.
+[[order-import-webview]] [[add-item-bulk]]
