@@ -2142,9 +2142,9 @@ function AddSheet({ ctx }) {
               {(() => {
                 const STAGE_H = 168;
                 const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다.
-                // 사진·URL은 168px 스테이지 뒤에 44px 힌트 슬롯을, 구매내역·바로 보기는 212px 박스를 쓴다.
-                // 두 경로의 합계를 같게 고정해 탭을 바꿔도 시트와 CTA가 흔들리지 않는다.
-                const panelH = (tab === 'orders' || tab === 'tryon') ? STAGE_H + HINT_SLOT_H : STAGE_H;
+                // 모바일 소스 탭은 전부 168px 카드와 CTA 아래 44px 안내 슬롯을 쓴다.
+                // PC 구매내역·바로 보기는 212px 카드 안에 해당 정보를 담아 같은 합계를 유지한다.
+                const panelH = tab === 'tryon' || (tab === 'orders' && wide) ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',
@@ -2530,7 +2530,6 @@ function AddSheet({ ctx }) {
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
-                              <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>컴퓨터에서 쇼핑몰 로그인 후 주문내역을 가져와요</div>
                             </div>
                           </div>
                         ) : orderFlow.phase !== 'idle' ? (
@@ -2829,7 +2828,7 @@ function AddSheet({ ctx }) {
                           onClick={onMobileOrderPrimary}
                           style={{ opacity: 0.42 }}
                         >
-                          {orderDemo ? '샘플 주문내역 보기' : '주문 내역 가져오기'}
+                          주문 내역 가져오기
                         </Btn>
                       ) : (
                         <Btn
@@ -2855,7 +2854,7 @@ function AddSheet({ ctx }) {
                             : orderBusy ? '로그인 창을 여는 중…'
                             : busy ? '인식 중…'
                             : (tab === 'orders'
-                              ? (!wide ? 'PC에서만 가능' : (orderDemo ? '샘플 주문내역 보기' : (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기')))
+                              ? (!wide ? 'PC에서만 가능' : (orderNeedLogin ? '로그인했어요, 다시 가져오기' : '주문 내역 가져오기'))
                               : (reextract ? '이미지 변경' : (anchor ? '조합 추천받기' : '추가하기')))}
                         </Btn>
                       )}
@@ -2869,9 +2868,13 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            ) : (!anchor && tab !== 'tryon' && tab !== 'orders') ? (
+            ) : (!anchor && tab !== 'tryon' && !(tab === 'orders' && wide)) ? (
               <div style={{ marginTop: 'var(--s4)', height: 28, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
+                {mobileOrderTab ? (
+                  <>PC에서 쇼핑몰 로그인 후 옷을 하나씩 담아요</>
+                ) : (
+                  <><Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요</>
+                )}
               </div>
             ) : null}
           </>
