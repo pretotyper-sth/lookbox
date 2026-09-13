@@ -1181,6 +1181,7 @@ function AddSheet({ ctx }) {
   const orderDemo = typeof window !== 'undefined'
     && (import.meta.env.DEV || new URLSearchParams(window.location.search).get('orderDemo') === '1')
     && new URLSearchParams(window.location.search).get('orderReal') !== '1';
+  const mobileOrderTab = tab === 'orders' && !wide;
   const [orderFlow, setOrderFlow] = useS({ phase: 'idle', shopId: '', demo: false, count: 0 });
   const orderDraftRef = useR({ bulk: null, result: null });
   const previewUrlRef = useR('');
@@ -2140,8 +2141,9 @@ function AddSheet({ ctx }) {
               {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
               {(() => {
                 const STAGE_H = 168;
-                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다
-                // 사진·URL은 168 + 힌트 줄. 바로 보기는 힌트 줄이 없으니 박스를 그 높이까지 키워 탭을 바꿔도 시트가 안 흔들린다.
+                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다.
+                // 사진·URL은 168px 스테이지 뒤에 44px 힌트 슬롯을, 구매내역·바로 보기는 212px 박스를 쓴다.
+                // 두 경로의 합계를 같게 고정해 탭을 바꿔도 시트와 CTA가 흔들리지 않는다.
                 const panelH = (tab === 'orders' || tab === 'tryon') ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
@@ -2524,10 +2526,11 @@ function AddSheet({ ctx }) {
                         background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
                         padding: 'var(--s4)', display: 'flex', flexDirection: 'column',
                       }}>
-                        {!wide ? (
+                        {mobileOrderTab ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
+                              <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>컴퓨터에서 쇼핑몰 로그인 후 주문내역을 가져와요</div>
                             </div>
                           </div>
                         ) : orderFlow.phase !== 'idle' ? (
@@ -2866,12 +2869,9 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            ) : (!anchor && tab !== 'tryon' && !(tab === 'orders' && !wide)) ? (
-              <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
-                <Icon name={tab === 'orders' ? 'bag' : 'sparkle'} size={15} />
-                {tab === 'orders'
-                  ? '로그인 후 옷을 하나씩 담아요'
-                  : '사진 속 상의·하의·신발까지 따로따로 찾아드려요'}
+            ) : (!anchor && tab !== 'tryon' && tab !== 'orders') ? (
+              <div style={{ marginTop: 'var(--s4)', height: 28, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                <Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요
               </div>
             ) : null}
           </>

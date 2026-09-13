@@ -683,3 +683,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 모바일 구매내역 안내에서 보조 Chrome 문구와 별도 가방 안내를 제거하고 「구매내역은 PC에서 불러올 수 있어요」만 남겼다. CTA는 PC와 같은 문구·형태를 낮은 대비로 보이게 하되 클릭은 막지 않아, 탭하면 PC 전용 토스트를 띄운다.
 근거: `frontend/src/proto/04-screens-ab.jsx` 모바일 `orders` 패널·CTA.
 [[order-import-webview]] [[add-item-bulk]]
+
+## [2026-09-13] fix | 소스 탭 전환 시 추가 시트 리듬 고정
+사진·URL은 168px 스테이지와 CTA 아래 44px 힌트 슬롯, 구매내역·바로 보기는 힌트 슬롯을 포함한 212px 박스를 사용하도록 합계를 고정했다. 모바일 구매내역의 PC 로그인 조건은 아이콘 없이 박스 안에 넣어, 시트 높이를 고정하면서도 빈 카드로 보이지 않게 했다.
+근거: `frontend/src/proto/04-screens-ab.jsx` `mobileOrderTab`·스테이지·힌트 슬롯.
+[[add-item-bulk]]
