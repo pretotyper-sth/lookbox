@@ -2142,8 +2142,8 @@ function AddSheet({ ctx }) {
               {(() => {
                 const STAGE_H = 168;
                 const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다.
-                // 모바일 소스 탭은 전부 168px 카드와 CTA 아래 44px 안내 슬롯을 쓴다.
-                // PC 구매내역·바로 보기는 212px 카드 안에 해당 정보를 담아 같은 합계를 유지한다.
+                // 사진·URL·모바일 구매내역은 168px 카드와 CTA 위·아래 44px 보조 슬롯을 쓴다.
+                // PC 구매내역·바로 보기는 CTA 위 슬롯을 카드 안에 포함하고, 아래 슬롯은 그대로 둔다.
                 const panelH = tab === 'tryon' || (tab === 'orders' && wide) ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
@@ -2709,27 +2709,36 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
-                    {tab !== 'orders' && tab !== 'tryon' && !bulk && !bulkResult && !tabLocked && (
+                    {(tab !== 'tryon' && !bulk && !bulkResult && !tabLocked) && (
                     <>
-                    <div style={{
-                      marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
-                    }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowHint((v) => !v)}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 6,
-                          fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
-                        }}
-                      >
-                        <Icon name="plus" size={15} /> 추출 힌트 추가
-                        <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
-                        <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
-                          <Icon name="chevL" size={14} />
-                        </span>
-                      </button>
-                    </div>
-                    {showHint && tab !== 'tryon' && (
+                    {tab === 'orders' && !wide ? (
+                      <div style={{
+                        marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
+                        fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
+                      }}>
+                        로그인 정보는 저장하지 않아요
+                      </div>
+                    ) : tab !== 'orders' ? (
+                      <div style={{
+                        marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowHint((v) => !v)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
+                          }}
+                        >
+                          <Icon name="plus" size={15} /> 추출 힌트 추가
+                          <span style={{ color: 'var(--ink-3)', fontWeight: 500 }}>선택</span>
+                          <span style={{ color: 'var(--ink-3)', transform: showHint ? 'rotate(-90deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+                            <Icon name="chevL" size={14} />
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
+                    {showHint && tab !== 'orders' && (
                       <div style={{ marginTop: 'var(--s4)' }}>
                         {hintHistory.length > 0 && (
                           <div style={{ marginBottom: 'var(--s5)' }}>
@@ -2868,10 +2877,12 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, minHeight: 18, whiteSpace: 'nowrap' }}>
                 <Icon name="sparkle" size={15} /> 새 사진·URL로 추출해도 상세 정보는 유지돼요
               </div>
-            ) : (!anchor && tab !== 'tryon' && !(tab === 'orders' && wide)) ? (
+            ) : (!anchor && tab !== 'tryon') ? (
               <div style={{ marginTop: 'var(--s4)', height: 28, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                {mobileOrderTab ? (
-                  <>PC에서 쇼핑몰 로그인 후 옷을 하나씩 담아요</>
+                {tab === 'orders' ? (
+                  mobileOrderTab
+                    ? <>PC에서 쇼핑몰 로그인 후 옷을 하나씩 담아요</>
+                    : <><Icon name="bag" size={15} /> 로그인 후 옷을 하나씩 담아요</>
                 ) : (
                   <><Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요</>
                 )}
