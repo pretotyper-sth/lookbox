@@ -2142,9 +2142,9 @@ function AddSheet({ ctx }) {
               {(() => {
                 const STAGE_H = 168;
                 const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다.
-                // 사진·URL·모바일 구매내역은 168px 카드와 CTA 위·아래 44px 보조 슬롯을 쓴다.
-                // PC 구매내역·바로 보기는 CTA 위 슬롯을 카드 안에 포함하고, 아래 슬롯은 그대로 둔다.
-                const panelH = tab === 'tryon' || (tab === 'orders' && wide) ? STAGE_H + HINT_SLOT_H : STAGE_H;
+                // 구매내역·바로 보기는 사진·URL의 CTA 위 보조 슬롯까지 카드에 포함한다.
+                // 따라서 같은 CTA 기준선을 유지하면서도 비어 있는 중간 행을 만들지 않는다.
+                const panelH = tab === 'tryon' || tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',
@@ -2213,6 +2213,7 @@ function AddSheet({ ctx }) {
                   </div>
                 );
                 const tabErr = tab === 'tryon' ? '' : err;
+                const tryOnNeedsBody = tab === 'tryon' && tryOnAvatar && !tryOnBodyReady && !tryOnErr;
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
@@ -2275,8 +2276,9 @@ function AddSheet({ ctx }) {
                         }}
                       >
                         <div style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: tryOnNeedsBody ? 22 : 10,
                           padding: '0 12px', pointerEvents: 'none',
+                          transform: tryOnNeedsBody ? 'translateY(20px)' : undefined,
                         }}>
                           <div style={{ pointerEvents: 'auto' }}>
                             {ProfileAvatar ? (
@@ -2289,15 +2291,16 @@ function AddSheet({ ctx }) {
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
                           <span style={{
-                            fontSize: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'clamp(12px, 3.6vw, 13.5px)' : 14,
+                            fontSize: tryOnNeedsBody ? 'clamp(12px, 3.6vw, 13.5px)' : 14,
                             fontWeight: 600,
                             textAlign: 'center',
-                            letterSpacing: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? '-0.03em' : undefined,
-                            whiteSpace: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'nowrap' : undefined,
-                            wordBreak: (tryOnAvatar && !tryOnBodyReady && !tryOnErr) ? 'normal' : 'keep-all',
+                            letterSpacing: tryOnNeedsBody ? '-0.03em' : undefined,
+                            whiteSpace: tryOnNeedsBody ? 'nowrap' : undefined,
+                            wordBreak: tryOnNeedsBody ? 'normal' : 'keep-all',
+                            lineHeight: tryOnNeedsBody ? 1.45 : undefined,
                           }}>
                             {tryOnAvatar
-                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : '프로필 사진으로 전신 바로보기 이미지 만들기')
+                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : <>아직 전신 이미지가 없어요.<br />바로 보기 클릭 시 프로필 사진으로 이미지를 만들어요</>)
                               : '프로필 사진 올리기'}
                           </span>
                           {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
@@ -2528,9 +2531,10 @@ function AddSheet({ ctx }) {
                       }}>
                         {mobileOrderTab ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 750 }}>구매내역은 PC에서 불러올 수 있어요</div>
-                            </div>
+                            <span style={{
+                              fontSize: 'clamp(12px, 3.6vw, 13.5px)', fontWeight: 600,
+                              color: 'var(--ink-2)', letterSpacing: '-0.03em', whiteSpace: 'nowrap', wordBreak: 'normal',
+                            }}>구매내역은 PC에서 불러올 수 있어요</span>
                           </div>
                         ) : orderFlow.phase !== 'idle' ? (
                           <>
@@ -2709,13 +2713,8 @@ function AddSheet({ ctx }) {
                       </div>
                     )}
 
-                    {(tab !== 'tryon' && !bulk && !bulkResult && !tabLocked) && (
+                    {tab !== 'orders' && tab !== 'tryon' && !bulk && !bulkResult && !tabLocked && (
                     <>
-                    {tab === 'orders' && !wide ? (
-                      <div style={{
-                        marginTop: 'var(--s4)', minHeight: 28,
-                      }} aria-hidden />
-                    ) : tab !== 'orders' ? (
                       <div style={{
                         marginTop: 'var(--s4)', minHeight: 28, display: 'flex', alignItems: 'center',
                       }}>
@@ -2734,8 +2733,7 @@ function AddSheet({ ctx }) {
                           </span>
                         </button>
                       </div>
-                    ) : null}
-                    {showHint && tab !== 'orders' && (
+                    {showHint && (
                       <div style={{ marginTop: 'var(--s4)' }}>
                         {hintHistory.length > 0 && (
                           <div style={{ marginBottom: 'var(--s5)' }}>
