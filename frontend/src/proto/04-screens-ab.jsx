@@ -2233,8 +2233,8 @@ function AddSheet({ ctx }) {
                         >
                           <div className="lb-skel lb-tryon-skel" aria-hidden />
                           <div className="lb-look-wave" aria-hidden />
-                          <div style={{
-                            position: 'relative', zIndex: 2, width: '100%', padding: '0 16px',
+                          <div className="lb-tryon-progress" style={{
+                            zIndex: 2, width: '100%', padding: '0 16px',
                             pointerEvents: 'none',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
@@ -2276,11 +2276,14 @@ function AddSheet({ ctx }) {
                         }}
                       >
                         <div style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: tryOnNeedsBody ? 22 : 10,
-                          padding: '0 12px', pointerEvents: 'none',
-                          transform: tryOnNeedsBody ? 'translateY(20px)' : undefined,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: tryOnNeedsBody ? 0 : 10,
+                          padding: tryOnNeedsBody ? 0 : '0 12px', pointerEvents: 'none',
+                          position: tryOnNeedsBody ? 'relative' : undefined,
+                          width: tryOnNeedsBody ? '100%' : undefined,
+                          alignSelf: tryOnNeedsBody ? 'stretch' : undefined,
+                          flex: tryOnNeedsBody ? 1 : undefined,
                         }}>
-                          <div style={{ pointerEvents: 'auto' }}>
+                          <div className={tryOnNeedsBody ? 'lb-tryon-profile-avatar' : undefined} style={{ pointerEvents: 'auto' }}>
                             {ProfileAvatar ? (
                               <ProfileAvatar
                                 src={tryOnAvatar}
@@ -2290,17 +2293,18 @@ function AddSheet({ ctx }) {
                               />
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
-                          <span style={{
-                            fontSize: tryOnNeedsBody ? 'clamp(12px, 3.6vw, 13.5px)' : 14,
-                            fontWeight: 600,
-                            textAlign: 'center',
-                            letterSpacing: tryOnNeedsBody ? '-0.03em' : undefined,
-                            whiteSpace: tryOnNeedsBody ? 'nowrap' : undefined,
-                            wordBreak: tryOnNeedsBody ? 'normal' : 'keep-all',
+                          <span className={tryOnNeedsBody ? 'lb-tryon-static-copy' : undefined} style={{
+                            fontSize: tryOnNeedsBody ? 13.5 : 14,
+                            fontWeight: tryOnNeedsBody ? 700 : 600,
+                            color: tryOnNeedsBody ? 'var(--ink-2)' : undefined,
+                            textAlign: tryOnNeedsBody ? 'left' : 'center',
+                            letterSpacing: tryOnNeedsBody ? '-0.01em' : undefined,
+                            whiteSpace: tryOnNeedsBody ? 'pre-line' : undefined,
+                            wordBreak: tryOnNeedsBody ? 'keep-all' : 'keep-all',
                             lineHeight: tryOnNeedsBody ? 1.45 : undefined,
                           }}>
                             {tryOnAvatar
-                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : <>아직 전신 이미지가 없어요.<br />바로 보기 클릭 시 프로필 사진으로 이미지를 만들어요</>)
+                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : '아직 전신 이미지가 없어요.\n바로 보기 클릭 시 프로필 사진으로 이미지를 만들어요')
                               : '프로필 사진 올리기'}
                           </span>
                           {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
