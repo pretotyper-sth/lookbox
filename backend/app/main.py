@@ -7317,13 +7317,13 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
     return {"results": results, "duplicates": dupes}
 
 
-_TRYON_PLATE_RGB = (216, 220, 226)
+_TRYON_PLATE_RGB = (242, 241, 238)
 _TRYON_TOP_SEED = (0.50, 0.39)
 _TRYON_BOTTOM_SEED = (0.50, 0.67)
 
 
 def _tryon_border_background(rgb: Image.Image) -> Image.Image:
-    """가장자리에서 이어진 쿨그레이 판색만 배경으로 본다. 흰 티와도 값이 충분히 다르다."""
+    """가장자리에서 이어진 판색만 배경으로 본다. 검정 티와 값이 충분히 다르다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -7357,7 +7357,7 @@ def _tryon_border_background(rgb: Image.Image) -> Image.Image:
 
 
 def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """가슴·허벅지 시드에서 흰 티 또는 중청만 4방향으로 모은다."""
+    """가슴·허벅지 시드에서 검정 티 또는 중청만 4방향으로 모은다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -7372,8 +7372,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         L = 0.299 * r + 0.587 * g + 0.114 * b
         if kind == "top":
             ch = max(r, g, b) - min(r, g, b)
-            # 흰 반팔은 쿨그레이 판보다 충분히 밝게 고정한다. 배경은 연결 성분으로 이미 제외한다.
-            return L >= 180 and ch <= 34 and min(r, g, b) >= 168
+            # 검정 반팔은 판·피부·중청과 명확히 떨어져 안정적으로 분리된다.
+            return 8 <= L <= 105 and ch <= 35 and (b - r) <= 14
         return b > r + 6 and b >= g - 6 and 32 < L < 175
 
     def skin(r: int, g: int, b: int) -> bool:
@@ -7536,13 +7536,13 @@ Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
 
 OUTFIT:
-clean optical-white short-sleeve crew-neck T-shirt (about RGB 245 245 242), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
-The T-shirt is a solid white, visibly brighter than the cool-gray background and never gray-blue or the same color as the jeans.
+matte black short-sleeve crew-neck T-shirt (about RGB 28 28 32), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
+The T-shirt is a solid near-black, clearly darker than the background, never gray-blue, and never the same color as the jeans.
 The jeans are distinctly blue denim, not charcoal and not black.
 Each garment is one solid color with a sharp edge against skin and against the other garment so they can be separated.
 No pattern, logo, extra garments, or black leather.
 
-- background is ONE continuous solid fill of #D8DCE2 from edge to edge.
+- background is ONE continuous solid fill of #F2F1EE from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
 - minimal contact shadow under the shoes
 - no text, watermark, frame, or other people
@@ -7625,7 +7625,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon9-{sig}-{profile_sig}"
+    key = f"tryon10-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -7714,7 +7714,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon9",
+                        "mask": "tryon10",
                         "assets": urls,
                     },
                 }).execute()
