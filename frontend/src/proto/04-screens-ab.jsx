@@ -1367,7 +1367,7 @@ function AddSheet({ ctx }) {
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
   const launchTryOnFromSheet = async () => {
-    if (wide || !tryOnAvatar || tryOnMaking) return;
+    if (!tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
     const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon9');
@@ -1386,6 +1386,8 @@ function AddSheet({ ctx }) {
       setTryOnErr(formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.');
       return;
     }
+    // 전신 기준 이미지는 어느 기기에서나 만들 수 있다. 실제 카메라 착장만 모바일 전용이다.
+    if (wide) return;
     if (typeof startTryOn === 'function') {
       startTryOn({ body, frame: body, cut: 'auto' });
       return;
@@ -1393,7 +1395,7 @@ function AddSheet({ ctx }) {
     openTryOn && openTryOn();
   };
   const onTryOnSubmit = () => {
-    if (wide || tryOnMaking || !canTryOn) return;
+    if (tryOnMaking || !canTryOn || (wide && tryOnBodyReady)) return;
     launchTryOnFromSheet();
   };
   const onTryOnAvatar = (dataUrl) => {
@@ -2214,6 +2216,9 @@ function AddSheet({ ctx }) {
                 );
                 const tabErr = tab === 'tryon' ? '' : err;
                 const tryOnNeedsBody = tab === 'tryon' && tryOnAvatar && !tryOnBodyReady && !tryOnErr;
+                const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
+                const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
+                const tryOnGuide = '프로필 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
@@ -2262,7 +2267,7 @@ function AddSheet({ ctx }) {
                         onClick={(e) => {
                           if (e.target.closest('[aria-label="프로필 사진 변경"]')) return;
                           if (tryOnAvatar) {
-                            if (!wide) launchTryOnFromSheet();
+                            if (!wide || !tryOnBodyReady) launchTryOnFromSheet();
                             return;
                           }
                           const btn = e.currentTarget.querySelector('[aria-label="프로필 사진 변경"]');
@@ -2304,7 +2309,7 @@ function AddSheet({ ctx }) {
                             lineHeight: tryOnNeedsBody ? 1.5 : undefined,
                           }}>
                             {tryOnAvatar
-                              ? (tryOnBodyReady ? '이 사진으로 옷을 바로 비춰 볼 수 있어요' : '아직 전신 이미지가 없어요.\n바로 보기 클릭 시 프로필 사진으로 이미지를 만들어요')
+                              ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
                               : '프로필 사진 올리기'}
                           </span>
                           {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
@@ -2795,9 +2800,9 @@ function AddSheet({ ctx }) {
                           size="lg"
                           icon="cutout"
                           onClick={onTryOnSubmit}
-                          disabled={wide || tryOnMaking || !canTryOn}
+                          disabled={tryOnActionDisabled}
                         >
-                          바로 보기
+                          {tryOnActionLabel}
                         </Btn>
                       ) : (tab === 'orders' || tab === 'url') && bulkResult ? (
                           <div style={{ display: 'flex', gap: 10, width: '100%' }}>
