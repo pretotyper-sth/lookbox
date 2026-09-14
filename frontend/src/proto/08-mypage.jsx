@@ -418,7 +418,6 @@ function MyPageScreen({ ctx }) {
     billing,
   } = ctx;
   const [planSheet, setPlanSheet] = useMp(false);
-  const [notif, setNotif] = useMp(true);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
 
@@ -501,7 +500,6 @@ function MyPageScreen({ ctx }) {
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
       {dailySettingsRows}
       {modelLookRow}
-      <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
     </div>
   );
 
@@ -591,7 +589,6 @@ function MyPageScreen({ ctx }) {
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
           {dailySettingsRows}
           {modelLookRow}
-          <ActionRow icon="bell" label="추천·코디 알림" right={<Switch on={notif} onToggle={() => setNotif((v) => !v)} />} />
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
           <ActionRow icon="help" label="고객센터" onClick={() => {}} />
