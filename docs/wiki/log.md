@@ -35,6 +35,13 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 `model-id25`다. 근거: `backend/app/main.py` `_remove_look_background_seams`;
 [[look-plate-shadow]].
 
+## [2026-09-14] ingest | 추천 플랫레이 가방 크기·구매내역 안내
+가방의 작은 투명 캔버스 여백을 상쇄해 상의·하의·신발과 화면 점유율을 맞추고,
+오늘 코디 플랫레이 캐시를 `flat8`로 올렸다. 구매내역 안내는 쇼핑몰 선택 뒤 로그인
+화면이 열리는 흐름과 주문내역에서 옷을 고르는 실제 단계를 한 줄로 표기한다.
+근거: `frontend/src/proto/05-screens-cde.jsx`, `04-screens-ab.jsx`;
+[[look-flatlay-overlap]] [[add-item-bulk]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

@@ -7,7 +7,9 @@
 개수가 다르면 덩어리 크기가 달라 3장은 작고 4장은 커 보인다. 오늘 코디는
 `flattenLookBoard`가 그린 뒤 bbox를 `LOOK_PACK`(1.03)로 맞춘다. 1.03은 0.86의
 1.2배, 패킹 전 4개짜리 2번 카드의 약 95%. 기하 가운데가 위로 보여
-`LOOK_NUDGE_Y` 2.4%만 내린다. 캐시 `|flat7`. 룩북 상품컷은 패킹 전 크기
+`LOOK_NUDGE_Y` 2.4%만 내린다. 가방은 작은 투명 캔버스 여백까지 반영해 상의·하의와
+균형이 맞게 `LOOK_SIZE` 38, canvas fill 0.62로 확대한 뒤 캐시 `|flat8`을 쓴다.
+룩북 상품컷은 패킹 전 크기
 (`pack={false}`, 캐시 `|flat1`)(2026-09-06).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `lookPlacement` `drawLookCutout`.

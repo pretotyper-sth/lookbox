@@ -2595,7 +2595,7 @@ function AddSheet({ ctx }) {
                                 ? '로그인한 뒤 다시 눌러 주세요.'
                                 : orderDemo
                                   ? '샘플 주문내역 · 실제 옷장에는 저장하지 않아요.'
-                                  : '쇼핑몰을 고른 뒤 로그인 화면이 열려요.'}
+                                  : '쇼핑몰을 고르면 로그인 화면이 열려요.'}
                             </div>
                             <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                               {ORDER_PLATFORMS.map((p) => (
@@ -2885,8 +2885,8 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', height: 28, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
                 {tab === 'orders' ? (
                   mobileOrderTab
-                    ? <>PC에서 쇼핑몰 로그인 후 옷을 하나씩 담아요</>
-                    : <><Icon name="bag" size={15} /> 로그인 후 옷을 하나씩 담아요</>
+                    ? <>PC에서 주문내역 옷을 골라 담아요</>
+                    : <><Icon name="bag" size={15} /> 주문내역에서 옷을 골라 담아요</>
                 ) : (
                   <><Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요</>
                 )}

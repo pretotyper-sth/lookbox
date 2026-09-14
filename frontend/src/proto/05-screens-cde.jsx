@@ -27,7 +27,7 @@ function MetaChips({ item }) {
    같은 색·비슷한 크기면 가운데에 포개지 않는다. 값은 가로폭 대비 %. */
 const LOOK_SIZE = {
   '아우터': 46, '상의': 44, '하의': 44, '스커트': 42, '원피스': 52,
-  '신발': 36, '가방': 30, '모자': 22, '소품': 16,
+  '신발': 36, '가방': 38, '모자': 22, '소품': 16,
   '액세서리': 16, // 구버전 데이터 호환
 };
 /* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
@@ -48,12 +48,13 @@ const LOOK_NUDGE_Y = 0.024;
    LOOK_SIZE 하나로 정리된다. 오래된 데이터가 과확대되지 않게 상한을 둔다. */
 const LOOK_CANVAS_FILL = {
   '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
-  '신발': 0.62, '가방': 0.74, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
+  '신발': 0.62, '가방': 0.62, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
 };
 const LOOK_ZOOM_MAX = 1.35;
+const LOOK_CATEGORY_ZOOM_MAX = { '가방': 1.62 };
 function lookImageZoom(category) {
   const fill = LOOK_CANVAS_FILL[category] || 0.9;
-  return Math.min(LOOK_ZOOM_MAX, 1 / fill);
+  return Math.min(LOOK_CATEGORY_ZOOM_MAX[category] || LOOK_ZOOM_MAX, 1 / fill);
 }
 
 /* 4분면 자리. 상의는 이미지가 프레임을 가로로 꽉 채우는데 하의(바지·스커트)는 좁고
@@ -297,7 +298,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat7' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat8' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
