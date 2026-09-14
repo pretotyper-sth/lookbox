@@ -59,6 +59,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 코디 상품컷 우클릭은 합성 PNG를 실제 클립보드에 복사한다. 가방은 우하단 구석 대신 안쪽 여백에 배치하고 플랫레이 캐시 세대를 갱신했다.
 근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
 
+## [2026-09-14] revert | 플랫레이 우클릭 가로채기
+코디 상품컷의 우클릭을 앱이 가로채 자동 복사하던 동작을 없애고, 브라우저 기본 이미지 메뉴를 유지한다.
+근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

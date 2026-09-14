@@ -11,7 +11,6 @@
 `LOOK_NUDGE_Y` 2.4%만 내린다. 가방은 작은 투명 캔버스 여백까지 반영해 상의·하의와
 균형이 맞게 `LOOK_SIZE` 38, canvas fill 0.62로 확대한 뒤 캐시 `|flat9`을 쓴다.
 룩북 상품컷은 패킹 전 크기
-(`pack={false}`, 캐시 `|flat1`). 오늘 플랫레이의 `data:image/png`은 우클릭으로 실제
-PNG 클립보드에 복사한다(2026-09-14).
+(`pack={false}`, 캐시 `|flat1`)(2026-09-14).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `lookPlacement` `drawLookCutout`.
