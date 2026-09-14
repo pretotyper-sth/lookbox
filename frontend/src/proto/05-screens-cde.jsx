@@ -72,10 +72,10 @@ const LOOK_SPOT = {
   // 좌하 · 신발
   shoes:  { cx: 32, cy: 74, z: 5 },
 };
-/* 우하 · 악세서리 후보. 0번은 가방 자리, 나머지는 모서리·옆이라
-   검정 선글라스가 검정 가방 한가운데에 앉지 않는다. */
+/* 우하 · 악세서리 후보. 가방도 바깥 모서리에 붙지 않도록 우하단 안쪽에 둔다.
+   나머지 소품은 가방과 겹치지 않는 범위에서 주변 자리를 쓴다. */
 const LOOK_ACC_CANDIDATES = [
-  { cx: 70, cy: 76, z: 6 },
+  { cx: 66, cy: 70, z: 6 },
   { cx: 88, cy: 56, z: 8 },
   { cx: 50, cy: 60, z: 8 },
   { cx: 84, cy: 64, z: 8 },
@@ -294,12 +294,23 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 
 const LOOK_FLAT_CACHE = {};
 
+function copyFlatImage(dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith('data:image/') || !navigator.clipboard || !window.ClipboardItem) {
+    return Promise.reject(new Error('clipboard unavailable'));
+  }
+  const [meta, encoded] = dataUrl.split(',');
+  const mime = (meta.match(/^data:(image\/[^;,]+)/) || [])[1] || 'image/png';
+  const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+  return navigator.clipboard.write([new ClipboardItem({ [mime]: new Blob([bytes], { type: mime }) })]);
+}
+
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full' }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat8' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat9' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
+  const [copyStatus, setCopyStatus] = useSc('');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
       setFlat('');
@@ -316,6 +327,15 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     });
     return () => { dead = true; };
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
+
+  const onFlatContextMenu = (e) => {
+    if (!flat || !flat.startsWith('data:image/')) return;
+    e.preventDefault();
+    copyFlatImage(flat).then(
+      () => setCopyStatus('이미지를 복사했어요'),
+      () => setCopyStatus('이미지 복사에 실패했어요'),
+    );
+  };
 
   // 착장 원본은 4:5 전체 전신이다. 레일도 같은 비율로 보여 잘라내지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
@@ -348,6 +368,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     <div
       aria-busy={pending ? 'true' : undefined}
       aria-label={pending ? '코디 이미지를 만드는 중' : undefined}
+      onContextMenu={onFlatContextMenu}
       style={{
         position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
@@ -380,6 +401,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         );
       })}
       {pending ? <LookPendingMarks stage={lookPendingStage(outfit)} /> : null}
+      {copyStatus ? (
+        <span role="status" style={{
+          position: 'absolute', left: 8, bottom: 8, zIndex: 10,
+          padding: '5px 8px', borderRadius: 'var(--r-pill)',
+          color: '#fff', background: 'color-mix(in srgb, var(--ink) 76%, transparent)',
+          fontSize: 11, fontWeight: 700, pointerEvents: 'none',
+        }}>{copyStatus}</span>
+      ) : null}
     </div>
   );
 }
