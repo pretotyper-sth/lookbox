@@ -1,8 +1,8 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, LOOK_TEST_LIMIT, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, LOOK_TEST_LIMIT, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
-/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, Eyebrow, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
+/* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // RealCloset — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
@@ -528,39 +528,24 @@ function TodayScreen({ ctx }) {
   const showReset = isToday ? (picks.length > 0 && !busy) : !!(pastRecord && pastRecord.outfits && pastRecord.outfits.length);
   const header = (
     <div style={{ marginBottom: 'var(--gap-header)' }}>
-      <Eyebrow>{isToday ? '오늘의 추천 코디' : '지난 추천 코디'}</Eyebrow>
-      <p style={{ margin: '10px 0 0', fontSize: wide ? 16 : 15, color: 'var(--ink)', lineHeight: 1.5, fontWeight: 600 }}>
-        {isToday ? (
-          busy ? (
-            <>오늘의 추천을 준비 중이에요</>
-          ) : (
-            <>
-              옷장 속 <b style={{ fontWeight: 800 }}>{items.length}개</b>
-              {picks.length > 0 ? <>로 만든 오늘의 추천 <b style={{ fontWeight: 800 }}>{picks.length}개</b>예요.</> : <>로 오늘의 추천을 준비 중이에요.</>}
-            </>
-          )
-        ) : (
-          <>
-            <b style={{ fontWeight: 800 }}>{selected.getMonth() + 1}월 {selected.getDate()}일</b>
-            {pastRecord ? '에 추천받았던 코디예요.' : '에는 받아둔 코디가 없어요.'}
-          </>
-        )}
-      </p>
-      {showReset ? (
-        <button
-          type="button"
-          onClick={() => (isToday ? setResetOpen(true) : pastLockToast())}
-          aria-disabled={!isToday}
-          style={{
-            marginTop: 8, padding: 0, border: 'none', background: 'none',
-            cursor: isToday ? 'pointer' : 'default',
-            fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
-            opacity: isToday ? 1 : 0.4,
-          }}
-        >
-          오늘 코디 다시 받기
-        </button>
-      ) : null}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: wide ? 25 : 20, fontWeight: 800 }}>오늘의 추천 코디</h1>
+        {showReset ? (
+          <button
+            type="button"
+            onClick={() => (isToday ? setResetOpen(true) : pastLockToast())}
+            aria-disabled={!isToday}
+            style={{
+              padding: 0, border: 'none', background: 'none', whiteSpace: 'nowrap',
+              cursor: isToday ? 'pointer' : 'default',
+              fontSize: wide ? 13.5 : 13, fontWeight: 600, color: 'var(--ink-3)',
+              opacity: isToday ? 1 : 0.4,
+            }}
+          >
+            오늘 코디 다시 받기
+          </button>
+        ) : null}
+      </div>
       {ctxStrip}
     </div>
   );
