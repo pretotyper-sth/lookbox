@@ -47,6 +47,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 `h1` 구조로 `오늘의 추천 코디`를 표시한다. 날짜·날씨 칩과 다시 받기 동작은 유지한다.
 근거: `frontend/src/proto/06-today.jsx`; [[model-look-toggle]].
 
+## [2026-09-14] fix | 오늘 추천 PC 다시 받기 행 정렬
+모바일 제목 행은 유지하고, PC의 「오늘 코디 다시 받기」는 날짜·날씨 칩 오른쪽의 같은 행으로 내렸다.
+근거: `frontend/src/proto/06-today.jsx`; [[model-look-toggle]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

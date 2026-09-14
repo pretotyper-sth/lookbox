@@ -15,7 +15,7 @@ function todayLabel() {
 }
 
 /* 날씨 · 날짜 메타 라인 — 날짜는 눌러서 지난 추천을 되짚어보는 진입점 */
-function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect }) {
+function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onSelect, action }) {
   const w = LB_DATA.WEATHER;
   const pill = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-2)', background: 'var(--surface)', boxShadow: 'inset 0 0 0 1px var(--line)' };
   const isToday = ymd(selected) === ymd(today);
@@ -67,6 +67,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
         </span>
         <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
       </div>
+      {action}
       {calOpen && calPos && (
         <>
           <div onClick={() => setCalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
@@ -517,34 +518,33 @@ function TodayScreen({ ctx }) {
 
   const isFirstLoad = isToday && picks.length === 0 && (dailyLoading || loading || !restoreDone);
   const busy = isFirstLoad;
-  // 오늘로 돌아가는 버튼은 카드 아래 풀너비 하나로 통일한다.
+  const pastLockToast = () => { if (showToast) showToast('날짜가 지나서 할 수 없어요'); };
+  const showReset = isToday ? (picks.length > 0 && !busy) : !!(pastRecord && pastRecord.outfits && pastRecord.outfits.length);
+  const resetButton = showReset ? (
+    <button
+      type="button"
+      onClick={() => (isToday ? setResetOpen(true) : pastLockToast())}
+      aria-disabled={!isToday}
+      style={{
+        padding: 0, border: 'none', background: 'none', whiteSpace: 'nowrap',
+        cursor: isToday ? 'pointer' : 'default',
+        fontSize: wide ? 13.5 : 13, fontWeight: 600, color: 'var(--ink-3)',
+        opacity: isToday ? 1 : 0.4,
+      }}
+    >
+      오늘 코디 다시 받기
+    </button>
+  ) : null;
   const ctxStrip = (
     <ContextStrip selected={selected} today={today}
       calOpen={calOpen} setCalOpen={setCalOpen} view={view} setView={setView}
-      onSelect={(d) => setSelected(startOfDay(d))} />
+      onSelect={(d) => setSelected(startOfDay(d))} action={wide ? resetButton : null} />
   );
-
-  const pastLockToast = () => { if (showToast) showToast('날짜가 지나서 할 수 없어요'); };
-  const showReset = isToday ? (picks.length > 0 && !busy) : !!(pastRecord && pastRecord.outfits && pastRecord.outfits.length);
   const header = (
     <div style={{ marginBottom: 'var(--gap-header)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: wide ? 25 : 20, fontWeight: 800 }}>오늘의 추천 코디</h1>
-        {showReset ? (
-          <button
-            type="button"
-            onClick={() => (isToday ? setResetOpen(true) : pastLockToast())}
-            aria-disabled={!isToday}
-            style={{
-              padding: 0, border: 'none', background: 'none', whiteSpace: 'nowrap',
-              cursor: isToday ? 'pointer' : 'default',
-              fontSize: wide ? 13.5 : 13, fontWeight: 600, color: 'var(--ink-3)',
-              opacity: isToday ? 1 : 0.4,
-            }}
-          >
-            오늘 코디 다시 받기
-          </button>
-        ) : null}
+        {!wide ? resetButton : null}
       </div>
       {ctxStrip}
     </div>
