@@ -1,8 +1,9 @@
 # 착장 배경은 손대지 않는다 — 기준 스튜디오를 보존한다
 
 2026-09-14부터 착장 결과에 배경 분리·평탄화 후처리를 적용하지 않는다. 기준 인물
-이미지(Image 1)의 스튜디오와 조명을 그대로 보존하도록 모델에 지시하고, 결과에는
-4:5 프레이밍만 적용한다.
+이미지(Image 1)의 스튜디오와 조명을 그대로 보존하도록 모델에 지시한다. 단, 생성본에
+남은 얇고 곧은 가로 경계선만 인물과 무관한 배경 픽셀에서 보간해 없앤 뒤 4:5 프레이밍을
+적용한다.
 
 ## 무엇이 깨졌나
 
@@ -42,7 +43,9 @@
 
 회귀 테스트: `test_reference_prompt_locks_the_original_studio`(흰색·단색 강제 없이
 기준 스튜디오를 잠금), `test_crop_keeps_backdrop_gradient_smooth`(그라데이션이 살아 있고
-인접 낙차 2 이하), `test_fit_pads_with_backdrop_not_flat_plate`(여백이 판 단색이 아니다).
+인접 낙차 2 이하), `test_background_seam_is_removed_without_touching_person`(가로 실선만
+보정하고 인물 픽셀은 보존), `test_fit_pads_with_backdrop_not_flat_plate`(여백이 판 단색이 아니다).
 
-근거: `backend/app/main.py` `_crop_look_to_card` / `_fit_look_to_card`;
+근거: `backend/app/main.py` `_remove_look_background_seams` / `_crop_look_to_card` /
+`_fit_look_to_card`;
 `backend/tests/test_model_look.py`. [[model-look-toggle]] [[look-img-flex-min]]

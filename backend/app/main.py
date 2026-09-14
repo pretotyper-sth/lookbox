@@ -4375,8 +4375,9 @@ COMPOSITION:
 Match Image 1's camera height, centered full-body framing, studio lighting, and restrained
 mood. Image 1's studio backdrop and its lighting are locked: preserve them as photographed.
 Do not replace, recolor, flatten, texture, or retouch the background, and never turn it pure
-white or a fixed solid color. Keep its smooth wall-to-floor transition with no added hard
-horizon, floor shadow, second plate, letterbox, border, or framed inset. Do not make a tight crop.
+white or a fixed solid color. Keep its smooth wall-to-floor transition with no visible straight
+horizontal separator line at any height, floor shadow, second plate, letterbox, border, or framed
+inset. Do not make a tight crop.
 This output will be converted to a 4:5 card and a square rail card: leave at least 18%
 clear studio above the hair and 18% clear floor below the soles. If space is tight, make
 the person smaller; never solve it by cutting off the legs or shoes. Keep the person
@@ -4587,6 +4588,9 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
 _LOOK_CARD_RATIO = 4 / 5
 _LOOK_CROP_PAD = 0.12
 _LOOK_FRAME_EDGE_MARGIN = 0.055
+_LOOK_SEAM_MIN_DARKEN = 18
+_LOOK_SEAM_MIN_COVERAGE = 0.35
+_LOOK_SEAM_REPAIR_DARKEN = 5
 
 
 # 배경은 레퍼런스 스튜디오라 위아래로 밝기가 변한다. 고정색과 비교하면 바닥이
@@ -4629,6 +4633,47 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     if y1 < 0:
         return None
     return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
+
+
+def _remove_look_background_seams(png_bytes: bytes) -> bytes:
+    """인물은 건드리지 않고 배경에만 가로로 생긴 얇은 경계선을 지운다."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    w, h = img.size
+    if w < 24 or h < 12:
+        return png_bytes
+    px = img.load()
+    left = range(w // 12, max(w // 12 + 1, w * 5 // 12))
+    right = range(w * 7 // 12, max(w * 7 // 12 + 1, w * 11 // 12))
+
+    def darken(x: int, y: int) -> tuple[int, tuple[int, int, int]]:
+        up, down, now = px[x, y - 2], px[x, y + 2], px[x, y]
+        expected = tuple((up[i] + down[i]) // 2 for i in range(3))
+        return sum(expected[i] - now[i] for i in range(3)), expected
+
+    seams: list[int] = []
+    for y in range(2, h - 2):
+        left_hits = sum(darken(x, y)[0] >= _LOOK_SEAM_MIN_DARKEN for x in left)
+        right_hits = sum(darken(x, y)[0] >= _LOOK_SEAM_MIN_DARKEN for x in right)
+        if (
+            left_hits >= len(left) * _LOOK_SEAM_MIN_COVERAGE
+            and right_hits >= len(right) * _LOOK_SEAM_MIN_COVERAGE
+        ):
+            seams.append(y)
+    if not seams:
+        return png_bytes
+    for y in seams:
+        backdrop = tuple(
+            sum(px[x, y][i] for x in (*left, *right)) // (len(left) + len(right))
+            for i in range(3)
+        )
+        for x in range(w):
+            score, expected = darken(x, y)
+            distance = sum(abs(px[x, y][i] - backdrop[i]) for i in range(3))
+            if score >= _LOOK_SEAM_REPAIR_DARKEN and distance <= _LOOK_BACKDROP_TOL:
+                px[x, y] = expected
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _look_needs_reshoot(img: Image.Image) -> bool:
@@ -4851,7 +4896,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id23-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id25-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4915,6 +4960,7 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         mark("finish")
         try:
+            out = _remove_look_background_seams(out)
             out = _crop_look_to_card(out)
         except Exception as crop_exc:  # noqa: BLE001
             print(f"[model-look] crop skip: {crop_exc}", flush=True)

@@ -23,6 +23,18 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 기존 불량 캐시를 우회한다. 근거: `backend/app/main.py` `generate_model_look_image`,
 `_model_look_prompt_with_reference`; [[look-plate-shadow]].
 
+## [2026-09-14] ingest | AI 착장 가로 배경선 보정
+생성 결과에 남은 벽·바닥의 얇은 직선만 좌우 배경에서 검출해 위아래 배경 픽셀로
+보간한다. 인물·신발 픽셀은 같은 줄이어도 건드리지 않으며, `model-id24`로 실선이 든
+기존 캐시를 우회한다. 근거: `backend/app/main.py` `_remove_look_background_seams`;
+[[look-plate-shadow]].
+
+## [2026-09-14] ingest | AI 착장 실선 검출 보정
+실제 카드 캡처의 1픽셀 가로 경계선을 대상으로 검출 기준을 보정했다. 넓은 좌우 배경에서
+동시에 감지되는 어두운 직선만 보간하고, 약한 바닥 명암 변화와 인물은 남긴다. 캐시 세대는
+`model-id25`다. 근거: `backend/app/main.py` `_remove_look_background_seams`;
+[[look-plate-shadow]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

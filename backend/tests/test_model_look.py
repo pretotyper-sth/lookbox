@@ -24,6 +24,7 @@ FNS = (
     '_model_look_prompt_with_reference',
     '_look_row_backdrop',
     '_look_content_box',
+    '_remove_look_background_seams',
     '_look_needs_reshoot',
     '_fit_look_to_card',
     '_pad_look_edges',
@@ -34,6 +35,7 @@ CONSTS = (
     '_LOOK_PLATE_RGB', 'CATEGORY_KO', 'CATEGORY_EN',
     '_LEGACY_CATEGORY_KO', '_LOOK_SLOT_LABEL', '_LOOK_SLOT_ORDER', '_LOOK_CARD_RATIO',
     '_LOOK_CROP_PAD', '_LOOK_BACKDROP_TOL', '_LOOK_FRAME_EDGE_MARGIN',
+    '_LOOK_SEAM_MIN_DARKEN', '_LOOK_SEAM_MIN_COVERAGE', '_LOOK_SEAM_REPAIR_DARKEN',
 )
 
 
@@ -94,7 +96,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id23-", src)
+        self.assertIn("model-id25-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -136,7 +138,28 @@ class ModelLookPromptTest(unittest.TestCase):
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
         self.assertIn("Image 1's studio backdrop and its lighting are locked", prompt)
         self.assertIn("never turn it pure\nwhite or a fixed solid color", prompt)
+        self.assertIn("no visible straight\nhorizontal separator line", prompt)
         self.assertNotIn("uniform matte #E5E3DE", prompt)
+
+    def test_background_seam_is_removed_without_touching_person(self):
+        image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
+        px = image.load()
+        for x in range(80):
+            if not 32 <= x < 48:
+                px[x, 66] = (160, 158, 153)
+                px[x, 67] = (165, 163, 158)
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        result = Image.open(io.BytesIO(self.ns['_remove_look_background_seams'](buf.getvalue()))).convert("RGB")
+        self.assertLessEqual(
+            sum(result.getpixel((8, 64))) - sum(result.getpixel((8, 66))),
+            8,
+        )
+        self.assertLessEqual(
+            sum(result.getpixel((8, 65))) - sum(result.getpixel((8, 67))),
+            8,
+        )
+        self.assertEqual(result.getpixel((40, 66)), (28, 42, 72))
 
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([
@@ -273,11 +296,12 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id23-", src)
+        self.assertIn("model-id25-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertNotIn("_normalize_look_background", src)
+        self.assertIn("_remove_look_background_seams(out)", src)
         self.assertIn("_crop_look_to_card(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
