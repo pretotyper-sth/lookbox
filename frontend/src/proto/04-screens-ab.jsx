@@ -1902,22 +1902,41 @@ function AddSheet({ ctx }) {
   };
   const handlePasteImage = (e) => {
     const items = (e.clipboardData && e.clipboardData.items) || [];
+    const applyImageFile = (f) => {
+      setTab('photo');
+      setFile(f);
+      setPicked(true);
+      setPreviewFromFile(f);
+      setErr('');
+    };
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (it && it.kind === 'file' && it.type && it.type.indexOf('image') === 0) {
         const f = it.getAsFile();
         if (f) {
           e.preventDefault();
-          setTab('photo');
-          setFile(f);
-          setPicked(true);
-          setPreviewFromFile(f);
-          setErr('');
+          applyImageFile(f);
           return true;
         }
       }
     }
-    return false;
+    // Chrome의 「이미지 복사」는 PNG 파일 대신 data:image를 넣은 HTML 조각만
+    // 제공할 수 있다. 캡처처럼 같은 사진 파일로 바꿔 사진 추가 흐름에 넘긴다.
+    const html = e.clipboardData && e.clipboardData.getData('text/html');
+    if (!html) return false;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const src = doc.querySelector('img') && doc.querySelector('img').getAttribute('src');
+    if (!src || !/^data:image\//i.test(src)) return false;
+    e.preventDefault();
+    fetch(src)
+      .then((res) => res.blob())
+      .then((blob) => {
+        if (!blob.type.startsWith('image/')) throw new Error('not image');
+        const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+        applyImageFile(new File([blob], `clipboard-image.${ext}`, { type: blob.type }));
+      })
+      .catch(() => setErr('클립보드 이미지를 불러오지 못했어요. 다시 복사해 주세요.'));
+    return true;
   };
   // 시트가 열려 input 단계일 때만 문서 전역 붙여넣기를 가로챈다.
   // URL 탭에서는 입력칸 포커스가 없어도 주소를 칸에 넣는다.

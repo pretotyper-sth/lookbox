@@ -63,6 +63,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 코디 상품컷의 우클릭을 앱이 가로채 자동 복사하던 동작을 없애고, 브라우저 기본 이미지 메뉴를 유지한다.
 근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
 
+## [2026-09-14] fix | 크롬 이미지 복사 붙여넣기
+크롬의 「이미지 복사」가 파일형 PNG 대신 HTML `data:image`를 주어도 사진 파일로 변환해 아이템 추가 시트에서 받는다.
+근거: `frontend/src/proto/04-screens-ab.jsx`; [[add-item-bulk]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를
