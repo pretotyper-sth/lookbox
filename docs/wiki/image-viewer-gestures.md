@@ -15,4 +15,8 @@
 2026-09-06: `lookImg` 스테이지는 `aspect-ratio: 4/5` + `object-fit: cover` +
 가운데. 이미지를 118%로 키우면 확대 때 왼쪽로 밀리고 오른쪽이 `--thumb-bg`다.
 
+2026-09-14: 상품컷은 저장 효율을 위해 WebP지만, 크게 보기에서는 브라우저에서 PNG로
+변환해 보인다. Chrome 우클릭 「이미지 복사」가 PNG를 클립보드에 넣어 WebP를 받지
+않는 붙여넣기 대상에도 그대로 붙는다. (`CopyReadyProductImg`)
+
 관련: [[chiprow-sheet-scroll]] [[look-img-flex-min]]

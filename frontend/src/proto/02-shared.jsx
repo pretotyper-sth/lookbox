@@ -151,6 +151,45 @@ function SmartImg({ src, alt, style, fallback, loading = 'eager', fetchPriority 
   );
 }
 
+// 상품컷은 용량을 위해 WebP로 저장한다. 다만 Chrome이 WebP를 그대로 클립보드에
+// 넣으면 일부 붙여넣기 대상이 받지 못하므로, 크게 보기에서는 PNG로 표시한다.
+function CopyReadyProductImg({ src, alt, style }) {
+  const isWebp = /\.webp(?:[?#]|$)/i.test(src || '');
+  const [copySrc, setCopySrc] = useState(isWebp ? '' : src);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = '';
+    setCopySrc(isWebp ? '' : src);
+    if (!src || !isWebp) return undefined;
+    (async () => {
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('image fetch failed');
+        const bitmap = await createImageBitmap(await res.blob());
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        bitmap.close?.();
+        const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (!png) throw new Error('png conversion failed');
+        objectUrl = URL.createObjectURL(png);
+        if (!cancelled) setCopySrc(objectUrl);
+      } catch (e) {
+        if (!cancelled) setCopySrc(src);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src, isWebp]);
+
+  if (!copySrc) return <div aria-busy="true" style={{ ...style, background: 'var(--thumb-bg)' }} />;
+  return <img src={copySrc} alt={alt} draggable={false} style={style} />;
+}
+
 /* ----------------------------------------------------------------
    Thumb — square garment tile. Photo OR silhouette on soft gray plate.
 ---------------------------------------------------------------- */
@@ -408,12 +447,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       padding: '4%', boxSizing: 'border-box',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <img
-        src={item.img}
-        alt={item.name || ''}
-        draggable={false}
-        style={mediaFit}
-      />
+      <CopyReadyProductImg src={item.img} alt={item.name || ''} style={mediaFit} />
     </div>
   );
 
