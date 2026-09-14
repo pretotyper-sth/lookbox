@@ -17,6 +17,12 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 같은 `#E5E3DE` 배경으로 합성한다. 프롬프트에도 수평선 없는 단색 배경을 명시했다.
 근거: `backend/app/main.py` `_normalize_look_background`.
 
+## [2026-09-14] ingest | AI 착장 기준 스튜디오 보존
+단색 배경 합성이 인물 주변의 접지 그림자와 스튜디오 질감을 전경으로 오판해 번짐을
+만들었다. 해당 후처리를 제거하고 Image 1의 스튜디오·조명을 잠그며, `model-id23`으로
+기존 불량 캐시를 우회한다. 근거: `backend/app/main.py` `generate_model_look_image`,
+`_model_look_prompt_with_reference`; [[look-plate-shadow]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

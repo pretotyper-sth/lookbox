@@ -4137,8 +4137,9 @@ Subject: {_model_look_subject(gender)}. Do not use the user's face, profile phot
 - never crop the chin, crown, or shoes in this source frame
 - make the apparent body height and inseam subtly shorter than a fashion illustration;
   keep a natural adult Korean lookbook proportion, never elongated legs
-{male_proportion_note}- uniform matte light-gray backdrop matching RGB 229 227 222
-  (#E5E3DE), with no wall-floor horizon or horizontal line. no second plate, letterbox,
+{male_proportion_note}- preserve the existing soft-gray studio backdrop from the input image. Do not recolor,
+  flatten, replace, or retouch it. Never turn it pure white or a fixed solid color. Keep the
+  original smooth wall-to-floor transition; no added hard horizon, second plate, letterbox,
   border, or framed inset
 - keep the soft contact shadow under the shoes smooth. no banding, posterization,
   dithering, or blotchy patches anywhere in the backdrop or shadow
@@ -4372,15 +4373,17 @@ jumping, dramatic pose, or fashion-illustration proportions.
 
 COMPOSITION:
 Match Image 1's camera height, centered full-body framing, studio lighting, and restrained
-mood. Use a uniform matte #E5E3DE backdrop with no wall-floor horizon or horizontal line.
-Do not make a tight crop.
+mood. Image 1's studio backdrop and its lighting are locked: preserve them as photographed.
+Do not replace, recolor, flatten, texture, or retouch the background, and never turn it pure
+white or a fixed solid color. Keep its smooth wall-to-floor transition with no added hard
+horizon, floor shadow, second plate, letterbox, border, or framed inset. Do not make a tight crop.
 This output will be converted to a 4:5 card and a square rail card: leave at least 18%
 clear studio above the hair and 18% clear floor below the soles. If space is tight, make
 the person smaller; never solve it by cutting off the legs or shoes. Keep the person
 centered horizontally. Make the full figure slightly less tall, with natural legs.
-Use one continuous, smooth matte studio backdrop reaching all four edges: no texture,
-grain, side streaks, noise, banding, posterization, dithering, blotches, second plate,
-letterbox, inset photograph, white border, or framed picture-in-picture.
+Keep the original continuous studio backdrop reaching all four edges. Do not add side streaks,
+noise, banding, posterization, dithering, blotches, a second plate, letterbox, inset photograph,
+white border, or framed picture-in-picture.
 {hem}
 White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
 
@@ -4628,29 +4631,6 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     return (max(0, x0), max(0, y0), min(w, x1 + step), min(h, y1 + step))
 
 
-def _normalize_look_background(png_bytes: bytes) -> bytes:
-    """생성본의 벽·바닥 경계와 색 편차를 카드 배경색으로 통일한다."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    w, h = img.size
-    src = img.load()
-    mask = Image.new("L", (w, h), 0)
-    out_mask = mask.load()
-    for y in range(h):
-        br, bg, bb = _look_row_backdrop(src, w, y)
-        for x in range(w):
-            distance = abs(src[x, y][0] - br) + abs(src[x, y][1] - bg) + abs(src[x, y][2] - bb)
-            if distance > _LOOK_BACKDROP_TOL:
-                out_mask[x, y] = 255
-            elif distance > _LOOK_BACKDROP_TOL * 0.72:
-                out_mask[x, y] = int(255 * (distance - _LOOK_BACKDROP_TOL * 0.72) / (_LOOK_BACKDROP_TOL * 0.28))
-    mask = mask.filter(ImageFilter.GaussianBlur(1.2))
-    canvas = Image.new("RGB", (w, h), _LOOK_PLATE_RGB)
-    canvas.paste(img, (0, 0), mask)
-    buf = io.BytesIO()
-    canvas.save(buf, format="PNG")
-    return buf.getvalue()
-
-
 def _look_needs_reshoot(img: Image.Image) -> bool:
     """발끝·정수리가 잘린 생성본은 카드 크롭으로 고칠 수 없으니 다시 만든다."""
     box = _look_content_box(img)
@@ -4871,7 +4851,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id22-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id23-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4935,7 +4915,6 @@ def generate_model_look_image(
             out = base64.b64decode(result.data[0].b64_json)
         mark("finish")
         try:
-            out = _normalize_look_background(out)
             out = _crop_look_to_card(out)
         except Exception as crop_exc:  # noqa: BLE001
             print(f"[model-look] crop skip: {crop_exc}", flush=True)

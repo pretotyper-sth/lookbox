@@ -17,10 +17,11 @@ FNS = (
     '_model_look_subject',
     '_model_identity_prompt',
     '_model_look_prompt',
-    '_normalize_look_background',
     '_garment_desc',
     '_model_look_garment_lines',
     '_model_look_outfit_block',
+    '_look_styling_block',
+    '_model_look_prompt_with_reference',
     '_look_row_backdrop',
     '_look_content_box',
     '_look_needs_reshoot',
@@ -75,9 +76,9 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_prompt_is_catalog_model_not_selfie(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertIn("identity lock", prompt)
-        self.assertIn("#E5E3DE", prompt)
-        self.assertIn("uniform matte light-gray backdrop", prompt)
-        self.assertIn("no wall-floor horizon or horizontal line", prompt)
+        self.assertNotIn("#E5E3DE", prompt)
+        self.assertIn("preserve the existing soft-gray studio backdrop", prompt)
+        self.assertIn("Never turn it pure white or a fixed solid color", prompt)
         self.assertIn("22% of the frame empty", prompt)
         self.assertIn("Do not use the user's face", prompt)
         self.assertNotIn("순하", prompt)
@@ -93,7 +94,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id22-", src)
+        self.assertIn("model-id23-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -130,20 +131,12 @@ class ModelLookPromptTest(unittest.TestCase):
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
 
-    def test_generated_backdrop_line_is_removed(self):
-        normalize = self.ns['_normalize_look_background']
-        image = Image.new("RGB", (32, 48), (180, 178, 173))
-        px = image.load()
-        for x in range(32):
-            px[x, 28] = (150, 148, 143)
-        for y in range(8, 40):
-            for x in range(13, 20):
-                px[x, y] = (30, 42, 65)
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        result = Image.open(io.BytesIO(normalize(buf.getvalue()))).convert("RGB")
-        self.assertEqual(result.getpixel((2, 28)), result.getpixel((2, 10)))
-        self.assertLess(sum(result.getpixel((16, 20))), 180)
+    def test_reference_prompt_locks_the_original_studio(self):
+        prompt_fn = self.ns['_model_look_prompt_with_reference']
+        prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
+        self.assertIn("Image 1's studio backdrop and its lighting are locked", prompt)
+        self.assertIn("never turn it pure\nwhite or a fixed solid color", prompt)
+        self.assertNotIn("uniform matte #E5E3DE", prompt)
 
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([
@@ -280,10 +273,11 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id22-", src)
+        self.assertIn("model-id23-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
+        self.assertNotIn("_normalize_look_background", src)
         self.assertIn("_crop_look_to_card(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
