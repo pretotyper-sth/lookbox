@@ -2279,7 +2279,7 @@ function App() {
   // 오늘의 코디 — '오늘 입기' 착장 기록 (룩북 저장과는 별개)
   const wearToday = (outfitId) => {
     setWornToday((arr) => {
-      const next = arr.includes(outfitId) ? arr.filter((x) => x !== outfitId) : [outfitId, ...arr];
+      const next = arr.includes(outfitId) ? [] : [outfitId];
       showToast(arr.includes(outfitId) ? '오늘 입기를 취소했어요' : '오늘의 코디로 기록했어요',
         arr.includes(outfitId) ? undefined : 'check');
       writeDailyRecord(localYmd(), { wornIds: next });
