@@ -49,6 +49,7 @@ const LOOK_CANVAS_FILL = {
 };
 const LOOK_ZOOM_MAX = 1.35;
 const LOOK_CATEGORY_ZOOM_MAX = { '가방': 1.62 };
+const LOOK_ACCENT_BOOST_MAX = 1.25;
 function lookImageZoom(category) {
   const fill = LOOK_CANVAS_FILL[category] || 0.9;
   return Math.min(LOOK_CATEGORY_ZOOM_MAX[category] || LOOK_ZOOM_MAX, 1 / fill);
@@ -72,14 +73,14 @@ const LOOK_SPOT = {
 /* 우하 · 악세서리 후보. 가방도 바깥 모서리에 붙지 않도록 우하단 안쪽에 둔다.
    나머지 소품은 가방과 겹치지 않는 범위에서 주변 자리를 쓴다. */
 const LOOK_ACC_CANDIDATES = [
-  { cx: 66, cy: 70, z: 6 },
-  { cx: 88, cy: 56, z: 8 },
+  { cx: 64, cy: 68, z: 6 },
+  { cx: 77, cy: 55, z: 8 },
   { cx: 50, cy: 60, z: 8 },
-  { cx: 84, cy: 64, z: 8 },
+  { cx: 76, cy: 65, z: 8 },
   { cx: 54, cy: 66, z: 8 },
-  { cx: 82, cy: 86, z: 7 },
-  { cx: 56, cy: 86, z: 7 },
-  { cx: 74, cy: 60, z: 8 },
+  { cx: 72, cy: 78, z: 7 },
+  { cx: 56, cy: 78, z: 7 },
+  { cx: 70, cy: 60, z: 8 },
 ];
 const LOOK_ROLE = {
   '하의': 'bottom', '스커트': 'bottom', '원피스': 'dress',
@@ -256,7 +257,7 @@ function lookAccentBoost(it, im) {
   );
   const expectedFill = LOOK_CANVAS_FILL[it.category] || 0.62;
   if (visibleFill >= expectedFill) return 1;
-  return Math.min(1.32, expectedFill / Math.max(visibleFill, 0.12));
+  return Math.min(LOOK_ACCENT_BOOST_MAX, expectedFill / Math.max(visibleFill, 0.12));
 }
 
 function packLookRects(rects, w, h) {
@@ -334,7 +335,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat11' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat12' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
