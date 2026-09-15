@@ -2807,7 +2807,11 @@ function App() {
           ? (prefs.tryOnOther && prefs.tryOnOther.tryOnCut === 'auto' ? (prefs.tryOnOther.tryOnBody || prefs.tryOnOther.tryOnFrame) : '')
           : (prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : '')}
         assets={prefs.tryOnActive === 'other' ? (prefs.tryOnOther && prefs.tryOnOther.tryOnAssets) : prefs.tryOnAssets}
-        canSwitchProfile={!!(prefs.avatar && prefs.tryOnFrame && prefs.tryOnOther && prefs.tryOnOther.avatar && prefs.tryOnOther.tryOnFrame)}
+        canSwitchProfile={!!(
+          prefs.avatar && prefs.tryOnFrame && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+          && prefs.tryOnOther && prefs.tryOnOther.avatar && prefs.tryOnOther.tryOnFrame
+          && (prefs.tryOnOther.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+        )}
         onSwitchProfile={(subject) => setTryOnActive(subject)}
         onClose={() => setTryOnCamera(false)}
       />

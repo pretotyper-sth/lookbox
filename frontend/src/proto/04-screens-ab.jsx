@@ -1235,7 +1235,7 @@ function TryOnPersonSheet({ open, profile, onClose, onSave }) {
   const set = (key) => (value) => setDraft((prev) => ({ ...prev, [key]: value }));
   const ready = !!(draft.avatar && draft.gender && draft.age && draft.height && draft.weight);
   return (
-    <BottomSheet open={open} onClose={onClose} maxW={460} desktopMaxW={420}>
+    <BottomSheet open={open} onClose={onClose} maxW={460} desktopMaxW={420} zIndex={80}>
       <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           {ProfileAvatar ? (
