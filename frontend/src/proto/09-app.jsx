@@ -739,10 +739,10 @@ function formatTryOnErr(raw) {
   return (/[.。]$/.test(s) ? s : `${s}.`) + '\n잠시 후 다시 시도해 주세요.';
 }
 
-async function uploadAvatarToAccount(dataUrl) {
+async function uploadAvatarToAccount(dataUrl, slot = 'profile') {
   const res = await liveJSON('/api/live/profile/avatar', {
     method: 'POST',
-    body: JSON.stringify({ image_data_url: dataUrl }),
+    body: JSON.stringify({ image_data_url: dataUrl, slot }),
   });
   return (res && res.avatarUrl) || '';
 }
@@ -964,9 +964,14 @@ function App() {
     if (!prefsSynced.current) return;
     // email은 세션에서 온다. 프사 data URL은 metadata 한도를 넘기니 URL만 올린다.
     if (window.LB_AUTH && window.LB_AUTH.savePrefs) {
-      const { email, avatar, ...rest } = p;
+      const { email, avatar, tryOnOther, ...rest } = p;
       if (typeof avatar === 'string' && /^https?:\/\//i.test(avatar)) rest.avatar = avatar;
       else if (opts && opts.clearAvatar) rest.avatar = '';
+      if (tryOnOther && typeof tryOnOther === 'object') {
+        const safeOther = { ...tryOnOther };
+        if (!/^https?:\/\//i.test(String(safeOther.avatar || ''))) delete safeOther.avatar;
+        rest.tryOnOther = safeOther;
+      }
       window.LB_AUTH.savePrefs(rest);
     }
   };
@@ -989,6 +994,25 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUid, prefs.avatar]);
+  useEffect(() => {
+    if (!authUid || !prefsSynced.current) return;
+    const pending = prefs.tryOnOther && prefs.tryOnOther.avatar;
+    if (!pending || !pending.startsWith('data:')) return;
+    let alive = true;
+    uploadAvatarToAccount(pending, 'tryon_other')
+      .then((url) => {
+        if (!alive || !url) return;
+        setPrefs((prev) => {
+          if (!prev.tryOnOther || prev.tryOnOther.avatar !== pending) return prev;
+          const np = { ...prev, tryOnOther: { ...prev.tryOnOther, avatar: url } };
+          persistPrefs(np);
+          return np;
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUid, prefs.tryOnOther && prefs.tryOnOther.avatar]);
   const completeOnboarding = (p) => { prefsSynced.current = true; setPrefs(p); persistPrefs(p); setOnboarded(true); };
   // 가입 — 계정 단계를 넘어갈 때 실제 Supabase 계정을 만든다. 에러 문구를 돌려주면
   // 온보딩이 그 단계에 머문다. 여기서 계정을 만들어야 다음 방문에 같은 옷장이 열린다.
@@ -1019,6 +1043,10 @@ function App() {
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
   const emptyTryOnAssets = () => ({ body: '', top: '', bottom: '', full: '' });
+  const emptyTryOnOther = () => ({
+    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
+    tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets(),
+  });
   const setAvatar = (dataUrl) => {
     const np = {
       ...prefs,
@@ -1034,20 +1062,44 @@ function App() {
     persistPrefs(np, { clearAvatar: !dataUrl });
     showToast(dataUrl ? '프로필 사진을 바꿨어요' : '프로필 사진을 지웠어요', 'check');
   };
-  const setTryOnFrame = ({ body, frame, cut, assets }) => {
+  const setTryOnFrame = ({ body, frame, cut, assets }, subject = prefs.tryOnActive || 'self') => {
     setPrefs((prev) => {
       const np = {
         ...prev,
-        tryOnBody: body || '',
-        tryOnFrame: frame || '',
-        tryOnCut: cut || '',
-        tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon10') : '',
-        tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
+        ...(subject === 'other' ? {
+          tryOnOther: {
+            ...(prev.tryOnOther || emptyTryOnOther()),
+            tryOnBody: body || '', tryOnFrame: frame || '', tryOnCut: cut || '',
+            tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon10') : '',
+            tryOnAssets: assets || (body ? ((prev.tryOnOther || {}).tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
+          },
+        } : {
+          tryOnBody: body || '', tryOnFrame: frame || '', tryOnCut: cut || '',
+          tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon10') : '',
+          tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
+        }),
       };
       persistPrefs(np);
       return np;
     });
     showToast(frame ? '바로 보기 사진을 저장했어요' : '사진을 지웠어요', 'check');
+  };
+  const setTryOnActive = (subject) => {
+    const next = subject === 'other' ? 'other' : 'self';
+    setPrefs((prev) => ({ ...prev, tryOnActive: next }));
+    persistPrefs({ ...prefs, tryOnActive: next });
+  };
+  const saveTryOnOther = (draft) => {
+    const previous = prefs.tryOnOther || emptyTryOnOther();
+    const changed = previous.avatar !== draft.avatar
+      || previous.gender !== draft.gender || previous.age !== draft.age
+      || String(previous.height) !== String(draft.height) || String(previous.weight) !== String(draft.weight);
+    const other = {
+      ...previous, ...draft,
+      ...(changed ? { tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets() } : {}),
+    };
+    const np = { ...prefs, tryOnOther: other, tryOnActive: 'other' };
+    setPrefs(np); persistPrefs(np); showToast('바로 보기 대상을 저장했어요', 'check');
   };
   const [tryOnSetup, setTryOnSetup] = useState(false);
   const [tryOnSeedBody, setTryOnSeedBody] = useState('');
@@ -1063,6 +1115,8 @@ function App() {
   const makeTryOnBody = async (opts) => {
     const silent = !!(opts && opts.silent);
     const onFail = opts && opts.onFail;
+    const subject = (opts && opts.subject) || prefs.tryOnActive || 'self';
+    const selected = subject === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs;
     const fail = (raw) => {
       const msg = formatTryOnErr(raw);
       if (typeof onFail === 'function') onFail(msg);
@@ -1070,14 +1124,17 @@ function App() {
       return msg;
     };
     if (tryOnMakingRef.current) return '';
-    if (!prefs.avatar) { fail('프로필 사진을 먼저 올려 주세요.'); return ''; }
+    if (!selected.avatar) { fail(subject === 'other' ? '본인 외 사진을 먼저 올려 주세요.' : '프로필 사진을 먼저 올려 주세요.'); return ''; }
     tryOnMakingRef.current = true;
     setTryOnMaking(true);
     setTryOnProgress({ key: 'tryon_profile', label: '프로필을 확인하고 있어요', pct: 0, until: 8, eta: 3 });
     try {
       const res = await liveJSON('/api/live/tryon/body', {
         method: 'POST',
-        body: JSON.stringify({ face_data_url: prefs.avatar }),
+        body: JSON.stringify({
+          face_data_url: selected.avatar,
+          profile: { gender: selected.gender || '', age: selected.age || '', height: selected.height || '', weight: selected.weight || '' },
+        }),
         timeoutMs: 180000,
         onProgress: (step) => setTryOnProgress(step),
       });
@@ -1087,11 +1144,11 @@ function App() {
       setPrefs((prev) => {
         const np = {
           ...prev,
-          tryOnBody: url,
-          tryOnFrame: url,
-          tryOnCut: 'auto',
-          tryOnRev: window.TRYON_BODY_REV || 'tryon10',
-          tryOnAssets: assets,
+          ...(subject === 'other' ? {
+            tryOnOther: { ...(prev.tryOnOther || emptyTryOnOther()), tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon10', tryOnAssets: assets },
+          } : {
+            tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon10', tryOnAssets: assets,
+          }),
         };
         persistPrefs(np);
         return np;
@@ -1150,9 +1207,10 @@ function App() {
   // 옷장·마이에서 진입. 프레임 없으면 설정, 있으면 카메라(모바일). PC 카메라 시도는 안내 시트.
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
-    if (!prefs.tryOnFrame || (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10')) {
+    const selected = (prefs.tryOnActive || 'self') === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs;
+    if (!selected.tryOnFrame || (selected.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
-      if (prefs.avatar) {
+      if (selected.avatar) {
         const made = await makeTryOnBody();
         if (made) { setTryOnCamera(true); return; }
       }
@@ -2534,6 +2592,7 @@ function App() {
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnProgress,
+    setTryOnActive, saveTryOnOther,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
@@ -2741,9 +2800,15 @@ function App() {
       <TryOnCameraOverlay
         open={tryOnCamera}
         wide={wide}
-        frameSrc={prefs.tryOnFrame}
-        bodySrc={prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : ''}
-        assets={prefs.tryOnAssets}
+        profileName={prefs.tryOnActive === 'other' ? ((prefs.tryOnOther && prefs.tryOnOther.name) || '본인 외') : '본인'}
+        activeProfile={prefs.tryOnActive || 'self'}
+        frameSrc={prefs.tryOnActive === 'other' ? (prefs.tryOnOther && prefs.tryOnOther.tryOnFrame) : prefs.tryOnFrame}
+        bodySrc={prefs.tryOnActive === 'other'
+          ? (prefs.tryOnOther && prefs.tryOnOther.tryOnCut === 'auto' ? (prefs.tryOnOther.tryOnBody || prefs.tryOnOther.tryOnFrame) : '')
+          : (prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : '')}
+        assets={prefs.tryOnActive === 'other' ? (prefs.tryOnOther && prefs.tryOnOther.tryOnAssets) : prefs.tryOnAssets}
+        canSwitchProfile={!!(prefs.avatar && prefs.tryOnFrame && prefs.tryOnOther && prefs.tryOnOther.avatar && prefs.tryOnOther.tryOnFrame)}
+        onSwitchProfile={(subject) => setTryOnActive(subject)}
         onClose={() => setTryOnCamera(false)}
       />
       <TryOnDesktopSheet open={tryOnDesktopHint} onClose={() => setTryOnDesktopHint(false)} />

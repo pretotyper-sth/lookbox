@@ -390,7 +390,11 @@ def _patch_user_prefs(user_id: str, patch: dict[str, Any]) -> None:
         user = getattr(res, "user", None) or res
         meta = dict(getattr(user, "user_metadata", None) or {})
         prefs = dict(meta.get("prefs") or {})
-        prefs.update(patch)
+        for key, value in patch.items():
+            if isinstance(value, dict) and isinstance(prefs.get(key), dict):
+                prefs[key] = {**prefs[key], **value}
+            else:
+                prefs[key] = value
         meta["prefs"] = prefs
         supabase_admin.auth.admin.update_user_by_id(user_id, {"user_metadata": meta})
     except Exception as exc:  # noqa: BLE001
@@ -7698,14 +7702,17 @@ No pattern, logo, extra garments, or black leather.
 
 class TryOnBody(BaseModel):
     face_data_url: str
+    profile: dict[str, Any] | None = None
 
 
-def _tryon_body_profile_note(user_id: str) -> str:
-    """계정에 저장한 수치만 전신 프레임의 느슨한 기준으로 쓴다."""
+def _tryon_body_profile_note(user_id: str, override: dict[str, Any] | None = None) -> str:
+    """계정 또는 선택한 대상의 수치를 전신 프레임의 느슨한 기준으로 쓴다."""
+    prefs = override
     try:
-        res = supabase_admin.auth.admin.get_user_by_id(user_id)
-        account = getattr(res, "user", None) or res
-        prefs = dict((getattr(account, "user_metadata", None) or {}).get("prefs") or {})
+        if prefs is None:
+            res = supabase_admin.auth.admin.get_user_by_id(user_id)
+            account = getattr(res, "user", None) or res
+            prefs = dict((getattr(account, "user_metadata", None) or {}).get("prefs") or {})
     except Exception as exc:  # noqa: BLE001
         print(f"[tryon] profile metrics unavailable: {exc}", flush=True)
         return ""
@@ -7719,16 +7726,22 @@ def _tryon_body_profile_note(user_id: str) -> str:
 
     height = metric(prefs.get("height"), 120, 230)
     weight = metric(prefs.get("weight"), 30, 220)
-    if height is None and weight is None:
+    gender = str(prefs.get("gender") or "").strip()
+    age = str(prefs.get("age") or "").strip()
+    if height is None and weight is None and not gender and not age:
         return ""
     facts = []
+    if gender and gender != "선택 안 함":
+        facts.append(f"gender presentation is {gender}")
+    if age:
+        facts.append(f"age range is {age}")
     if height is not None:
         facts.append(f"recorded height is {height} cm")
     if weight is not None:
         facts.append(f"recorded weight is {weight} kg")
     return (
         "\nPROFILE PROPORTIONS:\n"
-        f"The account profile says {', '.join(facts)}. Use this only as a loose, respectful reference "
+        f"The selected person's profile says {', '.join(facts)}. Use this only as a loose, respectful reference "
         "for believable adult body scale. Give a subtly flattering, naturally elongated overall silhouette "
         "(roughly one head taller in impression), especially a slightly longer leg line, while preserving "
         "realistic anatomy. Do not make the person ultra-thin, change their age, or exaggerate body shape.\n"
@@ -7737,6 +7750,7 @@ def _tryon_body_profile_note(user_id: str) -> str:
 
 class ProfileAvatarIn(BaseModel):
     image_data_url: str
+    slot: str = "profile"
 
 
 @app.post("/api/live/profile/avatar")
@@ -7755,9 +7769,10 @@ def live_profile_avatar(body: ProfileAvatarIn, user: UserContext = Depends(curre
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="프로필 사진을 읽지 못했어요.") from exc
     sig = hashlib.sha256(webp).hexdigest()[:12]
-    path = f"{user.id}/profile/avatar-{sig}.webp"
+    is_other = body.slot == "tryon_other"
+    path = f"{user.id}/profile/{'tryon-other-avatar' if is_other else 'avatar'}-{sig}.webp"
     url = upload_bytes(path, webp, "image/webp")
-    _patch_user_prefs(user.id, {"avatar": url})
+    _patch_user_prefs(user.id, {"tryOnOther": {"avatar": url}} if is_other else {"avatar": url})
     return {"avatarUrl": url}
 
 
@@ -7770,7 +7785,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
-    profile_note = _tryon_body_profile_note(uid)
+    profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
     key = f"tryon10-{sig}-{profile_sig}"
 

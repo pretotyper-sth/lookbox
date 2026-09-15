@@ -1,0 +1,15 @@
+# 바로 보기 다중 대상 프로필
+
+바로 보기 탭에서 `본인`과 `본인 외` 프로필을 나란히 고른다. 본인은 계정 프사와
+동기화하고, 본인 외는 관계명·사진·성별·연령대·키·몸무게를 한 번 저장한다.
+저장한 마지막 대상은 `prefs.tryOnActive`와 `prefs.tryOnOther`에 남아 다음 방문에도
+선택 상태와 전신 이미지 캐시를 유지한다.
+
+본인 외 프로필은 계정 metadata에 사진 data URL을 넣지 않고 기존 프로필 이미지 업로드
+경로의 `slot=tryon_other`로 스토리지 URL을 만든다. 전신 생성 요청은 선택 대상의 성별·연령대·키·몸무게를
+서버에 보내며, 이 값과 얼굴이 바뀌면 대상별 전신 캐시를 비운다. 두 대상의 전신 프레임이 모두
+준비된 경우 카메라 우상단 `전환` 버튼으로 카메라를 닫지 않고 즉시 교체한다.
+
+근거: `frontend/src/proto/04-screens-ab.jsx` `TryOnPersonSheet`·`AddSheet`,
+`frontend/src/proto/09-app.jsx` `saveTryOnOther`·`makeTryOnBody`,
+`frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`, `backend/app/main.py` `TryOnBody`·`live_tryon_body`.

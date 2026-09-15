@@ -170,6 +170,12 @@ const DEFAULT_PREFS = {
   tryOnFrame: '',
   tryOnCut: '', // 'top' | 'bottom' | 'custom'
   tryOnAssets: { body: '', top: '', bottom: '', full: '' },
+  tryOnActive: 'self',
+  tryOnOther: {
+    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
+    tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '',
+    tryOnAssets: { body: '', top: '', bottom: '', full: '' },
+  },
 };
 
 // 바로 보기 전신 캐시 세대. 프롬프트를 바꾸면 올려서 예전 컷을 다시 쓰지 않는다.

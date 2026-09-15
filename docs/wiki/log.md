@@ -876,3 +876,10 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 - 구매내역 쇼핑몰 선택 화면에 이름·주소·사용 목적을 입력하는 요청 UI와 실제 접수 완료 피드백을 추가했다.
 - `store_requests`에 사용자별 쇼핑몰 중복을 막아 저장하고, 관리자용 API에서 사이트별 요청 수·최근 요청을 집계한다. Supabase 적용 SQL과 RLS 정책을 스키마에 기록했다. [[store-request-survey]]
+
+# 2026-09-15 — 바로 보기 다중 대상 프로필
+
+- `frontend/src/proto/04-screens-ab.jsx`: 바로보기 탭에 본인·본인 외 선택 UI와 본인 외 등록/편집 바텀시트를 추가했다.
+- `frontend/src/proto/09-app.jsx`, `03-data.jsx`: 대상별 마지막 선택·사진·전신 이미지 캐시를 유지하고 대상에 맞춰 생성한다.
+- `frontend/src/proto/10-tryon.jsx`, `02-shared.jsx`: 두 대상의 전신이 모두 준비되면 카메라 우상단 전환 버튼을 보여준다.
+- `backend/app/main.py`: 본인 외 이미지 저장 슬롯과 성별·연령대·키·몸무게 기반 전신 생성 입력을 추가했다. [[tryon-multiple-profiles]]

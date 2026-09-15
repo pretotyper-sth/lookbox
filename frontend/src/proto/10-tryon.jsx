@@ -597,7 +597,7 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
 /* ============================================================
    TryOnCameraOverlay — 후면 카메라 + 투명 프레임 오버레이
    ============================================================ */
-function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide }) {
+function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, profileName = '본인', activeProfile = 'self', canSwitchProfile, onSwitchProfile }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   const streamRef = useRef(null);
@@ -760,9 +760,19 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide }) 
         <div style={{ fontSize: 14, fontWeight: 700 }}>
           {mode
             ? `${(TRYON_MODES.find((m) => m.id === mode) || {}).label}에 맞춰 보세요`
-            : '기본 착장을 보고 있어요'}
+            : `${profileName} 착장을 보고 있어요`}
         </div>
-        <div aria-hidden style={{ width: 40, height: 40 }} />
+        {canSwitchProfile ? (
+          <button
+            type="button"
+            onClick={() => onSwitchProfile && onSwitchProfile(activeProfile === 'other' ? 'self' : 'other')}
+            aria-label="바로 보기 대상 전환"
+            style={{ height: 40, display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', borderRadius: 20, background: 'rgba(255,255,255,0.14)', color: '#fff', fontSize: 11.5, fontWeight: 750 }}
+          >
+            <Icon name="users" size={17} stroke={1.8} />
+            전환
+          </button>
+        ) : <div aria-hidden style={{ width: 40, height: 40 }} />}
       </div>
 
       <div

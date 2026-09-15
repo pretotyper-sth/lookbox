@@ -1222,6 +1222,62 @@ function OrderStorePreview({ step, onClose, onAdd }) {
   );
 }
 
+function TryOnPersonSheet({ open, profile, onClose, onSave }) {
+  const ProfileAvatar = window.ProfileAvatar;
+  const initial = {
+    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
+    ...(profile || {}),
+  };
+  const [draft, setDraft] = useS(initial);
+  useE(() => {
+    if (open) setDraft({ ...initial });
+  }, [open, profile]);
+  const set = (key) => (value) => setDraft((prev) => ({ ...prev, [key]: value }));
+  const ready = !!(draft.avatar && draft.gender && draft.age && draft.height && draft.weight);
+  return (
+    <BottomSheet open={open} onClose={onClose} maxW={460} desktopMaxW={420}>
+      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+          {ProfileAvatar ? (
+            <ProfileAvatar src={draft.avatar} size={68} onChange={set('avatar')} onInvalid={() => {}} />
+          ) : <Icon name="user" size={34} />}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>본인 외 대상 추가</div>
+            <p style={{ margin: '7px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5, wordBreak: 'keep-all' }}>
+              애인이나 가족의 사진과 기본 정보를 저장해두면, 같은 옷을 그 사람에게도 바로 대볼 수 있어요.
+            </p>
+          </div>
+          <IconBtn name="x" label="닫기" onClick={onClose} style={{ marginRight: -8, marginTop: -6 }} />
+        </div>
+
+        <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <LabeledField label="이름 또는 관계" value={draft.name} onChange={set('name')} placeholder="예) 남친, 엄마" />
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {['여성', '남성', '선택 안 함'].map((item) => <Chip key={item} active={draft.gender === item} onClick={() => set('gender')(item)}>{item}</Chip>)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>연령대</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {LB_DATA.AGES.map((item) => <Chip key={item} active={draft.age === item} onClick={() => set('age')(item)}>{item}</Chip>)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <LabeledField label="키 (cm)" value={draft.height} onChange={set('height')} placeholder="예) 175" />
+            <LabeledField label="몸무게 (kg)" value={draft.weight} onChange={set('weight')} placeholder="예) 68" />
+          </div>
+        </div>
+        <div style={{ marginTop: 24 }}>
+          <Btn full size="lg" icon="check" disabled={!ready} onClick={() => onSave({ ...draft, name: draft.name.trim() || '선물용' })}>저장하고 계속하기</Btn>
+          {!ready && <div style={{ marginTop: 9, fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>사진과 성별·연령대·키·몸무게를 모두 입력해 주세요.</div>}
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
@@ -1229,7 +1285,7 @@ function AddSheet({ ctx }) {
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     liveOrderInput, liveOrderCancel,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar,
+    tryOnMaking, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1288,6 +1344,7 @@ function AddSheet({ ctx }) {
   const previewUrlRef = useR('');
   const [tryOnErr, setTryOnErr] = useS('');
   const tryOnLaunchGen = useR(0);
+  const [tryOnPersonOpen, setTryOnPersonOpen] = useS(false);
 
   const setPreviewFromFile = (f) => {
     if (previewUrlRef.current) {
@@ -1462,23 +1519,25 @@ function AddSheet({ ctx }) {
     setPreviewFromFile(null);
     setErr('');
   };
-  // 바로 보기는 계정 프사를 쓴다. 탭에서 따로 올리는 장은 두지 않는다.
-  const tryOnAvatar = (prefs && prefs.avatar) || '';
+  const tryOnSubject = prefs && prefs.tryOnActive === 'other' ? 'other' : 'self';
+  const tryOnOther = (prefs && prefs.tryOnOther) || {};
+  const tryOnProfile = tryOnSubject === 'other' ? tryOnOther : prefs;
+  const tryOnAvatar = (tryOnProfile && tryOnProfile.avatar) || '';
   const canTryOn = !!tryOnAvatar;
   const tryOnBodyReady = canTryOn
-    && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
-    && !!(prefs.tryOnBody || prefs.tryOnFrame);
+    && (tryOnProfile.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+    && !!(tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame);
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
   const launchTryOnFromSheet = async () => {
     if (!tryOnAvatar || tryOnMaking) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    const stale = (prefs.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10');
-    let body = stale ? '' : ((prefs && (prefs.tryOnBody || prefs.tryOnFrame)) || '');
+    const stale = (tryOnProfile.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10');
+    let body = stale ? '' : ((tryOnProfile && (tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       let fail = '';
-      body = await makeTryOnBody({ silent: true, onFail: (msg) => { fail = msg; } });
+      body = await makeTryOnBody({ silent: true, subject: tryOnSubject, onFail: (msg) => { fail = msg; } });
       if (gen !== tryOnLaunchGen.current || !tryOnStayRef.current) return;
       if (!body) {
         setTryOnErr(fail || (formatTryOnErr ? formatTryOnErr('') : '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.'));
@@ -2360,6 +2419,53 @@ function AddSheet({ ctx }) {
               })}
             </div>
 
+            {tab === 'tryon' && (
+              <div style={{ marginTop: 'var(--s4)' }}>
+                <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="바로 보기 대상">
+                  <button
+                    type="button"
+                    onClick={() => setTryOnActive && setTryOnActive('self')}
+                    aria-pressed={tryOnSubject === 'self'}
+                    style={{
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px',
+                      borderRadius: 'var(--r-md)', textAlign: 'left', background: tryOnSubject === 'self' ? 'var(--surface-2)' : 'var(--ivory)',
+                      boxShadow: tryOnSubject === 'self' ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--line)',
+                    }}
+                  >
+                    <span style={{ width: 34, height: 34, flex: 'none', borderRadius: '50%', overflow: 'hidden', background: 'var(--surface)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
+                      {prefs.avatar ? <img src={prefs.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="user" size={17} />}
+                    </span>
+                    <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>본인</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{prefs.avatar ? '프로필 동기화' : '사진이 필요해요'}</span></span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (tryOnOther.avatar) setTryOnActive && setTryOnActive('other');
+                      else setTryOnPersonOpen(true);
+                    }}
+                    aria-pressed={tryOnSubject === 'other'}
+                    style={{
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px',
+                      borderRadius: 'var(--r-md)', textAlign: 'left', background: tryOnSubject === 'other' ? 'var(--surface-2)' : 'var(--ivory)',
+                      boxShadow: tryOnSubject === 'other' ? 'inset 0 0 0 1.5px var(--ink)' : 'inset 0 0 0 1px var(--line)',
+                    }}
+                  >
+                    <span style={{ width: 34, height: 34, flex: 'none', borderRadius: '50%', overflow: 'hidden', background: tryOnOther.avatar ? 'var(--surface)' : 'var(--surface-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
+                      {tryOnOther.avatar ? <img src={tryOnOther.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="plus" size={17} />}
+                    </span>
+                    <span style={{ minWidth: 0, flex: 1 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>{tryOnOther.name || '본인 외'}</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{tryOnOther.avatar ? '선택해서 바로 보기' : '사진과 정보 등록'}</span></span>
+                    {tryOnOther.avatar && <span role="button" tabIndex={0} aria-label="본인 외 대상 편집" onClick={(e) => { e.stopPropagation(); setTryOnPersonOpen(true); }} style={{ color: 'var(--ink-3)', padding: 4 }}><Icon name="pencil" size={14} /></span>}
+                  </button>
+                </div>
+                <TryOnPersonSheet
+                  open={tryOnPersonOpen}
+                  profile={tryOnOther}
+                  onClose={() => setTryOnPersonOpen(false)}
+                  onSave={(draft) => { saveTryOnOther && saveTryOnOther(draft); setTryOnPersonOpen(false); }}
+                />
+              </div>
+            )}
+
             <div style={{ marginTop: 'var(--s5)' }}>
               {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
               {(() => {
@@ -2438,7 +2544,9 @@ function AddSheet({ ctx }) {
                 const tryOnNeedsBody = tab === 'tryon' && tryOnAvatar && !tryOnBodyReady && !tryOnErr;
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
-                const tryOnGuide = '프로필 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.';
+                const tryOnGuide = tryOnSubject === 'other'
+                  ? `${tryOnOther.name || '이 대상'} 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.`
+                  : '프로필 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
@@ -2513,7 +2621,7 @@ function AddSheet({ ctx }) {
                               <ProfileAvatar
                                 src={tryOnAvatar}
                                 size={80}
-                                onChange={onTryOnAvatar}
+                                onChange={tryOnSubject === 'self' ? onTryOnAvatar : undefined}
                                 onInvalid={(msg) => setTryOnErr(formatTryOnErr ? formatTryOnErr(msg) : msg)}
                               />
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
