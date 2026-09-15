@@ -41,11 +41,8 @@ const LOOK_PACK = 1.03;
 /* 상의가 커서 기하 가운데가 위로 보인다. 카드 높이의 이만큼만 내린다. */
 const LOOK_NUDGE_Y = 0.024;
 
-/* 프레임을 키워도 옷이 여전히 작아 보이는 이유는 축소가 두 번 걸려서다: 아이템
-   이미지 자체가 카테고리별 비율(backend _CATEGORY_FILL)로 캔버스 안에 작게 앉아
-   있고, 그 위에 LOOK_SIZE가 또 카테고리별로 줄인다. 신발·모자처럼 캔버스 비율이
-   낮은 항목이 특히 심하다. 캔버스 여백만큼 이미지를 확대해 상쇄하면 크기 조절은
-   LOOK_SIZE 하나로 정리된다. 오래된 데이터가 과확대되지 않게 상한을 둔다. */
+/* 플랫레이 완성 전 잠깐 보이는 원본의 캔버스 여백 보정값. 완성본은 아래에서 알파
+   실측 bbox로 맞추므로, 원본 파일의 투명 여백이 커도 소품 크기는 흔들리지 않는다. */
 const LOOK_CANVAS_FILL = {
   '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
   '신발': 0.62, '가방': 0.62, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
@@ -224,16 +221,42 @@ function loadLookImage(src) {
   });
 }
 
+const LOOK_VISIBLE_BOX = new WeakMap();
+function lookVisibleBox(im) {
+  const cached = LOOK_VISIBLE_BOX.get(im);
+  if (cached) return cached;
+  const full = { x0: 0, y0: 0, x1: im.naturalWidth, y1: im.naturalHeight };
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = im.naturalWidth;
+    canvas.height = im.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(im, 0, 0);
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let x0 = width, y0 = height, x1 = -1, y1 = -1;
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        if (data[(y * width + x) * 4 + 3] < 20) continue;
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x + 2); y1 = Math.max(y1, y + 2);
+      }
+    }
+    if (x1 > x0 && y1 > y0) Object.assign(full, { x0, y0, x1: Math.min(width, x1), y1: Math.min(height, y1) });
+  } catch (e) { /* CORS가 없는 오래된 이미지면 원본 전체 비율을 쓴다. */ }
+  LOOK_VISIBLE_BOX.set(im, full);
+  return full;
+}
+
 function packLookRects(rects, w, h) {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   rects.forEach((r) => {
-    minX = Math.min(minX, r.x);
-    minY = Math.min(minY, r.y);
-    maxX = Math.max(maxX, r.x + r.dw);
-    maxY = Math.max(maxY, r.y + r.dh);
+    minX = Math.min(minX, r.vx);
+    minY = Math.min(minY, r.vy);
+    maxX = Math.max(maxX, r.vx + r.vw);
+    maxY = Math.max(maxY, r.vy + r.vh);
   });
   const bw = Math.max(1, maxX - minX);
   const bh = Math.max(1, maxY - minY);
@@ -271,14 +294,20 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
     const rects = layered.map(({ it, im }) => {
       const at = place[it.id] || LOOK_SPOT.top;
       const size = lookItemSize(it, scale);
-      const zoom = lookImageZoom(it.category);
-      const box = (size / 100) * Math.min(w, h) * zoom;
+      const box = (size / 100) * Math.min(w, h);
       const cx = (at.cx / 100) * w;
       const cy = (at.cy / 100) * h;
-      const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
+      const visible = lookVisibleBox(im);
+      const s = Math.min(box / (visible.x1 - visible.x0), box / (visible.y1 - visible.y0));
       const dw = im.naturalWidth * s;
       const dh = im.naturalHeight * s;
-      return { im, x: cx - dw / 2, y: cy - dh / 2, dw, dh };
+      const x = cx - dw / 2;
+      const y = cy - dh / 2;
+      return {
+        im, x, y, dw, dh,
+        vx: x + visible.x0 * s, vy: y + visible.y0 * s,
+        vw: (visible.x1 - visible.x0) * s, vh: (visible.y1 - visible.y0) * s,
+      };
     });
     const drawn = nudgeLookRects(pack ? packLookRects(rects, w, h) : rects, h);
     drawn.forEach((r) => {
@@ -298,7 +327,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat9' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat10' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {

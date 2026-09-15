@@ -161,6 +161,20 @@ class ModelLookPromptTest(unittest.TestCase):
         )
         self.assertEqual(result.getpixel((40, 66)), (28, 42, 72))
 
+    def test_subtle_floor_line_is_removed_without_touching_person(self):
+        image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
+        px = image.load()
+        for x in range(80):
+            if not 32 <= x < 48:
+                r, g, b = px[x, 82]
+                px[x, 82] = (r - 3, g - 3, b - 3)
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        result = Image.open(io.BytesIO(self.ns['_remove_look_background_seams'](buf.getvalue()))).convert("RGB")
+        expected = (sum(result.getpixel((8, 80))) + sum(result.getpixel((8, 84)))) // 2
+        self.assertLessEqual(abs(sum(result.getpixel((8, 82))) - expected), 3)
+        self.assertEqual(result.getpixel((40, 82)), (28, 42, 72))
+
     def test_garment_lines_from_items(self):
         lines = self.ns['_model_look_garment_lines']([
             {"category": "top", "name": "그레이 티", "color": "그레이"},

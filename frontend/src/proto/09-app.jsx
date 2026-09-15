@@ -555,6 +555,16 @@ function outfitWishPending(outfit) {
   return !(it && it.img);
 }
 
+function pinDailyWishesToTail(list) {
+  const normal = [];
+  const wished = [];
+  (list || []).forEach((outfit) => {
+    const hasWish = !!(outfit && (outfit.wish || (outfit.itemIds || []).some(isWishId)));
+    (hasWish ? wished : normal).push(outfit);
+  });
+  return [...normal, ...wished];
+}
+
 function liveAppendDaily(payload, ownedItems) {
   const owned = ownedIdSet(ownedItems);
   (payload.items || []).forEach((it) => {
@@ -574,6 +584,8 @@ function liveAppendDaily(payload, ownedItems) {
     LB_DATA.OUTFIT_BY_ID[o.id] = o;
     added.push(o);
   }
+  const ordered = pinDailyWishesToTail(LB_DATA.DAILY);
+  LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...ordered);
   return added;
 }
 
@@ -1322,7 +1334,7 @@ function App() {
     const todayKey = localYmd();
     const today = byDate[todayKey];
     if (today && today.length) {
-      const kept = filterDailyOutfitsByOwned(today, ownedItems);
+      const kept = pinDailyWishesToTail(filterDailyOutfitsByOwned(today, ownedItems));
       if (kept.length) {
         // 서버 목록은 새 객체라, 지금 화면에 이미 붙은 lookImg를 지우면 착장이
         // 서버에 있어도 컷아웃만 남는다. 둘 중 있는 쪽을 쓴다.

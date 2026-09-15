@@ -71,6 +71,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 상품컷 크게 보기의 WebP를 브라우저에서 PNG로 변환해 표시하여 Chrome 우클릭 복사 결과가 붙여넣기 대상에서 호환되게 한다.
 근거: `frontend/src/proto/02-shared.jsx`; [[image-viewer-gestures]].
 
+## [2026-09-15] fix | 추천 코디 소품·외부 아이템·착장 바닥선
+플랫레이는 알파 실루엣 bbox로 소품 크기를 정규화하고, 모자는 명백한 스트리트·스포티 조합만 남긴다. 외부 아이템 코디는 항상 우측 끝에 모으며, 착장 배경의 약한 가로 바닥선도 보간한다.
+근거: `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[look-flatlay-overlap]] [[coord-clash]] [[model-look-toggle]] [[look-plate-shadow]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

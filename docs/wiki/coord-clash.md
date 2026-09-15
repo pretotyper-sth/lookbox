@@ -16,6 +16,9 @@
 근거: `backend/app/main.py` `_pair_clash`, `_COORD_RULES`, `_replace_offseason_shoes`;
 `backend/tests/test_coord_sense.py` `test_flipflop_loses_to_loafer_in_september`.
 
+2026-09-15: 모자는 후디·카고·트랙·러닝처럼 스트리트/스포티 근거가 명백할 때만
+허용한다. 데님·스니커만으로는 세미 비즈니스 캐주얼에도 섞이므로 근거가 아니다.
+
 2026-09-13: 추천 프롬프트는 소품을 개수로 강제하지 않고, 상의 베이스를 가능한 한
 서로 다르게 고르도록 한다. fallback도 `_accent_fit_score`로 가방·아우터·모자의
 적합성을 판단하며, 모자는 캐주얼 근거가 없으면 넣지 않는다. AI 응답은

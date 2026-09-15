@@ -14,7 +14,7 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
-    "_shoe_pair_score", "_pick_rotating_shoe",
+    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score",
     "_calendar_seasons", "_coord_season_note", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
@@ -203,6 +203,21 @@ class ShoeRotateTest(unittest.TestCase):
         )
         picked = self.pick([flop, loafer], shirt, jeans, None, {})
         self.assertEqual(picked["id"], loafer["id"])
+
+
+class AccentFitTest(unittest.TestCase):
+    def setUp(self):
+        self.ns = load()
+
+    def test_cap_needs_explicit_street_or_sport_basis(self):
+        cap = item(cat="hat", color="블랙", name="볼캡")
+        polo = item(cat="top", color="네이비", name="니트 폴로")
+        jeans = item(cat="bottom", color="블루", name="스트레이트 데님")
+        hoodie = item(cat="top", color="블랙", name="스트리트 후디")
+        cargo = item(cat="bottom", color="카키", name="와이드 카고")
+        score = self.ns["_accent_fit_score"]
+        self.assertLess(score(cap, polo, jeans), 0)
+        self.assertGreaterEqual(score(cap, hoodie, cargo), 2)
 
 
 class IncludeAndWishTest(unittest.TestCase):

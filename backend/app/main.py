@@ -3103,7 +3103,7 @@ def _wish_note(wish_combos: int, max_combos: int) -> str:
         f"\n[제안 아이템] 반드시 {n}개 코디에 wish를 넣는다. wish가 빠진 채 {n}개를 채우면 실패다.\n"
         f"- {max_combos}개 중 마지막 {n}개에 옷장에 없는 아이템 하나를 더한다. 그 코디에만 wish(name·category·color·reason).\n"
         "- 제안은 실제로 살 수 있는 보편 아이템. 그 코디에 이미 있는 자리(신발·상의·하의·가방)와 겹치지 않게.\n"
-        "- 신발이 있으면 다른 신발 금지. 빈 자리(가방·모자·겉옷)나, 같은 자리를 옷장 아이템 대신 바꿀 때만.\n"
+        "- 신발이 있으면 다른 신발 금지. 빈 자리(가방·겉옷)나, 같은 자리를 옷장 아이템 대신 바꿀 때만. 모자는 제안 아이템으로 쓰지 말 것.\n"
         "- name·color는 한국어(색은 블랙·아이보리처럼 패션 음차). reason은 왜 필요한지 한 문장.\n"
         f"- 앞쪽 {max_combos - n}개는 옷장만으로. wish 없는 코디에는 wish 키 자체를 생략.\n"
     )
@@ -3215,7 +3215,7 @@ def recommend_text(
 - 원피스 1벌이면 상의·하의 요건을 충족. 신발은 원피스여도 필수
 - 가방·모자·아우터·소품은 필요할 때만 0~1개 더한다. 소품 개수를 채우기 위해 억지로 넣지 말 것
 - 코디가 2개 이상이면 상의(또는 원피스/아우터)의 종류와 실루엣을 가능한 한 모두 다르게 한다. 같은 카라티·같은 상의를 반복하지 말고, 옷장에 티셔츠·셔츠·니트·후디·아우터가 있으면 서로 다른 베이스를 우선한다
-- 모자는 캐주얼·스트리트·스포티 무드에서만, 색·실루엣을 실제로 정리해 줄 때만 넣는다. 모자를 넣을 근거가 없으면 생략한다
+- 모자는 후디·카고·트랙·러닝처럼 스트리트/스포티 근거가 명백할 때만 넣는다. 셔츠·폴로·니트·로퍼·부츠·세미 비즈니스 캐주얼에는 절대 넣지 않는다
 - 코디마다 소품을 넣을 필요가 없다. 잘 어울리는 코디에는 가방·모자·아우터 중 최대 1개를 더하고, 나머지는 필수 아이템만으로 완성한다
 - 한 코디는 3~5개 구성 (필수 3 + 소품)
 - 기준 아이템이 있으면 반드시 포함
@@ -3414,8 +3414,8 @@ def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str,
         ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "shoes")
     if not _combo_has_category(ids, by_id, ("bag", "가방")):
         ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "bag")
-    if not _combo_has_category(ids, by_id, ("hat", "모자")):
-        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "hat")
+    # 외부 아이템은 빈자리를 억지로 채우는 안전장치다. 모자는 명백한 스트리트
+    # 근거가 있을 때만 모델이 고르고, 이 fallback 목록에서는 절대 만들지 않는다.
     ranked.extend(x for x in _WISH_GAP_ITEMS if x not in ranked)
     pick = ranked[slot % len(ranked)]
     return dict(pick)
@@ -3648,6 +3648,23 @@ def _finish_combos(
         ids = combo.get("item_ids") or []
         want = (sum(ord(c) for c in "".join(ids)) % 3) == 0
         _ensure_core_slots(combo, by_id, extras, want, profile, used_shoes)
+        top, bottom = _combo_top_bottom(combo.get("item_ids") or [], by_id)
+        if top and bottom:
+            combo["item_ids"] = [
+                item_id for item_id in (combo.get("item_ids") or [])
+                if not (
+                    item_id in by_id
+                    and _clue_has(_item_clue(by_id[item_id]), ("모자", "캡", "버킷", "비니", "hat"))
+                    and _accent_fit_score(by_id[item_id], top, bottom) < 2.0
+                )
+            ]
+            wish = combo.get("wish")
+            if (
+                isinstance(wish, dict)
+                and _clue_has(_item_clue(wish), ("모자", "캡", "버킷", "비니", "hat"))
+                and _accent_fit_score(wish, top, bottom) < 2.0
+            ):
+                combo.pop("wish", None)
     _rebalance_combo_shoes(combos, by_id, profile)
     _replace_offseason_shoes(combos, by_id, profile, used_shoes)
     _fill_wish_quota(combos, wish_combos, by_id)
@@ -3765,9 +3782,11 @@ def _accent_fit_score(
     clue = _item_clue(accent)
     base = f"{_item_clue(top)} {_item_clue(bottom)}"
     if _clue_has(clue, ("모자", "캡", "버킷", "비니", "hat")):
-        if not _clue_has(base, ("캐주얼", "스트리트", "스포티", "후디", "후드", "티셔츠", "데님", "카고", "조거", "스니커", "운동화")):
-            return -3.0
-        return 2.5 if _clue_has(base, ("후디", "후드", "스트리트", "스포티", "카고", "조거")) else 1.0
+        # 데님·스니커만으로는 세미 비즈니스에도 섞여 나온다. 모자는 명백한
+        # 스트리트/스포티 근거가 있을 때만 허용한다.
+        if not _clue_has(base, ("후디", "후드", "스트리트", "스포티", "카고", "조거", "트랙", "러닝", "그래픽 티")):
+            return -5.0
+        return 2.5
     if _clue_has(clue, ("가방", "백", "bag")):
         return 1.5 if _clue_has(base, ("캐주얼", "데님", "셔츠", "티셔츠", "니트", "스니커", "운동화")) else 0.5
     if _clue_has(clue, ("아우터", "자켓", "재킷", "코트", "가디건", "점퍼", "outer")):
@@ -4588,9 +4607,9 @@ def _model_look_composite(reference_png: bytes, board_png: bytes) -> bytes:
 _LOOK_CARD_RATIO = 4 / 5
 _LOOK_CROP_PAD = 0.12
 _LOOK_FRAME_EDGE_MARGIN = 0.055
-_LOOK_SEAM_MIN_DARKEN = 18
+_LOOK_SEAM_MIN_DARKEN = 4
 _LOOK_SEAM_MIN_COVERAGE = 0.35
-_LOOK_SEAM_REPAIR_DARKEN = 5
+_LOOK_SEAM_REPAIR_DARKEN = 3
 
 
 # 배경은 레퍼런스 스튜디오라 위아래로 밝기가 변한다. 고정색과 비교하면 바닥이
@@ -4662,10 +4681,9 @@ def _remove_look_background_seams(png_bytes: bytes) -> bytes:
     if not seams:
         return png_bytes
     for y in seams:
-        backdrop = tuple(
-            sum(px[x, y][i] for x in (*left, *right)) // (len(left) + len(right))
-            for i in range(3)
-        )
+        # 넓은 표본에는 가방·팔이 한두 픽셀 섞여 배경 평균이 흔들릴 수 있다.
+        # 양 끝은 항상 스튜디오라 이 줄의 기준색으로 안전하다.
+        backdrop = _look_row_backdrop(px, w, y)
         for x in range(w):
             score, expected = darken(x, y)
             distance = sum(abs(px[x, y][i] - backdrop[i]) for i in range(3))
