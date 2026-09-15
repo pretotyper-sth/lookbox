@@ -75,6 +75,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 플랫레이는 알파 실루엣 bbox로 소품 크기를 정규화하고, 모자는 명백한 스트리트·스포티 조합만 남긴다. 외부 아이템 코디는 항상 우측 끝에 모으며, 착장 배경의 약한 가로 바닥선도 보간한다.
 근거: `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[look-flatlay-overlap]] [[coord-clash]] [[model-look-toggle]] [[look-plate-shadow]].
 
+## [2026-09-15] fix | 플랫레이 소품 보정 범위
+전체 콜라주 패킹은 기존 캔버스 여백 기준으로 복원하고, 실제 알파 실루엣이 유난히 작은 소품만 최대 1.32배 보정한다.
+근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

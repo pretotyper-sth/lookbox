@@ -41,8 +41,8 @@ const LOOK_PACK = 1.03;
 /* 상의가 커서 기하 가운데가 위로 보인다. 카드 높이의 이만큼만 내린다. */
 const LOOK_NUDGE_Y = 0.024;
 
-/* 플랫레이 완성 전 잠깐 보이는 원본의 캔버스 여백 보정값. 완성본은 아래에서 알파
-   실측 bbox로 맞추므로, 원본 파일의 투명 여백이 커도 소품 크기는 흔들리지 않는다. */
+/* 원본 캔버스 여백을 포함한 기존 배치를 유지하는 기본 보정값. 알파 실측은 아래에서
+   유난히 작은 소품만 제한적으로 키울 때만 쓴다. */
 const LOOK_CANVAS_FILL = {
   '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
   '신발': 0.62, '가방': 0.62, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
@@ -247,16 +247,28 @@ function lookVisibleBox(im) {
   return full;
 }
 
+function lookAccentBoost(it, im) {
+  if (LOOK_ROLE[it.category] !== 'acc') return 1;
+  const visible = lookVisibleBox(im);
+  const visibleFill = Math.max(
+    (visible.x1 - visible.x0) / im.naturalWidth,
+    (visible.y1 - visible.y0) / im.naturalHeight,
+  );
+  const expectedFill = LOOK_CANVAS_FILL[it.category] || 0.62;
+  if (visibleFill >= expectedFill) return 1;
+  return Math.min(1.32, expectedFill / Math.max(visibleFill, 0.12));
+}
+
 function packLookRects(rects, w, h) {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   rects.forEach((r) => {
-    minX = Math.min(minX, r.vx);
-    minY = Math.min(minY, r.vy);
-    maxX = Math.max(maxX, r.vx + r.vw);
-    maxY = Math.max(maxY, r.vy + r.vh);
+    minX = Math.min(minX, r.x);
+    minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.dw);
+    maxY = Math.max(maxY, r.y + r.dh);
   });
   const bw = Math.max(1, maxX - minX);
   const bh = Math.max(1, maxY - minY);
@@ -294,20 +306,15 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
     const rects = layered.map(({ it, im }) => {
       const at = place[it.id] || LOOK_SPOT.top;
       const size = lookItemSize(it, scale);
-      const box = (size / 100) * Math.min(w, h);
+      const box = (size / 100) * Math.min(w, h) * lookImageZoom(it.category) * lookAccentBoost(it, im);
       const cx = (at.cx / 100) * w;
       const cy = (at.cy / 100) * h;
-      const visible = lookVisibleBox(im);
-      const s = Math.min(box / (visible.x1 - visible.x0), box / (visible.y1 - visible.y0));
+      const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
       const dw = im.naturalWidth * s;
       const dh = im.naturalHeight * s;
       const x = cx - dw / 2;
       const y = cy - dh / 2;
-      return {
-        im, x, y, dw, dh,
-        vx: x + visible.x0 * s, vy: y + visible.y0 * s,
-        vw: (visible.x1 - visible.x0) * s, vh: (visible.y1 - visible.y0) * s,
-      };
+      return { im, x, y, dw, dh };
     });
     const drawn = nudgeLookRects(pack ? packLookRects(rects, w, h) : rects, h);
     drawn.forEach((r) => {
@@ -327,7 +334,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat10' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat11' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
