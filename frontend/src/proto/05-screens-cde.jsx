@@ -41,8 +41,8 @@ const LOOK_PACK = 1.03;
 /* 상의가 커서 기하 가운데가 위로 보인다. 카드 높이의 이만큼만 내린다. */
 const LOOK_NUDGE_Y = 0.024;
 
-/* 원본 캔버스 여백을 포함한 기존 배치를 유지하는 기본 보정값. 알파 실측은 아래에서
-   유난히 작은 소품만 제한적으로 키울 때만 쓴다. */
+/* 원본 캔버스 여백을 포함한 기존 배치를 유지하는 기본 보정값. 소품은 아래에서 실제
+   알파 실루엣으로 양방향 정규화해, 유난히 큰 원본도 의류 크기로 커지지 않게 한다. */
 const LOOK_CANVAS_FILL = {
   '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
   '신발': 0.62, '가방': 0.62, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
@@ -248,7 +248,7 @@ function lookVisibleBox(im) {
   return full;
 }
 
-function lookAccentBoost(it, im) {
+function lookAccentScale(it, im) {
   if (LOOK_ROLE[it.category] !== 'acc') return 1;
   const visible = lookVisibleBox(im);
   const visibleFill = Math.max(
@@ -256,7 +256,6 @@ function lookAccentBoost(it, im) {
     (visible.y1 - visible.y0) / im.naturalHeight,
   );
   const expectedFill = LOOK_CANVAS_FILL[it.category] || 0.62;
-  if (visibleFill >= expectedFill) return 1;
   return Math.min(LOOK_ACCENT_BOOST_MAX, expectedFill / Math.max(visibleFill, 0.12));
 }
 
@@ -307,7 +306,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
     const rects = layered.map(({ it, im }) => {
       const at = place[it.id] || LOOK_SPOT.top;
       const size = lookItemSize(it, scale);
-      const box = (size / 100) * Math.min(w, h) * lookImageZoom(it.category) * lookAccentBoost(it, im);
+      const box = (size / 100) * Math.min(w, h) * lookImageZoom(it.category) * lookAccentScale(it, im);
       const cx = (at.cx / 100) * w;
       const cy = (at.cy / 100) * h;
       const s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
@@ -335,7 +334,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat12' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat13' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {

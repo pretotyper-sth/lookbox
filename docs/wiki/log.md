@@ -83,6 +83,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 가방·소품의 작은 원본 실루엣 보정 상한을 1.25배로 낮추고, 액세서리 후보 좌표를 카드 모서리보다 안쪽으로 옮긴다.
 근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
 
+## [2026-09-15] fix | 플랫레이 큰 소품 정규화
+가방·소품은 작은 원본만 키우지 않고 실제 알파 실루엣을 양방향으로 기준 크기에 맞춰, 큰 원본도 의류와 같은 크기로 커지지 않게 한다.
+근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를
