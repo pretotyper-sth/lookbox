@@ -87,6 +87,10 @@ subsystems so sessions can start from the index instead of reading `frontend/src
 가방·소품은 작은 원본만 키우지 않고 실제 알파 실루엣을 양방향으로 기준 크기에 맞춰, 큰 원본도 의류와 같은 크기로 커지지 않게 한다.
 근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
 
+## [2026-09-15] fix | AI 착장 다리 비율
+착장 프롬프트가 패션 화보식 다리 연장을 피하고 인심을 전신의 약 2%만 짧게 보여, 과하지 않게 현실적인 성인 비율로 생성한다. 캐시는 `model-id26`이다.
+근거: `backend/app/main.py` `_model_look_prompt_with_reference`; [[model-look-toggle]].
+
 ## [2026-08-17] ingest | 큰 화면 레이아웃 + 구매처 칩 스크롤
 [[large-display-layout]], [[recent-tag-field-scroll]] 작성. 두 건 모두 브라우저 실측으로
 확인(1280x1600 랜딩, 390x844 등록 시트). `AI_TEST_MODE=1`로 잠시 바꿔 등록 플로우를

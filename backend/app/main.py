@@ -4329,13 +4329,16 @@ Use Image 1 as the authoritative visual identity.
 Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
 and height impression.
-Keep the height and proportions of Image 1.
+Keep the same height impression and overall build of Image 1.
 Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
 do not de-age, age, slim, muscularize, or elongate the character.
 Do not replace them with a different person or a celebrity.
-Use ordinary real-adult proportions: a normal-sized head, crotch near the middle
-of the full height, and legs no longer than the torso plus head. Never use an
-editorial elongated-leg silhouette, a tiny head, or a raised waistline.
+Use ordinary real-adult proportions: a normal-sized head, crotch just below the
+middle of the full height, and legs modestly shorter than the torso plus head.
+Compared with a fashion-editorial impression, shorten the apparent inseam only
+slightly (about 2% of the full figure height) while keeping the torso, head, and
+overall height impression natural. Never use an editorial elongated-leg silhouette,
+a tiny head, or a raised waistline.
 
 FACE:
 A better photograph of the same person — photogenic Korean lookbook face,
@@ -4400,7 +4403,8 @@ inset. Do not make a tight crop.
 This output will be converted to a 4:5 card and a square rail card: leave at least 18%
 clear studio above the hair and 18% clear floor below the soles. If space is tight, make
 the person smaller; never solve it by cutting off the legs or shoes. Keep the person
-centered horizontally. Make the full figure slightly less tall, with natural legs.
+centered horizontally. Keep the full figure slightly less tall, with the subtly
+shorter, realistic leg line specified above.
 Keep the original continuous studio backdrop reaching all four edges. Do not add side streaks,
 noise, banding, posterization, dithering, blotches, a second plate, letterbox, inset photograph,
 white border, or framed picture-in-picture.
@@ -4914,7 +4918,7 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id25-{hem_seed}-{_look_gender_key(gender)}"
+    key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
