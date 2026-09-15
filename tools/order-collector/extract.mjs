@@ -1,7 +1,7 @@
 // 페이지 안에서 실행되는 수집 함수. 사이트별 셀렉터에 기대지 않고, '상품 링크처럼 생긴
 // 앵커'를 찾아 그 주변에서 이름·썸네일·가격·날짜를 줍는다. 셀렉터가 바뀌어도 잘 버틴다.
 export const PAGE_EXTRACTOR = () => {
-  const PRODUCT_RE = /(\/goods\/|goodsNo=|\/products?\/|\/product\/|\/catalog\/|\/pd\/|productNo=|itemId=|\/item\/|prdNo=|\/detail\/)/i;
+  const PRODUCT_RE = /(\/goods\/|goodsNo=|\/products?\/|\/product\/|\/catalog\/|\/pd\/|productNo=|itemId=|\/item\/|prdNo=|\/detail\/|\/pc\/history\/)/i;
   const SKIP_RE = /(review|리뷰|문의|교환|반품|취소|배송조회|장바구니|쿠폰|이벤트|login|logout)/i;
   const MONEY = /[0-9][0-9,]{2,}\s*원/;
   const DATE = /\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}/;
@@ -17,7 +17,6 @@ export const PAGE_EXTRACTOR = () => {
   const out = new Map();
   for (const a of Array.from(document.querySelectorAll('a[href]'))) {
     const href = a.href || '';
-    if (!PRODUCT_RE.test(href) || SKIP_RE.test(href)) continue;
     // 이미지와 글자를 함께 담은 가장 가까운 조상을 '주문 한 줄'로 본다
     let box = a;
     for (let i = 0; i < 6 && box.parentElement; i++) {
@@ -26,13 +25,20 @@ export const PAGE_EXTRACTOR = () => {
     }
     const lines = (box.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
     const anchorText = (a.innerText || '').trim();
-    const name = (anchorText.length > 3 && !SKIP_RE.test(anchorText) ? anchorText
-      : lines.find((t) => t.length > 5 && !MONEY.test(t) && !DATE.test(t) && !SKIP_RE.test(t))) || '';
+    const candidates = lines.filter((t) => t.length > 3 && !MONEY.test(t) && !DATE.test(t) && !SKIP_RE.test(t)
+      && !/^[A-Z0-9]{1,5}\s*\/\s*\d+개$/i.test(t));
+    const detail = candidates.filter((t) => t !== anchorText).sort((a, b) => b.length - a.length)[0];
+    const name = detail || (anchorText.length > 3 && !SKIP_RE.test(anchorText) ? anchorText : candidates[0]) || '';
     if (!name) continue;
+    const sizeLine = lines.find((t) => /^(.+?)\s*\/\s*\d+개$/i.test(t));
+    const size = sizeLine ? sizeLine.replace(/\s*\/\s*\d+개$/i, '').trim() : '';
+    const brand = anchorText && anchorText !== name ? anchorText : (candidates.find((t) => t !== name) || '');
     const img = a.querySelector('img') || box.querySelector('img');
     const item = {
       url: a.href,
       name: name.slice(0, 120),
+      brand: brand.slice(0, 80),
+      size: size.slice(0, 40),
       thumb: (img && (img.currentSrc || img.src)) || '',
       price: (lines.find((t) => MONEY.test(t)) || '').match(MONEY)?.[0] || '',
       purchasedAt: (lines.find((t) => DATE.test(t)) || '').match(DATE)?.[0] || '',

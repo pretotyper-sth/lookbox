@@ -481,17 +481,33 @@ img { display: block; max-width: 100%; }
   font-size: 11px;
   font-weight: 650;
 }
-.lb-order-demo-dots { display: flex; gap: 5px; }
-.lb-order-demo-dots i {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #c7c3bb;
+.lb-order-demo-window-icon {
+  position: relative;
+  display: inline-block;
+  width: 15px;
+  height: 12px;
+  border: 1.5px solid #8b877e;
+  border-radius: 3px;
+  box-sizing: border-box;
 }
-.lb-order-demo-dots i:first-child { background: #df8474; }
-.lb-order-demo-dots i:nth-child(2) { background: #dfbd6a; }
-.lb-order-demo-dots i:nth-child(3) { background: #7fbd83; }
+.lb-order-demo-window-icon::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #aaa69d;
+}
+.lb-order-demo-window-icon i {
+  position: absolute;
+  top: 1px;
+  width: 1.5px;
+  height: 1.5px;
+  border-radius: 50%;
+  background: #8b877e;
+}
+.lb-order-demo-window-icon i:first-child { left: 2px; }
+.lb-order-demo-window-icon i:last-child { left: 5px; }
 .lb-order-demo-urlbar {
   height: 38px;
   flex: none;
@@ -638,12 +654,30 @@ img { display: block; max-width: 100%; }
 .lb-order-demo-title > span.reading { background: #171717; color: #fff; }
 .lb-order-demo-title > span.done { background: #e7efe7; color: #426346; }
 .lb-order-demo-orderlist {
+  flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 32, 29, .42) rgba(34, 32, 29, .08);
+  scrollbar-gutter: stable;
   padding: 0 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+.lb-order-demo-orderlist::-webkit-scrollbar { width: 8px; }
+.lb-order-demo-orderlist::-webkit-scrollbar-track {
+  margin: 6px 1px 6px 0;
+  border-radius: 999px;
+  background: rgba(34, 32, 29, .08);
+}
+.lb-order-demo-orderlist::-webkit-scrollbar-thumb {
+  min-height: 34px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(34, 32, 29, .42);
+  background-clip: padding-box;
 }
 .lb-order-demo-order {
   min-height: 68px;
@@ -801,6 +835,7 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
   gap: var(--s4);
   max-width: 100%;
 }
+.lb-order-pair.split { align-items: flex-start; }
 .lb-order-card {
   background: var(--surface);
   border-radius: var(--r-lg);

@@ -218,7 +218,7 @@ function WardrobeScreen({ ctx }) {
   const {
     items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
-    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, wardrobeLoaded,
     requestPickedOutfits, refreshLive,
   } = ctx;
   const [cat, setCat] = useS('전체');
@@ -537,7 +537,7 @@ function WardrobeScreen({ ctx }) {
           </div>
         )}
         {wide && seasonChips}
-        {!viewingArchive && !ready && !wardrobeLoading && (
+        {!viewingArchive && !ready && (!wardrobeLoading || wardrobeLoaded) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none' }}>
               <Icon name="lock" size={18} />
@@ -845,6 +845,21 @@ function DetectRow({ item, on, onToggle }) {
 
 const URL_IMPORT_BLOCKED_MSG = '이미지 불러오기가 제한되는 URL이에요. 사진으로 추가해 주세요.';
 const URL_IMPORT_BLOCKED_HOST = /(^|\.)(coupang\.com|smartstore\.naver\.com|brand\.naver\.com|shopping\.naver\.com|11st\.co\.kr|gmarket\.co\.kr|auction\.co\.kr|ssg\.com|kurly\.com|wemakeprice\.com|tmon\.co\.kr)$/i;
+const ORDER_EXTENSION_STORE_URL = import.meta.env.VITE_ORDER_EXTENSION_STORE_URL || '';
+const ORDER_EDGE_EXTENSION_STORE_URL = import.meta.env.VITE_ORDER_EDGE_EXTENSION_STORE_URL || ORDER_EXTENSION_STORE_URL;
+
+function canFetchOrderImages(version) {
+  const parts = String(version || '').split('.').map(Number);
+  return (parts[0] || 0) > 0 || (parts[1] || 0) >= 3;
+}
+
+function orderExtensionBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Edg\//.test(ua)) return { name: 'Microsoft Edge', storeUrl: ORDER_EDGE_EXTENSION_STORE_URL, supported: true };
+  if (/Chrome\//.test(ua) || /Chromium\//.test(ua)) return { name: 'Chrome', storeUrl: ORDER_EXTENSION_STORE_URL, supported: true };
+  if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) return { name: 'Safari', storeUrl: '', supported: false };
+  return { name: '현재 브라우저', storeUrl: '', supported: false };
+}
 
 function onThisComputer() {
   const h = window.location.hostname || '';
@@ -869,11 +884,11 @@ function toHttpsUrl(raw) {
   return /^https?:\/\//i.test(t) ? t : ('https://' + t.replace(/^\/+/, ''));
 }
 
-function extCall(payload, timeoutMs, onEvent) {
+function extCall(payload, timeoutMs, onEvent, keepEvents = false) {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
     const timer = setTimeout(() => {
-      window.removeEventListener('message', onMsg);
+      if (!keepEvents) window.removeEventListener('message', onMsg);
       reject(new Error('NO_EXT'));
     }, timeoutMs);
     function onMsg(e) {
@@ -894,8 +909,9 @@ function extCall(payload, timeoutMs, onEvent) {
 }
 
 async function extensionImageFile(item) {
-  if (!item || !item.thumb) return null;
-  const result = await extCall({ type: 'FETCH_IMAGE', url: item.thumb }, 30000);
+  const imageUrl = item && (item.imageUrl || item.thumb);
+  if (!imageUrl) return null;
+  const result = await extCall({ type: 'FETCH_IMAGE', url: imageUrl }, 30000);
   if (!result || result.error || !result.dataUrl) throw new Error((result && result.error) || '상품 이미지를 가져오지 못했어요.');
   const response = await fetch(result.dataUrl);
   const blob = await response.blob();
@@ -1030,15 +1046,28 @@ function normalizeForDup(raw) {
   }
 }
 
+function orderMetaBits(item) {
+  const bits = [];
+  if (item.brand && !/^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test(item.brand.trim())) bits.push(item.brand);
+  if (item.size) bits.push(`사이즈 ${item.size}`);
+  if (item.price) bits.push(item.price);
+  if (item.purchasedAt) bits.push(`구매일 ${item.purchasedAt}`);
+  return bits;
+}
+
 function bulkRowMeta(b) {
   let host = b.url;
   try { host = new URL(b.url).hostname.replace(/^www\./, ''); } catch (e) { /* keep raw */ }
   const title = b.name || host;
   const bits = [];
-  if (b.name && !b.purchasedAt) bits.push(host);
-  if (b.store && b.store !== host && b.store !== b.name) bits.push(b.store);
-  if (b.price) bits.push(b.price);
-  if (b.purchasedAt) bits.push(b.purchasedAt);
+  const fromOrderHistory = !!b.platform;
+  if (!fromOrderHistory && b.name && !b.purchasedAt) bits.push(host);
+  if (!fromOrderHistory && b.store && b.store !== host && b.store !== b.name) bits.push(b.store);
+  if (fromOrderHistory) bits.push(...orderMetaBits(b));
+  else {
+    if (b.price) bits.push(b.price);
+    if (b.purchasedAt) bits.push(`구매일 ${b.purchasedAt}`);
+  }
   return { title, subtitle: bits.join(' · ') };
 }
 
@@ -1054,9 +1083,9 @@ function makeItemDraft(d = {}) {
   };
 }
 
-function OrderDemoBrowser({ platform, phase, count, onLogin }) {
+function OrderDemoBrowser({ platform, phase, count, onLogin, demo = false, collectedItems = [] }) {
   const Icon = window.Icon;
-  const items = fakeOrderItems(platform).slice(0, 4);
+  const items = demo ? fakeOrderItems(platform).slice(0, 4) : collectedItems;
   const loginOn = phase === 'opening' || phase === 'login';
   const ordersOn = phase === 'ready' || phase === 'collecting' || phase === 'done';
   const pageUrl = loginOn
@@ -1069,17 +1098,17 @@ function OrderDemoBrowser({ platform, phase, count, onLogin }) {
       : '';
 
   return (
-    <section role="region" aria-label={`${platform.name} 가상 로그인 창`} className="lb-order-demo-browser">
+    <section role="region" aria-label={`${platform.name} 브라우저 연결 화면`} className="lb-order-demo-browser">
       <div className="lb-order-demo-chrome">
-        <div className="lb-order-demo-dots" aria-hidden><i /><i /><i /></div>
-        <span>Chrome · 샘플 화면</span>
+        <span className="lb-order-demo-window-icon" aria-hidden><i /><i /></span>
+        <span>브라우저</span>
       </div>
       <div className="lb-order-demo-urlbar">
         <Icon name="lock" size={12} stroke={2.2} />
         <span>{String(pageUrl || platform.host || '').replace(/^https?:\/\//, '')}</span>
       </div>
       <div className="lb-order-demo-page">
-        {loginOn ? (
+        {loginOn && demo ? (
           <form className="lb-order-demo-login" onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
             <div className="lb-order-demo-brand">{platform.name}</div>
             <h3>로그인</h3>
@@ -1095,7 +1124,13 @@ function OrderDemoBrowser({ platform, phase, count, onLogin }) {
             <button type="submit">로그인</button>
             <small>가상 로그인 화면이에요. 실제 계정 정보는 입력하지 않아요.</small>
           </form>
-        ) : ordersOn ? (
+        ) : loginOn ? (
+          <div className="lb-order-demo-success">
+            <span><Icon name="lock" size={18} stroke={2.2} /></span>
+            <h3>Chrome에서 로그인해 주세요</h3>
+            <p>열린 Chrome 창에서 로그인하면 주문내역으로 자동 이동해요.</p>
+          </div>
+        ) : ordersOn && items.length ? (
           <div className="lb-order-demo-orders">
             <div className="lb-order-demo-shophead">
               <strong>{platform.name}</strong>
@@ -1110,19 +1145,26 @@ function OrderDemoBrowser({ platform, phase, count, onLogin }) {
             </div>
             <div className="lb-order-demo-orderlist">
               {items.map((item, index) => {
-                const read = phase === 'done' || (phase === 'collecting' && index < count);
+                const read = !demo || phase === 'done' || (phase === 'collecting' && index < count);
+                const meta = orderMetaBits(item).join(' · ');
                 return (
-                  <div key={item.slug} className={`lb-order-demo-order${read ? ' read' : ''}`}>
-                    <img src={item.thumb} alt="" />
+                  <div key={item.url || item.slug || index} className={`lb-order-demo-order${read ? ' read' : ''}`}>
+                    <img src={item.thumb} alt="" referrerPolicy="no-referrer" />
                     <div>
                       <strong>{item.name}</strong>
-                      <span>{item.brand} · {item.price}</span>
+                      {meta ? <span>{meta}</span> : null}
                     </div>
                     {read ? <Icon name="check" size={13} stroke={2.5} /> : <span className="lb-order-demo-delivery">배송완료</span>}
                   </div>
                 );
               })}
             </div>
+          </div>
+        ) : ordersOn ? (
+          <div className="lb-order-demo-success">
+            <span><Icon name="check" size={18} stroke={2.5} /></span>
+            <h3>주문내역을 열었어요</h3>
+            <p>{phase === 'collecting' ? `${count || 0}개 상품 정보를 읽고 있어요.` : '왼쪽에서 주문내역을 가져와 주세요.'}</p>
           </div>
         ) : (
           <div className="lb-order-demo-success">
@@ -1133,6 +1175,50 @@ function OrderDemoBrowser({ platform, phase, count, onLogin }) {
         )}
       </div>
     </section>
+  );
+}
+
+function OrderStorePreview({ step, onClose, onAdd }) {
+  const Icon = window.Icon;
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Chrome 웹 스토어 설치 미리보기" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(23,22,19,.56)', display: 'grid', placeItems: 'center', padding: 24 }}>
+      <section style={{ position: 'relative', width: 'min(760px, 100%)', borderRadius: 18, overflow: 'hidden', background: '#fff', boxShadow: '0 28px 80px rgba(0,0,0,.28)' }}>
+        <div style={{ height: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', background: '#F2F3F5', color: '#303134', fontSize: 12.5, fontWeight: 650 }}>
+          <span style={{ display: 'flex', gap: 5 }}><i style={{ width: 10, height: 10, borderRadius: '50%', background: '#EA4335' }} /><i style={{ width: 10, height: 10, borderRadius: '50%', background: '#FBBC05' }} /><i style={{ width: 10, height: 10, borderRadius: '50%', background: '#34A853' }} /></span>
+          <span style={{ padding: '7px 12px', borderRadius: 8, background: '#fff', minWidth: 160 }}>Chrome 웹 스토어</span>
+          <button type="button" onClick={onClose} aria-label="미리보기 닫기" style={{ marginLeft: 'auto', padding: 6, color: '#5f6368' }}><Icon name="x" size={17} /></button>
+        </div>
+        <div style={{ minHeight: 420, padding: '26px clamp(22px, 6vw, 54px)', color: '#202124' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#5f6368', fontSize: 13, fontWeight: 650 }}><span style={{ width: 20, height: 20, borderRadius: '50%', background: 'conic-gradient(#4285F4 0 25%,#34A853 0 50%,#FBBC05 0 75%,#EA4335 0)', display: 'inline-block' }} /> Chrome 웹 스토어</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18, marginTop: 36 }}>
+            <div style={{ width: 72, height: 72, borderRadius: 16, background: '#1A1A1A', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 26, fontWeight: 800 }}>R</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, letterSpacing: '-.03em' }}>RealCloset 구매내역</h2>
+              <p style={{ margin: '7px 0 0', color: '#5f6368', fontSize: 14 }}>RealCloset 제공 · 쇼핑</p>
+              <p style={{ margin: '18px 0 0', color: '#3c4043', fontSize: 14, lineHeight: 1.6 }}>로그인된 쇼핑몰의 주문내역에서 고른 옷을 RealCloset 옷장에 담습니다.</p>
+            </div>
+          </div>
+          <div style={{ marginTop: 30, borderTop: '1px solid #E0E3E7', paddingTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <span style={{ fontSize: 12.5, color: '#5f6368' }}>이 미리보기에서는 실제 설치나 권한 요청이 발생하지 않아요.</span>
+            <button type="button" onClick={() => step === 'store' ? onAdd('confirm') : onAdd('installed')} style={{ minWidth: 132, height: 42, borderRadius: 21, padding: '0 18px', background: '#1A73E8', color: '#fff', fontWeight: 750, fontSize: 14 }}>
+              {step === 'store' ? 'Chrome에 추가' : '확장 프로그램 추가'}
+            </button>
+          </div>
+        </div>
+        {step === 'confirm' ? (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.24)', padding: 24 }}>
+            <div style={{ width: 'min(382px, 100%)', borderRadius: 14, background: '#fff', padding: 22, boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
+              <div style={{ fontSize: 17, fontWeight: 750 }}>‘RealCloset 구매내역’을 추가하시겠어요?</div>
+              <p style={{ margin: '12px 0 0', fontSize: 13.5, lineHeight: 1.55, color: '#5f6368' }}>선택한 쇼핑몰 주문내역에서 상품 정보와 이미지를 읽을 수 있어요.</p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
+                <button type="button" onClick={() => onAdd('store')} style={{ height: 38, padding: '0 13px', color: '#1A73E8', fontWeight: 700 }}>취소</button>
+                <button type="button" onClick={() => onAdd('installed')} style={{ height: 38, padding: '0 14px', borderRadius: 19, background: '#1A73E8', color: '#fff', fontWeight: 750 }}>확장 프로그램 추가</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -1177,11 +1263,26 @@ function AddSheet({ ctx }) {
   const [orderBusy, setOrderBusy] = useS(false);
   const [orderNeedLogin, setOrderNeedLogin] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
+  const orderTabRef = useR(null);
   const [orderExtImage, setOrderExtImage] = useS(false);
+  const [orderPreviewItems, setOrderPreviewItems] = useS([]);
+  const [orderExtension, setOrderExtension] = useS('checking');
+  const [orderInstallPending, setOrderInstallPending] = useS(false);
+  const [orderStorePreview, setOrderStorePreview] = useS('');
+  const [orderPreviewSession, setOrderPreviewSession] = useS(false);
+  const [storeRequestOpen, setStoreRequestOpen] = useS(false);
+  const [storeRequestName, setStoreRequestName] = useS('');
+  const [storeRequestUrl, setStoreRequestUrl] = useS('');
+  const [storeRequestReason, setStoreRequestReason] = useS('');
+  const [storeRequestBusy, setStoreRequestBusy] = useS(false);
+  const [storeRequestDone, setStoreRequestDone] = useS(false);
   const orderDemo = typeof window !== 'undefined'
-    && (import.meta.env.DEV || new URLSearchParams(window.location.search).get('orderDemo') === '1')
+    && new URLSearchParams(window.location.search).get('orderDemo') === '1'
     && new URLSearchParams(window.location.search).get('orderReal') !== '1';
+  const orderInstallPreview = typeof window !== 'undefined'
+    && (import.meta.env.DEV || new URLSearchParams(window.location.search).get('orderPreview') === '1');
   const mobileOrderTab = tab === 'orders' && !wide;
+  const orderBrowser = orderExtensionBrowser();
   const [orderFlow, setOrderFlow] = useS({ phase: 'idle', shopId: '', demo: false, count: 0 });
   const orderDraftRef = useR({ bulk: null, result: null });
   const previewUrlRef = useR('');
@@ -1220,6 +1321,7 @@ function AddSheet({ ctx }) {
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
+  const bulkCancelRef = useR(false);
   const draftIdsRef = useR([]);
   const detectedRef = useR([]);
   const stepsRef = useR([]);
@@ -1233,11 +1335,13 @@ function AddSheet({ ctx }) {
     setBusy(false); setErr('');
     setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
-    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); setOrderTabId(null); setOrderExtImage(false); setOrderSession(null);
+    setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); orderTabRef.current = null; setOrderTabId(null); setOrderExtImage(false); setOrderPreviewItems([]); setOrderSession(null);
+    setStoreRequestOpen(false); setStoreRequestName(''); setStoreRequestUrl(''); setStoreRequestReason(''); setStoreRequestBusy(false); setStoreRequestDone(false);
     setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
     orderDraftRef.current = { bulk: null, result: null };
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
     draftIdsRef.current = [];
+    bulkCancelRef.current = false;
   };
 
   const discardDraftIds = (ids) => {
@@ -1255,8 +1359,8 @@ function AddSheet({ ctx }) {
       ...stepsRef.current.map((s) => s && s.id),
     ];
     discardDraftIds(ids);
-    resetLocalDraft();
     closeAdd();
+    window.setTimeout(resetLocalDraft, 280);
   };
 
   useE(() => {
@@ -1406,9 +1510,10 @@ function AddSheet({ ctx }) {
   const applyCollectedRows = (found) => {
     if (!found.length) return [];
     const known = new Set(knownSourceUrls);
-    const rows = found.map((it) => {
+  const rows = found.map((it) => {
       const dup = known.has(normalizeForDup(it.url));
-      return { ...it, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '', thumb: it.thumb || '' };
+      const brand = /^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test((it.brand || '').trim()) ? '' : it.brand;
+      return { ...it, brand, pick: !dup, dup, dupReason: dup ? '같은 상품 주소예요' : '', state: 'idle', error: '', thumb: it.thumb || '' };
     });
     setBulk(rows);
     // URL 입력칸은 비우지 않는다. 후보를 지웠을 때 주소를 다시 볼 수 있게.
@@ -1461,30 +1566,40 @@ function AddSheet({ ctx }) {
       try {
         const ping = await extCall({ type: 'PING' }, 700);
         usedExt = !!(ping && ping.ok);
-        const version = String((ping && ping.version) || '').split('.').map(Number);
-        setOrderExtImage((version[0] || 0) > 0 || (version[1] || 0) >= 3);
+        const canFetchImages = canFetchOrderImages(ping && ping.version);
+        setOrderExtImage(canFetchImages);
+        setOrderExtension(usedExt ? (canFetchImages ? 'ready' : 'outdated') : 'missing');
       } catch (e) {
         usedExt = false;
+        setOrderExtImage(false);
+        setOrderExtension('missing');
       }
       if (usedExt) {
         if (onProgress) onProgress({ key: 'extension_login', url: platform && platform.loginUrl });
         const res = await extCall(
-          { type: action === 'collect' ? 'COLLECT' : 'OPEN', platform: shopId, tabId: orderTabId },
+          { type: action === 'collect' ? 'COLLECT' : 'OPEN', platform: shopId, tabId: orderTabRef.current },
           330000,
           async (event) => {
             if (event.type === 'progress') {
-              if (Number.isInteger(event.tabId)) setOrderTabId(event.tabId);
+              if (Number.isInteger(event.tabId)) { orderTabRef.current = event.tabId; setOrderTabId(event.tabId); }
               if (onProgress) onProgress(event);
             }
             if (event.type === 'item' && event.item && onItem) onItem(event.item);
           },
+          action === 'collect',
         );
-        if (res && res.tabId) setOrderTabId(res.tabId);
+        if (res && res.tabId) { orderTabRef.current = res.tabId; setOrderTabId(res.tabId); }
         if (res && res.status === 'error') throw new Error(res.error || '주문 내역을 가져오지 못했어요.');
         if (res && res.status === 'need_login') {
           setOrderNeedLogin(true);
           const err = new Error('NEED_LOGIN');
           throw err;
+        }
+        if (res && res.status === 'orders_unavailable') {
+          throw new Error('ORDERS_UNAVAILABLE');
+        }
+        if (res && res.status === 'empty_orders') {
+          throw new Error('EMPTY_ORDERS');
         }
         const items = (res && res.items) || [];
         if (onProgress) onProgress({ key: 'orders_ready' });
@@ -1520,11 +1635,12 @@ function AddSheet({ ctx }) {
   };
   const orderFlowPlatform = () => {
     const platform = orderPlatformById(orderShop);
-    return orderDemo ? { ...platform, demo: true } : platform;
+    return orderDemo || orderPreviewSession ? { ...platform, demo: true } : platform;
   };
   const startInlineOrder = async () => {
     const platform = orderFlowPlatform();
     setErr('');
+    setOrderPreviewItems([]);
     setOrderFlow({ phase: 'opening', shopId: platform.id, demo: !!platform.demo, count: 0 });
     if (platform.demo) {
       setOrderNeedLogin(true);
@@ -1545,6 +1661,7 @@ function AddSheet({ ctx }) {
         },
       });
       setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
+      await collectInlineOrders();
     } catch (e) {
       const message = String((e && e.message) || '');
       if (message === 'NEED_LOGIN' || /로그인/.test(message)) {
@@ -1552,7 +1669,9 @@ function AddSheet({ ctx }) {
         setOrderNeedLogin(true);
       } else {
         setOrderFlow((cur) => ({ ...cur, phase: 'error' }));
-        setErr(message === 'ORDER_OPEN_FAILED' || message === 'NO_EXT'
+        setErr(message === 'ORDERS_UNAVAILABLE'
+          ? '주문내역 화면을 열지 못했어요. 다시 로그인해 주세요.'
+          : message === 'ORDER_OPEN_FAILED' || message === 'NO_EXT'
           ? '구매내역 연결 확장 프로그램이 필요해요. 설치한 뒤 새로고침해 주세요.'
           : '쇼핑몰에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
@@ -1562,6 +1681,7 @@ function AddSheet({ ctx }) {
     const platform = orderFlowPlatform();
     const found = new Map();
     setErr('');
+    setOrderPreviewItems([]);
     setOrderFlow((cur) => ({ ...cur, phase: 'collecting', count: 0 }));
     try {
       const items = await collectOrderItems({
@@ -1570,6 +1690,7 @@ function AddSheet({ ctx }) {
         onItem: (item) => {
           if (!item || !item.url) return;
           found.set(item.url, item);
+          setOrderPreviewItems([...found.values()]);
           setOrderFlow((cur) => ({ ...cur, count: found.size }));
         },
       });
@@ -1577,22 +1698,25 @@ function AddSheet({ ctx }) {
         if (item && item.url) found.set(item.url, item);
       });
       const rows = [...found.values()];
+      setOrderPreviewItems(rows);
       if (!rows.length) {
         setOrderFlow((cur) => ({ ...cur, phase: 'ready', count: 0 }));
-        setErr('주문내역에서 옷을 찾지 못했어요. 주문내역을 확인한 뒤 다시 가져와 주세요.');
+        setErr('주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.');
         return;
       }
       applyCollectedRows(rows);
       setOrderFlow((cur) => ({ ...cur, phase: 'done', count: rows.length }));
     } catch (e) {
       setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
-      setErr((e && e.message) || '주문내역을 가져오지 못했어요.');
+      setErr((e && e.message) === 'EMPTY_ORDERS'
+        ? '주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.'
+        : (e && e.message) || '주문내역을 가져오지 못했어요.');
     }
   };
   const launchOrderFlow = () => {
     const platform = orderFlowPlatform();
     const nativeWebview = !!(window.LookboxNative && window.LookboxNative.embeddedWebview);
-    if (platform.demo || (!onThisComputer() && !nativeWebview)) {
+    if (!nativeWebview) {
       startInlineOrder();
       return;
     }
@@ -1601,15 +1725,11 @@ function AddSheet({ ctx }) {
   const completeOrderDemoLogin = () => {
     if (orderFlow.demo && orderFlow.phase === 'login') {
       setOrderNeedLogin(false);
-      setOrderFlow((cur) => ({ ...cur, phase: 'authenticated' }));
+      setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
     }
   };
   const onOrderPrimary = () => {
     if (orderFlow.demo && orderFlow.phase === 'login') return;
-    if (orderFlow.demo && orderFlow.phase === 'authenticated') {
-      setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
-      return;
-    }
     if (orderFlow.phase === 'ready') {
       collectInlineOrders();
       return;
@@ -1623,6 +1743,53 @@ function AddSheet({ ctx }) {
   const onMobileOrderPrimary = () => {
     if (typeof showToast === 'function') showToast('구매내역은 PC에서만 불러올 수 있어요');
   };
+  const checkOrderExtension = () => {
+    if (orderDemo) {
+      setOrderExtension('demo');
+      return;
+    }
+    setOrderExtension('checking');
+    extCall({ type: 'PING' }, 700)
+      .then((ping) => {
+        const ready = !!(ping && ping.ok);
+        const canFetchImages = canFetchOrderImages(ping && ping.version);
+        setOrderExtImage(ready && canFetchImages);
+        setOrderExtension(ready ? (canFetchImages ? 'ready' : 'outdated') : 'missing');
+      })
+      .catch(() => {
+        setOrderExtImage(false);
+        setOrderExtension('missing');
+      });
+  };
+  const openOrderExtensionInstall = () => {
+    if (orderInstallPreview) {
+      setOrderStorePreview('store');
+      return;
+    }
+    if (!orderBrowser.storeUrl) return;
+    setOrderInstallPending(true);
+    window.open(orderBrowser.storeUrl, '_blank', 'noopener');
+  };
+  const completeOrderInstallPreview = (next) => {
+    if (next !== 'installed') {
+      setOrderStorePreview(next);
+      return;
+    }
+    setOrderStorePreview('');
+    setOrderPreviewSession(true);
+    setOrderExtImage(true);
+    setOrderExtension('ready');
+    setErr('');
+  };
+  useE(() => {
+    if (!orderInstallPending) return undefined;
+    const checkAfterInstall = () => {
+      setOrderInstallPending(false);
+      checkOrderExtension();
+    };
+    window.addEventListener('focus', checkAfterInstall, { once: true });
+    return () => window.removeEventListener('focus', checkAfterInstall);
+  }, [orderInstallPending]);
   const URL_ROW_MAX = 20;
   const setUrlAt = (idx, value) => {
     setUrls((prev) => prev.map((u, i) => (i === idx ? value : u)));
@@ -1707,26 +1874,32 @@ function AddSheet({ ctx }) {
         }],
       };
     }
-    if (tab === 'orders' && orderExtImage && Number.isInteger(orderTabId) && it.thumb) {
+    if (tab === 'orders') {
+      if (!orderExtImage || !Number.isInteger(orderTabId)) {
+        throw new Error('Chrome 확장 프로그램 연결을 확인한 뒤 다시 시도해 주세요.');
+      }
+      if (!it.thumb) {
+        throw new Error('주문내역에서 상품 이미지를 찾지 못했어요.');
+      }
       let image = null;
       try {
         image = await extensionImageFile(it);
-      } catch { /* 구버전 확장 또는 이미지 CDN 실패 시 기존 URL 경로로 폴백 */ }
-      if (image) {
-        return await liveImportSource({
-          sourceType: 'photo',
-          file: image,
-          status,
-          sourceUrl: it.url,
-          name: it.name || '',
-          brand: it.brand || '',
-          store: it.store || '',
-          price: it.price || '',
-          material: it.material || '',
-          color: it.color || '',
-          skipDuplicate: true,
-        });
+      } catch {
+        throw new Error('Chrome 확장 프로그램에서 상품 이미지를 가져오지 못했어요. 확장을 다시 켠 뒤 다시 시도해 주세요.');
       }
+      return await liveImportSource({
+        sourceType: 'photo',
+        file: image,
+        status,
+        sourceUrl: it.url,
+        name: it.name || '',
+        brand: it.brand || '',
+        store: it.store || '',
+        price: it.price || '',
+        material: it.material || '',
+        color: it.color || '',
+        skipDuplicate: true,
+      });
     }
     return liveImportSource({ sourceType: 'url', url: it.url, status });
   };
@@ -1735,7 +1908,7 @@ function AddSheet({ ctx }) {
     const sourceRows = explicitRows || bulk || [];
     const targets = explicitRows ? sourceRows.filter((b) => b.pick && !b.dup) : bulkPicked.slice();
     if (!liveImportSource || !targets.length) return;
-    cancelledRef.current = false;
+    bulkCancelRef.current = false;
     setErr('');
     const preSkipped = sourceRows.filter((b) => b.dup && !b.pick);
     setBulkRun({ index: 0, total: targets.length });
@@ -1747,24 +1920,12 @@ function AddSheet({ ctx }) {
     const skipped = preSkipped.map((b) => ({ ...b, reason: b.dupReason || '이미 옷장에 있어요' }));
     draftIdsRef.current = [];
     for (let i = 0; i < targets.length; i++) {
-      if (cancelledRef.current) {
-        discardDraftIds(draftIdsRef.current);
-        draftIdsRef.current = [];
-        setBulkRun(null);
-        return;
-      }
+      if (bulkCancelRef.current) break;
       const it = targets[i];
       setBulkRun({ index: i, total: targets.length, label: it.name || it.url });
       mark(it.url, { state: 'run' });
       try {
         const res = await importBulkItem(it, 'pending');
-        if (cancelledRef.current) {
-          const ids = ((res && res.items) || []).map((d) => d && d.id).filter(Boolean);
-          discardDraftIds([...draftIdsRef.current, ...ids]);
-          draftIdsRef.current = [];
-          setBulkRun(null);
-          return;
-        }
         if (res && res.duplicate) {
           skipped.push({ ...it, reason: res.reason || '이미 옷장에 있어요', matchedName: res.matchedName || '' });
           mark(it.url, { state: 'dup', pick: false, dup: true, dupReason: res.reason || '이미 옷장에 있어요' });
@@ -1784,9 +1945,17 @@ function AddSheet({ ctx }) {
         failed.push({ ...it, error: (e && e.message) || '등록하지 못했어요' });
         mark(it.url, { state: 'fail', error: (e && e.message) || '실패' });
       }
+      if (bulkCancelRef.current) break;
     }
+    const wasCancelled = bulkCancelRef.current;
+    bulkCancelRef.current = false;
     setBulkRun(null);
     if (!collected.length) {
+      if (wasCancelled) {
+        setBulk((arr) => (arr || []).map((b) => (b.state === 'run' ? { ...b, state: 'idle' } : b)));
+        if (typeof showToast === 'function') showToast('담기를 취소했어요. 완료된 옷은 없어요.');
+        return;
+      }
       setBulkResult({
         ok: 0,
         dup: skipped.length,
@@ -1799,6 +1968,9 @@ function AddSheet({ ctx }) {
     if ((failed.length || skipped.length) && typeof showToast === 'function') {
       showToast(`${collected.length}개 확인 대기 · 건너뛴 ${failed.length + skipped.length}건`);
     }
+    if (wasCancelled && typeof showToast === 'function') {
+      showToast(`${collected.length}개까지 확인할 수 있어요.`);
+    }
     setDetected(collected);
     setSel(collected.map((d) => d.id));
     setSteps(collected.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
@@ -1810,6 +1982,11 @@ function AddSheet({ ctx }) {
   const runBulk = async () => {
     if (bulkAuto) await runBulkAuto();
     else await runBulkReview();
+  };
+  const cancelBulkRun = () => {
+    if (!bulkRun) return;
+    bulkCancelRef.current = true;
+    setBulkRun((current) => (current ? { ...current, cancelling: true } : current));
   };
   const retryFailed = () => {
     const again = (bulkResult && bulkResult.failed) || [];
@@ -1888,6 +2065,9 @@ function AddSheet({ ctx }) {
     setErr('');
     setTryOnErr('');
     if (id === 'tryon') setShowHint(false);
+    if (id === 'orders') {
+      checkOrderExtension();
+    }
   };
   const chooseOtherOrderShop = () => {
     cancelOrderCollection();
@@ -1896,9 +2076,31 @@ function AddSheet({ ctx }) {
     setBulkResult(null);
     setBulkRun(null);
     setOrderNeedLogin(false);
+    orderTabRef.current = null;
     setOrderTabId(null);
     setOrderExtImage(false);
     setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
+  };
+  const submitStoreRequest = async () => {
+    if (storeRequestBusy) return;
+    if (!storeRequestName.trim()) {
+      setErr('쇼핑몰 이름을 입력해 주세요.');
+      return;
+    }
+    setStoreRequestBusy(true);
+    setErr('');
+    try {
+      await liveJSON('/api/live/store-requests', {
+        method: 'POST',
+        body: JSON.stringify({ store_name: storeRequestName, store_url: storeRequestUrl, reason: storeRequestReason }),
+      });
+      setStoreRequestDone(true);
+      if (typeof showToast === 'function') showToast('쇼핑몰 추가 요청이 접수됐어요', 'check');
+    } catch (e) {
+      setErr((e && e.message) || '요청을 접수하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setStoreRequestBusy(false);
+    }
   };
   const handlePasteImage = (e) => {
     const items = (e.clipboardData && e.clipboardData.items) || [];
@@ -2074,13 +2276,13 @@ function AddSheet({ ctx }) {
     header = anchor ? '고민 중인 옷 추가' : '옷장에 아이템 추가';
     sub = anchor
       ? '이 옷이 내 옷장 옷들과 어울리는지 확인해볼게요.'
-      : (tab === 'orders'
-        ? '산 옷을 골라 하나씩 담아요.'
-        : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.');
+      : '사진 한 장 속 여러 개를 자동으로 분리해 드려요.';
   }
 
   const showBack = stage === 'select' || stage === 'register' || stage === 'anchor-ready' || stage === 'reextract-confirm';
-  const showOrderDemoBrowser = !!(wide && stage === 'input' && tab === 'orders' && orderFlow.demo && orderFlow.phase !== 'idle');
+  const nativeOrderWebview = !!(window.LookboxNative && window.LookboxNative.embeddedWebview);
+  const showOrderDemoBrowser = !!(wide && stage === 'input' && tab === 'orders' && !nativeOrderWebview && orderFlow.phase !== 'idle');
+  const keepOrderSheetOpen = tab === 'orders' && (orderFlow.phase === 'collecting' || orderFlow.phase === 'done' || !!bulk);
   const orderDemoPlatform = orderPlatformById(orderFlow.shopId || orderShop);
 
   return (
@@ -2089,7 +2291,7 @@ function AddSheet({ ctx }) {
     <BottomSheet
       open={addSheet.open}
       onClose={requestClose}
-      dismissOnScrim={stage !== 'analyzing'}
+      dismissOnScrim={stage !== 'analyzing' && !keepOrderSheetOpen}
       tightBottom={stage === 'input'}
       desktopMaxW={showOrderDemoBrowser ? 900 : 420}
     >
@@ -2181,14 +2383,13 @@ function AddSheet({ ctx }) {
                   login: orderFlow.demo
                     ? ['Chrome 로그인 창을 열었어요', '오른쪽 샘플 화면에서 로그인 버튼을 눌러 보세요.']
                     : ['Chrome에서 로그인해 주세요', '로그인이 끝나면 자동으로 다음 단계로 넘어가요.'],
-                  authenticated: ['로그인을 확인했어요', '이제 확장이 쇼핑몰의 주문내역 페이지를 열어요.'],
                   ready: ['주문내역을 열었어요', '이제 주문내역에서 옷만 가져올게요.'],
                   collecting: ['옷을 가져오고 있어요', orderFlow.count ? `${orderFlow.count}개를 찾았어요.` : '주문내역을 읽는 중이에요.'],
                   done: ['주문내역을 불러왔어요', '담을 옷을 확인해 주세요.'],
                   error: ['쇼핑몰에 연결하지 못했어요', '다시 연결하거나 다른 쇼핑몰을 선택해 주세요.'],
                 }[orderFlow.phase] || ['', ''];
                 const orderStepState = {
-                  opening: [0, 0], login: [0, 0], authenticated: [1, 1],
+                  opening: [0, 0], login: [0, 0],
                   ready: [2, 2], collecting: [2, 2], done: [3, 2], error: [0, 0],
                 }[orderFlow.phase] || [0, 0];
                 const [orderStepsDone, orderStepActive] = orderStepState;
@@ -2486,7 +2687,7 @@ function AddSheet({ ctx }) {
                                 </span>
                                 {tab === 'orders' && b.thumb ? (
                                   <span style={{ width: 38, height: 38, flex: 'none', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)', display: 'grid', placeItems: 'center' }}>
-                                    <img src={b.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <img src={b.thumb} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                   </span>
                                 ) : null}
                                 <span style={{ flex: 1, minWidth: 0 }}>
@@ -2547,7 +2748,9 @@ function AddSheet({ ctx }) {
                           </label>
                         ) : (
                           <div style={{ padding: '12px var(--s4) var(--s4)', borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-                            선택한 옷은 상세 정보를 하나씩 확인한 뒤 담아요.
+                            {tab === 'orders' && orderShop === 'naver'
+                              ? '이미지 없는 옷은 담은 뒤 바꿀 수 있어요.'
+                              : '선택한 옷은 상세 정보를 하나씩 확인한 뒤 담아요.'}
                           </div>
                         )}
                       </div>
@@ -2564,6 +2767,39 @@ function AddSheet({ ctx }) {
                               color: 'var(--ink-2)', letterSpacing: '-0.03em', whiteSpace: 'nowrap', wordBreak: 'normal',
                             }}>구매내역은 PC에서 불러올 수 있어요</span>
                           </div>
+                        ) : !orderBrowser.supported ? (
+                          <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 12px' }}>
+                            <div>
+                              <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>구매내역은 Chrome 또는 Edge에서 불러올 수 있어요</div>
+                              <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>현재 {orderBrowser.name}에서는 사진 또는 URL로 옷을 추가해 주세요.</div>
+                            </div>
+                          </div>
+                        ) : orderExtension === 'checking' ? (
+                          <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+                            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{orderBrowser.name} 연결 상태를 확인하고 있어요</span>
+                          </div>
+                        ) : (orderExtension === 'missing' || orderExtension === 'outdated') ? (
+                          <>
+                            <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>
+                              {orderExtension === 'outdated' ? '확장 프로그램 업데이트가 필요해요' : `${orderBrowser.name} 확장 프로그램을 먼저 설치해 주세요`}
+                            </div>
+                            <div style={{ marginTop: 5, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>
+                              한 번 설치하면 바로 불러와요.
+                            </div>
+                            <div style={{ display: 'grid', gap: 7, marginTop: 14 }}>
+                              {[
+                                ['확장 프로그램 설치', true, '0'],
+                                ['쇼핑몰 로그인', false, '1'],
+                                ['주문내역 열기', false, '2'],
+                                ['옷 가져오기', false, '3'],
+                              ].map(([label, active, number]) => (
+                                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 22 }}>
+                                  <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: active ? 'var(--surface-2)' : 'transparent', color: active ? 'var(--ink)' : 'var(--ink-3)', boxShadow: `inset 0 0 0 ${active ? 1.5 : 1}px ${active ? 'var(--ink)' : 'var(--line-2)'}`, fontSize: 11.5, fontWeight: 750 }}>{number}</span>
+                                  <span style={{ fontSize: 12.5, fontWeight: active ? 650 : 550, color: active ? 'var(--ink)' : 'var(--ink-3)' }}>{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
                         ) : orderFlow.phase !== 'idle' ? (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -2606,18 +2842,19 @@ function AddSheet({ ctx }) {
                           </>
                         ) : (
                           <>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
-                              어디서 산 옷을 가져올까요?
-                            </div>
-                            <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {orderNeedLogin
-                                ? '로그인한 뒤 다시 눌러 주세요.'
-                                : orderDemo
-                                  ? '샘플 주문내역 · 실제 옷장에는 저장하지 않아요.'
-                                  : '쇼핑몰을 고르면 로그인 화면이 열려요.'}
-                            </div>
-                            <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
-                              {ORDER_PLATFORMS.map((p) => (
+                            {!storeRequestOpen ? <>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.4 }}>
+                                어디서 산 옷을 가져올까요?
+                              </div>
+                              <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {orderNeedLogin
+                                  ? '로그인한 뒤 다시 눌러 주세요.'
+                                  : orderDemo
+                                    ? '샘플 주문내역 · 실제 옷장에는 저장하지 않아요.'
+                                    : 'Chrome에 연결됨 · 쇼핑몰을 고르면 로그인 화면이 열려요.'}
+                              </div>
+                              <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
+                                {ORDER_PLATFORMS.map((p) => (
                                 <button
                                   key={p.id}
                                   type="button"
@@ -2635,8 +2872,33 @@ function AddSheet({ ctx }) {
                                 >
                                   {p.name}
                                 </button>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                              <button type="button" onClick={() => { setStoreRequestOpen(true); setErr(''); }} style={{ marginTop: 'var(--s3)', alignSelf: 'flex-start', padding: 0, color: 'var(--ink-2)', fontSize: 12.5, fontWeight: 650, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                                찾는 쇼핑몰이 없나요? 추가 요청하기
+                              </button>
+                            </> : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <IconBtn name="chevL" label="쇼핑몰 선택으로" onClick={() => { setStoreRequestOpen(false); setStoreRequestDone(false); setErr(''); }} style={{ marginLeft: -8 }} />
+                                  <div style={{ fontSize: 15, fontWeight: 750 }}>쇼핑몰 추가 요청</div>
+                                </div>
+                                {storeRequestDone ? (
+                                  <div role="status" style={{ marginTop: 8, padding: '18px 14px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', color: 'var(--ink-2)', lineHeight: 1.55, fontSize: 13.5 }}>
+                                    <div style={{ color: 'var(--accent)', fontWeight: 800, marginBottom: 6 }}>요청이 접수됐어요</div>
+                                    {storeRequestName.trim()}을(를) 추가 후보로 기록했어요. 요청이 쌓이면 순서대로 검토할게요.
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>사용하고 싶은 쇼핑몰을 알려주시면 추가 후보로 검토할게요.</div>
+                                    <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름 (필수)" maxLength={120} style={{ height: 46, padding: '0 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, outline: 'none' }} />
+                                    <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 46, padding: '0 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, outline: 'none' }} />
+                                    <textarea className="lb-input" value={storeRequestReason} onChange={(e) => setStoreRequestReason(e.target.value)} placeholder="주로 어떤 옷을 사는지 알려주세요 (선택)" maxLength={1000} rows={3} style={{ padding: '12px 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, lineHeight: 1.45, resize: 'none', outline: 'none' }} />
+                                    <Btn full size="lg" icon="check" onClick={submitStoreRequest} disabled={storeRequestBusy}>{storeRequestBusy ? '접수 중…' : '추가 요청 접수하기'}</Btn>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -2834,14 +3096,14 @@ function AddSheet({ ctx }) {
                           </div>
                       ) : tab === 'orders' && bulk ? (
                         <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                          <Btn variant="soft" onClick={chooseOtherOrderShop} style={{ flex: 1 }}>취소</Btn>
+                          <Btn variant="soft" onClick={bulkRun ? cancelBulkRun : chooseOtherOrderShop} style={{ flex: 1 }}>취소</Btn>
                           <Btn
                             icon="plus"
                             onClick={runBulk}
                             disabled={busy || !!bulkRun || !bulkPicked.length}
                             style={{ flex: 1.6 }}
                           >
-                            {bulkRun ? '담는 중…' : `${bulkPicked.length}개 담기`}
+                            {bulkRun ? (bulkRun.cancelling ? '멈추는 중…' : '담는 중…') : `${bulkPicked.length}개 담기`}
                           </Btn>
                         </div>
                       ) : tab === 'orders' && orderFlow.demo && orderFlow.phase === 'login' ? (
@@ -2862,6 +3124,14 @@ function AddSheet({ ctx }) {
                         >
                           주문 내역 가져오기
                         </Btn>
+                      ) : tab === 'orders' && !orderBrowser.supported ? (
+                        <Btn full size="lg" icon="camera" onClick={() => switchSourceTab('photo')}>
+                          사진으로 추가하기
+                        </Btn>
+                      ) : tab === 'orders' && (orderExtension === 'missing' || orderExtension === 'outdated') ? (
+                        <Btn full size="lg" icon="bag" onClick={openOrderExtensionInstall}>
+                          {orderExtension === 'outdated' ? '확장 프로그램 업데이트하기' : '확장 프로그램 설치하기'}
+                        </Btn>
                       ) : (
                         <Btn
                           full size="lg" icon={tab === 'orders' ? 'bag' : 'sparkle'}
@@ -2869,7 +3139,7 @@ function AddSheet({ ctx }) {
                           disabled={bulk
                             ? (busy || !!bulkRun || !bulkPicked.length)
                             : tab === 'orders'
-                              ? (!wide || busy || !!bulkRun || ['opening', 'collecting'].includes(orderFlow.phase) || (orderFlow.phase === 'login' && !orderNeedLogin))
+                              ? (!wide || orderExtension === 'checking' || busy || !!bulkRun || ['opening', 'collecting'].includes(orderFlow.phase) || (orderFlow.phase === 'login' && !orderNeedLogin))
                               : (!canSubmit || busy || !!bulkRun)}
                         >
                           {bulkRun ? '담는 중…'
@@ -2879,7 +3149,6 @@ function AddSheet({ ctx }) {
                                 : `${bulkPicked.length}개 확인하고 담기`)
                             : orderFlow.phase === 'opening' ? 'Chrome 여는 중…'
                             : orderFlow.phase === 'login' ? (orderFlow.demo ? '오른쪽에서 로그인해 주세요' : (orderNeedLogin ? '로그인했어요' : 'Chrome에서 로그인해 주세요'))
-                            : orderFlow.phase === 'authenticated' ? '주문내역 열기'
                             : orderFlow.phase === 'ready' ? (orderFlow.demo ? '옷 가져오기' : '주문내역 가져오기')
                             : orderFlow.phase === 'collecting' ? (orderFlow.count ? `${orderFlow.count}개 찾는 중…` : '옷을 찾는 중…')
                             : orderFlow.phase === 'error' ? '다시 연결하기'
@@ -3135,11 +3404,20 @@ function AddSheet({ ctx }) {
               phase={orderFlow.phase}
               count={orderFlow.count}
               onLogin={completeOrderDemoLogin}
+              demo={orderFlow.demo}
+              collectedItems={orderPreviewItems}
             />
           ) : null}
         </div>
       </div>
     </BottomSheet>
+    {orderStorePreview ? (
+      <OrderStorePreview
+        step={orderStorePreview}
+        onClose={() => setOrderStorePreview('')}
+        onAdd={completeOrderInstallPreview}
+      />
+    ) : null}
     <OrderImportSession
         open={!!orderSession}
         platform={orderSession || orderPlatformById(orderShop)}

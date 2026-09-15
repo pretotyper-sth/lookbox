@@ -323,6 +323,12 @@ class UserContext(BaseModel):
     email: str | None = None
 
 
+class StoreRequestIn(BaseModel):
+    store_name: str
+    store_url: str | None = None
+    reason: str | None = None
+
+
 class WardrobeUpdate(BaseModel):
     name: str | None = None
     category: str | None = None
@@ -345,6 +351,10 @@ class OutfitAction(BaseModel):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_store_request_name(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip().lower())[:120]
 
 
 def require_supabase() -> None:
@@ -7218,6 +7228,96 @@ def live_auth_signup(body: AuthSignup) -> dict[str, Any]:
 
 
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
+
+
+@app.get("/api/live/store-requests")
+def list_store_requests(user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    """현재 사용자가 접수한 쇼핑몰 요청을 확인한다."""
+    require_supabase()
+    rows = (
+        supabase_admin.table("store_requests")
+        .select("id,store_name,store_url,reason,status,created_at,updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", desc=True)
+        .limit(50)
+        .execute()
+        .data
+        or []
+    )
+    return {"requests": rows}
+
+
+@app.post("/api/live/store-requests")
+def create_store_request(
+    body: StoreRequestIn, user: UserContext = Depends(current_user)
+) -> dict[str, Any]:
+    """없는 쇼핑몰 요청을 사용자당 몰별 한 건으로 저장·갱신한다."""
+    require_supabase()
+    name = body.store_name.strip()[:120]
+    normalized = normalize_store_request_name(name)
+    if len(normalized) < 2:
+        raise HTTPException(status_code=400, detail="쇼핑몰 이름을 두 글자 이상 입력해 주세요.")
+    url = (body.store_url or "").strip()[:500] or None
+    if url and not re.match(r"^https?://", url, re.I):
+        url = "https://" + url
+    reason = (body.reason or "").strip()[:1000] or None
+    row = (
+        supabase_admin.table("store_requests")
+        .upsert(
+            {
+                "user_id": user.id,
+                "store_name": name,
+                "normalized_name": normalized,
+                "store_url": url,
+                "reason": reason,
+                "status": "pending",
+                "updated_at": now_iso(),
+            },
+            on_conflict="user_id,normalized_name",
+        )
+        .execute()
+        .data
+        or []
+    )
+    return {"ok": True, "request": row[0] if row else {"store_name": name, "status": "pending"}}
+
+
+@app.get("/api/live/admin/store-requests")
+def live_admin_store_requests(
+    days: int = 365, x_admin_token: str = Header("", alias="X-Admin-Token")
+) -> dict[str, Any]:
+    """쇼핑몰 요청을 사이트별 투표 수와 최근 요청으로 집계한다."""
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=404, detail="not_found")
+    require_supabase()
+    span = max(1, min(int(days or 365), 3650))
+    since = (datetime.now(timezone.utc) - timedelta(days=span - 1)).isoformat()
+    rows = (
+        supabase_admin.table("store_requests")
+        .select("id,user_id,store_name,normalized_name,store_url,reason,status,created_at,updated_at")
+        .gte("updated_at", since)
+        .order("updated_at", desc=True)
+        .limit(20000)
+        .execute()
+        .data
+        or []
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = row.get("normalized_name") or normalize_store_request_name(row.get("store_name", ""))
+        item = grouped.setdefault(key, {
+            "store_name": row.get("store_name") or key,
+            "store_url": row.get("store_url") or "",
+            "requests": 0,
+            "latest_at": row.get("updated_at"),
+            "statuses": {},
+        })
+        item["requests"] += 1
+        item["store_url"] = item["store_url"] or row.get("store_url") or ""
+        status = row.get("status") or "pending"
+        item["statuses"][status] = item["statuses"].get(status, 0) + 1
+    summary = sorted(grouped.values(), key=lambda item: (-item["requests"], item["store_name"]))
+    return {"days": span, "total": len(rows), "sites": summary, "recent": rows[:100]}
 
 
 @app.get("/api/live/admin/ai-cost")

@@ -98,6 +98,19 @@ create table if not exists public.recommendation_timings (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.store_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  store_name text not null,
+  normalized_name text not null,
+  store_url text,
+  reason text,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, normalized_name)
+);
+
 -- wardrobe_items.updated_at: 앱 코드가 매번 세팅하지 않아도 UPDATE 시 자동으로 now()를 채움.
 create or replace function public.set_wardrobe_updated_at()
 returns trigger as $$
@@ -117,6 +130,7 @@ create index if not exists idx_wardrobe_items_user_status on public.wardrobe_ite
 create index if not exists idx_outfits_user_created on public.outfits(user_id, created_at desc);
 create index if not exists idx_generated_images_user_cache on public.generated_images(user_id, cache_key);
 create index if not exists idx_credit_ledger_user on public.credit_ledger(user_id);
+create index if not exists idx_store_requests_name on public.store_requests(normalized_name, created_at desc);
 
 alter table public.profiles enable row level security;
 alter table public.wardrobe_items enable row level security;
@@ -127,6 +141,7 @@ alter table public.credit_ledger enable row level security;
 -- extraction_timings / recommendation_timings: 백엔드(service role)만 기록/집계. anon 접근은 RLS로 차단(정책 없음).
 alter table public.extraction_timings enable row level security;
 alter table public.recommendation_timings enable row level security;
+alter table public.store_requests enable row level security;
 
 drop policy if exists "profiles own rows" on public.profiles;
 create policy "profiles own rows" on public.profiles
@@ -151,3 +166,7 @@ create policy "ai logs own rows" on public.ai_usage_logs
 drop policy if exists "credits own rows" on public.credit_ledger;
 create policy "credits own rows" on public.credit_ledger
   for select using (auth.uid() = user_id);
+
+drop policy if exists "store requests own rows" on public.store_requests;
+create policy "store requests own rows" on public.store_requests
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

@@ -2514,7 +2514,7 @@ function App() {
     detailIndex: ((detailList && detailList.looks) || savedLooks).findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: ((detailList && detailList.looks) || savedLooks).length, gotoLook,
     hasWardrobe: comboReady,
-    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, lookbookLoading,
+    comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, wardrobeLoaded, lookbookLoading,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
     // 코디 개수·제안 코디 수는 계정 설정(prefs)을 따른다. 기기별 tweak은 쇼케이스용 폴백.
     dailyCount, wishCount, setDailyCount, setWishCount,

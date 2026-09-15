@@ -2,7 +2,7 @@
 
 상품 URL 등록은 페이지 HTML에서 상품컷을 고른 뒤 그 이미지를 받는다. 같은 HTML에서 브랜드·가격·재질도 읽어 등록 칸에 넣는다. 쿠팡·네이버쇼핑 같은 마켓은 봇이 막아 사진 업로드로 안내한다.
 
-구매내역 확장으로 가져온 상품은 예외다. 로그인된 Chrome에서 주문내역에 이미 표시된 이미지를 확장이 받아 사진 등록 API로 넘기므로, 서버가 상품 상세 URL을 열지 못해도 등록할 수 있다. 상품 URL은 출처·중복 판정용으로 따로 저장한다. (`extensions/lookbox-orders/background.js` `FETCH_IMAGE`, `frontend/src/proto/04-screens-ab.jsx` `importBulkItem`, `backend/app/main.py` `live_import_photo`, 2026-09-11)
+구매내역 확장으로 가져온 상품은 예외다. 로그인된 Chrome에서 주문내역에 이미 표시된 이미지를 확장이 받아 사진 등록 API로 넘기므로, 서버가 상품 상세 URL을 열지 못해도 등록할 수 있다. 확장 이미지 전달이 실패했을 때는 URL 추출로 조용히 되돌아가지 않고, 확장 연결을 다시 확인하라고 알려 준다. 상품 URL은 출처·중복 판정용으로 따로 저장한다. (`extensions/lookbox-orders/background.js` `FETCH_IMAGE`, `frontend/src/proto/04-screens-ab.jsx` `importBulkItem`, `backend/app/main.py` `live_import_photo`, 2026-09-13)
 
 재질은 JSON-LD·표뿐 아니라 숨은 상세 팝업·스크립트 문자열의 혼용률(`Outshell: Cotton 100%` 등)도 본다. 클릭 후 따로 받아 오는 상세는 못 본다. (`backend/app/main.py` `_material_from_body`, 2026-08-30)
 

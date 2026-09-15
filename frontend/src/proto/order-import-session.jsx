@@ -4,8 +4,18 @@ const React = window.React;
 const { useState, useEffect, useRef, useLayoutEffect } = React;
 
 const CARD_H = 'min(640px, calc(100dvh - 48px))';
+const TRAY_CARD_H = 'min(568px, calc(100dvh - 120px))';
 const NATIVE_WEBVIEW_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 const NATIVE_DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+
+function orderItemMeta(item) {
+  const bits = [];
+  if (item.brand && !/^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test(item.brand.trim())) bits.push(item.brand);
+  if (item.size) bits.push(`사이즈 ${item.size}`);
+  if (item.price) bits.push(item.price);
+  if (item.purchasedAt) bits.push(`구매일 ${item.purchasedAt}`);
+  return bits.join(' · ');
+}
 
 function nativePageLooksLoggedOut() {
   const url = location.href.toLowerCase();
@@ -171,8 +181,10 @@ function OrderImportSession({
     const url = it && it.url;
     if (!url || seenRef.current.has(url)) return;
     seenRef.current.add(url);
+    const brand = /^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test((it.brand || '').trim()) ? '' : it.brand;
     setFound((prev) => prev.concat([{
       ...it,
+      brand,
       url,
       name: it.name || '',
       store: it.platform || it.store || (shop && shop.name) || '',
@@ -232,13 +244,16 @@ function OrderImportSession({
       setDoneCollect(true);
       setPhase((p) => (p === 'login' ? 'orders' : p));
       if (!(items && items.length) && !seenRef.current.size) {
-        setErr('주문내역이 보이면\n다시 불러오세요.');
+        setErr('주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.');
       }
     } catch (e) {
       if (cancelRef.current) return;
       const msg = String((e && e.message) || '');
       if (msg === 'NEED_LOGIN' || /로그인/.test(msg)) {
-        setErr('이 화면에서 로그인한 뒤\n다시 눌러 주세요.');
+        setErr('로그인 상태를 확인하지 못했어요. 다시 로그인해 주세요.');
+        setPhase('login');
+      } else if (msg === 'ORDERS_UNAVAILABLE') {
+        setErr('주문내역 화면을 열지 못했어요. 다시 로그인해 주세요.');
         setPhase('login');
       } else {
         setErr(formatOrderErr(msg || '주문 내역을 가져오지 못했어요.', wide));
@@ -433,7 +448,7 @@ function OrderImportSession({
         await new Promise((resolve) => setTimeout(resolve, 90));
       }
       setDoneCollect(true);
-      if (!(items && items.length)) setErr('주문내역에서 옷을 찾지 못했어요.');
+      if (!(items && items.length)) setErr('주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.');
     } catch {
       if (!cancelRef.current) setErr('주문내역을 읽지 못했어요.\n페이지를 확인한 뒤 다시 시도해 주세요.');
     } finally {
@@ -662,7 +677,7 @@ function OrderImportSession({
       return `${found.length}개를 불러왔어요. 담을 옷을 골라 주세요.`;
     }
     if (doneCollect && !found.length) {
-      return err || '주문내역에서 옷을 찾지 못했어요.';
+      return err || '주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.';
     }
     return '옷을 찾는 중…';
   })();
@@ -742,7 +757,7 @@ function OrderImportSession({
       >
         {(!trayOn || (wide && !extensionMode)) ? loginCard : null}
         {trayOn ? (
-          <div className="lb-order-card tray" style={{ height: wide ? CARD_H : 'min(92dvh, 760px)' }}>
+          <div className="lb-order-card tray" style={{ height: wide ? TRAY_CARD_H : 'min(92dvh, 760px)' }}>
             {trayBody}
           </div>
         ) : null}
@@ -774,7 +789,7 @@ function OrderItemRow({ it, onToggle }) {
       </button>
       <div className="lb-order-thumb">
         {it.thumb ? (
-          <img src={it.thumb} alt="" />
+          <img src={it.thumb} alt="" referrerPolicy="no-referrer" />
         ) : (
           <Icon name="hanger" size={22} />
         )}
@@ -790,7 +805,7 @@ function OrderItemRow({ it, onToggle }) {
           marginTop: 3, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.35,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {[it.store, it.price].filter(Boolean).join(' · ') || '상품 정보'}
+          {orderItemMeta(it) || '상품 정보'}
         </div>
         {it.error ? (
           <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: '#B0573C', lineHeight: 1.35 }}>
