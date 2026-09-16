@@ -908,3 +908,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-16: 남성 AI 착장의 Image 1을 `assets/mood/남자 코디 레퍼런스.png`로 고정했다. 실행 프롬프트는 동일 인물 유지·Image 2+ 옷장 아이템 착용·전신 실사 출력·아이템 추가/삭제 금지와 목록만 남겼고, 체형·나이·피부·포즈·무드·배경·기장 관련 추가 지시를 제거했다. 기존 결과와 분리하도록 캐시는 `model-id29-`로 올렸다. 근거: `backend/app/main.py` `_mood_identity_seed`, `_model_look_prompt_with_reference`.
 2026-09-16: 여성 AI 착장의 Image 1도 `assets/mood/여자 코디 레퍼런스.png`를 직접 읽도록 맞췄다. 남녀 모두 mood 폴더의 동명 레퍼런스만 교체하면 다음 착장 생성에 반영되며, 기존 여성 결과는 `model-id30-` 캐시 분리로 재사용하지 않는다. 근거: `backend/app/main.py` `_mood_identity_seed`.
 2026-09-16: 기본 AI 착장은 mood 레퍼런스의 인물·구도·배경·조명을 함께 따른다. 개인화 착장은 프로필 사진을 Image 1로, 기본 레퍼런스를 Image 2로 전달하고 키·몸무게를 자연스러운 신체 스케일 가이드로만 쓴다. 레퍼런스 파일 해시를 캐시 키에 포함해 파일 교체 뒤 이전 결과가 남지 않게 했다(`model-id31-`). 근거: `backend/app/main.py` `_model_look_prompt_with_reference`, `generate_model_look_image`.
+2026-09-16: 바로 보기 탭에서 전신 이미지 생성 전의 두 줄 안내를 12px 내렸다. 프사 원형은 생성 중 스켈레톤과 같은 좌표를 유지한다. 근거: `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.
+2026-09-16: 본인 외 바로 보기 대상 입력에서 관계명·이름 필드를 제거했다. 저장·목록·생성 안내는 이름 없이 사진과 기본 신체 정보만 쓴다. 근거: `frontend/src/proto/04-screens-ab.jsx` `TryOnPersonSheet`.
+2026-09-16: 바로 보기 생성 전 안내를 내리던 변경을 되돌리고, 텍스트는 생성 진행 제목과 같은 y=121px로 복원했다. 대신 바로 보기 스테이지를 사진·URL과 같은 168px로 줄여 텍스트 아래 빈 여백과 탭별 시트 높이 차이를 없앴다. 근거: `frontend/src/proto/04-screens-ab.jsx` `panelH`, `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.

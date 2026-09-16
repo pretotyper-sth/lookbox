@@ -1225,9 +1225,10 @@ function OrderStorePreview({ step, onClose, onAdd }) {
 function TryOnPersonSheet({ open, profile, onClose, onSave }) {
   const ProfileAvatar = window.ProfileAvatar;
   const sheetBodyRef = useR(null);
+  const { name: _ignoredName, ...savedProfile } = profile || {};
   const initial = {
-    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
-    ...(profile || {}),
+    avatar: '', gender: '', age: '', height: '', weight: '',
+    ...savedProfile,
   };
   const [draft, setDraft] = useS(initial);
   useE(() => {
@@ -1262,7 +1263,6 @@ function TryOnPersonSheet({ open, profile, onClose, onSave }) {
         </div>
 
         <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <LabeledField label="이름 또는 관계" value={draft.name} onChange={set('name')} placeholder="예) 남친, 엄마" />
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -1281,7 +1281,7 @@ function TryOnPersonSheet({ open, profile, onClose, onSave }) {
           </div>
         </div>
         <div style={{ marginTop: 24 }}>
-          <Btn full size="lg" icon="check" disabled={!ready} onClick={() => onSave({ ...draft, name: draft.name.trim() || '선물용' })}>저장하고 계속하기</Btn>
+          <Btn full size="lg" icon="check" disabled={!ready} onClick={() => onSave(draft)}>저장하고 계속하기</Btn>
           {!ready && <div style={{ marginTop: 9, fontSize: 12, color: 'var(--ink-3)', textAlign: 'center' }}>사진과 성별·연령대·키·몸무게를 모두 입력해 주세요.</div>}
         </div>
       </div>
@@ -2464,7 +2464,7 @@ function AddSheet({ ctx }) {
                     <span style={{ width: 34, height: 34, flex: 'none', borderRadius: '50%', overflow: 'hidden', background: tryOnOther.avatar ? 'var(--surface)' : 'var(--surface-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>
                       {tryOnOther.avatar ? <img src={tryOnOther.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="plus" size={17} />}
                     </span>
-                    <span style={{ minWidth: 0, flex: 1 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>{tryOnOther.name || '본인 외'}</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{tryOnOther.avatar ? '선택해서 바로 보기' : '사진과 정보 등록'}</span></span>
+                    <span style={{ minWidth: 0, flex: 1 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>본인 외</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{tryOnOther.avatar ? '선택해서 바로 보기' : '사진과 정보 등록'}</span></span>
                     {tryOnOther.avatar && <span role="button" tabIndex={0} aria-label="본인 외 대상 편집" onClick={(e) => { e.stopPropagation(); setTryOnPersonOpen(true); }} style={{ color: 'var(--ink-3)', padding: 4 }}><Icon name="pencil" size={14} /></span>}
                   </button>
                 </div>
@@ -2481,10 +2481,10 @@ function AddSheet({ ctx }) {
               {/* 탭마다 본문 높이가 달라지지 않도록 미디어 패널·힌트·푸터 슬롯을 고정 */}
               {(() => {
                 const STAGE_H = 168;
-                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역·바로 보기는 이 칸까지 박스를 키운다.
-                // 구매내역·바로 보기는 사진·URL의 CTA 위 보조 슬롯까지 카드에 포함한다.
-                // 따라서 같은 CTA 기준선을 유지하면서도 비어 있는 중간 행을 만들지 않는다.
-                const panelH = tab === 'tryon' || tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
+                const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역만 이 칸까지 박스를 키운다.
+                // 바로 보기는 사진·URL과 같은 기본 스테이지 높이를 쓴다. 생성 전 안내 아래의
+                // 빈칸을 없애 세 탭의 시트 크기와 CTA 기준선을 맞춘다.
+                const panelH = tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',
@@ -2556,7 +2556,7 @@ function AddSheet({ ctx }) {
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
                 const tryOnGuide = tryOnSubject === 'other'
-                  ? `${tryOnOther.name || '이 대상'} 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.`
+                  ? '이 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.'
                   : '프로필 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.

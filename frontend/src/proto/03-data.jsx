@@ -175,7 +175,7 @@ const DEFAULT_PREFS = {
   tryOnAssets: { body: '', top: '', bottom: '', full: '' },
   tryOnActive: 'self',
   tryOnOther: {
-    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
+    avatar: '', gender: '', age: '', height: '', weight: '',
     tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '',
     tryOnAssets: { body: '', top: '', bottom: '', full: '' },
   },

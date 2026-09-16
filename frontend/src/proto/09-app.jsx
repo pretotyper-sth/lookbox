@@ -1060,7 +1060,7 @@ function App() {
   const openAccount = () => setAccountSheet(true);
   const emptyTryOnAssets = () => ({ body: '', top: '', bottom: '', full: '' });
   const emptyTryOnOther = () => ({
-    name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
+    avatar: '', gender: '', age: '', height: '', weight: '',
     tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets(),
   });
   const setAvatar = (dataUrl) => {
@@ -1106,12 +1106,13 @@ function App() {
     persistPrefs({ ...prefs, tryOnActive: next });
   };
   const saveTryOnOther = (draft) => {
-    const previous = prefs.tryOnOther || emptyTryOnOther();
+    const { name: _oldName, ...previous } = prefs.tryOnOther || emptyTryOnOther();
+    const { name: _draftName, ...savedDraft } = draft;
     const changed = previous.avatar !== draft.avatar
       || previous.gender !== draft.gender || previous.age !== draft.age
       || String(previous.height) !== String(draft.height) || String(previous.weight) !== String(draft.weight);
     const other = {
-      ...previous, ...draft,
+      ...previous, ...savedDraft,
       ...(changed ? { tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets() } : {}),
     };
     const np = { ...prefs, tryOnOther: other, tryOnActive: 'other' };
@@ -2862,7 +2863,7 @@ function App() {
       <TryOnCameraOverlay
         open={tryOnCamera}
         wide={wide}
-        profileName={prefs.tryOnActive === 'other' ? ((prefs.tryOnOther && prefs.tryOnOther.name) || '본인 외') : '본인'}
+        profileName={prefs.tryOnActive === 'other' ? '본인 외' : '본인'}
         activeProfile={prefs.tryOnActive || 'self'}
         frameSrc={prefs.tryOnActive === 'other' ? (prefs.tryOnOther && prefs.tryOnOther.tryOnFrame) : prefs.tryOnFrame}
         bodySrc={prefs.tryOnActive === 'other'
