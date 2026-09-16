@@ -26,6 +26,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
 - [profile-height-weight](profile-height-weight.md) — 키·몸무게는 표시/입력 행을 나눔. 추천에는 안 넣고 바로 보기 전신만 자연스럽게 반영
+- [personal-model-look](personal-model-look.md) — AI 착장 개인화 토글은 기본 off. 얼굴·키·몸무게를 계정 단위로 저장하고 모달 재표시도 계정 단위로 기억
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용. 착장 인물은 `assets/mood` 남·여 예시. 분류 id는 `_STYLE_IDS`와 같음
 - [order-import-webview](order-import-webview.md) — 구매내역: 실제 확장은 Chrome 팝업, 샘플은 추가 시트 2열 가상 Chrome. 썸네일 직접 등록·탭 이동 후 유지·선택 후 공용 상세입력. 모바일은 PC 안내
 - [store-request-survey](store-request-survey.md) — 지원하지 않는 쇼핑몰은 로그인 사용자별 중복을 막아 요청으로 저장하고, 관리자 API가 사이트별 요청 수·최근 요청을 집계한다

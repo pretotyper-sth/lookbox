@@ -4305,6 +4305,9 @@ def _model_look_prompt_with_reference(
     occasion: str = "",
     styles: list[str] | None = None,
     user_request: str = "",
+    personal: bool = False,
+    height: str | None = None,
+    weight: str | None = None,
 ) -> str:
     outfit_block = _model_look_outfit_block(items, wish)
     hem = _bottom_hem_note(items, hem_seed, wish)
@@ -4330,12 +4333,18 @@ def _model_look_prompt_with_reference(
                 "Synthesize a photorealistic garment from the description and put it on them. "
                 "Do not keep a wardrobe garment in the same slot."
             )
+    identity_source = "the user's profile photo" if personal else "the canonical reference"
+    body_note = (
+        f"The profile records {height or 'an unspecified'} cm and {weight or 'an unspecified'} kg. "
+        "Use these only as a subtle guide to natural proportions and build; do not display measurements or exaggerate them."
+        if personal else ""
+    )
     return f"""This is an outfit replacement task, not a character generation task.
 
 Image 1 defines the character identity.
 The wardrobe reference images define the garments.
 Do not mix these roles.
-Preserve the person from the canonical reference.
+Preserve the person from {identity_source}.
 Dress that same person using the supplied wardrobe garments.
 
 CANONICAL CHARACTER:
@@ -4344,7 +4353,7 @@ Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
 hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
 and height impression.
 Keep the same height impression and overall build of Image 1.
-Image 1 is already the canonical model. Keep their apparent age exactly as photographed —
+Image 1 is already the {'user reference' if personal else 'canonical model'}. Keep their apparent age exactly as photographed —
 do not de-age, age, slim, muscularize, or elongate the character.
 Do not replace them with a different person or a celebrity.
 Use ordinary real-adult proportions: a normal-sized head, crotch just below the
@@ -4360,6 +4369,7 @@ well-defined features, catchlights in the eyes, natural lips.
 Skin must look real: visible pores, subtle texture, faint natural variation.
 No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
 Fashion mood is expressed through clothing, never by changing the person.
+{body_note}
 
 OUTFIT:
 Dress the character using the supplied wardrobe items.
@@ -4905,6 +4915,9 @@ def generate_model_look_image(
     styles: list[str] | None = None,
     user_request: str = "",
     stage: Callable[[str], None] | None = None,
+    personal: bool = False,
+    height: str | None = None,
+    weight: str | None = None,
 ) -> str | None:
     """canonical 캐릭터에 옷장 실물을 입힌 전신 컷. 프로필 얼굴은 쓰지 않는다.
 
@@ -4932,7 +4945,11 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
-    key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}"
+    if personal:
+        identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
+        key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+    else:
+        key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -4958,6 +4975,7 @@ def generate_model_look_image(
         prompt = _model_look_prompt_with_reference(
             gender, items, wish, hem_seed,
             mood=mood, occasion=occasion, styles=styles, user_request=user_request,
+            personal=personal, height=height, weight=weight,
         )
         look_model = OPENAI_IMAGE_MODEL_LOOK
         if AI_TEST_MODE:
@@ -5334,8 +5352,10 @@ class LiveLookOutfit(BaseModel):
 
 class LiveLooks(BaseModel):
     gender: str | None = None
-    # 예전 클라가 얼굴을 실어 보내도 422 나지 않게 받을 뿐, 착장에는 쓰지 않는다.
+    personal_model_look: bool = False
     face_data_url: str | None = None
+    height: str | None = None
+    weight: str | None = None
     outfits: list[LiveLookOutfit] = []
 
 
@@ -8319,6 +8339,10 @@ def _apply_model_looks(
     by_id: dict[str, Any],
     gender: str | None = None,
     report: Callable[[Any], None] | None = None,
+    reference_png: bytes | None = None,
+    personal: bool = False,
+    height: str | None = None,
+    weight: str | None = None,
 ) -> None:
     """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
 
@@ -8397,12 +8421,13 @@ def _apply_model_looks(
 
         return outfit, generate_model_look_image(
             user_id, outfit["itemIds"], members, gender,
-            reference_png=identity, wish=_clean_wish(outfit.get("wish")),
+            reference_png=reference_png or identity, wish=_clean_wish(outfit.get("wish")),
             mood=outfit.get("mood") or "",
             occasion="daily outfit",
             styles=outfit.get("styles") or [],
             user_request=outfit.get("label") or "",
             stage=stage,
+            personal=personal, height=height, weight=weight,
         )
 
     t0 = time.perf_counter()
@@ -8768,7 +8793,14 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
     ]
 
     def work(report) -> dict[str, Any]:
-        _apply_model_looks(user.id, outfits, by_id, body.gender, report=report)
+        reference = _face_image_bytes(body.face_data_url) if body.personal_model_look else None
+        if body.personal_model_look and not reference:
+            raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요.")
+        _apply_model_looks(
+            user.id, outfits, by_id, body.gender, report=report,
+            reference_png=reference, personal=body.personal_model_look,
+            height=body.height, weight=body.weight,
+        )
         return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
 
     return stream_with_keepalive(work)

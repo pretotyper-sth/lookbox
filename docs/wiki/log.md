@@ -883,3 +883,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - `frontend/src/proto/09-app.jsx`, `03-data.jsx`: 대상별 마지막 선택·사진·전신 이미지 캐시를 유지하고 대상에 맞춰 생성한다.
 - `frontend/src/proto/10-tryon.jsx`, `02-shared.jsx`: 두 대상의 전신이 모두 준비되면 카메라 우상단 전환 버튼을 보여준다.
 - `backend/app/main.py`: 본인 외 이미지 저장 슬롯과 성별·연령대·키·몸무게 기반 전신 생성 입력을 추가했다. [[tryon-multiple-profiles]]
+
+# 2026-09-16 — AI 착장 개인화 설정
+
+- `frontend/src/proto/08-mypage.jsx`, `09-app.jsx`, `03-data.jsx`: 설정에 개인 얼굴·체형 착장 토글을 추가하고, 사진·키·몸무게 입력 시트와 계정 단위 `다시 열지 않기`를 연결했다. 기본값은 off다.
+- `backend/app/main.py`: 개인 프로필 사진과 키·몸무게를 착장 생성에 전달하고, 사진 해시·수치별 캐시 키와 자연스러운 비율 프롬프트를 적용했다. [[personal-model-look]]

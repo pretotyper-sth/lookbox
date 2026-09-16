@@ -407,13 +407,45 @@ function Switch({ on, onToggle }) {
   );
 }
 
+function PersonalLookSetupSheet({ open, prefs, onClose, onSave, onInvalid }) {
+  const [d, setD] = useMp({ avatar: '', height: '', weight: '', dontAsk: false });
+  useMe(() => {
+    if (open) setD({ avatar: prefs.avatar || '', height: prefs.height || '', weight: prefs.weight || '', dontAsk: !!prefs.personalModelLookDontAsk });
+  }, [open]);
+  const ready = !!d.avatar && !!d.height && !!d.weight;
+  return (
+    <BottomSheet open={open} onClose={onClose}>
+      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>내 정보로 AI 착장 보기</div>
+          <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
+        </div>
+        <p style={{ margin: '0 0 20px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>프로필 사진과 키·몸무게를 기준으로 나에게 맞는 모습으로 보여드려요.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+          <ProfileAvatar src={d.avatar} size={68} onChange={(avatar) => setD((s) => ({ ...s, avatar }))} onInvalid={onInvalid} />
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>얼굴이 잘 보이는<br />사진을 올려 주세요.</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <NumberSlider label="키" hint="cm" value={d.height} onChange={(height) => setD((s) => ({ ...s, height }))} min={140} max={200} unit="cm" defaultValue={165} />
+          <NumberSlider label="몸무게" hint="kg" value={d.weight} onChange={(weight) => setD((s) => ({ ...s, weight }))} min={30} max={150} unit="kg" defaultValue={60} />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22, fontSize: 13, color: 'var(--ink-2)' }}>
+          <input type="checkbox" checked={d.dontAsk} onChange={(e) => setD((s) => ({ ...s, dontAsk: e.target.checked }))} />
+          다시 열지 않기
+        </label>
+        <div style={{ marginTop: 24 }}><Btn full size="lg" icon="check" disabled={!ready} onClick={() => onSave(d)}>내 정보로 보기</Btn></div>
+      </div>
+    </BottomSheet>
+  );
+}
+
 /* ============================================================
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
-    modelLook, setModelLook, showToast,
+    modelLook, setModelLook, personalModelLook, onTogglePersonalModelLook, personalSetupOpen, closePersonalSetup, savePersonalModelLook, showToast,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
   } = ctx;
@@ -467,6 +499,10 @@ function MyPageScreen({ ctx }) {
     />
   );
 
+  const personalModelLookRow = (
+    <ActionRow nested label="내 얼굴·체형에 맞춰 보기" hint="프로필 사진과 키·몸무게를 사용해요" right={<Switch on={!!personalModelLook} onToggle={() => onTogglePersonalModelLook && onTogglePersonalModelLook(!personalModelLook)} />} />
+  );
+
   // 개수 설정은 추천을 켰을 때만. 박스는 없이 ㄴ + 살짝 들여쓰기만.
   const dailyChildRows = dailyEnabled ? (
     <>
@@ -500,6 +536,7 @@ function MyPageScreen({ ctx }) {
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
       {dailySettingsRows}
       {modelLookRow}
+      {personalModelLookRow}
     </div>
   );
 
@@ -524,6 +561,7 @@ function MyPageScreen({ ctx }) {
       <PlanSheet open={planSheet} onClose={() => setPlanSheet(false)} billing={billing} />
       <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
+      <PersonalLookSetupSheet open={!!personalSetupOpen} prefs={prefs} onClose={closePersonalSetup} onSave={savePersonalModelLook} onInvalid={(msg) => showToast(msg, 'camera')} />
     </>
   );
 
@@ -589,6 +627,7 @@ function MyPageScreen({ ctx }) {
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
           {dailySettingsRows}
           {modelLookRow}
+          {personalModelLookRow}
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>
           <ActionRow icon="help" label="고객센터" onClick={() => {}} />

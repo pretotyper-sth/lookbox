@@ -164,7 +164,9 @@ const DEFAULT_PREFS = {
   dailyEnabled: false, // 오늘의 추천 코디 — 비용 때문에 기본 off, 마이페이지에서 허용
   dailyCount: 4,       // 처음 추천받을 때 만드는 코디 수 (2~8)
   wishCount: 1,        // 그 중 '옷장에 없는 아이템'을 하나 더한 코디 수 (1~3, 마지막 칸)
-  modelLook: false,    // 코디를 룩북 모델 전신 컷으로 — 더 비싸서 기본 off. 프로필 얼굴은 안 씀
+  modelLook: false,    // 코디를 룩북 모델 전신 컷으로 — 더 비싸서 기본 off
+  personalModelLook: false, // 내 얼굴·신체 사이즈로 AI 착장 이미지 보기 — 기본 off
+  personalModelLookDontAsk: false, // 계정 단위 안내 모달 숨김
   // 매장 맞춰보기 — 원본 전신 + 옷 자리가 뚫린 PNG. 카메라에 프레임만 겹친다.
   tryOnBody: '',
   tryOnFrame: '',

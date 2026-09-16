@@ -918,6 +918,7 @@ function App() {
   }, [authUid]);
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
+  const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
 
   // 부팅 시 Supabase 세션을 복원한다. lb_onboarded는 이 기기의 플래그일 뿐이어서,
@@ -1768,6 +1769,10 @@ function App() {
         },
         body: JSON.stringify({
           gender: prefs.gender || '',
+          personal_model_look: !!prefs.personalModelLook,
+          face_data_url: prefs.personalModelLook ? (prefs.avatar || '') : '',
+          height: prefs.personalModelLook ? (prefs.height || '') : '',
+          weight: prefs.personalModelLook ? (prefs.weight || '') : '',
           outfits: targets.map((o) => ({
             id: o.id,
             item_ids: o.itemIds || [],
@@ -1794,7 +1799,7 @@ function App() {
       });
       bumpDaily();
     }
-  }, [prefs.gender, dailyStyle, items, bumpDaily, reloadBilling]);
+  }, [prefs.gender, prefs.personalModelLook, prefs.avatar, prefs.height, prefs.weight, dailyStyle, items, bumpDaily, reloadBilling]);
 
   // refreshLive로 코디만 채워지면 dailyAllowed=true라 오늘 탭이 request를 스킵한다.
   // 그때 applyModelLooks가 안 타서 착장 토글이 켜져 있어도 옷 컷아웃만 보였다.
@@ -1819,9 +1824,9 @@ function App() {
     if (on) {
       const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
       if (pending.length) {
-        showToast('AI 착장 이미지를 만들고 있어요. 조금 걸려요.');
+        showToast('AI 착장 만드는 중이에요');
         applyModelLooks(pending).then((n) => {
-          showToast(n ? 'AI 착장으로 바꿔 보여드려요' : '다음 추천부터 AI 착장으로 보여드려요');
+          showToast(n ? 'AI 착장으로 바꿔 보여드려요' : '다음 추천부터 적용해요');
         }).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
       } else {
         showToast('다음 추천부터 AI 착장으로 보여드려요');
@@ -1830,6 +1835,38 @@ function App() {
       showToast('AI 착장 이미지를 껐어요');
     }
     return true;
+  };
+
+  const onTogglePersonalModelLook = (on) => {
+    const clearDisplayedModelLooks = () => {
+      (LB_DATA.DAILY || []).forEach((o) => { if (o) delete o.lookImg; });
+      writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
+      bumpDaily();
+    };
+    if (!on) {
+      clearDisplayedModelLooks();
+      const np = { ...prefs, personalModelLook: false };
+      setPrefs(np); persistPrefs(np); showToast('내 얼굴·체형 맞춤 착장을 껐어요');
+      return;
+    }
+    if (prefs.personalModelLookDontAsk) {
+      clearDisplayedModelLooks();
+      const np = { ...prefs, personalModelLook: true };
+      setPrefs(np); persistPrefs(np); return;
+    }
+    setPersonalSetupOpen(true);
+  };
+  const savePersonalModelLook = (draft) => {
+    const avatarChanged = draft.avatar !== prefs.avatar;
+    const np = {
+      ...prefs, avatar: draft.avatar || '', height: draft.height || '', weight: draft.weight || '',
+      personalModelLook: true, personalModelLookDontAsk: !!draft.dontAsk,
+      ...(avatarChanged ? { tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets() } : {}),
+    };
+    (LB_DATA.DAILY || []).forEach((o) => { if (o) delete o.lookImg; });
+    writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
+    bumpDaily();
+    setPrefs(np); persistPrefs(np); setPersonalSetupOpen(false); showToast('내 정보로 AI 착장을 보여드려요', 'check');
   };
 
   const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
@@ -2579,6 +2616,8 @@ function App() {
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
     modelLook: !!prefs.modelLook, setModelLook,
+    personalModelLook: !!prefs.personalModelLook, onTogglePersonalModelLook, personalSetupOpen,
+    closePersonalSetup: () => setPersonalSetupOpen(false), savePersonalModelLook,
     dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
