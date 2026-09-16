@@ -1289,6 +1289,8 @@ function TryOnPersonSheet({ open, profile, onClose, onSave }) {
   );
 }
 
+const TRYON_AVATAR_SIZE = 72;
+
 function AddSheet({ ctx }) {
   const {
     addSheet, closeAdd, confirmAdd, addItemsBatch, liveImportSource, discardLiveItems,
@@ -2631,7 +2633,7 @@ function AddSheet({ ctx }) {
                             {ProfileAvatar ? (
                               <ProfileAvatar
                                 src={tryOnAvatar}
-                                size={80}
+                                size={TRYON_AVATAR_SIZE}
                                 onChange={tryOnSubject === 'self' ? onTryOnAvatar : undefined}
                                 onInvalid={(msg) => setTryOnErr(formatTryOnErr ? formatTryOnErr(msg) : msg)}
                               />

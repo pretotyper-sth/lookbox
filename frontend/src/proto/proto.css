@@ -301,11 +301,11 @@ img { display: block; max-width: 100%; }
 }
 
 .lb-tryon-skel {
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   position: absolute;
-  top: 31px;
+  top: 35px;
   left: 50%;
   transform: translate(-50%, -10px);
 }
@@ -325,7 +325,7 @@ img { display: block; max-width: 100%; }
 }
 .lb-tryon-profile-avatar {
   position: absolute;
-  top: 31px;
+  top: 35px;
   left: 50%;
   transform: translate(-50%, -10px);
 }
