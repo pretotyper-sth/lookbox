@@ -75,54 +75,27 @@ class ModelLookPromptTest(unittest.TestCase):
     def setUpClass(cls):
         cls.ns = load()
 
-    def test_prompt_is_catalog_model_not_selfie(self):
+    def test_fallback_prompt_is_minimal(self):
         prompt = self.ns['_model_look_prompt']("남성")
-        self.assertIn("identity lock", prompt)
-        self.assertNotIn("#E5E3DE", prompt)
-        self.assertIn("preserve the existing soft-gray studio backdrop", prompt)
-        self.assertIn("Never turn it pure white or a fixed solid color", prompt)
-        self.assertIn("22% of the frame empty", prompt)
-        self.assertIn("Do not use the user's face", prompt)
-        self.assertNotIn("순하", prompt)
-        self.assertNotIn("키 크고", prompt)
-        self.assertIn("photogenic", prompt)
-        self.assertIn("three-quarter", prompt)
-        self.assertNotIn("beautify", prompt)
-        self.assertEqual(self.ns['_LOOK_PLATE_RGB'], (229, 227, 222))
+        self.assertEqual(prompt, "Return one photorealistic full-body lookbook image.")
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
-        self.assertIn("outfit replacement task", src)
-        self.assertIn("Image 1 defines the character identity", src)
-        self.assertIn("Do not mix these roles", src)
+        tree = ast.parse(src)
+        prompt_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_model_look_prompt_with_reference')
+        prompt_src = ast.get_source_segment(src, prompt_fn) or ""
+        self.assertIn("남자 코디 레퍼런스.png", src)
+        self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id27-", src)
+        self.assertIn("model-id31-", src)
         self.assertIn("look-identity", src)
-        self.assertIn("01-canonical.png", src)
-        self.assertIn("긴 기장", src)
-        self.assertIn("Do not lengthen the legs", src)
-        # 레퍼런스가 실제 룩북 모델로 바뀌었다. 억지로 젊게·작게 만들던 규칙은
-        # 얼굴과 비율만 흔들어서 걷어냈다(2026-09-02).
-        self.assertNotIn("heads tall", src)
-        self.assertNotIn("De-age", src)
-        self.assertNotIn("youthful early-to-mid-20s", src)
-        self.assertIn("Keep the same height impression and overall build of Image 1", src)
-        self.assertIn("shorten the apparent inseam only", src)
-        self.assertIn("at least 18%\nclear studio above the", src)
-        self.assertIn("entire shoes must be visible", src)
-        self.assertNotIn("middle 64%", src)
-        self.assertIn("MUST wear this suggested item", src)
-        self.assertNotIn("다리가 길어 보이게", src)
-        self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
-        self.assertIn('_png_named(identity, "01-canonical.png")', src)
-        self.assertNotIn("인상은 순하고 부드럽게", src)
-        self.assertNotIn("키 크고 비율 좋은 카탈로그", src)
-        # 시드 실루엣·정면 포즈를 고정하면 옷이 마네킹에 붙은 것처럼 나온다(2026-09-06).
-        self.assertNotIn("clothing silhouette", src)
-        self.assertIn("full-body frame weak", src)
-        self.assertIn("worn on a real body", src)
-        self.assertIn("Do not paint any caption", src)
-        self.assertNotIn("MUSINSA", src)
+        self.assertIn("01-default-reference.png", src)
+        self.assertIn("02-default-look-reference.png", src)
+        self.assertIn("Image 1 is the default person and look reference", prompt_src)
+        self.assertIn("Images 3 onward are the wardrobe garments", prompt_src)
+        self.assertNotIn("Requested mood", prompt_src)
+        self.assertNotIn("COMPOSITION", prompt_src)
+        self.assertNotIn("FIT:", prompt_src)
 
     def test_bottom_hem_prefers_long_inseam(self):
         note = self.ns['_bottom_hem_note']([
@@ -134,13 +107,25 @@ class ModelLookPromptTest(unittest.TestCase):
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
 
-    def test_reference_prompt_creates_a_fresh_seamless_studio(self):
+    def test_reference_prompt_only_locks_person_and_garments(self):
         prompt_fn = self.ns['_model_look_prompt_with_reference']
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
-        self.assertIn("identity reference only", prompt)
-        self.assertIn("Do not copy any pixels", prompt)
-        self.assertIn("No horizon, floor-wall seam, straight horizontal line", prompt)
-        self.assertIn("Never duplicate a garment slot", prompt)
+        self.assertIn("Image 1 is the default person and look reference", prompt)
+        self.assertIn("Images 2 onward are the wardrobe garments", prompt)
+        self.assertIn("셔츠", prompt)
+        self.assertIn("Do not change the person", prompt)
+        self.assertNotIn("Requested mood", prompt)
+        self.assertNotIn("COMPOSITION", prompt)
+
+    def test_personal_prompt_uses_profile_measurements_and_default_composition(self):
+        prompt = self.ns['_model_look_prompt_with_reference'](
+            "여성", [{"category": "top", "name": "니트"}], personal=True, height="165", weight="52",
+        )
+        self.assertIn("Image 1 is the profile person reference", prompt)
+        self.assertIn("Image 2 is the default look reference", prompt)
+        self.assertIn("165 cm", prompt)
+        self.assertIn("52 kg", prompt)
+        self.assertIn("Images 3 onward are the wardrobe garments", prompt)
 
     def test_background_seam_is_removed_without_touching_person(self):
         image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
@@ -311,7 +296,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id27-", src)
+        self.assertIn("model-id31-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

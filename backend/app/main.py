@@ -4215,36 +4215,7 @@ def _model_look_prompt(gender: str | None) -> str:
 
 
 def _model_identity_prompt(gender: str | None) -> str:
-    male_proportion_note = "- For the male model only, make the leg line subtly shorter and more realistic than the reference impression; reduce it slightly, never dramatically.\n" if str(gender or "").strip().startswith("남") else ""
-    return f"""This is an identity lock, not a character redesign.
-Keep the same person in the source photo: face structure, eyes, nose, lips, jawline,
-hairstyle, hair color, skin tone, apparent age, shoulder width.
-The source is already the canonical model — do not de-age, restyle, or replace them.
-Photograph them at lookbook quality: photogenic, defined features, natural skin texture
-with pores. Not CGI-smooth, not a beauty filter, not a different face.
-Subject: {_model_look_subject(gender)}. Do not use the user's face, profile photo, or body. Do not imitate a celebrity.
-- one person, full-body standing Korean fashion lookbook
-- three-quarter stance, weight on one leg, one hand in a pocket, relaxed shoulders —
-  not a stiff frontal mannequin
-- keep the source photo's body proportions exactly. Do not lengthen the legs or torso,
-  raise the waist, or shrink the head to make the model read taller.
-- frame for a 4:5 card crop: person vertically centered in the middle ~56% of the height
-- leave about 22% of the frame empty above the hair and 22% empty below the shoes
-- the top 18% and bottom 18% must be empty studio only — never hair, chin, or shoes
-- never crop the chin, crown, or shoes in this source frame
-- make the apparent body height and inseam subtly shorter than a fashion illustration;
-  keep a natural adult Korean lookbook proportion, never elongated legs
-{male_proportion_note}- preserve the existing soft-gray studio backdrop from the input image. Do not recolor,
-  flatten, replace, or retouch it. Never turn it pure white or a fixed solid color. Keep the
-  original smooth wall-to-floor transition; no added hard horizon, second plate, letterbox,
-  border, or framed inset
-- keep the soft contact shadow under the shoes smooth. no banding, posterization,
-  dithering, or blotchy patches anywhere in the backdrop or shadow
-- simple base garments already in the photo; do not invent logos or extra people
-- clothes wrap the body with gravity and natural folds — not pasted on
-- soft studio lighting, photorealistic contemporary Korean fashion lookbook
-- no text, watermark, collage, thumbnail, brand name, or UI chrome
-"""
+    return """Return one photorealistic full-body lookbook image."""
 
 
 _LOOK_SLOT_LABEL = {
@@ -4373,193 +4344,26 @@ def _model_look_prompt_with_reference(
     height: str | None = None,
     weight: str | None = None,
 ) -> str:
-    outfit_block = _model_look_outfit_block(items, wish)
-    hem = _bottom_hem_note(items, hem_seed, wish)
-    mood_line, occasion_line, request_line = _look_styling_block(
-        mood, occasion, styles, user_request,
-    )
-    wish_line = ""
-    if wish:
-        bits = [
-            wish.get("color") or "",
-            wish.get("name") or "",
-            _category_display(wish.get("category")) if wish.get("category") else "",
-        ]
-        desc = " ".join(b for b in bits if b).strip() or "the suggested item"
-        if wish.get("storage_path") or wish.get("image_url"):
-            wish_line = (
-                f"One of the wardrobe reference images is this suggested item: {desc}. "
-                "Wear that exact product. Do not invent a different accessory in the same slot."
-            )
-        else:
-            wish_line = (
-                f"The person MUST wear this suggested item (no wardrobe photo): {desc}. "
-                "Synthesize a photorealistic garment from the description and put it on them. "
-                "Do not keep a wardrobe garment in the same slot."
-            )
-    identity_source = "the user's profile photo" if personal else "the canonical reference"
-    body_note = (
-        f"The profile records {height or 'an unspecified'} cm and {weight or 'an unspecified'} kg. "
-        "Use these only as a subtle guide to natural proportions and build; do not display measurements or exaggerate them."
-        if personal else ""
-    )
-    return f"""Create one brand-new 4:5 Korean fashion lookbook photograph.
-
-Image 1 is identity reference only. Preserve the person from {identity_source}: face, hair,
-skin tone, apparent age, shoulder width, and natural proportions. Do not copy any pixels,
-pose, lighting, floor, wall, horizon, shadow, or background from Image 1.
+    garment_lines = _model_look_garment_lines(items, wish)
+    if personal:
+        body_note = (
+            f"Use the profile's {height or 'unspecified'} cm height and {weight or 'unspecified'} kg weight "
+            "as a natural body-scale guide."
+        )
+        reference_lines = f"""Image 1 is the profile person reference. Keep the exact same person.
+Image 2 is the default look reference. Use its framing, studio background, and lighting.
 {body_note}
+Images 3 onward are the wardrobe garments. Put every listed garment on that person."""
+    else:
+        reference_lines = """Image 1 is the default person and look reference. Keep the exact same person,
+framing, studio background, and lighting.
+Images 2 onward are the wardrobe garments. Put every listed garment on that person."""
+    return f"""{reference_lines}
+Return one photorealistic full-body image of the person wearing those garments.
+Do not change the person. Do not add or remove garments.
 
-Images after Image 1 are garment references only. The person wears every listed garment once,
-with its exact color, category, silhouette, neckline, sleeve length, material, pattern, pockets,
-and construction. {wish_line}
-
-{outfit_block}
-
-Never duplicate a garment slot. A top, bottom, outerwear, dress, skirt, pair of shoes, bag, or
-accessory shown in the outfit list may appear at most once. Do not add any unlisted layer, shirt,
-knit, jacket, pants, shoe, bag, logo, text, or accessory.
-
-Requested mood: {mood_line}
-Occasion: {occasion_line}
-Additional request: {request_line}
-
-Make a fresh, seamless light-gray studio with a single smooth continuous cyclorama from top edge
-to bottom edge. No horizon, floor-wall seam, straight horizontal line, band, plate, inset, border,
-side streak, or picture-in-picture. Use soft even lighting and one subtle diffuse contact shadow
-only. The background must be newly created, not copied from any reference image.
-
-Place the person centered, upright, and relaxed with both complete shoes visible. Leave at least
-18% clean studio above the hair and below the soles. If framing is tight, make the whole person
-smaller; never crop the crown, legs, hems, or shoes. Use real adult proportions: no elongated legs,
-tiny head, beauty-filter skin, CGI, illustration, collage, floating clothes, mannequin fit, or
-theatrical pose. Clothes wrap the body with gravity, real folds, correct collars, shoulder seams,
-waist, cuffs, and hems. {hem}
-
-No typography, watermark, UI, heart icon, brand name, or caption. Return only one newly
-photographed person wearing this exact outfit in the seamless studio.
-"""
-    return f"""This is an outfit replacement task, not a character generation task.
-
-Image 1 defines the character identity.
-The wardrobe reference images define the garments.
-Do not mix these roles.
-Preserve the person from {identity_source}.
-Dress that same person using the supplied wardrobe garments.
-
-CANONICAL CHARACTER:
-Use Image 1 as the authoritative visual identity.
-Preserve the same facial identity, facial structure, eyes, nose, lips, jawline,
-hairstyle, hair color, skin tone, physique, shoulder width, limb proportions,
-and height impression.
-Keep the same height impression and overall build of Image 1.
-Image 1 is already the {'user reference' if personal else 'canonical model'}. Keep their apparent age exactly as photographed —
-do not de-age, age, slim, muscularize, or elongate the character.
-Do not replace them with a different person or a celebrity.
-Use ordinary real-adult proportions: a normal-sized head, crotch just below the
-middle of the full height, and legs modestly shorter than the torso plus head.
-Compared with a fashion-editorial impression, shorten the apparent inseam only
-slightly (about 2% of the full figure height) while keeping the torso, head, and
-overall height impression natural. Never use an editorial elongated-leg silhouette,
-a tiny head, or a raised waistline.
-
-FACE:
-A better photograph of the same person — photogenic Korean lookbook face,
-well-defined features, catchlights in the eyes, natural lips.
-Skin must look real: visible pores, subtle texture, faint natural variation.
-No CGI, no plastic airbrush, no mannequin skin, no beauty-filter smoothness.
-Fashion mood is expressed through clothing, never by changing the person.
-{body_note}
-
-OUTFIT:
-Dress the character using the supplied wardrobe items.
-{wish_line}
-
-{outfit_block}
-
-WARDROBE REFERENCES:
-Images after Image 1 are photographs of the actual garments.
-Preserve each garment's recognizable color, category, silhouette, material, fit,
-neckline, sleeve length, pattern, and major construction details (seams, pockets, collar).
-Do not invent unrelated garments.
-Do not add logos, typography, graphics, extra pockets, zippers, stripes, or embroidery
-that are not visible in the wardrobe photos. If a wardrobe photo already has a print or logo, keep it.
-Collage, floating clothes, grids, and thumbnails are forbidden — only the dressed person.
-
-FIT:
-Clothes must look worn on a real body, not pasted onto a mannequin.
-Each garment wraps a three-dimensional body. Gravity, thickness, and contact
-with the body and with other layers must be visible.
-- Shoulder seams sit on the actual shoulders. Collars wrap the neck.
-  Sleeves follow the arm and crease naturally at the elbow.
-- Pants hang from the waist and hips with a real crotch. Long hems stack
-  slightly on the shoe. No painted-on legs.
-- Outerwear has weight. Inner layers compress underneath instead of floating.
-- Fabric-appropriate folds only: leather creases, cotton wrinkles, wool drapes.
-- A bag strap slightly depresses the shoulder. The bag hangs with weight.
-No hovering clothes, no melted fabric, no warped prints.
-
-STYLING:
-Requested mood: {mood_line}
-Occasion: {occasion_line}
-Season / Weather: not specified
-Additional user request: {request_line}
-Style like a contemporary Korean fashion lookbook: clean silhouette, intentional
-proportions, layers sitting correctly. Express the mood through combination,
-fit, color, footwear, and accessories — not by adding garments that are not listed.
-Do NOT express the mood by changing the character, hair, body, or background.
-
-POSE:
-Use the same simple, balanced full-body lookbook stance as Image 1: upright,
-front-facing or a very slight natural angle, relaxed shoulders, and both feet on
-the studio floor. A hand may be in a pocket or hold a bag naturally.
-Full-body standing is mandatory: crown of hair, chin, both trouser hems, and both
-entire shoes must be visible. Never crop or hide the feet. No walking, sitting,
-jumping, dramatic pose, or fashion-illustration proportions.
-
-COMPOSITION:
-Match Image 1's camera height, centered full-body framing, studio lighting, and restrained
-mood. Image 1's studio backdrop and its lighting are locked: preserve them as photographed.
-Do not replace, recolor, flatten, texture, or retouch the background, and never turn it pure
-white or a fixed solid color. Keep its smooth wall-to-floor transition with no visible straight
-horizontal separator line at any height, floor shadow, second plate, letterbox, border, or framed
-inset. Do not make a tight crop.
-This output will be converted to a 4:5 card and a square rail card: leave at least 18%
-clear studio above the hair and 18% clear floor below the soles. If space is tight, make
-the person smaller; never solve it by cutting off the legs or shoes. Keep the person
-centered horizontally. Keep the full figure slightly less tall, with the subtly
-shorter, realistic leg line specified above.
-Keep the original continuous studio backdrop reaching all four edges. Do not add side streaks,
-noise, banding, posterization, dithering, blotches, a second plate, letterbox, inset photograph,
-white border, or framed picture-in-picture.
-{hem}
-White or light garments must keep buttons, collar, and fabric grain — no flash blowout.
-
-VISUAL STYLE:
-Premium contemporary Korean fashion lookbook photography.
-Photorealistic, minimal, clean, sophisticated, soft even studio lighting,
-natural skin texture, realistic fabric folds, natural body proportions.
-Avoid illustration, anime, 3D, CGI, overly smooth skin, cinematic lighting, heavy grading.
-
-NO TEXT OR UI:
-No brand names, no large typography on the backdrop, no heart icon,
-no UI chrome, no collage, no watermark.
-Do not paint any caption. The app adds its own credit.
-
-PRIORITY IF CONFLICTS:
-1. Character identity consistency
-2. Suggested item must be worn if listed
-3. User wardrobe item fidelity
-4. Natural garment fit on the body
-5. Natural lookbook pose
-6. Outfit coordination quality
-7. Requested fashion mood
-8. Photographic aesthetics
-
-FINAL:
-The result must look like the exact same character from Image 1 photographed again
-in the same studio lookbook session, wearing a different outfit, in a natural pose.
-Change the outfit and the stance. Do not change the person. Do not change the studio.
+GARMENTS:
+{garment_lines}
 """
 
 
@@ -4571,6 +4375,14 @@ def _mood_identity_seed(gender: str | None) -> tuple[bytes, str] | None:
     key = _look_gender_key(gender)
     if key not in ("m", "f"):
         return None
+    mood_name = {
+        "m": "남자 코디 레퍼런스.png",
+        "f": "여자 코디 레퍼런스.png",
+    }.get(key)
+    if mood_name:
+        source = Path(__file__).resolve().parents[2] / "assets" / "mood" / mood_name
+        if source.is_file():
+            return source.read_bytes(), f"{key}-look-reference.png"
     for ext in ("jpg", "jpeg", "png", "webp"):
         path = _LOOK_IDENTITY_DIR / f"{key}.{ext}"
         if path.is_file():
@@ -4976,7 +4788,7 @@ def _model_look_board(items: list[dict[str, Any]]) -> bytes:
     return buf.getvalue()
 
 
-def _garment_edit_images(items: list[dict[str, Any]]) -> list[io.BytesIO]:
+def _garment_edit_images(items: list[dict[str, Any]], start_at: int = 2) -> list[io.BytesIO]:
     """옷장 실물 컷을 별도 입력으로 넘긴다. 한 장 격자로 붙이면 출력에 칸이 남는다.
 
     순서는 Image 2+=의류 역할이 드러나게 상의→하의→아우터→신발→소품.
@@ -4990,7 +4802,7 @@ def _garment_edit_images(items: list[dict[str, Any]]) -> list[io.BytesIO]:
             pair[0],
         ),
     )
-    picked = [(n, item) for n, (_, item) in enumerate(ranked[:6], start=2) if item.get("storage_path")]
+    picked = [(n, item) for n, (_, item) in enumerate(ranked[:6], start=start_at) if item.get("storage_path")]
 
     def fetch(n: int, item: dict[str, Any]) -> io.BytesIO | None:
         try:
@@ -5015,6 +4827,7 @@ def _garment_edit_images(items: list[dict[str, Any]]) -> list[io.BytesIO]:
 def generate_model_look_image(
     user_id: str, item_ids: list[str], items: list[dict[str, Any]], gender: str | None = None,
     reference_png: bytes | None = None,
+    composition_reference_png: bytes | None = None,
     wish: dict[str, Any] | None = None,
     mood: str = "",
     occasion: str = "",
@@ -5051,11 +4864,12 @@ def generate_model_look_image(
 
     quality = OPENAI_IMAGE_QUALITY_LOOK
     hem_seed = look_cache_key(item_ids)
+    composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-id27-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+        key = f"model-id31-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
     else:
-        key = f"model-id27-{hem_seed}-{_look_gender_key(gender)}"
+        key = f"model-id31-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5088,8 +4902,10 @@ def generate_model_look_image(
             print("[model-look] TEST MODE — 기준 인물만, AI 미호출 ($0)", flush=True)
             out = identity or _model_look_board(items)
         elif identity:
-            images = [_png_named(identity, "01-canonical.png")]
-            images.extend(_garment_edit_images(items))
+            images = [_png_named(identity, "01-profile.png" if personal else "01-default-reference.png")]
+            if personal and composition_reference_png:
+                images.append(_png_named(composition_reference_png, "02-default-look-reference.png"))
+            images.extend(_garment_edit_images(items, start_at=len(images) + 1))
             for attempt in range(2):
                 mark("dress")
                 kwargs: dict[str, Any] = {
@@ -8575,6 +8391,7 @@ def _apply_model_looks(
         return outfit, generate_model_look_image(
             user_id, outfit["itemIds"], members, gender,
             reference_png=reference_png or identity, wish=_clean_wish(outfit.get("wish")),
+            composition_reference_png=identity if personal else None,
             mood=outfit.get("mood") or "",
             occasion="daily outfit",
             styles=outfit.get("styles") or [],

@@ -113,6 +113,15 @@ hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보�
 `wish_combos`는 추천 시점에 서버가 쿼타를 채운다. 모델이 빼먹어도 빈 자리
 (신발·가방 등)를 제안으로 넣는다(`_fill_wish_quota`, 2026-08-30).
 
+2026-09-16: 남성·여성 착장은 각각 `assets/mood/남자 코디 레퍼런스.png`·
+`assets/mood/여자 코디 레퍼런스.png`를 직접 Image 1로 읽는다.
+실행 프롬프트는 “Image 1의 같은 인물에게 Image 2+ 옷장 아이템을 입힌다”와 아이템
+목록만 남기고, 체형·포즈·무드·기장 등 추가 지시를 제거했다. 기본 모드에서 Image 1은
+인물·구도·스튜디오 배경·조명의 기준이다. 개인화 토글을 명시적으로 켠 경우에는 Image 1에
+프로필 얼굴, Image 2에 기본 레퍼런스의 구도·배경·조명, 키·몸무게는 자연스러운 신체
+스케일 가이드로 함께 전달한다. 레퍼런스 파일 해시도 캐시 키에 넣어 파일 교체 후 이전
+결과를 쓰지 않는다(`model-id31-`).
+
 근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `_apply_wish_slot`, `generate_model_look_image`; `frontend/src/proto/05-screens-cde.jsx`
 `LookPendingMarks`; `frontend/src/proto/proto.css` `--thumb-bg`.

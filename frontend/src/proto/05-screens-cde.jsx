@@ -50,6 +50,7 @@ const LOOK_CANVAS_FILL = {
 const LOOK_ZOOM_MAX = 1.35;
 const LOOK_CATEGORY_ZOOM_MAX = { '가방': 1.62 };
 const LOOK_ACCENT_BOOST_MAX = 1.25;
+const LOOK_ACCENT_BASE_SCALE = { '가방': 1.2 };
 function lookImageZoom(category) {
   const fill = LOOK_CANVAS_FILL[category] || 0.9;
   return Math.min(LOOK_CATEGORY_ZOOM_MAX[category] || LOOK_ZOOM_MAX, 1 / fill);
@@ -256,7 +257,21 @@ function lookAccentScale(it, im) {
     (visible.y1 - visible.y0) / im.naturalHeight,
   );
   const expectedFill = LOOK_CANVAS_FILL[it.category] || 0.62;
-  return Math.min(LOOK_ACCENT_BOOST_MAX, expectedFill / Math.max(visibleFill, 0.12));
+  // CORS 등으로 알파 bbox를 읽지 못하면 visibleFill=1이 된다. 그 경우 소품을
+  // 0.62배로 줄이면 작은 가방이 더 작아지므로, 기본 크기 아래로는 내리지 않는다.
+  const normalized = Math.min(LOOK_ACCENT_BOOST_MAX, expectedFill / Math.max(visibleFill, 0.12));
+  return Math.max(1, LOOK_ACCENT_BASE_SCALE[it.category] || 1, normalized);
+}
+
+async function copyCompositePng(src) {
+  if (!src || !navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') {
+    throw new Error('clipboard image API unavailable');
+  }
+  const response = await fetch(src);
+  if (!response.ok) throw new Error('composite image fetch failed');
+  const blob = await response.blob();
+  if (!blob.size) throw new Error('empty composite image');
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }
 
 function packLookRects(rects, w, h) {
@@ -334,8 +349,10 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat13' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat14' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
+  const [copyState, setCopyState] = useSc('');
+  const copyTimer = React.useRef(0);
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
       setFlat('');
@@ -352,6 +369,20 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     });
     return () => { dead = true; };
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
+
+  useEc(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
+  const copyFlat = (event) => {
+    if (!flat) return;
+    event.preventDefault();
+    copyCompositePng(flat).then(() => {
+      setCopyState('이미지를 복사했어요');
+    }).catch(() => {
+      setCopyState('이미지 복사에 실패했어요');
+    }).finally(() => {
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopyState(''), 1800);
+    });
+  };
 
   // 착장 원본은 4:5 전체 전신이다. 레일도 같은 비율로 보여 잘라내지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
@@ -393,6 +424,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         <img
           src={flat}
           alt={shown.map((i) => i.name).join(' · ')}
+          onContextMenu={copyFlat}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: 'center', display: 'block',
@@ -416,6 +448,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         );
       })}
       {pending ? <LookPendingMarks stage={lookPendingStage(outfit)} /> : null}
+      {copyState ? (
+        <span style={{
+          position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+          zIndex: 12, padding: '8px 10px', borderRadius: 10, whiteSpace: 'nowrap',
+          background: 'rgba(20,20,18,0.82)', color: '#fff', fontSize: 12, fontWeight: 700,
+          pointerEvents: 'none',
+        }}>{copyState}</span>
+      ) : null}
     </div>
   );
 }

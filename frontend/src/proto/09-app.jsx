@@ -1833,7 +1833,7 @@ function App() {
   }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
   const setModelLook = (on) => {
-    const np = { ...prefs, modelLook: !!on, ...(on ? { modelLookRevision: '27' } : {}) };
+    const np = { ...prefs, modelLook: !!on, ...(on ? { modelLookRevision: '31' } : {}) };
     setPrefs(np);
     persistPrefs(np);
     if (on) {
@@ -1853,10 +1853,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (!prefs.modelLook || prefs.modelLookRevision === '27') return;
+    if (!prefs.modelLook || prefs.modelLookRevision === '31') return;
     (LB_DATA.DAILY || []).forEach((outfit) => { if (outfit) delete outfit.lookImg; });
     writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-    const np = { ...prefs, modelLookRevision: '27' };
+    const np = { ...prefs, modelLookRevision: '31' };
     setPrefs(np); persistPrefs(np); bumpDaily();
   }, [prefs, dailyStyle, items, bumpDaily]);
 

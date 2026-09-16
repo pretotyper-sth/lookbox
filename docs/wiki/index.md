@@ -12,10 +12,10 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님
-- [look-flatlay-overlap](look-flatlay-overlap.md) — 플랫레이 소품은 자리로만 구분. 오늘 코디 LOOK_PACK 1.03, 아래로 2.4%. 룩북은 패킹 없음
+- [look-flatlay-overlap](look-flatlay-overlap.md) — 플랫레이 소품은 자리로만 구분. 오늘 코디 LOOK_PACK 1.03, 아래로 2.4%. 가방 기본 1.2배·우클릭 PNG 복사. 룩북은 패킹 없음
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — 착장 시드 JPG 캐논. 오늘 카드는 `추천 코디 N`. 지난 날은 잠금 토스트. 입은 코디는 `당일 입었음`. `LOOK_TEST_LIMIT=1`
+- [model-look-toggle](model-look-toggle.md) — 남·여 착장은 `assets/mood/* 코디 레퍼런스.png` 고정. 개인화는 프로필 얼굴·신체 수치 + 레퍼런스 구도·배경. 오늘 카드는 `추천 코디 N`. 캐시 `model-id31-`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
 - [coord-clash](coord-clash.md) — 셔츠+카고+첼시 감점. 신발은 맞는 켤레 안에서 돌아가며 쓴다. 9월 쪼리 제외
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음

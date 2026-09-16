@@ -903,3 +903,8 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 - `frontend/src/proto/04-screens-ab.jsx`: 본인 외 입력 시트를 열 때 내부 스크롤을 상단으로 초기화하고 다음 열림에도 같은 동작을 보장했다.
 - `frontend/src/proto/proto.css`: 모바일 본인 외 입력 시트 높이를 다른 바로보기 탭과 맞추고, 긴 상세 입력은 시트 내부에서 스크롤하도록 고정했다. [[tryon-multiple-profiles]]
+2026-09-16: 착장 생성 함수의 앞선 프롬프트 반환이 뒤의 identity-lock 프롬프트를 가려 새 인물·새 배경 생성 지시가 실행되던 문제를 수정했다. Image 1 기준 인물의 얼굴·비율·피부 질감·스튜디오를 유지하고 의상만 교체하며, 기존 결과와 분리하도록 캐시를 `model-id28-`로 올렸다. 근거: `backend/app/main.py` `_model_look_prompt_with_reference`, `generate_model_look_image`.
+2026-09-16: 플랫레이는 여러 상품컷을 캔버스 data URL로 합성하므로, 브라우저 우클릭 기본 복사가 PNG 클립보드 데이터를 비우는 환경에서 실패했다. 합성 이미지의 우클릭을 가로채 `ClipboardItem(image/png)`으로 단일 PNG를 복사하게 했다. 소품 알파 bbox를 CORS 때문에 읽지 못하면 기존 계산이 가방을 0.62배로 줄이던 것도 수정해, 가방은 최소 1.2배·작은 원본은 최대 1.25배로 보정한다. 캐시는 `flat14`. 근거: `frontend/src/proto/05-screens-cde.jsx` `copyCompositePng`, `lookAccentScale`.
+2026-09-16: 남성 AI 착장의 Image 1을 `assets/mood/남자 코디 레퍼런스.png`로 고정했다. 실행 프롬프트는 동일 인물 유지·Image 2+ 옷장 아이템 착용·전신 실사 출력·아이템 추가/삭제 금지와 목록만 남겼고, 체형·나이·피부·포즈·무드·배경·기장 관련 추가 지시를 제거했다. 기존 결과와 분리하도록 캐시는 `model-id29-`로 올렸다. 근거: `backend/app/main.py` `_mood_identity_seed`, `_model_look_prompt_with_reference`.
+2026-09-16: 여성 AI 착장의 Image 1도 `assets/mood/여자 코디 레퍼런스.png`를 직접 읽도록 맞췄다. 남녀 모두 mood 폴더의 동명 레퍼런스만 교체하면 다음 착장 생성에 반영되며, 기존 여성 결과는 `model-id30-` 캐시 분리로 재사용하지 않는다. 근거: `backend/app/main.py` `_mood_identity_seed`.
+2026-09-16: 기본 AI 착장은 mood 레퍼런스의 인물·구도·배경·조명을 함께 따른다. 개인화 착장은 프로필 사진을 Image 1로, 기본 레퍼런스를 Image 2로 전달하고 키·몸무게를 자연스러운 신체 스케일 가이드로만 쓴다. 레퍼런스 파일 해시를 캐시 키에 포함해 파일 교체 뒤 이전 결과가 남지 않게 했다(`model-id31-`). 근거: `backend/app/main.py` `_model_look_prompt_with_reference`, `generate_model_look_image`.
