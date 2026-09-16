@@ -96,7 +96,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("Image 1 defines the character identity", src)
         self.assertIn("Do not mix these roles", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id26-", src)
+        self.assertIn("model-id27-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-canonical.png", src)
         self.assertIn("긴 기장", src)
@@ -134,13 +134,13 @@ class ModelLookPromptTest(unittest.TestCase):
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
 
-    def test_reference_prompt_locks_the_original_studio(self):
+    def test_reference_prompt_creates_a_fresh_seamless_studio(self):
         prompt_fn = self.ns['_model_look_prompt_with_reference']
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
-        self.assertIn("Image 1's studio backdrop and its lighting are locked", prompt)
-        self.assertIn("never turn it pure\nwhite or a fixed solid color", prompt)
-        self.assertIn("no visible straight\nhorizontal separator line", prompt)
-        self.assertNotIn("uniform matte #E5E3DE", prompt)
+        self.assertIn("identity reference only", prompt)
+        self.assertIn("Do not copy any pixels", prompt)
+        self.assertIn("No horizon, floor-wall seam, straight horizontal line", prompt)
+        self.assertIn("Never duplicate a garment slot", prompt)
 
     def test_background_seam_is_removed_without_touching_person(self):
         image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
@@ -311,7 +311,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id26-", src)
+        self.assertIn("model-id27-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

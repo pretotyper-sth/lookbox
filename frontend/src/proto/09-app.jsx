@@ -186,6 +186,7 @@ function relativeSavedAt(iso) {
 // 코디 요청에 실어 보낼 취향값만 골라낸다 (이메일·아바타 같은 건 보내지 않는다).
 function coordProfile(prefs) {
   const p = prefs || {};
+  const weather = LB_DATA.WEATHER || {};
   return {
     personal_color: p.personalColor || '',
     fit: p.fit || '',
@@ -194,6 +195,7 @@ function coordProfile(prefs) {
     age: p.age || '',
     height: p.height || '',
     weight: p.weight || '',
+    weather: { temp: weather.temp, hi: weather.hi, lo: weather.lo, cond: weather.cond || '' },
   };
 }
 function wardrobeSigOf(list) {
@@ -919,6 +921,7 @@ function App() {
   const [editPrefs, setEditPrefs] = useState(false);
   const [accountSheet, setAccountSheet] = useState(false);
   const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
+  const [, setWeatherRev] = useState(0);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
 
   // 부팅 시 Supabase 세션을 복원한다. lb_onboarded는 이 기기의 플래그일 뿐이어서,
@@ -957,6 +960,18 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    if (!authUid || isShowcase) return undefined;
+    let alive = true;
+    liveJSON('/api/live/weather')
+      .then((weather) => {
+        if (!alive || !weather) return;
+        Object.assign(LB_DATA.WEATHER, weather);
+        setWeatherRev((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [authUid]);
   const persistPrefs = (p, opts) => {
     try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
     // 계정 설정을 아직 못 읽은 상태에서 계정에 쓰면, 이 기기의 기본값이 계정에 저장된
@@ -1818,7 +1833,7 @@ function App() {
   }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
   const setModelLook = (on) => {
-    const np = { ...prefs, modelLook: !!on };
+    const np = { ...prefs, modelLook: !!on, ...(on ? { modelLookRevision: '27' } : {}) };
     setPrefs(np);
     persistPrefs(np);
     if (on) {
@@ -1829,13 +1844,21 @@ function App() {
           showToast(n ? 'AI 착장으로 바꿔 보여드려요' : '다음 추천부터 적용해요');
         }).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
       } else {
-        showToast('다음 추천부터 AI 착장으로 보여드려요');
+        showToast('다음 추천부터 적용해요');
       }
     } else {
       showToast('AI 착장 이미지를 껐어요');
     }
     return true;
   };
+
+  useEffect(() => {
+    if (!prefs.modelLook || prefs.modelLookRevision === '27') return;
+    (LB_DATA.DAILY || []).forEach((outfit) => { if (outfit) delete outfit.lookImg; });
+    writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
+    const np = { ...prefs, modelLookRevision: '27' };
+    setPrefs(np); persistPrefs(np); bumpDaily();
+  }, [prefs, dailyStyle, items, bumpDaily]);
 
   const onTogglePersonalModelLook = (on) => {
     const clearDisplayedModelLooks = () => {

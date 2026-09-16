@@ -23,3 +23,8 @@
 서로 다르게 고르도록 한다. fallback도 `_accent_fit_score`로 가방·아우터·모자의
 적합성을 판단하며, 모자는 캐주얼 근거가 없으면 넣지 않는다. AI 응답은
 `_diversify_combo_bases`에서 같은 상의 반복을 뒤로 미룬다.
+
+2026-09-16: 같은 카테고리(top·bottom·outer·dress·shoes·bag 등)는 레이어 여부와
+무관하게 한 코디에 한 개만 허용한다. AI 응답·fallback·저장 직전에
+`_combo_has_unique_garment_slots`로 다시 검증한다. 서울의 실제 현재·최고·최저 기온도
+추천 프롬프트와 fallback 점수에 전달해 더운 날의 기모·패딩·두꺼운 코트를 감점한다.

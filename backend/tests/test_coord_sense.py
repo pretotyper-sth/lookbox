@@ -15,7 +15,7 @@ FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
     "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score",
-    "_calendar_seasons", "_coord_season_note", "_is_summer_shoe", "_offseason_shoe",
+    "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
     "_STYLE_IDS", "_FITS", "_PATTERNS", "_MATERIALS", "_PC_GUIDE",
@@ -99,6 +99,14 @@ class StyleAttrTest(unittest.TestCase):
         self.assertNotIn("170", block)
         self.assertNotIn("60", block)
         self.assertIn("슬림", block)
+
+    def test_hot_weather_penalises_heavy_outerwear(self):
+        heavy = item(cat="outer", color="블랙", name="기모 롱코트")
+        tee = item(cat="top", color="화이트", name="반팔 티셔츠")
+        weather = {"temp": 27, "hi": 29, "lo": 20, "cond": "맑음"}
+        self.assertLess(self.ns["_weather_item_penalty"](heavy, weather), 0)
+        self.assertEqual(self.ns["_weather_item_penalty"](tee, weather), 0)
+        self.assertIn("최고 29°C", self.ns["_coord_weather_note"](weather))
 
     def test_coord_rules_forbid_cargo_chelsea(self):
         rules = MAIN_PATH.read_text()
@@ -226,7 +234,8 @@ class IncludeAndWishTest(unittest.TestCase):
     def setUp(self):
         tree = ast.parse(MAIN_PATH.read_text())
         names = (
-            "_item_bucket", "_combo_has_top_and_bottom", "_combo_has_shoes",
+            "_item_bucket", "_garment_slot", "_combo_has_unique_garment_slots",
+            "_combo_has_top_and_bottom", "_combo_has_shoes",
             "_combo_is_wearable", "_clean_wish", "_include_note",
             "_wish_note", "_combo_has_category", "_gap_wish", "_fill_wish_quota",
             "_wish_slot_key", "_apply_wish_slot", "_pin_wishes_to_tail", "_is_accent",
@@ -248,6 +257,17 @@ class IncludeAndWishTest(unittest.TestCase):
         self.assertFalse(has(["a"], by_id))                                   # 상의만 → 코디 아님
         self.assertTrue(has(["a"], by_id, {"category": "bottom"}))            # 제안 하의가 채운다
         self.assertFalse(has(["a"], by_id, {"category": "bag"}))              # 가방으론 안 된다
+
+    def test_same_category_can_only_appear_once(self):
+        by_id = {
+            "polo": {"category": "top"},
+            "knit": {"category": "상의"},
+            "pants": {"category": "bottom"},
+            "shoes": {"category": "shoes"},
+        }
+        unique = self.ns["_combo_has_unique_garment_slots"]
+        self.assertFalse(unique(["polo", "knit", "pants", "shoes"], by_id))
+        self.assertTrue(unique(["polo", "pants", "shoes"], by_id))
 
     def test_wish_needs_a_real_category_and_name(self):
         clean = self.ns["_clean_wish"]

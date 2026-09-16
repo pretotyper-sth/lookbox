@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.request import urlopen
 
 import requests
 import truststore
@@ -3216,7 +3217,7 @@ def recommend_text(
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
 {_profile_block(profile)}{('기준 아이템 id=' + anchor['id']) if anchor else '기준 아이템 없음'}
-{_coord_season_note()}
+{_coord_season_note()}{_coord_weather_note((profile or {}).get("weather"))}
 
 옷장(id | 카테고리 | 색 | 이름 | 종류 | 속성):
 {catalog}
@@ -3275,7 +3276,7 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                 continue
             if must and not all(keep in ids for keep in must):
                 continue
-            if not _combo_has_top_and_bottom(ids, valid, wish):
+            if not _combo_has_top_and_bottom(ids, valid, wish) or not _combo_has_unique_garment_slots(ids, valid, wish):
                 continue
             key = tuple(sorted(ids) + ([f"wish:{wish['category']}:{wish['name']}"] if wish else []))
             core = _combo_core_key(ids, valid)
@@ -3356,6 +3357,28 @@ def _combo_has_top_and_bottom(
     return ("top" in buckets) and ("bottom" in buckets)
 
 
+def _garment_slot(item: dict[str, Any]) -> str:
+    """레이어 여부와 무관하게 같은 카테고리 옷은 한 코디에 한 개만 둔다."""
+    cat = str(item.get("category") or "").strip().lower()
+    slots = {
+        "top": "top", "상의": "top", "outer": "outer", "아우터": "outer",
+        "bottom": "bottom", "하의": "bottom", "skirt": "skirt", "스커트": "skirt",
+        "dress": "dress", "원피스": "dress", "shoes": "shoes", "신발": "shoes",
+        "bag": "bag", "가방": "bag", "hat": "hat", "모자": "hat",
+        "misc": "misc", "기타": "misc",
+    }
+    return slots.get(cat, cat or "other")
+
+
+def _combo_has_unique_garment_slots(
+    ids: list[str], by_id: dict[str, Any], wish: dict[str, Any] | None = None,
+) -> bool:
+    slots = [_garment_slot(by_id[i]) for i in ids if i in by_id]
+    if wish:
+        slots.append(_garment_slot(wish))
+    return len(slots) == len(set(slots))
+
+
 def _combo_core_key(ids: list[str], by_id: dict[str, Any]) -> tuple[str, ...]:
     """소품·신발을 빼고 코디의 골격(상의+하의 또는 원피스)을 비교한다."""
     core = []
@@ -3380,7 +3403,11 @@ def _combo_is_wearable(
     ids: list[str], by_id: dict[str, Any], wish: dict[str, Any] | None = None
 ) -> bool:
     """상의·하의(또는 원피스) + 신발. 옷장에 신발이 있으면 옷장에서, 없으면 wish로."""
-    return _combo_has_top_and_bottom(ids, by_id, wish) and _combo_has_shoes(ids, by_id, wish)
+    return (
+        _combo_has_top_and_bottom(ids, by_id, wish)
+        and _combo_has_shoes(ids, by_id, wish)
+        and _combo_has_unique_garment_slots(ids, by_id, wish)
+    )
 
 
 def _is_accent(item: dict[str, Any] | None) -> bool:
@@ -3686,7 +3713,7 @@ def _finish_combos(
         c for c in combos
         if _combo_is_wearable(c.get("item_ids") or [], by_id, c.get("wish"))
     ]
-    return ok if ok else combos
+    return ok
 
 
 _NEUTRAL_COLORS = ("블랙", "화이트", "그레이", "네이비", "아이보리", "베이지", "차콜")
@@ -3721,6 +3748,41 @@ def _coord_season_note(now: datetime | None = None) -> str:
     if "summer" not in _calendar_seasons(now):
         extra = " 쪼리·슬리퍼·샌들·슬라이드는 넣지 말 것."
     return f"오늘(KST) {local.month}월 {local.day}일, 계절 {season}.{extra}\n"
+
+
+def _coord_weather_note(weather: dict[str, Any] | None = None) -> str:
+    """실제 기온이 있으면 계절보다 우선하는 착장 힌트로 쓴다."""
+    if not isinstance(weather, dict):
+        return ""
+    temp, hi, lo = weather.get("temp"), weather.get("hi"), weather.get("lo")
+    try:
+        temp = round(float(temp))
+        hi = round(float(hi))
+        lo = round(float(lo))
+    except (TypeError, ValueError):
+        return ""
+    cond = str(weather.get("cond") or "").strip()
+    guidance = ""
+    if hi >= 25:
+        guidance = "낮에는 덥다. 패딩·두꺼운 울·기모·무거운 코트는 피한다."
+    elif lo <= 8:
+        guidance = "아침·밤이 춥다. 반팔 단독·민소매·얇은 린넨만의 코디는 피한다."
+    return f"실제 서울 날씨: 현재 {temp}°C, 최고 {hi}°C, 최저 {lo}°C{(' · ' + cond) if cond else ''}. {guidance}\n"
+
+
+def _weather_item_penalty(item: dict[str, Any], weather: dict[str, Any] | None) -> float:
+    if not isinstance(weather, dict):
+        return 0.0
+    try:
+        hi, lo = float(weather.get("hi")), float(weather.get("lo"))
+    except (TypeError, ValueError):
+        return 0.0
+    clue = _item_clue(item)
+    if hi >= 25 and _clue_has(clue, ("패딩", "기모", "플리스", "퍼", "두꺼운 울", "헤비", "롱코트")):
+        return -8.0
+    if lo <= 8 and _clue_has(clue, ("민소매", "나시", "반바지", "숏팬츠", "린넨", "메시")):
+        return -8.0
+    return 0.0
 
 
 def _is_summer_shoe(item: dict[str, Any]) -> bool:
@@ -3775,6 +3837,8 @@ def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | 
     if any(n in ca for n in _NEUTRAL_COLORS) or any(n in cb for n in _NEUTRAL_COLORS):
         score += 0.5
     score += _pair_clash(a, b)
+    score += _weather_item_penalty(a, (profile or {}).get("weather"))
+    score += _weather_item_penalty(b, (profile or {}).get("weather"))
     return score
 
 
@@ -3884,7 +3948,7 @@ def fallback_combos(
         for keep in reversed(must):
             if keep not in ids:
                 ids = [keep, *ids]
-        if not _combo_has_top_and_bottom(ids, by_id):
+        if not _combo_has_top_and_bottom(ids, by_id) or not _combo_has_unique_garment_slots(ids, by_id):
             return
         key = tuple(sorted(ids[:5]))
         if key in seen:
@@ -4339,6 +4403,42 @@ def _model_look_prompt_with_reference(
         "Use these only as a subtle guide to natural proportions and build; do not display measurements or exaggerate them."
         if personal else ""
     )
+    return f"""Create one brand-new 4:5 Korean fashion lookbook photograph.
+
+Image 1 is identity reference only. Preserve the person from {identity_source}: face, hair,
+skin tone, apparent age, shoulder width, and natural proportions. Do not copy any pixels,
+pose, lighting, floor, wall, horizon, shadow, or background from Image 1.
+{body_note}
+
+Images after Image 1 are garment references only. The person wears every listed garment once,
+with its exact color, category, silhouette, neckline, sleeve length, material, pattern, pockets,
+and construction. {wish_line}
+
+{outfit_block}
+
+Never duplicate a garment slot. A top, bottom, outerwear, dress, skirt, pair of shoes, bag, or
+accessory shown in the outfit list may appear at most once. Do not add any unlisted layer, shirt,
+knit, jacket, pants, shoe, bag, logo, text, or accessory.
+
+Requested mood: {mood_line}
+Occasion: {occasion_line}
+Additional request: {request_line}
+
+Make a fresh, seamless light-gray studio with a single smooth continuous cyclorama from top edge
+to bottom edge. No horizon, floor-wall seam, straight horizontal line, band, plate, inset, border,
+side streak, or picture-in-picture. Use soft even lighting and one subtle diffuse contact shadow
+only. The background must be newly created, not copied from any reference image.
+
+Place the person centered, upright, and relaxed with both complete shoes visible. Leave at least
+18% clean studio above the hair and below the soles. If framing is tight, make the whole person
+smaller; never crop the crown, legs, hems, or shoes. Use real adult proportions: no elongated legs,
+tiny head, beauty-filter skin, CGI, illustration, collage, floating clothes, mannequin fit, or
+theatrical pose. Clothes wrap the body with gravity, real folds, correct collars, shoulder seams,
+waist, cuffs, and hems. {hem}
+
+No typography, watermark, UI, heart icon, brand name, or caption. Return only one newly
+photographed person wearing this exact outfit in the seamless studio.
+"""
     return f"""This is an outfit replacement task, not a character generation task.
 
 Image 1 defines the character identity.
@@ -4683,7 +4783,7 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
 
 
 def _remove_look_background_seams(png_bytes: bytes) -> bytes:
-    """인물은 건드리지 않고 배경에만 가로로 생긴 얇은 경계선을 지운다."""
+    """인물은 건드리지 않고 배경의 수평 경계·띠를 지운다."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
     if w < 24 or h < 12:
@@ -4708,15 +4808,21 @@ def _remove_look_background_seams(png_bytes: bytes) -> bytes:
             seams.append(y)
     if not seams:
         return png_bytes
+    groups: list[tuple[int, int]] = []
     for y in seams:
-        # 넓은 표본에는 가방·팔이 한두 픽셀 섞여 배경 평균이 흔들릴 수 있다.
-        # 양 끝은 항상 스튜디오라 이 줄의 기준색으로 안전하다.
-        backdrop = _look_row_backdrop(px, w, y)
-        for x in range(w):
-            score, expected = darken(x, y)
-            distance = sum(abs(px[x, y][i] - backdrop[i]) for i in range(3))
-            if score >= _LOOK_SEAM_REPAIR_DARKEN and distance <= _LOOK_BACKDROP_TOL:
-                px[x, y] = expected
+        if groups and y <= groups[-1][1] + 1:
+            groups[-1] = (groups[-1][0], y)
+        else:
+            groups.append((y, y))
+    for first, last in groups:
+        above, below = max(0, first - 3), min(h - 1, last + 3)
+        for y in range(first, last + 1):
+            ratio = (y - above) / max(1, below - above)
+            backdrop = _look_row_backdrop(px, w, y)
+            for x in range(w):
+                distance = sum(abs(px[x, y][i] - backdrop[i]) for i in range(3))
+                if distance <= _LOOK_BACKDROP_TOL * 2:
+                    px[x, y] = tuple(round(px[x, above][i] * (1 - ratio) + px[x, below][i] * ratio) for i in range(3))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -4947,9 +5053,9 @@ def generate_model_look_image(
     hem_seed = look_cache_key(item_ids)
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+        key = f"model-id27-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
     else:
-        key = f"model-id26-{hem_seed}-{_look_gender_key(gender)}"
+        key = f"model-id27-{hem_seed}-{_look_gender_key(gender)}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5040,6 +5146,47 @@ def generate_model_look_image(
 
 
 DEPLOY_REV = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "dev"
+_SEOUL_WEATHER_CACHE: tuple[float, dict[str, Any]] | None = None
+
+
+def _weather_condition(code: Any) -> str:
+    labels = {
+        0: "맑음", 1: "대체로 맑음", 2: "구름 조금", 3: "흐림",
+        45: "안개", 48: "안개", 51: "이슬비", 53: "이슬비", 55: "이슬비",
+        61: "비", 63: "비", 65: "비", 71: "눈", 73: "눈", 75: "눈", 80: "소나기",
+        81: "소나기", 82: "소나기", 95: "뇌우",
+    }
+    return labels.get(int(code or -1), "날씨 정보")
+
+
+def _seoul_weather() -> dict[str, Any]:
+    """Open-Meteo 서울 관측값을 30분 캐시하고, 실패하면 UI 기본값을 쓴다."""
+    global _SEOUL_WEATHER_CACHE
+    now = time.monotonic()
+    if _SEOUL_WEATHER_CACHE and now - _SEOUL_WEATHER_CACHE[0] < 1800:
+        return _SEOUL_WEATHER_CACHE[1]
+    fallback = {"city": "서울", "temp": 24, "cond": "날씨 정보", "hi": 27, "lo": 18}
+    try:
+        url = (
+            "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780"
+            "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min"
+            "&timezone=Asia%2FSeoul&forecast_days=1"
+        )
+        with urlopen(url, timeout=4) as response:  # noqa: S310 - fixed public weather URL
+            raw = json.load(response)
+        current, daily = raw.get("current") or {}, raw.get("daily") or {}
+        weather = {
+            "city": "서울",
+            "temp": round(float(current.get("temperature_2m"))),
+            "cond": _weather_condition(current.get("weather_code")),
+            "hi": round(float((daily.get("temperature_2m_max") or [fallback["hi"]])[0])),
+            "lo": round(float((daily.get("temperature_2m_min") or [fallback["lo"]])[0])),
+        }
+    except Exception as exc:  # noqa: BLE001
+        print(f"[weather] Seoul fetch failed: {exc}", flush=True)
+        weather = fallback
+    _SEOUL_WEATHER_CACHE = (now, weather)
+    return weather
 
 
 @app.get("/health")
@@ -5051,6 +5198,11 @@ def health() -> dict[str, Any]:
         "rev": (DEPLOY_REV or "")[:12],
         "look_test_limit": LOOK_TEST_LIMIT,
     }
+
+
+@app.get("/api/live/weather")
+def live_weather() -> dict[str, Any]:
+    return _seoul_weather()
 
 
 @app.get("/me")
@@ -5339,6 +5491,7 @@ class LiveCoordinate(BaseModel):
     age: str | None = None
     height: str | None = None
     weight: str | None = None
+    weather: dict[str, Any] | None = None
 
 
 class LiveLookOutfit(BaseModel):
@@ -8612,6 +8765,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             "age": body.age,
             "height": body.height,
             "weight": body.weight,
+            "weather": body.weather,
         }
         max_combos = min(max(body.max_combos, 1), 10)
         wish_combos = body.wish_combos or 0
@@ -8626,7 +8780,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         def persist_combo(combo: dict[str, Any], idx: int, paint_wish: bool) -> None:
             ids = [item_id for item_id in combo["item_ids"] if item_id in by_id]
             wish = combo.get("wish") if isinstance(combo.get("wish"), dict) else None
-            if not _combo_has_top_and_bottom(ids, by_id, wish):
+            if not _combo_has_top_and_bottom(ids, by_id, wish) or not _combo_has_unique_garment_slots(ids, by_id, wish):
                 return
             for item_id in ids:
                 used[item_id] = by_id[item_id]
