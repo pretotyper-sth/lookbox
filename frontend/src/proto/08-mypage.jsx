@@ -499,9 +499,9 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  const personalModelLookRow = (
+  const personalModelLookRow = modelLook ? (
     <ActionRow nested label="내 얼굴·체형에 맞춰 보기" hint="프로필 사진과 키·몸무게를 사용해요" right={<Switch on={!!personalModelLook} onToggle={() => onTogglePersonalModelLook && onTogglePersonalModelLook(!personalModelLook)} />} />
-  );
+  ) : null;
 
   // 개수 설정은 추천을 켰을 때만. 박스는 없이 ㄴ + 살짝 들여쓰기만.
   const dailyChildRows = dailyEnabled ? (

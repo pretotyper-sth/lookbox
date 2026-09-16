@@ -122,6 +122,10 @@ hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보�
 스케일 가이드로 함께 전달한다. 레퍼런스 파일 해시도 캐시 키에 넣어 파일 교체 후 이전
 결과를 쓰지 않는다(`model-id31-`).
 
+2026-09-16: 마이페이지의 얼굴·체형 맞춤 설정 행은 AI 캐릭터 착장 설정이 켜진 경우에만
+노출한다. 상위 설정을 끄면 하위 개인화 행도 함께 숨겨지며, 저장된 개인화 값 자체는
+변경하지 않는다. 근거: `frontend/src/proto/08-mypage.jsx` `personalModelLookRow`.
+
 근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `_apply_wish_slot`, `generate_model_look_image`; `frontend/src/proto/05-screens-cde.jsx`
 `LookPendingMarks`; `frontend/src/proto/proto.css` `--thumb-bg`.
