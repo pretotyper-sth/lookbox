@@ -911,3 +911,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-16: 바로 보기 탭에서 전신 이미지 생성 전의 두 줄 안내를 12px 내렸다. 프사 원형은 생성 중 스켈레톤과 같은 좌표를 유지한다. 근거: `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.
 2026-09-16: 본인 외 바로 보기 대상 입력에서 관계명·이름 필드를 제거했다. 저장·목록·생성 안내는 이름 없이 사진과 기본 신체 정보만 쓴다. 근거: `frontend/src/proto/04-screens-ab.jsx` `TryOnPersonSheet`.
 2026-09-16: 바로 보기 생성 전 안내를 내리던 변경을 되돌리고, 텍스트는 생성 진행 제목과 같은 y=121px로 복원했다. 대신 바로 보기 스테이지를 사진·URL과 같은 168px로 줄여 텍스트 아래 빈 여백과 탭별 시트 높이 차이를 없앴다. 근거: `frontend/src/proto/04-screens-ab.jsx` `panelH`, `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.
+2026-09-16: 플랫레이 초기 표시에도 가방 기본 1.2배를 적용하고 캐시를 `flat15`로 분리했다. 합성 복사는 응답 MIME을 그대로 PNG로 포장하지 않고 이미지 디코드 후 실제 PNG로 인코딩해 붙여넣기 호환성을 보장한다. 추천 보정 후처리에서 같은 garment slot이 다시 붙으면 첫 아이템만 남긴다. 근거: `frontend/src/proto/05-screens-cde.jsx` `copyCompositePng`, `backend/app/main.py` `_dedupe_combo_garment_slots`.

@@ -3379,6 +3379,21 @@ def _combo_has_unique_garment_slots(
     return len(slots) == len(set(slots))
 
 
+def _dedupe_combo_garment_slots(combo: dict[str, Any], by_id: dict[str, Any]) -> None:
+    """보정 단계에서 다시 붙은 같은 카테고리 아이템은 첫 아이템만 남긴다."""
+    kept: list[str] = []
+    seen: set[str] = set()
+    for item_id in combo.get("item_ids") or []:
+        if item_id not in by_id:
+            continue
+        slot = _garment_slot(by_id[item_id])
+        if slot in seen:
+            continue
+        seen.add(slot)
+        kept.append(item_id)
+    combo["item_ids"] = kept
+
+
 def _combo_core_key(ids: list[str], by_id: dict[str, Any]) -> tuple[str, ...]:
     """소품·신발을 빼고 코디의 골격(상의+하의 또는 원피스)을 비교한다."""
     core = []
@@ -3706,6 +3721,7 @@ def _finish_combos(
                 and _accent_fit_score(wish, top, bottom) < 2.0
             ):
                 combo.pop("wish", None)
+        _dedupe_combo_garment_slots(combo, by_id)
     _rebalance_combo_shoes(combos, by_id, profile)
     _replace_offseason_shoes(combos, by_id, profile, used_shoes)
     _fill_wish_quota(combos, wish_combos, by_id)

@@ -269,8 +269,17 @@ async function copyCompositePng(src) {
   }
   const response = await fetch(src);
   if (!response.ok) throw new Error('composite image fetch failed');
-  const blob = await response.blob();
-  if (!blob.size) throw new Error('empty composite image');
+  const source = await response.blob();
+  if (!source.size) throw new Error('empty composite image');
+  const bitmap = await createImageBitmap(source);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((png) => (png ? resolve(png) : reject(new Error('png encode failed'))), 'image/png');
+  });
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }
 
@@ -349,7 +358,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat14' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat15' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
   const copyTimer = React.useRef(0);
@@ -442,7 +451,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           <div key={it.id} style={frame}>
             <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
               width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-              transform: `scale(${lookImageZoom(it.category)})`,
+              transform: `scale(${lookImageZoom(it.category) * (LOOK_ACCENT_BASE_SCALE[it.category] || 1)})`,
             }} />
           </div>
         );

@@ -14,7 +14,7 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
-    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score",
+    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_garment_slot", "_dedupe_combo_garment_slots",
     "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
@@ -157,6 +157,22 @@ class PairScoreTest(unittest.TestCase):
         cargo = item(cat="bottom", color="블랙", name="카고 팬츠", subtype="카고 팬츠")
         slacks = item(cat="bottom", color="블랙", name="슬랙스", subtype="슬랙스")
         self.assertGreater(self.score(shirt, slacks, None), self.score(shirt, cargo, None))
+
+
+class ComboSlotTest(unittest.TestCase):
+    def setUp(self):
+        self.ns = load()
+
+    def test_dedupe_keeps_one_item_per_slot(self):
+        by_id = {
+            "top-1": {"id": "top-1", "category": "top"},
+            "top-2": {"id": "top-2", "category": "top"},
+            "bottom": {"id": "bottom", "category": "bottom"},
+            "shoes": {"id": "shoes", "category": "shoes"},
+        }
+        combo = {"item_ids": ["top-1", "top-2", "bottom", "shoes"]}
+        self.ns["_dedupe_combo_garment_slots"](combo, by_id)
+        self.assertEqual(combo["item_ids"], ["top-1", "bottom", "shoes"])
 
 
 class ShoeRotateTest(unittest.TestCase):
