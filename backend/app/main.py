@@ -3162,6 +3162,16 @@ def _clean_wish(raw: Any) -> dict[str, Any] | None:
     }
 
 
+def _wish_key(wish: dict[str, Any] | None) -> tuple[str, str, str]:
+    if not wish:
+        return ("", "", "")
+    return (
+        str(wish.get("category") or "").strip().lower(),
+        str(wish.get("name") or "").strip().lower(),
+        str(wish.get("color") or "").strip().lower(),
+    )
+
+
 def recommend_text(
     user_id: str,
     anchor: dict[str, Any] | None,
@@ -3173,6 +3183,7 @@ def recommend_text(
     profile: dict[str, Any] | None = None,
     include_ids: list[str] | None = None,
     wish_combos: int = 0,
+    exclude_wishes: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if not items:
         return []
@@ -3212,7 +3223,8 @@ def recommend_text(
     if not openai_client or AI_TEST_MODE:
         print("[recommend] no openai client / TEST MODE — fallback ($0)", flush=True)
         combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
-        return _finish_combos(combos, items, wish_combos, profile)
+        combos = _diversify_combo_bases(combos, by_id, max_combos)
+        return _finish_combos(combos, items, wish_combos, profile, exclude_wishes)
     prompt = f"""당신은 퍼스널 스타일리스트다. 사용자의 옷장 목록만 사용해 실제로 입고 나갈 만한 코디를 최대 {max_combos}개 만들어라.
 사용자가 마이페이지에서 설정한 선호 무드 id: {style_id_note}
 선호 무드 설명: {tone}
@@ -3230,6 +3242,7 @@ def recommend_text(
 - 원피스 1벌이면 상의·하의 요건을 충족. 신발은 원피스여도 필수
 - 가방·모자·아우터·소품은 필요할 때만 0~1개 더한다. 소품 개수를 채우기 위해 억지로 넣지 말 것
 - 코디가 2개 이상이면 상의(또는 원피스/아우터)의 종류와 실루엣을 가능한 한 모두 다르게 한다. 같은 카라티·같은 상의를 반복하지 말고, 옷장에 티셔츠·셔츠·니트·후디·아우터가 있으면 서로 다른 베이스를 우선한다
+- 4개 코디를 만들 수 있으면 상의 종류·핏·패턴과 하의 실루엣을 분석해 최소 3개는 다른 베이스로 만든다. 색만 바꾼 같은 카라티+바지 조합을 다른 코디로 세지 말 것
 - 모자는 후디·카고·트랙·러닝처럼 스트리트/스포티 근거가 명백할 때만 넣는다. 셔츠·폴로·니트·로퍼·부츠·세미 비즈니스 캐주얼에는 절대 넣지 않는다
 - 코디마다 소품을 넣을 필요가 없다. 잘 어울리는 코디에는 가방·모자·아우터 중 최대 1개를 더하고, 나머지는 필수 아이템만으로 완성한다
 - 한 코디는 3~5개 구성 (필수 3 + 소품)
@@ -3262,6 +3275,10 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
         seen_cores = set(excluded_cores)
         must = [str(i) for i in (include_ids or []) if str(i) in valid]
         wish_left = max(0, min(int(wish_combos or 0), max_combos))
+        seen_wishes = {
+            _wish_key(wish) for wish in (exclude_wishes or [])
+            if _wish_key(wish) != ("", "", "")
+        }
         for combo in data.get("combos") or []:
             ids = [item_id for item_id in combo.get("item_ids", []) if item_id in valid]
             if anchor and anchor["id"] not in ids:
@@ -3272,6 +3289,8 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                     ids = [keep, *ids]
             ids = ids[: max(5, len(must) + 2)]
             wish = _clean_wish(combo.get("wish")) if wish_left else None
+            if wish and _wish_key(wish) in seen_wishes:
+                wish = None
             if not ids or (len(ids) < 2 and not wish):
                 continue
             if must and not all(keep in ids for keep in must):
@@ -3286,6 +3305,7 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
             if core:
                 seen_cores.add(core)
             if wish:
+                seen_wishes.add(_wish_key(wish))
                 wish_left -= 1
             combo_styles = [s for s in (combo.get("styles") or []) if s in allowed_styles][:2]
             if not combo_styles:
@@ -3308,7 +3328,8 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
             combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
-            return _finish_combos(combos, items, wish_combos, profile)
+            combos = _diversify_combo_bases(combos, valid, max_combos)
+            return _finish_combos(combos, items, wish_combos, profile, exclude_wishes)
         # 모델이 max_combos개를 돌려줘도 중복·상하의 미충족으로 걸러지면 그만큼 비어 버린다.
         # 옷장에 남은 조합이 있는데 개수가 모자라면 결정적 페어링으로 채운다.
         if len(combos) < max_combos:
@@ -3323,13 +3344,14 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                     break
             print(f"[recommend] topped up {len(combos) - (max_combos - short)} combo(s) from wardrobe pairs", flush=True)
         combos = _diversify_combo_bases(combos, valid, max_combos)
-        combos = _finish_combos(combos, items, wish_combos, profile)
+        combos = _finish_combos(combos, items, wish_combos, profile, exclude_wishes)
         print(f"[recommend] ok via=ai combos={len(combos)}", flush=True)
         return combos
     except Exception as exc:  # noqa: BLE001
         print(f"[recommend] ai call failed: {exc} — fallback", flush=True)
         combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
-        return _finish_combos(combos, items, wish_combos, profile)
+        combos = _diversify_combo_bases(combos, by_id, max_combos)
+        return _finish_combos(combos, items, wish_combos, profile, exclude_wishes)
 
 
 def _item_bucket(item: dict[str, Any]) -> str:
@@ -3463,7 +3485,10 @@ def _wish_slot_key(item: dict[str, Any] | None) -> str:
     return cat or "other"
 
 
-def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str, Any]:
+def _gap_wish(
+    ids: list[str], by_id: dict[str, Any], slot: int = 0,
+    avoid_wishes: set[tuple[str, str, str]] | None = None,
+) -> dict[str, Any]:
     """옷장 조합에서 비는 자리를 채울 제안 아이템. 모델이 wish를 빼먹어도 쿼타를 맞춘다."""
     ranked: list[dict[str, Any]] = []
     if not _combo_has_category(ids, by_id, ("shoes", "신발")):
@@ -3473,7 +3498,8 @@ def _gap_wish(ids: list[str], by_id: dict[str, Any], slot: int = 0) -> dict[str,
     # 외부 아이템은 빈자리를 억지로 채우는 안전장치다. 모자는 명백한 스트리트
     # 근거가 있을 때만 모델이 고르고, 이 fallback 목록에서는 절대 만들지 않는다.
     ranked.extend(x for x in _WISH_GAP_ITEMS if x not in ranked)
-    pick = ranked[slot % len(ranked)]
+    available = [item for item in ranked if _wish_key(item) not in (avoid_wishes or set())]
+    pick = (available or ranked)[slot % len(available or ranked)]
     return dict(pick)
 
 
@@ -3510,6 +3536,7 @@ def _apply_wish_slot(combo: dict[str, Any], by_id: dict[str, Any]) -> None:
 
 def _pin_wishes_to_tail(
     combos: list[dict[str, Any]], wish_combos: int, by_id: dict[str, Any],
+    exclude_wishes: list[dict[str, Any]] | None = None,
 ) -> None:
     """wish는 마지막 n장에만. 모델이 앞 카드에 넣었으면 뒤로 옮긴다."""
     collected: list[dict[str, Any]] = []
@@ -3522,7 +3549,23 @@ def _pin_wishes_to_tail(
         return
     while len(collected) < n:
         collected.append(_gap_wish(combos[-1].get("item_ids") or [], by_id, len(collected)))
-    use = collected[-n:]
+    used = {
+        _wish_key(wish) for wish in (exclude_wishes or [])
+        if _wish_key(wish) != ("", "", "")
+    }
+    use: list[dict[str, Any]] = []
+    for wish in collected:
+        key = _wish_key(wish)
+        if key in used:
+            continue
+        used.add(key)
+        use.append(wish)
+        if len(use) >= n:
+            break
+    while len(use) < n:
+        wish = _gap_wish(combos[-1].get("item_ids") or [], by_id, len(use), used)
+        use.append(wish)
+        used.add(_wish_key(wish))
     for i, wish in enumerate(use):
         combo = combos[len(combos) - n + i]
         combo["wish"] = wish
@@ -3531,8 +3574,9 @@ def _pin_wishes_to_tail(
 
 def _fill_wish_quota(
     combos: list[dict[str, Any]], wish_combos: int, by_id: dict[str, Any],
+    exclude_wishes: list[dict[str, Any]] | None = None,
 ) -> None:
-    _pin_wishes_to_tail(combos, wish_combos, by_id)
+    _pin_wishes_to_tail(combos, wish_combos, by_id, exclude_wishes)
 
 
 _SHOE_ROTATE_SLACK = 3.0
@@ -3691,6 +3735,7 @@ def _finish_combos(
     items: list[dict[str, Any]],
     wish_combos: int,
     profile: dict[str, Any] | None,
+    exclude_wishes: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """추천 결과를 입을 수 있는 코디로 맞춘다: 신발 필수, 소품 섞기, wish는 맨 뒤."""
     by_id = {item["id"]: item for item in items}
@@ -3724,7 +3769,7 @@ def _finish_combos(
         _dedupe_combo_garment_slots(combo, by_id)
     _rebalance_combo_shoes(combos, by_id, profile)
     _replace_offseason_shoes(combos, by_id, profile, used_shoes)
-    _fill_wish_quota(combos, wish_combos, by_id)
+    _fill_wish_quota(combos, wish_combos, by_id, exclude_wishes)
     ok = [
         c for c in combos
         if _combo_is_wearable(c.get("item_ids") or [], by_id, c.get("wish"))
@@ -4049,30 +4094,66 @@ def fallback_combos(
     return combos
 
 
+def _combo_top_variant_key(item: dict[str, Any]) -> tuple[str, ...]:
+    style = _row_style(item)
+    return tuple(
+        str(value).strip().lower()
+        for value in (
+            _garment_slot(item),
+            style.get("subtype"),
+            style.get("fit"),
+            style.get("pattern"),
+            style.get("material"),
+        )
+        if value
+    )
+
+
 def _diversify_combo_bases(
     combos: list[dict[str, Any]], by_id: dict[str, Any], max_combos: int,
 ) -> list[dict[str, Any]]:
-    """같은 상의만 반복하는 AI 응답을 버리고, 서로 다른 상의 베이스를 먼저 쓴다."""
+    """같은 상의 종류·핏·패턴을 반복하는 응답을 뒤로 미룬다."""
     if len(combos) < 2:
         return combos
     unique: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
     used_tops: set[str] = set()
+    used_variants: set[tuple[str, ...]] = set()
     for combo in combos:
+        top = next(
+            ((item_id, by_id[item_id]) for item_id in combo.get("item_ids") or []
+             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
+            ("", None),
+        )[1]
+        top_id = next(
+            (item_id for item_id in combo.get("item_ids") or []
+             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
+            "",
+        )
+        variant = _combo_top_variant_key(top) if top else (top_id,)
+        if variant in used_variants:
+            deferred.append(combo)
+            continue
+        unique.append(combo)
+        used_variants.add(variant)
+        if top_id:
+            used_tops.add(top_id)
+    for combo in deferred:
+        if len(unique) >= max_combos:
+            break
         top_id = next(
             (item_id for item_id in combo.get("item_ids") or []
              if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
             "",
         )
         if top_id and top_id in used_tops:
-            deferred.append(combo)
             continue
         unique.append(combo)
         if top_id:
             used_tops.add(top_id)
     for combo in deferred:
-        if len(unique) >= max_combos:
-            break
+        if len(unique) >= max_combos or combo in unique:
+            continue
         unique.append(combo)
     return unique[:max_combos]
 
@@ -4107,7 +4188,8 @@ def recommend_closet(
     combos = fallback_combos(
         items, anchor, max_combos, tone, exclude_keys, uniq, profile, include_ids,
     )
-    return _finish_combos(combos, items, 0, profile)
+    finished = _finish_combos(combos, items, 0, profile)
+    return _diversify_combo_bases(finished, {item["id"]: item for item in items}, max_combos)
 
 
 def look_cache_key(item_ids: list[str]) -> str:
@@ -4864,6 +4946,8 @@ def generate_model_look_image(
     marks: list[tuple[str, float]] = []
 
     def mark(key: str) -> None:
+        if marks and marks[-1][0] == key:
+            return
         marks.append((key, time.perf_counter()))
         if stage:
             try:
@@ -8422,6 +8506,8 @@ def _apply_model_looks(
         identity = _ensure_model_identity_png(user_id, gender)
         for outfit in targets:
             try:
+                if report:
+                    report({"_look": {"id": outfit.get("id"), "stage": "queued"}})
                 outfit, url = one(outfit, identity)
                 if url:
                     persist(outfit, url)
@@ -8557,6 +8643,43 @@ def _recent_daily_exclusions(user_id: str, for_date: str | None) -> list[list[st
     return out
 
 
+def _recent_daily_wishes(user_id: str, for_date: str | None) -> list[dict[str, Any]]:
+    """최근 데일리에서 제안한 외부 아이템을 다시 고르지 않게 한다."""
+    today = (for_date or "")[:10]
+    try:
+        cutoff = (datetime.fromisoformat(today).date() - timedelta(days=7)).isoformat()
+    except ValueError:
+        cutoff = ""
+    try:
+        rows = (
+            supabase_admin.table("outfits")
+            .select("metadata,created_at")
+            .eq("user_id", user_id)
+            .eq("type", "daily")
+            .order("created_at", desc=True)
+            .limit(40)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[coordinate] recent wish read skip: {exc}", flush=True)
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in rows:
+        meta = row.get("metadata") or {}
+        day = str(meta.get("for_date") or row.get("created_at") or "")[:10]
+        if not day or day == today or (cutoff and day < cutoff):
+            continue
+        wish = _clean_wish(meta.get("wish"))
+        key = _wish_key(wish) if wish else None
+        if wish and key not in seen:
+            out.append(wish)
+            seen.add(key)
+    return out
+
+
 @app.post("/api/live/coordinate")
 def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)):
     t0 = time.perf_counter()
@@ -8604,6 +8727,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         wish_combos = body.wish_combos or 0
         by_id = {row["id"]: row for row in pool}
         recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
+        recent_wishes = _recent_daily_wishes(user.id, body.for_date)
         exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
         outfits: list[dict[str, Any]] = []
@@ -8724,6 +8848,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                 user.id, anchor, pool, body.style, rest_n,
                 exclude, body.styles or None, profile,
                 body.include_item_ids or None, wish_combos,
+                recent_wishes,
             )
             start = len(outfits)
             for i, combo in enumerate(rest):

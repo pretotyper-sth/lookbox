@@ -1735,10 +1735,11 @@ function App() {
   };
 
   const lookInflight = useRef(new Set());
+  const lookFailed = useRef(new Set());
   const applyModelLooks = useCallback(async (list) => {
     const pending = (list || LB_DATA.DAILY || []).filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id
-      && !lookInflight.current.has(o.id) && !outfitWishPending(o)
+      && !lookInflight.current.has(o.id) && !lookFailed.current.has(o.id) && !o.lookError && !outfitWishPending(o)
     ));
     if (!pending.length) return 0;
     const lookLimit = window.LOOK_TEST_LIMIT || 0;
@@ -1752,6 +1753,7 @@ function App() {
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
     targets.forEach((o) => lookInflight.current.add(o.id));
+    const completed = new Set();
     // 서버가 단계를 흘려보낸다(prep/dress/finish/save). 카드 문구는 이 값만 보고 그린다.
     const markStage = (id, key) => {
       if (!id || !key) return;
@@ -1762,8 +1764,8 @@ function App() {
       if (!id || !url) return;
       delete LB_DATA.LOOK_STAGE[id];
       // hydrate가 DAILY를 새 객체로 갈아끼워도 id로 찾아 붙인다.
-      (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
-      (list || []).forEach((o) => { if (o && o.id === id) o.lookImg = url; });
+      (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === id) { o.lookImg = url; delete o.lookError; } });
+      (list || []).forEach((o) => { if (o && o.id === id) { o.lookImg = url; delete o.lookError; } });
       if (LB_DATA.OUTFIT_BY_ID[id]) LB_DATA.OUTFIT_BY_ID[id].lookImg = url;
       writeDailyCache({
         style: dailyStyle,
@@ -1780,7 +1782,7 @@ function App() {
         timeoutMs: 420000,
         onLook: (row) => {
           if (!row) return;
-          if (row.lookImg) paintLook(row.id, row.lookImg);
+          if (row.lookImg) { completed.add(row.id); paintLook(row.id, row.lookImg); }
           else markStage(row.id, row.stage);
         },
         body: JSON.stringify({
@@ -1802,6 +1804,7 @@ function App() {
       let n = 0;
       (payload.outfits || []).forEach((row) => {
         if (row && row.id && row.lookImg) {
+          completed.add(row.id);
           paintLook(row.id, row.lookImg);
           n += 1;
         }
@@ -1811,6 +1814,12 @@ function App() {
     } finally {
       targets.forEach((o) => {
         lookInflight.current.delete(o.id);
+        if (!completed.has(o.id)) {
+          lookFailed.current.add(o.id);
+          (LB_DATA.DAILY || []).forEach((dailyOutfit) => {
+            if (dailyOutfit && dailyOutfit.id === o.id) dailyOutfit.lookError = true;
+          });
+        }
         delete LB_DATA.LOOK_STAGE[o.id];
       });
       bumpDaily();
@@ -1838,6 +1847,8 @@ function App() {
     setPrefs(np);
     persistPrefs(np);
     if (on) {
+      lookFailed.current.clear();
+      (LB_DATA.DAILY || []).forEach((o) => { if (o) delete o.lookError; });
       const pending = (LB_DATA.DAILY || []).filter((o) => o && !o.lookImg && (o.itemIds || []).length);
       if (pending.length) {
         showToast('AI 착장 만드는 중이에요');

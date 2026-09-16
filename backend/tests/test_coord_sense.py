@@ -12,9 +12,9 @@ from pathlib import Path
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
-    "_pick", "_clean_style_attrs", "_row_style", "_pair_score", "_catalog_line",
+    "_pick", "_clean_style_attrs", "_row_style", "_item_bucket", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
-    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_garment_slot", "_dedupe_combo_garment_slots",
+    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_garment_slot", "_dedupe_combo_garment_slots", "_combo_top_variant_key", "_diversify_combo_bases",
     "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
@@ -174,6 +174,24 @@ class ComboSlotTest(unittest.TestCase):
         self.ns["_dedupe_combo_garment_slots"](combo, by_id)
         self.assertEqual(combo["item_ids"], ["top-1", "bottom", "shoes"])
 
+    def test_diversify_prefers_different_top_variants(self):
+        items = [
+            item(cat="top", color="블랙", name="블랙 카라티", subtype="카라티"),
+            item(cat="top", color="화이트", name="화이트 카라티", subtype="카라티"),
+            item(cat="top", color="네이비", name="네이비 니트", subtype="니트"),
+        ]
+        for idx, it in enumerate(items):
+            it["id"] = f"top-{idx}"
+        by_id = {it["id"]: it for it in items}
+        combos = [
+            {"item_ids": ["top-0", "bottom-0", "shoes"]},
+            {"item_ids": ["top-1", "bottom-1", "shoes"]},
+            {"item_ids": ["top-2", "bottom-2", "shoes"]},
+        ]
+        got = self.ns["_diversify_combo_bases"](combos, by_id, 3)
+        self.assertEqual(got[0]["item_ids"][0], "top-0")
+        self.assertEqual(got[1]["item_ids"][0], "top-2")
+
 
 class ShoeRotateTest(unittest.TestCase):
     def setUp(self):
@@ -254,7 +272,7 @@ class IncludeAndWishTest(unittest.TestCase):
             "_combo_has_top_and_bottom", "_combo_has_shoes",
             "_combo_is_wearable", "_clean_wish", "_include_note",
             "_wish_note", "_combo_has_category", "_gap_wish", "_fill_wish_quota",
-            "_wish_slot_key", "_apply_wish_slot", "_pin_wishes_to_tail", "_is_accent",
+            "_wish_slot_key", "_wish_key", "_apply_wish_slot", "_pin_wishes_to_tail", "_is_accent",
         )
         body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
         consts = [
@@ -316,6 +334,15 @@ class IncludeAndWishTest(unittest.TestCase):
         self.assertIsNone(combos[0].get("wish"))
         self.ns["_fill_wish_quota"](combos, 1, by_id)
         self.assertEqual(sum(1 for c in combos if c.get("wish")), 1)
+
+    def test_gap_wish_rotates_away_from_recent_item(self):
+        by_id = {
+            "t": {"id": "t", "category": "top"},
+            "b": {"id": "b", "category": "bottom"},
+        }
+        recent = {self.ns["_wish_key"]({"category": "shoes", "name": "화이트 스니커즈", "color": "화이트"})}
+        wish = self.ns["_gap_wish"](["t", "b"], by_id, avoid_wishes=recent)
+        self.assertEqual(wish["category"], "bag")
 
     def test_overlapping_core_wish_keeps_wardrobe_shoes(self):
         by_id = {

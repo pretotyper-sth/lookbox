@@ -17,7 +17,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [model-look-toggle](model-look-toggle.md) — 남·여 착장은 `assets/mood/* 코디 레퍼런스.png` 고정. 개인화는 프로필 얼굴·신체 수치 + 레퍼런스 구도·배경. 오늘 카드는 `추천 코디 N`. 캐시 `model-id31-`
 - [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
-- [coord-clash](coord-clash.md) — 셔츠+카고+첼시 감점. 신발은 맞는 켤레 안에서 돌아가며 쓴다. 9월 쪼리 제외
+- [coord-clash](coord-clash.md) — 카테고리 중복 차단. 최근 외부 아이템을 순환하고 상의 종류·핏·패턴이 다른 코디를 우선한다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 탭은 확인 단계. 구멍 약하면 재생성, 실패는 일 3회. 월 2회는 성공만. PC `wide`는 생성 안 함
