@@ -448,6 +448,14 @@ img { display: block; max-width: 100%; }
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+.lb-tryon-person-sheet-body { scrollbar-gutter: stable; }
+@media (max-width: 759px) {
+  .lb-tryon-person-sheet-body {
+    height: min(76vh, 640px);
+    max-height: min(76vh, 640px);
+    box-sizing: border-box;
+  }
+}
 
 /* 구매내역 데모: 기존 추가 모달 안에서 안내와 가상 Chrome을 나란히 보여준다. */
 .lb-order-demo-layout {

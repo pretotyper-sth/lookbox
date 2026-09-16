@@ -10,6 +10,8 @@
 서버에 보내며, 이 값과 얼굴이 바뀌면 대상별 전신 캐시를 비운다. 두 대상의 전신 프레임이 모두
 준비된 경우 카메라 우상단 `전환` 버튼으로 카메라를 닫지 않고 즉시 교체한다.
 
+본인 외 입력 바텀시트는 모바일에서 열릴 때 내부 스크롤을 상단으로 초기화하고, 다른 바로보기 탭과 같은 높이로 고정한다. 긴 상세 입력값은 시트 안에서 스크롤해 확인한 뒤 저장한다.
+
 근거: `frontend/src/proto/04-screens-ab.jsx` `TryOnPersonSheet`·`AddSheet`,
 `frontend/src/proto/09-app.jsx` `saveTryOnOther`·`makeTryOnBody`,
 `frontend/src/proto/10-tryon.jsx` `TryOnCameraOverlay`, `backend/app/main.py` `TryOnBody`·`live_tryon_body`.

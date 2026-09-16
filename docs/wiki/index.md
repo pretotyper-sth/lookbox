@@ -21,7 +21,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 탭은 확인 단계. 구멍 약하면 재생성, 실패는 일 3회. 월 2회는 성공만. PC `wide`는 생성 안 함
-- [tryon-multiple-profiles](tryon-multiple-profiles.md) — 바로보기에서 본인·본인 외 프로필을 저장하고 카메라 우상단에서 즉시 전환
+- [tryon-multiple-profiles](tryon-multiple-profiles.md) — 바로보기에서 본인·본인 외 프로필을 저장하고 카메라 우상단에서 즉시 전환; 본인 외 입력 시트는 상단 포커스·고정 높이·내부 스크롤
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px
 - [profile-avatar](profile-avatar.md) — 프사는 스토리지 URL을 계정 prefs에 붙인다. data URL은 기기에만 남아 모바일에 안 보였다
@@ -38,6 +38,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Decisions
 - [rename-candidates-2026-08](rename-candidates-2026-08.md) — Lookbox 대체 후보. R3는 Look 고정 해제·컨셉/페르소나형. KIPRIS 미클리어
+- [acloset-positioning-2026-09](acloset-positioning-2026-09.md) — Acloset 대비 Lookbox는 범용 AI 옷장이 아니라 구매 전 적합성 검증·구매결정 도구를 차지한다
 
 
 ## Operations

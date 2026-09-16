@@ -1224,6 +1224,7 @@ function OrderStorePreview({ step, onClose, onAdd }) {
 
 function TryOnPersonSheet({ open, profile, onClose, onSave }) {
   const ProfileAvatar = window.ProfileAvatar;
+  const sheetBodyRef = useR(null);
   const initial = {
     name: '선물용', avatar: '', gender: '', age: '', height: '', weight: '',
     ...(profile || {}),
@@ -1232,11 +1233,21 @@ function TryOnPersonSheet({ open, profile, onClose, onSave }) {
   useE(() => {
     if (open) setDraft({ ...initial });
   }, [open, profile]);
+  useScrollTopOn(sheetBodyRef, open ? 'tryon-person-open' : 'tryon-person-closed', open);
+  useE(() => {
+    if (!open) return;
+    const reset = () => {
+      if (sheetBodyRef.current) sheetBodyRef.current.scrollTop = 0;
+    };
+    reset();
+    const frame = requestAnimationFrame(reset);
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
   const set = (key) => (value) => setDraft((prev) => ({ ...prev, [key]: value }));
   const ready = !!(draft.avatar && draft.gender && draft.age && draft.height && draft.weight);
   return (
     <BottomSheet open={open} onClose={onClose} maxW={460} desktopMaxW={420} zIndex={80}>
-      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+      <div ref={sheetBodyRef} className="lb-sheet-body lb-tryon-person-sheet-body" style={{ padding: '8px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           {ProfileAvatar ? (
             <ProfileAvatar src={draft.avatar} size={68} onChange={set('avatar')} onInvalid={() => {}} />
