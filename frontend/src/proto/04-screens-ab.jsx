@@ -1342,7 +1342,6 @@ function AddSheet({ ctx }) {
   const [storeRequestOpen, setStoreRequestOpen] = useS(false);
   const [storeRequestName, setStoreRequestName] = useS('');
   const [storeRequestUrl, setStoreRequestUrl] = useS('');
-  const [storeRequestReason, setStoreRequestReason] = useS('');
   const [storeRequestBusy, setStoreRequestBusy] = useS(false);
   const [storeRequestDone, setStoreRequestDone] = useS(false);
   const orderDemo = typeof window !== 'undefined'
@@ -2164,7 +2163,7 @@ function AddSheet({ ctx }) {
     try {
       await liveJSON('/api/live/store-requests', {
         method: 'POST',
-        body: JSON.stringify({ store_name: storeRequestName, store_url: storeRequestUrl, reason: storeRequestReason }),
+        body: JSON.stringify({ store_name: storeRequestName, store_url: storeRequestUrl }),
       });
       setStoreRequestDone(true);
       if (typeof showToast === 'function') showToast('쇼핑몰 추가 요청이 접수됐어요', 'check');
@@ -2880,26 +2879,27 @@ function AddSheet({ ctx }) {
                         ...stagePanel,
                         background: 'var(--ivory)', boxShadow: 'inset 0 0 0 1px var(--line)',
                         padding: 'var(--s4)', display: 'flex', flexDirection: 'column',
+                        overflowY: storeRequestOpen ? 'auto' : 'hidden',
                       }}>
-                        {mobileOrderTab ? (
+                        {mobileOrderTab && !storeRequestOpen ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 18px' }}>
                             <span style={{
                               fontSize: 'clamp(12px, 3.6vw, 13.5px)', fontWeight: 600,
                               color: 'var(--ink-2)', letterSpacing: '-0.03em', whiteSpace: 'nowrap', wordBreak: 'normal',
                             }}>구매내역은 PC에서 불러올 수 있어요</span>
                           </div>
-                        ) : !orderBrowser.supported ? (
+                        ) : !orderBrowser.supported && !storeRequestOpen ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 12px' }}>
                             <div>
                               <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>구매내역은 Chrome 또는 Edge에서 불러올 수 있어요</div>
                               <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>현재 {orderBrowser.name}에서는 사진 또는 URL로 옷을 추가해 주세요.</div>
                             </div>
                           </div>
-                        ) : orderExtension === 'checking' ? (
+                        ) : orderExtension === 'checking' && !storeRequestOpen ? (
                           <div style={{ flex: 1, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
                             <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{orderBrowser.name} 연결 상태를 확인하고 있어요</span>
                           </div>
-                        ) : (orderExtension === 'missing' || orderExtension === 'outdated') ? (
+                        ) : (orderExtension === 'missing' || orderExtension === 'outdated') && !storeRequestOpen ? (
                           <>
                             <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>
                               {orderExtension === 'outdated' ? '확장 프로그램 업데이트가 필요해요' : `${orderBrowser.name} 확장 프로그램을 먼저 설치해 주세요`}
@@ -2921,7 +2921,7 @@ function AddSheet({ ctx }) {
                               ))}
                             </div>
                           </>
-                        ) : orderFlow.phase !== 'idle' ? (
+                        ) : orderFlow.phase !== 'idle' && !storeRequestOpen ? (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                               <div style={{ fontSize: 13.5, fontWeight: 750, lineHeight: 1.4 }}>{orderFlowCopy[0]}</div>
@@ -2994,28 +2994,33 @@ function AddSheet({ ctx }) {
                                   {p.name}
                                 </button>
                                 ))}
+                                <button
+                                  type="button"
+                                  onClick={() => { setStoreRequestOpen(true); setStoreRequestDone(false); setErr(''); }}
+                                  style={{
+                                    padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 650,
+                                    background: 'color-mix(in srgb, var(--accent) 11%, var(--ivory))', color: 'var(--accent-ink)',
+                                    boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line))',
+                                  }}
+                                >
+                                  <Icon name="plus" size={13} /> 추가 요청하기
+                                </button>
                               </div>
-                              <button type="button" onClick={() => { setStoreRequestOpen(true); setErr(''); }} style={{ marginTop: 'var(--s3)', alignSelf: 'flex-start', padding: 0, color: 'var(--ink-2)', fontSize: 12.5, fontWeight: 650, textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                                찾는 쇼핑몰이 없나요? 추가 요청하기
-                              </button>
                             </> : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <IconBtn name="chevL" label="쇼핑몰 선택으로" onClick={() => { setStoreRequestOpen(false); setStoreRequestDone(false); setErr(''); }} style={{ marginLeft: -8 }} />
-                                  <div style={{ fontSize: 15, fontWeight: 750 }}>쇼핑몰 추가 요청</div>
+                                  <div style={{ fontSize: 16, fontWeight: 750 }}>쇼핑몰 추가 요청</div>
                                 </div>
                                 {storeRequestDone ? (
-                                  <div role="status" style={{ marginTop: 8, padding: '18px 14px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', color: 'var(--ink-2)', lineHeight: 1.55, fontSize: 13.5 }}>
+                                  <div role="status" style={{ padding: '18px 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', color: 'var(--ink-2)', lineHeight: 1.55, fontSize: 14 }}>
                                     <div style={{ color: 'var(--accent)', fontWeight: 800, marginBottom: 6 }}>요청이 접수됐어요</div>
                                     {storeRequestName.trim()}을(를) 추가 후보로 기록했어요. 요청이 쌓이면 순서대로 검토할게요.
                                   </div>
                                 ) : (
                                   <>
-                                    <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.45 }}>사용하고 싶은 쇼핑몰을 알려주시면 추가 후보로 검토할게요.</div>
-                                    <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름 (필수)" maxLength={120} style={{ height: 46, padding: '0 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, outline: 'none' }} />
-                                    <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 46, padding: '0 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, outline: 'none' }} />
-                                    <textarea className="lb-input" value={storeRequestReason} onChange={(e) => setStoreRequestReason(e.target.value)} placeholder="주로 어떤 옷을 사는지 알려주세요 (선택)" maxLength={1000} rows={3} style={{ padding: '12px 13px', borderRadius: 'var(--r-md)', background: 'var(--ivory)', border: '1px solid var(--line)', fontSize: 14, lineHeight: 1.45, resize: 'none', outline: 'none' }} />
-                                    <Btn full size="lg" icon="check" onClick={submitStoreRequest} disabled={storeRequestBusy}>{storeRequestBusy ? '접수 중…' : '추가 요청 접수하기'}</Btn>
+                                    <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름" maxLength={120} style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
+                                    <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
                                   </>
                                 )}
                               </div>
@@ -3196,7 +3201,17 @@ function AddSheet({ ctx }) {
                     )}
 
                     <div style={{ marginTop: 'var(--s5)', minHeight: 52 }}>
-                      {tab === 'tryon' ? (
+                      {tab === 'orders' && storeRequestOpen ? (
+                        <Btn
+                          full
+                          size="lg"
+                          icon={storeRequestDone ? 'check' : 'plus'}
+                          onClick={storeRequestDone ? () => setStoreRequestOpen(false) : submitStoreRequest}
+                          disabled={storeRequestBusy}
+                        >
+                          {storeRequestDone ? '확인' : (storeRequestBusy ? '접수 중…' : '추가 요청하기')}
+                        </Btn>
+                      ) : tab === 'tryon' ? (
                         <Btn
                           full
                           size="lg"

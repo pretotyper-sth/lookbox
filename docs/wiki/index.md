@@ -29,7 +29,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [personal-model-look](personal-model-look.md) — AI 착장 개인화 토글은 기본 off. 얼굴·키·몸무게를 계정 단위로 저장하고 모달 재표시도 계정 단위로 기억
 - [mood-groups](mood-groups.md) — 무드는 공통 + 여성 전용. 착장 인물은 `assets/mood` 남·여 예시. 분류 id는 `_STYLE_IDS`와 같음
 - [order-import-webview](order-import-webview.md) — 구매내역: 실제 확장은 Chrome 팝업, 샘플은 추가 시트 2열 가상 Chrome. 썸네일 직접 등록·탭 이동 후 유지·선택 후 공용 상세입력. 모바일은 PC 안내
-- [store-request-survey](store-request-survey.md) — 지원하지 않는 쇼핑몰은 로그인 사용자별 중복을 막아 요청으로 저장하고, 관리자 API가 사이트별 요청 수·최근 요청을 집계한다
+- [store-request-survey](store-request-survey.md) — 지원하지 않는 쇼핑몰은 추가 요청 칩 → 이름·주소 입력 → 단일 CTA로 저장하고, 사용자별 중복을 막아 관리자 API가 집계한다
 - [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. URL이면 가격·재질도 HTML에서 채움
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷·브랜드·가격·재질을 페이지에서 읽는다. robots 메타를 차단으로 오인하지 않음
