@@ -3025,8 +3025,8 @@ function AddSheet({ ctx }) {
                                   </div>
                                 ) : (
                                   <>
-                                    <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름" maxLength={120} style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
-                                    <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
+                                    <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름" maxLength={120} style={{ height: 48, padding: '0 14px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 14, outline: 'none', flex: 'none' }} />
+                                    <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 48, padding: '0 14px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 14, outline: 'none', flex: 'none' }} />
                                     <div style={{ marginTop: 'auto', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>
                                       요청이 모이면 우선순위에 맞춰 검토 후 반영해요.
                                     </div>
