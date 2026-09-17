@@ -2159,10 +2159,13 @@ function AddSheet({ ctx }) {
     setBulk(null);
     setBulkResult(null);
     setBulkRun(null);
+    setOrderBusy(false);
     setOrderNeedLogin(false);
     orderTabRef.current = null;
     setOrderTabId(null);
     setOrderExtImage(false);
+    setOrderPreviewItems([]);
+    setErr('');
     setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
   };
   const submitStoreRequest = async () => {
