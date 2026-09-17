@@ -915,3 +915,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-16: AI 착장 생성 실패를 자동 재시도하지 않아 진행 문구가 초단위로 무한 반복되지 않게 했다. 외부 아이템은 최근 7일 이력과 현재 응답 중복을 피하고, 추천 코디는 상의 종류·핏·패턴·소재와 아이템 자체가 다른 조합을 우선한다. 테스트 모드 fallback에도 같은 다양화 규칙을 적용했다. 근거: `frontend/src/proto/09-app.jsx` `lookFailed`, `backend/app/main.py` `_recent_daily_wishes`, `_diversify_combo_bases`.
 2026-09-16: 마이페이지의 `내 얼굴·체형에 맞춰 보기` 하위 설정을 `AI 캐릭터 착장 이미지로 보기`가 켜진 경우에만 표시하도록 상위 토글과 동일한 조건으로 맞췄다. 근거: `frontend/src/proto/08-mypage.jsx` `personalModelLookRow`.
 2026-09-16: 사진·URL·바로보기 탭의 168px 미디어 스테이지를 유지하면서, 바로보기 생성 전 프사와 생성 중 스켈레톤을 동일한 72px 원형으로 축소해 모달 안쪽 여백을 맞췄다. 근거: `frontend/src/proto/04-screens-ab.jsx` `TRYON_AVATAR_SIZE`, `frontend/src/proto/proto.css` `.lb-tryon-skel`.
+2026-09-17: 바로 보기 생성 전 안내를 사진 기준 한 문장으로 줄이고 프사 아래 8px로 당겼다. 프사는 고정한 채 사진·URL과 같은 168px 스테이지 안에서 여백만 조정했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `tryOnGuide`, `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.

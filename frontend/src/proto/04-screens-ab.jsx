@@ -2558,8 +2558,8 @@ function AddSheet({ ctx }) {
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
                 const tryOnGuide = tryOnSubject === 'other'
-                  ? '이 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.'
-                  : '프로필 사진으로 전신 이미지를 만들어요.\n완성된 이미지로 모바일에서 옷을 바로 대볼 수 있어요.';
+                  ? '이 사진으로 옷을 바로 대볼 수 있어요.'
+                  : '프로필 사진으로 옷을 바로 대볼 수 있어요.';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';

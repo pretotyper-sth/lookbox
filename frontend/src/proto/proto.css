@@ -322,6 +322,7 @@ img { display: block; max-width: 100%; }
 .lb-tryon-static-copy {
   left: 16px;
   right: 16px;
+  top: 113px;
 }
 .lb-tryon-profile-avatar {
   position: absolute;
