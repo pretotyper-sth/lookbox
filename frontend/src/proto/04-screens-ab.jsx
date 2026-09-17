@@ -1342,8 +1342,6 @@ function AddSheet({ ctx }) {
   const [storeRequestOpen, setStoreRequestOpen] = useS(false);
   const [storeRequestName, setStoreRequestName] = useS('');
   const [storeRequestUrl, setStoreRequestUrl] = useS('');
-  // 이전에 열린 동적 번들이 남아도 요청 화면 렌더가 끊기지 않게 상태 슬롯을 유지한다.
-  const [storeRequestReason] = useS('');
   const [storeRequestBusy, setStoreRequestBusy] = useS(false);
   const [storeRequestDone, setStoreRequestDone] = useS(false);
   const orderDemo = typeof window !== 'undefined'
@@ -1407,7 +1405,7 @@ function AddSheet({ ctx }) {
     setTryOnErr(''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); orderTabRef.current = null; setOrderTabId(null); setOrderExtImage(false); setOrderPreviewItems([]); setOrderSession(null);
-    setStoreRequestOpen(false); setStoreRequestName(''); setStoreRequestUrl(''); setStoreRequestReason(''); setStoreRequestBusy(false); setStoreRequestDone(false);
+    setStoreRequestOpen(false); setStoreRequestName(''); setStoreRequestUrl(''); setStoreRequestBusy(false); setStoreRequestDone(false);
     setOrderFlow({ phase: 'idle', shopId: '', demo: false, count: 0 });
     orderDraftRef.current = { bulk: null, result: null };
     setStage('input'); setDetected([]); setSel([]); setSteps([]); setStepIdx(0); setPendingReplace(null);
