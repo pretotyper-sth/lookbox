@@ -2554,6 +2554,7 @@ function AddSheet({ ctx }) {
                 );
                 const tabErr = tab === 'tryon' ? '' : err;
                 const tryOnNeedsBody = tab === 'tryon' && tryOnAvatar && !tryOnBodyReady && !tryOnErr;
+                const tryOnProfilePanel = tab === 'tryon' && tryOnAvatar && !tryOnErr;
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
                 const tryOnGuide = tryOnSubject === 'other'
@@ -2582,23 +2583,12 @@ function AddSheet({ ctx }) {
                             zIndex: 2,
                             pointerEvents: 'none',
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                              <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.01em', wordBreak: 'keep-all' }}>
-                                {(tryOnUi.step && tryOnUi.step.label) || '프로필을 확인하고 있어요'}
-                              </div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
-                                {tryOnUi.pct}%
-                              </div>
-                            </div>
-                            <div className="lb-tryon-bar" aria-hidden>
-                              <i style={{ width: `${Math.max(2, Math.min(100, tryOnUi.pct))}%` }} />
-                            </div>
-                            <div style={{
-                              marginTop: 10, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)',
-                              textAlign: 'left', wordBreak: 'keep-all', lineHeight: 1.4,
+                            <span style={{
+                              display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--ink-3)',
+                              textAlign: 'center', wordBreak: 'keep-all', lineHeight: 1.5,
                             }}>
-                              좀만 기다려 주세요. 한 번만 하면 돼요
-                            </div>
+                              {`${(tryOnUi.step && tryOnUi.step.label) || '기본 착장을 만들고 있어요'} (${tryOnUi.pct}%)`}
+                            </span>
                           </div>
                         </div>
                       ) : (
@@ -2621,14 +2611,14 @@ function AddSheet({ ctx }) {
                         }}
                       >
                         <div style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: tryOnNeedsBody ? 0 : 10,
-                          padding: tryOnNeedsBody ? 0 : '0 12px', pointerEvents: 'none',
-                          position: tryOnNeedsBody ? 'relative' : undefined,
-                          width: tryOnNeedsBody ? '100%' : undefined,
-                          alignSelf: tryOnNeedsBody ? 'stretch' : undefined,
-                          flex: tryOnNeedsBody ? 1 : undefined,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: tryOnProfilePanel ? 0 : 10,
+                          padding: tryOnProfilePanel ? 0 : '0 12px', pointerEvents: 'none',
+                          position: tryOnProfilePanel ? 'relative' : undefined,
+                          width: tryOnProfilePanel ? '100%' : undefined,
+                          alignSelf: tryOnProfilePanel ? 'stretch' : undefined,
+                          flex: tryOnProfilePanel ? 1 : undefined,
                         }}>
-                          <div className={tryOnNeedsBody ? 'lb-tryon-profile-avatar' : undefined} style={{ pointerEvents: 'auto' }}>
+                          <div className={tryOnProfilePanel ? 'lb-tryon-profile-avatar' : undefined} style={{ pointerEvents: 'auto' }}>
                             {ProfileAvatar ? (
                               <ProfileAvatar
                                 src={tryOnAvatar}
@@ -2638,22 +2628,22 @@ function AddSheet({ ctx }) {
                               />
                             ) : <Icon name="camera" size={30} stroke={1.5} />}
                           </div>
-                          <span className={tryOnNeedsBody ? 'lb-tryon-static-copy' : undefined} style={{
-                            fontSize: tryOnNeedsBody ? 12 : 14,
-                            fontWeight: tryOnNeedsBody ? 400 : 600,
-                            color: tryOnNeedsBody ? 'var(--ink-3)' : undefined,
+                          <span className={tryOnProfilePanel ? 'lb-tryon-static-copy' : undefined} style={{
+                            fontSize: tryOnProfilePanel ? 12 : 14,
+                            fontWeight: tryOnProfilePanel ? 400 : 600,
+                            color: tryOnProfilePanel ? 'var(--ink-3)' : undefined,
                             textAlign: 'center',
                             letterSpacing: undefined,
-                            whiteSpace: tryOnNeedsBody ? 'pre-line' : undefined,
-                            wordBreak: tryOnNeedsBody ? 'keep-all' : 'keep-all',
-                            lineHeight: tryOnNeedsBody ? 1.5 : undefined,
+                            whiteSpace: tryOnProfilePanel ? 'pre-line' : undefined,
+                            wordBreak: 'keep-all',
+                            lineHeight: tryOnProfilePanel ? 1.5 : undefined,
                           }}>
                             {tryOnAvatar
                               ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
                               : '프로필 사진 올리기'}
                           </span>
                           {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
-                          <span style={{
+                          <span className={tryOnProfilePanel && tryOnBodyReady ? 'lb-tryon-ready-note' : undefined} style={{
                             fontSize: tryOnErr ? 12.5 : 12,
                             fontWeight: tryOnErr ? 600 : 400,
                             color: tryOnErr ? '#9D472F' : 'var(--ink-3)',

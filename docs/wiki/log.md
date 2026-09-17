@@ -919,3 +919,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-17: 구매내역의 텍스트형 쇼핑몰 추가 요청을 기존 몰과 같은 `+ 추가 요청하기` 칩으로 바꿨다. 요청 화면은 이름·주소만 큰 입력으로 받고 박스 내부를 스크롤하며, 하단의 주문내역 CTA 자리를 단일 추가 요청 CTA로 교체했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`, `submitStoreRequest`.
 2026-09-17: 쇼핑몰 요청 입력 축소 뒤 `resetLocalDraft`에 남은 `setStoreRequestReason` 호출이 화면 렌더를 끊기던 오류를 제거했다. 세 번째 입력·상태·전송 모두 없고, 새 번들로 교체한다. 근거: `frontend/src/proto/04-screens-ab.jsx` `resetLocalDraft`.
 2026-09-17: 바로 보기에는 대상 선택 행(68px)이, 사진·URL에는 추출 힌트 행(44px)이 있어 프사 박스를 같은 168px로 두면 모달이 24px 더 커졌다. 바로 보기 프사 스테이지를 144px로 줄여 세 탭의 전체 높이와 CTA 기준선을 통일했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `panelH`.
+2026-09-17: 144px 바로 보기 스테이지에서 프사·생성 스켈레톤과 전후 안내를 위로 올렸다. 생성 중 진행은 보조 안내와 같은 12px·보조색·가운데 정렬의 「상태 (퍼센트)」 한 줄로 바꿨다. 근거: `frontend/src/proto/04-screens-ab.jsx` `tryOnProfilePanel`, `frontend/src/proto/proto.css` `.lb-tryon-progress`.
