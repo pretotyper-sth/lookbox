@@ -1333,6 +1333,7 @@ function AddSheet({ ctx }) {
   const [orderNeedLogin, setOrderNeedLogin] = useS(false);
   const [orderTabId, setOrderTabId] = useS(null);
   const orderTabRef = useR(null);
+  const orderFlowTokenRef = useR(0);
   const [orderExtImage, setOrderExtImage] = useS(false);
   const [orderPreviewItems, setOrderPreviewItems] = useS([]);
   const [orderExtension, setOrderExtension] = useS('checking');
@@ -1709,6 +1710,9 @@ function AddSheet({ ctx }) {
     return orderDemo || orderPreviewSession ? { ...platform, demo: true } : platform;
   };
   const startInlineOrder = async () => {
+    const flowToken = orderFlowTokenRef.current + 1;
+    orderFlowTokenRef.current = flowToken;
+    const isActive = () => orderFlowTokenRef.current === flowToken;
     const platform = orderFlowPlatform();
     setErr('');
     setOrderPreviewItems([]);
@@ -1723,6 +1727,7 @@ function AddSheet({ ctx }) {
         platform,
         action: 'open',
         onProgress: (step) => {
+          if (!isActive()) return;
           const key = (step && (step.key || step)) || '';
           if (key === 'extension_login') {
             setOrderFlow((cur) => ({ ...cur, phase: 'login' }));
@@ -1731,9 +1736,11 @@ function AddSheet({ ctx }) {
           }
         },
       });
+      if (!isActive()) return;
       setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
-      await collectInlineOrders();
+      await collectInlineOrders(flowToken);
     } catch (e) {
+      if (!isActive()) return;
       const message = String((e && e.message) || '');
       if (message === 'NEED_LOGIN' || /로그인/.test(message)) {
         setOrderFlow((cur) => ({ ...cur, phase: 'login' }));
@@ -1748,7 +1755,9 @@ function AddSheet({ ctx }) {
       }
     }
   };
-  const collectInlineOrders = async () => {
+  const collectInlineOrders = async (flowToken = orderFlowTokenRef.current + 1) => {
+    if (flowToken !== orderFlowTokenRef.current) orderFlowTokenRef.current = flowToken;
+    const isActive = () => orderFlowTokenRef.current === flowToken;
     const platform = orderFlowPlatform();
     const found = new Map();
     setErr('');
@@ -1759,12 +1768,14 @@ function AddSheet({ ctx }) {
         platform,
         action: 'collect',
         onItem: (item) => {
+          if (!isActive()) return;
           if (!item || !item.url) return;
           found.set(item.url, item);
           setOrderPreviewItems([...found.values()]);
           setOrderFlow((cur) => ({ ...cur, count: found.size }));
         },
       });
+      if (!isActive()) return;
       (items || []).forEach((item) => {
         if (item && item.url) found.set(item.url, item);
       });
@@ -1778,6 +1789,7 @@ function AddSheet({ ctx }) {
       applyCollectedRows(rows);
       setOrderFlow((cur) => ({ ...cur, phase: 'done', count: rows.length }));
     } catch (e) {
+      if (!isActive()) return;
       setOrderFlow((cur) => ({ ...cur, phase: 'ready' }));
       setErr((e && e.message) === 'EMPTY_ORDERS'
         ? '주문내역에 담을 옷이 없어요. 첫 주문 후 다시 불러와 주세요.'
@@ -2141,6 +2153,7 @@ function AddSheet({ ctx }) {
     }
   };
   const chooseOtherOrderShop = () => {
+    orderFlowTokenRef.current += 1;
     cancelOrderCollection();
     orderDraftRef.current = { bulk: null, result: null };
     setBulk(null);
@@ -2988,9 +3001,9 @@ function AddSheet({ ctx }) {
                                   type="button"
                                   onClick={() => { setStoreRequestOpen(true); setStoreRequestDone(false); setErr(''); }}
                                   style={{
-                                    padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 650,
-                                    background: 'color-mix(in srgb, var(--accent) 11%, var(--ivory))', color: 'var(--accent-ink)',
-                                    boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--line))',
+                                    display: 'inline-flex', alignItems: 'center', gap: 6, flex: 'none', whiteSpace: 'nowrap',
+                                    padding: '7px 10px', borderRadius: 'var(--r-pill)', fontSize: 12.5, fontWeight: 600,
+                                    background: 'var(--ivory)', color: 'var(--ink-2)', boxShadow: 'inset 0 0 0 1px var(--line)',
                                   }}
                                 >
                                   <Icon name="plus" size={13} /> 추가 요청하기
