@@ -2669,7 +2669,7 @@ function AddSheet({ ctx }) {
                           }}>
                             {tryOnErr
                               ? tryOnErr
-                              : tryOnAvatar ? '모바일 전용' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
+                              : tryOnAvatar ? '(모바일 전용)' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
                           </span>
                           )}
                         </div>
