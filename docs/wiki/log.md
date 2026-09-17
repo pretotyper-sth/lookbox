@@ -921,3 +921,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-17: 바로 보기에는 대상 선택 행(68px)이, 사진·URL에는 추출 힌트 행(44px)이 있어 프사 박스를 같은 168px로 두면 모달이 24px 더 커졌다. 바로 보기 프사 스테이지를 144px로 줄여 세 탭의 전체 높이와 CTA 기준선을 통일했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `panelH`.
 2026-09-17: 144px 바로 보기 스테이지에서 프사·생성 스켈레톤과 전후 안내를 위로 올렸다. 생성 중 진행은 보조 안내와 같은 12px·보조색·가운데 정렬의 「상태 (퍼센트)」 한 줄로 바꿨다. 근거: `frontend/src/proto/04-screens-ab.jsx` `tryOnProfilePanel`, `frontend/src/proto/proto.css` `.lb-tryon-progress`.
 2026-09-17: 쇼핑몰 추가 요청 칩을 다른 몰 칩과 동일하게 맞추고 `+ 추가 요청하기`가 줄바꿈되지 않게 했다. 로그인 대기 중 다른 쇼핑몰을 선택하면 기존 수집 흐름 토큰을 무효화해 이전 로그인 완료 콜백이 자동 전환을 이어가지 못하게 했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `orderFlowTokenRef`, `chooseOtherOrderShop`.
+2026-09-17: 쇼핑몰 추가 요청 제목을 선택 화면 제목과 같은 13.5px 결로 낮추고, 주소 아래 남는 칸에 요청 수 기준 검토·반영 안내를 추가했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`.

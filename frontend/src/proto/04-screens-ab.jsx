@@ -3013,7 +3013,7 @@ function AddSheet({ ctx }) {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <IconBtn name="chevL" label="쇼핑몰 선택으로" onClick={() => { setStoreRequestOpen(false); setStoreRequestDone(false); setErr(''); }} style={{ marginLeft: -8 }} />
-                                  <div style={{ fontSize: 16, fontWeight: 750 }}>쇼핑몰 추가 요청</div>
+                                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>쇼핑몰 추가 요청</div>
                                 </div>
                                 {storeRequestDone ? (
                                   <div role="status" style={{ padding: '18px 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', color: 'var(--ink-2)', lineHeight: 1.55, fontSize: 14 }}>
@@ -3024,6 +3024,9 @@ function AddSheet({ ctx }) {
                                   <>
                                     <input className="lb-input" value={storeRequestName} onChange={(e) => setStoreRequestName(e.target.value)} placeholder="쇼핑몰 이름" maxLength={120} style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
                                     <input className="lb-input" value={storeRequestUrl} onChange={(e) => setStoreRequestUrl(e.target.value)} placeholder="쇼핑몰 주소 (선택)" maxLength={500} inputMode="url" style={{ height: 52, padding: '0 16px', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--line)', fontSize: 16, outline: 'none', flex: 'none' }} />
+                                    <div style={{ marginTop: 'auto', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>
+                                      요청이 모이면 우선순위에 맞춰 검토 후 반영해요.
+                                    </div>
                                   </>
                                 )}
                               </div>
