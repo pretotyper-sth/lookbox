@@ -2483,9 +2483,9 @@ function AddSheet({ ctx }) {
               {(() => {
                 const STAGE_H = 168;
                 const HINT_SLOT_H = 44; // --s4 16 + 힌트 줄 28. 구매내역만 이 칸까지 박스를 키운다.
-                // 바로 보기는 사진·URL과 같은 기본 스테이지 높이를 쓴다. 생성 전 안내 아래의
-                // 빈칸을 없애 세 탭의 시트 크기와 CTA 기준선을 맞춘다.
-                const panelH = tab === 'orders' ? STAGE_H + HINT_SLOT_H : STAGE_H;
+                // 바로 보기는 대상 선택 행(68px)이 사진·URL의 힌트 행(44px)보다 24px 크다.
+                // 그 차이만 프사 박스에서 빼 세 탭의 시트·CTA 기준선을 맞춘다.
+                const panelH = tab === 'orders' ? STAGE_H + HINT_SLOT_H : tab === 'tryon' ? STAGE_H - 24 : STAGE_H;
                 const stagePanel = {
                   width: '100%', height: panelH, borderRadius: 'var(--r-md)',
                   boxSizing: 'border-box', overflow: 'hidden',
