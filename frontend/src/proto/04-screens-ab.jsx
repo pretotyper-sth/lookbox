@@ -2978,7 +2978,7 @@ function AddSheet({ ctx }) {
                                   ? '로그인한 뒤 다시 눌러 주세요.'
                                   : orderDemo
                                     ? '샘플 주문내역 · 실제 옷장에는 저장하지 않아요.'
-                                    : 'Chrome에 연결됨 · 쇼핑몰을 고르면 로그인 화면이 열려요.'}
+                                    : '쇼핑몰을 고르면 로그인 화면이 열려요.'}
                               </div>
                               <div className="lb-scrollable" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'var(--s3)', flex: 1, minHeight: 0, overflowY: 'auto', alignContent: 'flex-start' }}>
                                 {ORDER_PLATFORMS.map((p) => (

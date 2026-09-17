@@ -924,3 +924,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-17: 쇼핑몰 추가 요청 제목을 선택 화면 제목과 같은 13.5px 결로 낮추고, 주소 아래 남는 칸에 요청 수 기준 검토·반영 안내를 추가했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`.
 2026-09-17: 로그인 대기 중 다른 쇼핑몰로 돌아갈 때 이전 흐름 토큰만 무효화하고 `orderBusy`·오류 배너가 남던 문제를 수정했다. 취소 순간 로그인 열기 문구·후보·오류를 함께 초기화한다. 근거: `frontend/src/proto/04-screens-ab.jsx` `chooseOtherOrderShop`.
 2026-09-17: 쇼핑몰 요청 제목을 13.5px로 맞춘 뒤 입력을 16px·52px로 남겨 생긴 위계 불균형을 바로잡았다. 이름·주소는 다른 URL 입력과 같은 14px·48px로 통일했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`.
+2026-09-17: 쇼핑몰 선택 화면의 「Chrome에 연결됨」 상태 문구를 제거했다. 확장 설치 여부는 설치 CTA·단계에서만 처리하고, 선택 화면에는 로그인 동작만 안내한다. 근거: `frontend/src/proto/04-screens-ab.jsx` 구매내역 선택 안내.
