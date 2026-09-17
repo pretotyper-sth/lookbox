@@ -1342,6 +1342,8 @@ function AddSheet({ ctx }) {
   const [storeRequestOpen, setStoreRequestOpen] = useS(false);
   const [storeRequestName, setStoreRequestName] = useS('');
   const [storeRequestUrl, setStoreRequestUrl] = useS('');
+  // 이전에 열린 동적 번들이 남아도 요청 화면 렌더가 끊기지 않게 상태 슬롯을 유지한다.
+  const [storeRequestReason] = useS('');
   const [storeRequestBusy, setStoreRequestBusy] = useS(false);
   const [storeRequestDone, setStoreRequestDone] = useS(false);
   const orderDemo = typeof window !== 'undefined'

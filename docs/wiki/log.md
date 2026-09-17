@@ -917,3 +917,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-16: 사진·URL·바로보기 탭의 168px 미디어 스테이지를 유지하면서, 바로보기 생성 전 프사와 생성 중 스켈레톤을 동일한 72px 원형으로 축소해 모달 안쪽 여백을 맞췄다. 근거: `frontend/src/proto/04-screens-ab.jsx` `TRYON_AVATAR_SIZE`, `frontend/src/proto/proto.css` `.lb-tryon-skel`.
 2026-09-17: 바로 보기 생성 전 안내를 사진 기준 한 문장으로 줄이고 프사 아래 8px로 당겼다. 프사는 고정한 채 사진·URL과 같은 168px 스테이지 안에서 여백만 조정했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `tryOnGuide`, `frontend/src/proto/proto.css` `.lb-tryon-static-copy`.
 2026-09-17: 구매내역의 텍스트형 쇼핑몰 추가 요청을 기존 몰과 같은 `+ 추가 요청하기` 칩으로 바꿨다. 요청 화면은 이름·주소만 큰 입력으로 받고 박스 내부를 스크롤하며, 하단의 주문내역 CTA 자리를 단일 추가 요청 CTA로 교체했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`, `submitStoreRequest`.
+2026-09-17: 쇼핑몰 요청 입력 축소 뒤 이전 동적 번들이 유지돼 `storeRequestReason` 참조 오류로 화면 렌더가 끊길 수 있는 경로를 막았다. 세 번째 입력은 노출·전송하지 않고 상태 슬롯만 유지해 새 번들을 강제한다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestReason`.
