@@ -178,29 +178,18 @@ function lookPlacement(items) {
   return out;
 }
 
-// 서버가 흘려보내는 실제 단계. 지어낸 순환 문구가 아니라 그때 도는 작업 이름이다.
-const LOOK_STAGE_LABEL = {
-  queued: '차례를 기다리는 중',
-  prep: '옷장 사진을 모으는 중',
-  dress: 'AI가 옷을 입히는 중',
-  finish: '배경을 카드에 맞추는 중',
-  save: '이미지를 저장하는 중',
-  draw: '제안 아이템을 그리는 중',
-};
-
 function lookPendingStage(outfit) {
   if (!outfit || !outfit.id) return null;
   return LB_DATA.LOOK_STAGE[outfit.id] || LB_DATA.WISH_STAGE[outfit.id] || null;
 }
 
-function LookPendingMarks({ stage }) {
+function LookPendingMarks() {
   return (
     <>
       <div className="lb-look-wave" aria-hidden />
-      <p className="lb-look-status">
-        <Icon name="sparkle" size={13} stroke={1.9} />
-        <span>{LOOK_STAGE_LABEL[stage] || LOOK_STAGE_LABEL.queued}</span>
-      </p>
+      <span className="lb-look-pending-icon" aria-label="AI 이미지 생성 중">
+        <Icon name="sparkle" size={18} stroke={1.9} />
+      </span>
     </>
   );
 }
@@ -484,7 +473,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           </div>
         );
       })}
-      {pending ? <LookPendingMarks stage={lookPendingStage(outfit)} /> : null}
+      {pending ? <LookPendingMarks /> : null}
       {copyControl}
       {copyState ? (
         <span style={{

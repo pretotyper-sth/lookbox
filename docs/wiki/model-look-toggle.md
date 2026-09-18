@@ -129,8 +129,9 @@ hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보�
 2026-09-18: AI 캐릭터 착장은 첫 번째 일반 상품컷 카드가 도착하면 즉시 별도 요청으로
 시작한다. 오른쪽 제안 아이템 상품컷 생성과 병렬이라, 제안을 전부 기다린 뒤 시작하지
 않는다. 테스트 비용 제한은 왼쪽 첫 카드 한 장으로 고정하고, 실제 `_look` SSE 단계가 온
-카드만 스켈레톤과 상태 문구를 띄운다. 인물·구도와 옷장 입력의 관계만 남긴 짧은 이미지
-편집 지시를 쓰며, 품질 재촬영은 하지 않는다.
+카드만 스켈레톤 물결과 중앙 AI 아이콘을 띄운다. 단계별 문구는 화면에 노출하지 않는다.
+인물·구도와 옷장 입력의 관계만 남긴 짧은 이미지 편집 지시를 쓰며, 품질 재촬영은 하지
+않는다.
 
 근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `_apply_wish_slot`, `generate_model_look_image`; `frontend/src/proto/05-screens-cde.jsx`
