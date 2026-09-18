@@ -19,3 +19,8 @@
 (`pack={false}`, 캐시 `|flat1`)(2026-09-14).
 
 근거: `frontend/src/proto/05-screens-cde.jsx` `lookPlacement` `drawLookCutout`.
+
+2026-09-18: 추천 상품컷은 이제 상의·하의·신발만 기본 조합으로 보내므로 소품 배치가
+의류를 가릴 일이 없다. 제안 아이템으로 가방·소품이 한 개 들어올 때도 가방 크기는
+24%, 이미지 확대는 최대 1.15배로 제한한다. 근거:
+`frontend/src/proto/05-screens-cde.jsx` `LOOK_SIZE`, `lookImageZoom`.

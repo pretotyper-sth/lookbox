@@ -1739,20 +1739,21 @@ function App() {
 
   const lookInflight = useRef(new Set());
   const lookFailed = useRef(new Set());
+  const dailyPipelineRef = useRef(false);
   const applyModelLooks = useCallback(async (list) => {
     const pending = (list || LB_DATA.DAILY || []).filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id
       && !lookInflight.current.has(o.id) && !lookFailed.current.has(o.id) && !o.lookError && !outfitWishPending(o)
     ));
     if (!pending.length) return 0;
-    const lookLimit = window.LOOK_TEST_LIMIT || 0;
-    if (lookLimit > 0 && lookInflight.current.size > 0) return 0;
+    const lookLimit = 1;
+    if (lookInflight.current.size > 0) return 0;
     const daily = LB_DATA.DAILY || [];
     const fromDaily = pending.every((o) => daily.some((d) => d && d.id === o.id));
     const have = fromDaily
       ? daily.filter((o) => o && o.lookImg).length
       : pending.filter((o) => o && o.lookImg).length;
-    const room = lookLimit > 0 ? Math.max(0, lookLimit - have) : pending.length;
+    const room = Math.max(0, lookLimit - have);
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
     targets.forEach((o) => lookInflight.current.add(o.id));
@@ -1832,9 +1833,9 @@ function App() {
   // refreshLive로 코디만 채워지면 dailyAllowed=true라 오늘 탭이 request를 스킵한다.
   // 그때 applyModelLooks가 안 타서 착장 토글이 켜져 있어도 옷 컷아웃만 보였다.
   useEffect(() => {
-    if (isShowcase || !authUid || !wardrobeLoaded || !prefs.modelLook || !prefs.dailyEnabled) return;
+    if (isShowcase || !authUid || !wardrobeLoaded || !prefs.modelLook || !prefs.dailyEnabled || dailyPipelineRef.current) return;
     if (lookInflight.current.size > 0) return;
-    const lookLimit = window.LOOK_TEST_LIMIT || 0;
+    const lookLimit = 1;
     const have = (LB_DATA.DAILY || []).filter((o) => o && o.lookImg).length;
     if (lookLimit > 0 && have >= lookLimit) return;
     const pending = (LB_DATA.DAILY || []).filter((o) => (
@@ -1984,6 +1985,7 @@ function App() {
     setDailyStyle(style);
     setDailyAllowed(true);
     setDailyLoading(true);
+    dailyPipelineRef.current = true;
     try {
       const baseCount = dailyCount;
       const ownedSig = wardrobeSigOf(items);
@@ -2001,12 +2003,8 @@ function App() {
         stampOutfitStyle([row.outfit]);
         const added = liveAppendDaily({ outfits: [row.outfit], items: row.items || [] }, items);
         if (!added.length) return;
-        added.forEach((o) => {
-          if (outfitWishPending(o) && !LB_DATA.WISH_STAGE[o.id]) LB_DATA.WISH_STAGE[o.id] = 'draw';
-        });
         cacheDaily();
         bumpDaily();
-        if (prefs.modelLook) applyModelLooks(added.filter((o) => !o.lookImg && !outfitWishPending(o)));
       };
       const onWish = (row) => {
         if (!row || !row.id) return;
@@ -2023,10 +2021,6 @@ function App() {
         if (LB_DATA.OUTFIT_BY_ID[row.id] && row.wish) LB_DATA.OUTFIT_BY_ID[row.id].wish = row.wish;
         cacheDaily();
         bumpDaily();
-        if (prefs.modelLook) {
-          const o = (LB_DATA.DAILY || []).find((x) => x && x.id === row.id);
-          if (o && !o.lookImg && !outfitWishPending(o)) applyModelLooks([o]);
-        }
       };
       if (force && LB_DATA.DAILY.length > 0) {
         // 첫 줄(4) 미달이면 나머지만, 찼으면 2개씩 추가(리셋 아님).
@@ -2074,7 +2068,7 @@ function App() {
           style,
           styles: preferredStyles,
           for_date: localYmd(),
-          wish_combos: Math.min(Math.max(wishCount, 1), baseCount),
+          wish_combos: Math.min(wishCount, baseCount),
           ...styleProfile,
           ...modelLook,
         }),
@@ -2099,6 +2093,7 @@ function App() {
       showToast(e.message || '코디를 만들지 못했어요');
       return { added: 0, wardrobeGrew, error: true };
     } finally {
+      dailyPipelineRef.current = false;
       setDailyLoading(false);
     }
   };

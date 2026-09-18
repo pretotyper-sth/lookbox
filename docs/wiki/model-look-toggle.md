@@ -126,6 +126,11 @@ hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보�
 노출한다. 상위 설정을 끄면 하위 개인화 행도 함께 숨겨지며, 저장된 개인화 값 자체는
 변경하지 않는다. 근거: `frontend/src/proto/08-mypage.jsx` `personalModelLookRow`.
 
+2026-09-18: AI 캐릭터 착장은 추천 카드가 모두 도착하고 오른쪽 제안 아이템 이미지가
+끝난 뒤에만 시작한다. 테스트 비용 제한은 왼쪽 첫 카드 한 장으로 고정하고, 실제
+`_look` SSE 단계가 온 카드만 스켈레톤과 상태 문구를 띄운다. 인물·구도와 옷장 입력의
+관계만 남긴 짧은 이미지 편집 지시를 쓰며, 품질 재촬영은 하지 않는다.
+
 근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `_apply_wish_slot`, `generate_model_look_image`; `frontend/src/proto/05-screens-cde.jsx`
 `LookPendingMarks`; `frontend/src/proto/proto.css` `--thumb-bg`.

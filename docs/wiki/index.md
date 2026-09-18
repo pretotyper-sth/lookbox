@@ -12,12 +12,12 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님
-- [look-flatlay-overlap](look-flatlay-overlap.md) — 플랫레이 소품은 자리로만 구분. 오늘 코디 LOOK_PACK 1.03, 아래로 2.4%. 가방 기본 1.2배·실제 PNG 우클릭 복사. 룩북은 패킹 없음
+- [look-flatlay-overlap](look-flatlay-overlap.md) — 추천 상품컷은 의류 코어 슬롯만 배치하고, 제안 가방·소품은 작게 한 자리만 둔다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — AI 캐릭터 착장이 켜진 경우에만 얼굴·체형 맞춤 설정을 노출한다. 개인화는 프로필 얼굴·신체 수치 + 레퍼런스 구도·배경. 캐시 `model-id31-`
-- [look-latency](look-latency.md) — 옷장 상품컷은 텍스트 페어링으로 바로. 스트림 시작 전에 옷장을 읽지 않는다. GPT·wish 생성은 마지막 카드. 착장은 분 단위
-- [coord-clash](coord-clash.md) — 카테고리 중복 차단. 최근 외부 아이템을 순환하고 상의 종류·핏·패턴이 다른 코디를 우선한다
+- [model-look-toggle](model-look-toggle.md) — AI 캐릭터 착장은 제안 아이템 생성 완료 뒤 왼쪽 첫 카드 한 장만 실제 단계와 함께 만든다
+- [look-latency](look-latency.md) — 상품컷은 API 없는 옷장 조합으로 먼저 보내고, 오른쪽 제안 아이템 뒤 AI 착장을 순차 생성한다
+- [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
 - [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 대상 선택 행만큼 프사 스테이지를 144px로 줄여 사진·URL과 전체 높이 통일. 재시도 92% 표시와 전신 마스크 처리 지연 최적화. 실패는 일 3회

@@ -91,11 +91,12 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
-        self.assertIn("Image 1 is the default person and look reference", prompt_src)
-        self.assertIn("Images 3 onward are the wardrobe garments", prompt_src)
+        self.assertIn("Image 1 is the person and look framing", prompt_src)
+        self.assertIn("Images after that are the outfit pieces", prompt_src)
         self.assertNotIn("Requested mood", prompt_src)
         self.assertNotIn("COMPOSITION", prompt_src)
         self.assertNotIn("FIT:", prompt_src)
+        self.assertNotIn("GARMENTS:", prompt_src)
 
     def test_bottom_hem_prefers_long_inseam(self):
         note = self.ns['_bottom_hem_note']([
@@ -110,10 +111,10 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_reference_prompt_only_locks_person_and_garments(self):
         prompt_fn = self.ns['_model_look_prompt_with_reference']
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
-        self.assertIn("Image 1 is the default person and look reference", prompt)
-        self.assertIn("Images 2 onward are the wardrobe garments", prompt)
-        self.assertIn("셔츠", prompt)
-        self.assertIn("Do not change the person", prompt)
+        self.assertIn("Image 1 is the person and look framing", prompt)
+        self.assertIn("Images after that are the outfit pieces", prompt)
+        self.assertNotIn("셔츠", prompt)
+        self.assertIn("same person", prompt)
         self.assertNotIn("Requested mood", prompt)
         self.assertNotIn("COMPOSITION", prompt)
 
@@ -121,11 +122,10 @@ class ModelLookPromptTest(unittest.TestCase):
         prompt = self.ns['_model_look_prompt_with_reference'](
             "여성", [{"category": "top", "name": "니트"}], personal=True, height="165", weight="52",
         )
-        self.assertIn("Image 1 is the profile person reference", prompt)
-        self.assertIn("Image 2 is the default look reference", prompt)
-        self.assertIn("165 cm", prompt)
-        self.assertIn("52 kg", prompt)
-        self.assertIn("Images 3 onward are the wardrobe garments", prompt)
+        self.assertIn("Image 1 is the person. Image 2 is the look framing", prompt)
+        self.assertNotIn("165 cm", prompt)
+        self.assertNotIn("52 kg", prompt)
+        self.assertIn("Images after that are the outfit pieces", prompt)
 
     def test_background_seam_is_removed_without_touching_person(self):
         image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")

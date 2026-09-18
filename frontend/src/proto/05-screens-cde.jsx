@@ -22,12 +22,10 @@ function MetaChips({ item }) {
    LookComposite — 조합 전체를 한 배경 위에 옷(컷아웃)만 배치.
    개별 제품 이미지는 배경 제거된 투명 PNG여야 카드처럼 안 잘림.
    ============================================================ */
-/* 4사분면 플랫레이: 상의 | 하의 / 신발 | 악세서리.
-   가방이 우하단을 잡고, 선글라스 같은 소품은 더 작게 모서리에 둔다.
-   같은 색·비슷한 크기면 가운데에 포개지 않는다. 값은 가로폭 대비 %. */
+/* 4사분면 플랫레이: 상의 | 하의 / 신발 | 소품. 값은 가로폭 대비 %. */
 const LOOK_SIZE = {
   '아우터': 46, '상의': 44, '하의': 44, '스커트': 42, '원피스': 52,
-  '신발': 36, '가방': 38, '모자': 22, '소품': 16,
+  '신발': 36, '가방': 24, '모자': 18, '소품': 14,
   '액세서리': 16, // 구버전 데이터 호환
 };
 /* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
@@ -45,12 +43,12 @@ const LOOK_NUDGE_Y = 0.024;
    알파 실루엣으로 양방향 정규화해, 유난히 큰 원본도 의류 크기로 커지지 않게 한다. */
 const LOOK_CANVAS_FILL = {
   '아우터': 0.90, '상의': 0.90, '하의': 0.90, '스커트': 0.80, '원피스': 0.90,
-  '신발': 0.62, '가방': 0.62, '모자': 0.56, '소품': 0.66, '액세서리': 0.66,
+  '신발': 0.82, '가방': 0.90, '모자': 0.82, '소품': 0.82, '액세서리': 0.82,
 };
-const LOOK_ZOOM_MAX = 1.35;
-const LOOK_CATEGORY_ZOOM_MAX = { '가방': 1.62 };
-const LOOK_ACCENT_BOOST_MAX = 1.25;
-const LOOK_ACCENT_BASE_SCALE = { '가방': 1.2 };
+const LOOK_ZOOM_MAX = 1.15;
+const LOOK_CATEGORY_ZOOM_MAX = {};
+const LOOK_ACCENT_BOOST_MAX = 1;
+const LOOK_ACCENT_BASE_SCALE = {};
 function lookImageZoom(category) {
   const fill = LOOK_CANVAS_FILL[category] || 0.9;
   return Math.min(LOOK_CATEGORY_ZOOM_MAX[category] || LOOK_ZOOM_MAX, 1 / fill);

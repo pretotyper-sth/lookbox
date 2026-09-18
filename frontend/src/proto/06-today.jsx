@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, LOOK_TEST_LIMIT, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
+const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
 // RealCloset — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
@@ -86,13 +86,6 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
       )}
     </div>
   );
-}
-
-function todayWishDrawing(outfit) {
-  if (!outfit || !LB_DATA.WISH_STAGE[outfit.id]) return false;
-  const id = (outfit.itemIds || []).find((x) => String(x).indexOf('wish-') === 0);
-  const it = id && LB_DATA.ALL[id];
-  return !(it && it.img);
 }
 
 /* ============================================================
@@ -357,7 +350,6 @@ function TodayScreen({ ctx }) {
     dailyWardrobeGrew, dailyTick,
     getDayRecord, openDetail, refreshLive, showToast,
     comboNeed, comboProgress,
-    modelLook,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -556,10 +548,6 @@ function TodayScreen({ ctx }) {
     o.cardTitle = `추천 코디 ${i + 1}`;
     if (LB_DATA.OUTFIT_BY_ID[o.id]) LB_DATA.OUTFIT_BY_ID[o.id].cardTitle = o.cardTitle;
   });
-  const lookCap = LOOK_TEST_LIMIT || 0;
-  const lookBusyId = (isToday && modelLook && (lookCap <= 0 || shown.filter((x) => x.lookImg).length < lookCap))
-    ? (shown.find((x) => !x.lookImg && !x.lookError) || {}).id
-    : null;
   // 룩북과 같은 상세 화면을 쓴다. 상세는 LB_DATA에서 코디·아이템을 찾으므로 지난 날짜의
   // 스냅샷은 열기 전에 조회용으로 등록해 둔다(그날 옷을 지웠어도 기록이 깨지지 않게).
   const dailyLooks = shown.map((o, i) => ({
@@ -617,8 +605,6 @@ function TodayScreen({ ctx }) {
                   onWear={isToday ? () => wearToday(o.id) : pastLockToast}
                   wearLocked={!isToday}
                   itemsById={isToday ? null : pastItemsById}
-                  // 테스트(limit>0): 대기 오버레이는 만들 1장만. 실서비스(0): 상품컷 카드마다 대기, 끝나는 장부터 착장으로 바뀐다.
-                  looking={isToday && (todayWishDrawing(o) || (!!modelLook && !o.lookImg && !o.lookError && (lookCap <= 0 || o.id === lookBusyId)))}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

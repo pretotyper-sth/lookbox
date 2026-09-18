@@ -3990,11 +3990,14 @@ def fallback_combos(
     profile: dict[str, Any] | None = None,
     include_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """상의×하의 고유 페어만 만든다. 부족하면 억지로 복제하지 않는다."""
-    tops = [i for i in items if _item_bucket(i) in ("top", "dress")]
-    bottoms = [i for i in items if _item_bucket(i) in ("bottom", "dress")]
+    """상품컷 카드용의 단순한 옷장 조합만 만든다.
+
+    한 카드에는 상의(또는 아우터)·하의·신발을 하나씩만 넣는다. 가방·모자 등은
+    상품컷의 배치를 가리고 조합을 불안정하게 만들기 때문에 여기서는 넣지 않는다.
+    """
+    tops = [i for i in items if _item_bucket(i) == "top"]
+    bottoms = [i for i in items if _item_bucket(i) == "bottom"]
     shoes = [i for i in items if _item_bucket(i) == "shoes"]
-    extras = [i for i in items if _is_accent(i)]
     by_id = {i["id"]: i for i in items}
     combos: list[dict[str, Any]] = []
     seen: set[tuple[str, ...]] = set(exclude_keys or ())
@@ -4061,10 +4064,6 @@ def fallback_combos(
             shoe = _pick_rotating_shoe(shoes, t, b, profile, used_shoes)
             if shoe:
                 ids.append(shoe["id"])
-        if extras and len(ids) < 5:
-            extra = _pick_styling_accent(extras, t, b, sum(ord(c) for c in "".join(ids)) + len(combos))
-            if extra and extra["id"] not in ids:
-                ids.append(extra["id"])
         before = len(combos)
         _push(ids, f"추천 코디 {len(combos) + 1}")
         if len(combos) > before:
@@ -4083,10 +4082,6 @@ def fallback_combos(
             shoe = _pick_rotating_shoe(shoes, d, d, profile, used_shoes)
             if shoe:
                 ids.append(shoe["id"])
-        if extras:
-            extra = _pick_styling_accent(extras, d, d, sum(ord(c) for c in d["id"]))
-            if extra and extra["id"] not in ids:
-                ids.append(extra["id"])
         if len(ids) >= 2:
             _push(ids, f"추천 코디 {len(combos) + 1}")
         if len(combos) >= max_combos:
@@ -4189,8 +4184,9 @@ def recommend_closet(
     combos = fallback_combos(
         items, anchor, max_combos, tone, exclude_keys, uniq, profile, include_ids,
     )
-    finished = _finish_combos(combos, items, 0, profile)
-    return _diversify_combo_bases(finished, {item["id"]: item for item in items}, max_combos)
+    # 상품컷 추천은 여기서 끝낸다. 후처리의 소품 덧붙이기·GPT 보정은 하지 않아야
+    # 한 카드의 카테고리가 겹치지 않고, 즉시 옷장 사진을 보여줄 수 있다.
+    return _diversify_combo_bases(combos, {item["id"]: item for item in items}, max_combos)
 
 
 def look_cache_key(item_ids: list[str]) -> str:
@@ -4443,27 +4439,15 @@ def _model_look_prompt_with_reference(
     height: str | None = None,
     weight: str | None = None,
 ) -> str:
-    garment_lines = _model_look_garment_lines(items, wish)
     if personal:
-        body_note = (
-            f"Use the profile's {height or 'unspecified'} cm height and {weight or 'unspecified'} kg weight "
-            "as a natural body-scale guide."
-        )
-        reference_lines = f"""Image 1 is the profile person reference. Keep the exact same person.
-Image 2 is the default look reference. Use its framing, studio background, and lighting.
-{body_note}
-Images 3 onward are the wardrobe garments. Put every listed garment on that person."""
+        reference_lines = "Image 1 is the person. Image 2 is the look framing."
     else:
-        reference_lines = """Image 1 is the default person and look reference. Keep the exact same person,
-framing, studio background, and lighting.
-Images 2 onward are the wardrobe garments. Put every listed garment on that person."""
-    return f"""{reference_lines}
-Return one photorealistic full-body image of the person wearing those garments.
-Do not change the person. Do not add or remove garments.
-
-GARMENTS:
-{garment_lines}
-"""
+        reference_lines = "Image 1 is the person and look framing."
+    return (
+        f"{reference_lines} Images after that are the outfit pieces. "
+        "Return one photorealistic full-body image of the same person wearing every supplied piece. "
+        "Keep the person, full body, studio framing, and garment count unchanged."
+    )
 
 
 def _model_identity_cache_key(gender: str | None) -> str:
@@ -5007,23 +4991,18 @@ def generate_model_look_image(
             if personal and composition_reference_png:
                 images.append(_png_named(composition_reference_png, "02-default-look-reference.png"))
             images.extend(_garment_edit_images(items, start_at=len(images) + 1))
-            for attempt in range(2):
-                mark("dress")
-                kwargs: dict[str, Any] = {
-                    "model": look_model,
-                    "image": images,
-                    "prompt": prompt,
-                    "size": "1024x1536",
-                    "quality": quality,
-                }
-                if "gpt-image-2" not in look_model:
-                    kwargs["input_fidelity"] = "high"
-                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
-                out = base64.b64decode(result.data[0].b64_json)
-                generated = Image.open(io.BytesIO(out)).convert("RGB")
-                if not _look_needs_reshoot(generated):
-                    break
-                print(f"[model-look] full-body frame weak — retry attempt={attempt + 1}", flush=True)
+            mark("dress")
+            kwargs: dict[str, Any] = {
+                "model": look_model,
+                "image": images,
+                "prompt": prompt,
+                "size": "1024x1536",
+                "quality": quality,
+            }
+            if "gpt-image-2" not in look_model:
+                kwargs["input_fidelity"] = "high"
+            result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
+            out = base64.b64decode(result.data[0].b64_json)
         else:
             board = _model_look_board(items)
             mark("dress")
@@ -8431,7 +8410,8 @@ def _apply_model_looks(
     """
     if not outfits:
         return
-    targets = [o for o in outfits if not o.get("lookImg")]
+    # 비용·품질 확인 중에는 어떤 호출 경로로 들어와도 왼쪽 첫 카드 한 장만 만든다.
+    targets = [o for o in outfits if not o.get("lookImg")][:1]
     claimed = False
     if LOOK_TEST_LIMIT > 0:
         with _LOOK_FILLING_LOCK:
@@ -8543,35 +8523,17 @@ def generate_wish_product_image(
     styles: list[str] | None,
     mood: str,
 ) -> bytes | None:
-    """옷장에 없는 제안 아이템을 기존 상품컷과 같은 톤의 스튜디오 컷으로 그린다."""
+    """옷장에 없는 제안 아이템의 단일 상품컷을 그린다."""
     if AI_TEST_MODE or not openai_client:
         return None
     name = str(wish.get("name") or "패션 아이템").strip()
     color = str(wish.get("color") or "").strip()
     cat = _category_display(wish.get("category"))
-    mate_bits = []
-    for it in mates[:4]:
-        bits = [str(it.get("color") or ""), str(it.get("name") or "")[:40], _category_display(it.get("category"))]
-        mate_bits.append(" ".join(b for b in bits if b).strip())
-    mate_line = "; ".join(b for b in mate_bits if b)
-    palettes = [str(x).strip() for x in ((profile or {}).get("palettes") or []) if str(x).strip()][:4]
-    pc = str((profile or {}).get("personal_color") or "").strip()
-    style_note = ", ".join(s for s in (styles or []) if s)[:80]
-    prompt = f"""Generate a single isolated fashion product photo of: {color} {name} ({cat}).
-
-Match Korean online fashion mall product-cut style used for wardrobe items:
-- One item only. No model, no mannequin, no hanger unless typical for this category (bags may hang naturally).
-- Photorealistic fabric/leather texture. Item fully visible, centered, not cropped.
-- Lighting: soft studio, no dramatic shadows, no props, no floor, no lifestyle scene.
-- Transparent background (PNG). No white or gray plate behind the item.
-Personal taste to match the rest of this outfit:
-- mood: {(mood or "").strip() or "the user's usual wardrobe mood"}
-- styles: {style_note or "same as the outfit"}
-- personal color: {pc or "unspecified"}
-- palettes: {", ".join(palettes) or "match the outfit"}
-The rest of the outfit (do not draw these, only match their mood/color temperature): {mate_line or "n/a"}
-Do not invent a logo unless the name implies one. Do not add a second item.
-"""
+    prompt = (
+        f"Single isolated product cut: {color} {name} ({cat}). "
+        "Show one complete item, centered, with a transparent background. "
+        "No person, mannequin, props, floor, text, logo, or second item."
+    )
     model = OPENAI_IMAGE_MODEL
     quality = OPENAI_IMAGE_QUALITY
     t0 = time.perf_counter()
@@ -8734,17 +8696,17 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             "weather": body.weather,
         }
         max_combos = min(max(body.max_combos, 1), 10)
-        wish_combos = body.wish_combos or 0
+        wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
         recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
-        recent_wishes = _recent_daily_wishes(user.id, body.for_date)
         exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
         outfits: list[dict[str, Any]] = []
         used: dict[str, Any] = {}
         wish_items: list[dict[str, Any]] = []
+        wish_jobs: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]] = []
 
-        def persist_combo(combo: dict[str, Any], idx: int, paint_wish: bool) -> None:
+        def persist_combo(combo: dict[str, Any], idx: int) -> None:
             ids = [item_id for item_id in combo["item_ids"] if item_id in by_id]
             wish = combo.get("wish") if isinstance(combo.get("wish"), dict) else None
             if not _combo_has_top_and_bottom(ids, by_id, wish) or not _combo_has_unique_garment_slots(ids, by_id, wish):
@@ -8801,71 +8763,58 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             if wish_item:
                 piece_items.append(wish_item)
             report({"_outfit": {"outfit": outfit, "items": piece_items}})
+            if wish and wish_item and outfit.get("id"):
+                wish_jobs.append((outfit, combo, wish, wish_item))
 
-            if wish and paint_wish and outfit.get("id"):
-                report({"_wish": {"id": outfit["id"], "stage": "draw"}})
-                mates = [by_id[i] for i in combo["item_ids"] if i in by_id]
-                png = generate_wish_product_image(
-                    user.id, wish, mates, profile,
-                    combo.get("styles") or body.styles or None,
-                    combo.get("mood") or "",
-                )
-                if png:
-                    report({"_wish": {"id": outfit["id"], "stage": "save"}})
-                    path, url, thumb = save_product_image_set(user.id, png)
-                    wish["storage_path"] = path
-                    wish["image_url"] = url
-                    wish["thumb_url"] = thumb
-                    wish_item["img"] = url
-                    wish_item["thumb"] = thumb
-                    outfit["wish"] = wish
-                    try:
-                        supabase_admin.table("outfits").update({
-                            "metadata": {
-                                "styles": outfit["styles"],
-                                "for_date": body.for_date or None,
-                                "wish": wish,
-                            },
-                        }).eq("id", outfit["id"]).eq("user_id", user.id).execute()
-                    except Exception as exc:  # noqa: BLE001
-                        print(f"[coordinate] wish persist skip: {exc}", flush=True)
-                    report({"_wish": {"id": outfit["id"], "item": wish_item, "wish": wish}})
-                else:
-                    report({"_wish": {"id": outfit["id"]}})
+        # 기본 상품컷은 외부 생성 없이 전부 먼저 보낸다. 마지막 N장만 새 아이템을
+        # 포함하며, 이 카드들은 오른쪽부터 실제 이미지 생성 단계를 진행한다.
+        combos = recommend_closet(
+            pool, anchor, max_combos, body.style,
+            exclusions, body.styles or None, profile,
+            body.include_item_ids or None,
+        )
+        wish_n = min(wish_combos, len(combos))
+        for offset in range(wish_n):
+            combo = combos[len(combos) - wish_n + offset]
+            wish = _gap_wish(combo.get("item_ids") or [], by_id, offset)
+            combo["wish"] = wish
+            _apply_wish_slot(combo, by_id)
+        for i, combo in enumerate(combos):
+            persist_combo(combo, i)
+        print(
+            f"[coordinate] product-cuts n={len(outfits)} "
+            f"first_ms={int((time.perf_counter() - t0) * 1000)}",
+            flush=True,
+        )
 
-        closet_n = max(0, max_combos - max(0, min(int(wish_combos or 0), max_combos)))
-        if closet_n:
-            quick = recommend_closet(
-                pool, anchor, closet_n, body.style,
-                exclusions, body.styles or None, profile,
-                body.include_item_ids or None,
-            )
-            for i, combo in enumerate(quick):
-                persist_combo(combo, i, paint_wish=False)
-            print(
-                f"[coordinate] closet stream n={len(quick)} "
-                f"first_ms={int((time.perf_counter() - t0) * 1000)}",
-                flush=True,
-            )
-        rest_n = max(0, max_combos - len(outfits))
-        if rest_n:
-            _ensure_style_attrs(user.id, pool)
-            exclude = exclusions + [
-                [i for i in (o.get("itemIds") or []) if not str(i).startswith("wish-")]
-                for o in outfits
-            ]
-            rest = recommend_text(
-                user.id, anchor, pool, body.style, rest_n,
-                exclude, body.styles or None, profile,
-                body.include_item_ids or None, wish_combos,
-                recent_wishes,
-            )
-            start = len(outfits)
-            for i, combo in enumerate(rest):
-                persist_combo(
-                    combo, start + i,
-                    paint_wish=bool(combo.get("wish")),
-                )
+        # 제안 아이템은 화면의 가장 오른쪽 카드부터 한 장씩 완료한다. 이 작업이
+        # 끝난 뒤에만 프론트가 AI 착장 생성을 시작한다.
+        for outfit, combo, wish, wish_item in reversed(wish_jobs):
+            report({"_wish": {"id": outfit["id"], "stage": "draw"}})
+            mates = [by_id[i] for i in combo["item_ids"] if i in by_id]
+            png = generate_wish_product_image(user.id, wish, mates, profile, None, "")
+            if not png:
+                report({"_wish": {"id": outfit["id"]}})
+                continue
+            report({"_wish": {"id": outfit["id"], "stage": "save"}})
+            path, url, thumb = save_product_image_set(user.id, png)
+            wish["storage_path"] = path
+            wish["image_url"] = url
+            wish["thumb_url"] = thumb
+            wish_item["img"] = url
+            wish_item["thumb"] = thumb
+            outfit["wish"] = wish
+            try:
+                supabase_admin.table("outfits").update({
+                    "metadata": {
+                        "styles": outfit["styles"],
+                        "for_date": body.for_date or None,
+                        "wish": wish,
+                    },
+                }).eq("id", outfit["id"]).eq("user_id", user.id).execute()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[coordinate] wish persist skip: {exc}", flush=True)
+            report({"_wish": {"id": outfit["id"], "item": wish_item, "wish": wish}})
 
         recommend_ms = int((time.perf_counter() - t0) * 1000)
         _record_recommendation_timing(
