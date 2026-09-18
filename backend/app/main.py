@@ -179,6 +179,7 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     "tryon_profile": ("프로필을 확인하고 있어요", 0, 8, 3),
     "tryon_generate": ("기본 착장을 만들고 있어요", 8, 78, 70),
     "tryon_segment": ("옷 경계를 정리하고 있어요", 78, 92, 4),
+    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 92, 98, 70),
     "tryon_save": ("바로 보기를 준비하고 있어요", 92, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
@@ -7560,6 +7561,7 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
 _TRYON_PLATE_RGB = (242, 241, 238)
 _TRYON_TOP_SEED = (0.50, 0.39)
 _TRYON_BOTTOM_SEED = (0.50, 0.67)
+_TRYON_SEGMENT_MAX_SIDE = 768
 
 
 def _tryon_border_background(rgb: Image.Image) -> Image.Image:
@@ -7678,23 +7680,26 @@ def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
 def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
     rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    bg = _tryon_border_background(rgb)
-    top_m = _tryon_seed_component(rgb, bg, "top")
-    bot_m = _tryon_seed_component(rgb, bg, "bottom")
+    segment_rgb = rgb
+    if max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
+        scale = _TRYON_SEGMENT_MAX_SIDE / max(rgb.size)
+        segment_rgb = rgb.resize(
+            (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale))),
+            Image.BILINEAR,
+        )
+    bg = _tryon_border_background(segment_rgb)
+    top_m = _tryon_seed_component(segment_rgb, bg, "top")
+    bot_m = _tryon_seed_component(segment_rgb, bg, "bottom")
     overlap = ImageChops.multiply(top_m, bot_m)
     if overlap.getbbox():
-        split_y = int(round((_TRYON_TOP_SEED[1] + _TRYON_BOTTOM_SEED[1]) * 0.5 * rgb.height))
-        top_px = top_m.load()
-        bot_px = bot_m.load()
-        w, h = rgb.size
-        for y in range(h):
-            for x in range(w):
-                if top_px[x, y] < 8 or bot_px[x, y] < 8:
-                    continue
-                if y < split_y:
-                    bot_px[x, y] = 0
-                else:
-                    top_px[x, y] = 0
+        w, h = segment_rgb.size
+        split_y = int(round((_TRYON_TOP_SEED[1] + _TRYON_BOTTOM_SEED[1]) * 0.5 * h))
+        overlap_upper = overlap.copy()
+        overlap_upper.paste(0, (0, split_y, w, h))
+        overlap_lower = overlap.copy()
+        overlap_lower.paste(0, (0, 0, w, split_y))
+        top_m = ImageChops.subtract(top_m, overlap_lower)
+        bot_m = ImageChops.subtract(bot_m, overlap_upper)
 
     def png(im: Image.Image) -> bytes:
         buf = io.BytesIO()
@@ -7708,6 +7713,9 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
 
     top_h = _tryon_soft_hole(top_m)
     bot_h = _tryon_soft_hole(bot_m)
+    if top_h.size != rgb.size:
+        top_h = top_h.resize(rgb.size, Image.BILINEAR)
+        bot_h = bot_h.resize(rgb.size, Image.BILINEAR)
     full_h = ImageChops.lighter(top_h, bot_h)
     return {
         "body": png(rgb.convert("RGBA")),
@@ -7726,27 +7734,24 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     n = w * h
     if n < 8:
         return False
-    top_a = list(top.getchannel("A").getdata())
-    bot_a = list(bottom.getchannel("A").getdata())
-    top_hole = sum(1 for a in top_a if a < 128)
-    bot_hole = sum(1 for a in bot_a if a < 128)
+    top_a = top.getchannel("A")
+    bot_a = bottom.getchannel("A")
+    top_hole = sum(top_a.histogram()[:128])
+    bot_hole = sum(bot_a.histogram()[:128])
     if top_hole < n * 0.015 or top_hole > n * 0.35:
         return False
     if bot_hole < n * 0.02 or bot_hole > n * 0.35:
         return False
-    overlap = sum(1 for ta, ba in zip(top_a, bot_a) if ta < 128 and ba < 128)
+    top_hole_mask = top_a.point(lambda a: 255 if a < 128 else 0)
+    bot_hole_mask = bot_a.point(lambda a: 255 if a < 128 else 0)
+    overlap = ImageChops.multiply(top_hole_mask, bot_hole_mask).histogram()[255]
     if overlap > n * 0.002:
         return False
     shoe_y0 = int(h * 0.88)
-    shoe_n = 0
-    shoe_ok = 0
     x0, x1 = int(w * 0.25), int(w * 0.75)
-    for y in range(shoe_y0, h):
-        row = y * w
-        for x in range(x0, x1):
-            shoe_n += 1
-            if bot_a[row + x] >= 200:
-                shoe_ok += 1
+    shoe = bot_a.crop((x0, shoe_y0, x1, h))
+    shoe_n = shoe.width * shoe.height
+    shoe_ok = sum(shoe.histogram()[200:])
     return shoe_n == 0 or (shoe_ok / shoe_n) >= 0.7
 
 
@@ -7948,15 +7953,20 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     break
                 print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
                 assets_bytes = None
+                if attempt == 0:
+                    report("tryon_retry")
             if not assets_bytes:
                 note_fail(uid, "tryon_body", {"key": key, "why": "mask"})
                 raise HTTPException(status_code=502, detail=_TRYON_FAIL_MSG["mask"])
 
             report("tryon_save")
-            urls: dict[str, str] = {}
-            for name, blob in assets_bytes.items():
+            def save_asset(entry: tuple[str, bytes]) -> tuple[str, str]:
+                name, blob = entry
                 path = f"{uid}/tryon/{key}-{name}.png"
-                urls[name] = upload_bytes(path, blob, "image/png")
+                return name, upload_bytes(path, blob, "image/png")
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                urls = dict(pool.map(save_asset, assets_bytes.items()))
             storage_path = f"{uid}/tryon/{key}-body.png"
             try:
                 supabase_admin.table("generated_images").insert({

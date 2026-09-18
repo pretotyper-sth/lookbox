@@ -1298,7 +1298,7 @@ function AddSheet({ ctx }) {
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     liveOrderInput, liveOrderCancel,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
+    tryOnMaking, tryOnMakingSubject, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1384,10 +1384,16 @@ function AddSheet({ ctx }) {
   const [stepIdx, setStepIdx] = useS(0);
   const [pendingReplace, setPendingReplace] = useS(null); // { item, pending } — 이미지 변경 미리보기 (아직 DB 미반영)
   const progress = useImportProgress(stage === 'analyzing');
-  const tryOnUi = useImportProgress(!!tryOnMaking);
+  const tryOnSubject = prefs && prefs.tryOnActive === 'other' ? 'other' : 'self';
+  const tryOnOther = (prefs && prefs.tryOnOther) || {};
+  const tryOnProfile = tryOnSubject === 'other' ? tryOnOther : prefs;
+  const tryOnAvatar = (tryOnProfile && tryOnProfile.avatar) || '';
+  const tryOnSubjectMaking = !!tryOnMaking && tryOnMakingSubject === tryOnSubject;
+  const tryOnOtherSubjectMaking = !!tryOnMaking && tryOnMakingSubject !== tryOnSubject;
+  const tryOnUi = useImportProgress(tryOnSubjectMaking);
   useE(() => {
     if (tryOnProgress) tryOnUi.report(tryOnProgress);
-  }, [tryOnProgress, tryOnMaking]);
+  }, [tryOnProgress, tryOnMaking, tryOnMakingSubject, tryOnSubject]);
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
@@ -1532,10 +1538,6 @@ function AddSheet({ ctx }) {
     setPreviewFromFile(null);
     setErr('');
   };
-  const tryOnSubject = prefs && prefs.tryOnActive === 'other' ? 'other' : 'self';
-  const tryOnOther = (prefs && prefs.tryOnOther) || {};
-  const tryOnProfile = tryOnSubject === 'other' ? tryOnOther : prefs;
-  const tryOnAvatar = (tryOnProfile && tryOnProfile.avatar) || '';
   const canTryOn = !!tryOnAvatar;
   const tryOnBodyReady = canTryOn
     && (tryOnProfile.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
@@ -1543,7 +1545,7 @@ function AddSheet({ ctx }) {
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
   const launchTryOnFromSheet = async () => {
-    if (!tryOnAvatar || tryOnMaking) return;
+    if (!tryOnAvatar) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
     const stale = (tryOnProfile.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10');
@@ -1571,7 +1573,7 @@ function AddSheet({ ctx }) {
     openTryOn && openTryOn();
   };
   const onTryOnSubmit = () => {
-    if (tryOnMaking || !canTryOn || (wide && tryOnBodyReady)) return;
+    if (!canTryOn || (wide && tryOnBodyReady) || (tryOnOtherSubjectMaking && !tryOnBodyReady)) return;
     launchTryOnFromSheet();
   };
   const onTryOnAvatar = (dataUrl) => {
@@ -2466,6 +2468,7 @@ function AddSheet({ ctx }) {
                     <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>본인</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{prefs.avatar ? '프로필 동기화' : '사진이 필요해요'}</span></span>
                   </button>
                   <button
+                    className="lb-tryon-other-card"
                     type="button"
                     onClick={() => {
                       if (tryOnOther.avatar) setTryOnActive && setTryOnActive('other');
@@ -2482,7 +2485,7 @@ function AddSheet({ ctx }) {
                       {tryOnOther.avatar ? <img src={tryOnOther.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="plus" size={17} />}
                     </span>
                     <span style={{ minWidth: 0, flex: 1 }}><span style={{ display: 'block', fontSize: 12.5, fontWeight: 750 }}>본인 외</span><span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>{tryOnOther.avatar ? '선택해서 바로 보기' : '사진과 정보 등록'}</span></span>
-                    {tryOnOther.avatar && <span role="button" tabIndex={0} aria-label="본인 외 대상 편집" onClick={(e) => { e.stopPropagation(); setTryOnPersonOpen(true); }} style={{ color: 'var(--ink-3)', padding: 4 }}><Icon name="pencil" size={14} /></span>}
+                    {tryOnOther.avatar && <span className="lb-tryon-other-edit" role="button" tabIndex={0} aria-label="본인 외 대상 편집" onClick={(e) => { e.stopPropagation(); setTryOnPersonOpen(true); }} style={{ color: 'var(--ink-3)', padding: 4 }}><Icon name="pencil" size={14} /></span>}
                   </button>
                 </div>
                 <TryOnPersonSheet
@@ -2572,7 +2575,7 @@ function AddSheet({ ctx }) {
                 const tryOnNeedsBody = tab === 'tryon' && tryOnAvatar && !tryOnBodyReady && !tryOnErr;
                 const tryOnProfilePanel = tab === 'tryon' && tryOnAvatar && !tryOnErr;
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
-                const tryOnActionDisabled = tryOnMaking || !canTryOn || (wide && tryOnBodyReady);
+                const tryOnActionDisabled = tryOnSubjectMaking || !canTryOn || (tryOnOtherSubjectMaking && !tryOnBodyReady) || (wide && tryOnBodyReady);
                 const tryOnGuide = tryOnSubject === 'other'
                   ? '이 사진으로 옷을 바로 대볼 수 있어요.'
                   : '프로필 사진으로 옷을 바로 대볼 수 있어요.';
@@ -2582,7 +2585,7 @@ function AddSheet({ ctx }) {
                 return (
                   <>
                     {tabLocked ? null : tab === 'tryon' ? (
-                      tryOnMaking ? (
+                      tryOnSubjectMaking ? (
                         <div
                           className="lb-drop"
                           style={{

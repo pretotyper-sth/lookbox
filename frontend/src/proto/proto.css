@@ -335,6 +335,14 @@ img { display: block; max-width: 100%; }
   left: 16px;
   right: 16px;
 }
+@media (max-width: 759px) {
+  .lb-tryon-other-card { position: relative; }
+  .lb-tryon-other-edit {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+  }
+}
 .lb-tryon-frame {
   position: relative;
   height: 100%;

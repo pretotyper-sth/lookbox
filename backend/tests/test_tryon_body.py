@@ -20,6 +20,7 @@ CONSTS = (
     "_TRYON_PLATE_RGB",
     "_TRYON_TOP_SEED",
     "_TRYON_BOTTOM_SEED",
+    "_TRYON_SEGMENT_MAX_SIDE",
 )
 
 
@@ -80,7 +81,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
         self.assertIn("ONE continuous", prompt)
-        self.assertIn("charcoal-gray short-sleeve", prompt)
+        self.assertIn("matte black short-sleeve", prompt)
         self.assertIn("mid-blue straight-leg denim", prompt)
         self.assertIn("white low-top sneakers", prompt)
         self.assertIn("6% empty", prompt)
@@ -91,7 +92,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon8-", chunk)
+        self.assertIn("tryon10-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)

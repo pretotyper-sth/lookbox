@@ -1127,6 +1127,7 @@ function App() {
   // 프로필 사진 한 장으로 전신 이미지를 만든다(퍼스널 컬러와 같은 방식). 착장 컷은 얼굴을 쓰지 않는다.
   // 매장에서 쓰려면 전신 사진이 필요한데 미리 찍어 둔 사람은 드물다.
   const [tryOnMaking, setTryOnMaking] = useState(false);
+  const [tryOnMakingSubject, setTryOnMakingSubject] = useState(null);
   const [tryOnProgress, setTryOnProgress] = useState(null);
   const tryOnMakingRef = useRef(false);
   const makeTryOnBody = async (opts) => {
@@ -1143,6 +1144,7 @@ function App() {
     if (tryOnMakingRef.current) return '';
     if (!selected.avatar) { fail(subject === 'other' ? '본인 외 사진을 먼저 올려 주세요.' : '프로필 사진을 먼저 올려 주세요.'); return ''; }
     tryOnMakingRef.current = true;
+    setTryOnMakingSubject(subject);
     setTryOnMaking(true);
     setTryOnProgress({ key: 'tryon_profile', label: '프로필을 확인하고 있어요', pct: 0, until: 8, eta: 3 });
     try {
@@ -1178,6 +1180,7 @@ function App() {
       return '';
     } finally {
       tryOnMakingRef.current = false;
+      setTryOnMakingSubject(null);
       setTryOnMaking(false);
       setTryOnProgress(null);
     }
@@ -2665,7 +2668,7 @@ function App() {
       .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnProgress,
+    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnMakingSubject, tryOnProgress,
     setTryOnActive, saveTryOnOther,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),

@@ -925,3 +925,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-17: 로그인 대기 중 다른 쇼핑몰로 돌아갈 때 이전 흐름 토큰만 무효화하고 `orderBusy`·오류 배너가 남던 문제를 수정했다. 취소 순간 로그인 열기 문구·후보·오류를 함께 초기화한다. 근거: `frontend/src/proto/04-screens-ab.jsx` `chooseOtherOrderShop`.
 2026-09-17: 쇼핑몰 요청 제목을 13.5px로 맞춘 뒤 입력을 16px·52px로 남겨 생긴 위계 불균형을 바로잡았다. 이름·주소는 다른 URL 입력과 같은 14px·48px로 통일했다. 근거: `frontend/src/proto/04-screens-ab.jsx` `storeRequestOpen`.
 2026-09-17: 쇼핑몰 선택 화면의 「Chrome에 연결됨」 상태 문구를 제거했다. 확장 설치 여부는 설치 CTA·단계에서만 처리하고, 선택 화면에는 로그인 동작만 안내한다. 근거: `frontend/src/proto/04-screens-ab.jsx` 구매내역 선택 안내.
+2026-09-18: 바로 보기에서 본인 외 전신 생성 중 본인을 선택해도 본인 캐시 결과가 로딩 화면으로 덮이지 않도록 `tryOnMakingSubject` 기준으로 진행 화면·CTA를 대상별 분기했다. 본인 외로 돌아오면 같은 요청의 진행률을 이어서 보고, 대상 전환이나 시트 닫힘으로 요청을 취소하지 않는다. 모바일 본인 외 수정 아이콘은 카드 타이틀 행 상단으로 옮겼다. 근거: `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/09-app.jsx`, `frontend/src/proto/proto.css`.
+2026-09-18: 92% 정체의 원인이 마스크 품질 재시도인데 단조 증가 진행률 때문에 재시도 중에도 92%로 보이던 문제를 확인했다. `tryon_retry` 단계를 추가하고, 전신 마스크 분리를 768px 이하 축소본에서 처리하며 Pillow 기반 검증·4개 PNG 병렬 업로드로 후처리 시간을 줄였다. 근거: `backend/app/main.py` `_tryon_make_assets`, `_tryon_assets_valid`, `live_tryon_body`.
