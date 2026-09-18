@@ -3850,6 +3850,17 @@ def _weather_item_penalty(item: dict[str, Any], weather: dict[str, Any] | None) 
     clue = _item_clue(item)
     daytime = max(temp, feels, hi)
     cond = str(weather.get("cond") or "")
+    seasons = {
+        str(season).strip().lower()
+        for season in ((item.get("metadata") or {}).get("seasons") or [])
+        if str(season).strip()
+    }
+    # 계절 태그가 분명한 옷은 달력보다 실제 체감 기온을 먼저 따른다. 겨울에
+    # 여름 전용 옷을 다양성 때문에 끼워 넣거나, 더운 날 겨울 전용 옷을 고르는 일을 막는다.
+    if min(lo, feels) <= 12 and seasons == {"summer"}:
+        return -9.0
+    if daytime >= 24 and seasons == {"winter"}:
+        return -9.0
     if daytime >= 25 and _clue_has(clue, ("패딩", "기모", "플리스", "퍼", "두꺼운 울", "헤비", "롱코트")):
         return -8.0
     if min(lo, feels) <= 8 and _clue_has(clue, ("민소매", "나시", "반바지", "숏팬츠", "린넨", "메시")):
@@ -4061,7 +4072,31 @@ def fallback_combos(
     # 하나라도 있으면 그쪽을 먼저 쓰고, 옷이 정말 부족할 때만 다시 허용한다.
     fresh = [p for p in walk if _combo_core_key([p[0]["id"], p[1]["id"]], by_id) not in excluded_cores]
     stale = [p for p in walk if _combo_core_key([p[0]["id"], p[1]["id"]], by_id) in excluded_cores]
-    walk = fresh + stale
+    recent_top_variants = {
+        _combo_top_variant_key(by_id[item_id])
+        for ids in (exclude_keys or ())
+        for item_id in ids
+        if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")
+    }
+
+    def prioritise_variants(candidates: list[tuple[dict[str, Any], dict[str, Any], float]]):
+        # 정렬 점수는 그대로 보존하되, 첫 패스에서는 다른 상의 실루엣을 한 번씩
+        # 먼저 보인다. 예: 차콜 셔츠 두 장보다 셔츠·니트·티를 우선한다.
+        first: list[tuple[dict[str, Any], dict[str, Any], float]] = []
+        repeated: list[tuple[dict[str, Any], dict[str, Any], float]] = []
+        seen_variants: set[tuple[str, ...]] = set()
+        for pair in candidates:
+            variant = _combo_top_variant_key(pair[0])
+            if variant in seen_variants:
+                repeated.append(pair)
+            else:
+                first.append(pair)
+                seen_variants.add(variant)
+        return first + repeated
+
+    fresh_new = [p for p in fresh if _combo_top_variant_key(p[0]) not in recent_top_variants]
+    fresh_seen = [p for p in fresh if _combo_top_variant_key(p[0]) in recent_top_variants]
+    walk = prioritise_variants(fresh_new) + prioritise_variants(fresh_seen) + prioritise_variants(stale)
     used_tops: dict[str, int] = {}
     used_shoes: dict[str, int] = {}
     for key in exclude_keys or ():
@@ -4110,6 +4145,7 @@ def _combo_top_variant_key(item: dict[str, Any]) -> tuple[str, ...]:
         str(value).strip().lower()
         for value in (
             _garment_slot(item),
+            _visual_garment_family(item),
             style.get("subtype"),
             style.get("fit"),
             style.get("pattern"),
@@ -4117,6 +4153,29 @@ def _combo_top_variant_key(item: dict[str, Any]) -> tuple[str, ...]:
         )
         if value
     )
+
+
+def _visual_garment_family(item: dict[str, Any]) -> str:
+    """속성 추출이 비어 있어도 이름으로 같은 셔츠·니트 반복을 가린다."""
+    clue = _item_clue(item)
+    families = (
+        ("셔츠", ("셔츠", "남방", "옥스퍼드", "블라우스")),
+        ("폴로", ("폴로", "카라티", "피케")),
+        ("니트", ("니트", "스웨터", "터틀넥")),
+        ("가디건", ("가디건")),
+        ("후디", ("후디", "후드")),
+        ("스웨트", ("맨투맨", "스웨트", "크루넥")),
+        ("티셔츠", ("티셔츠", "티 ", "반팔", "긴팔")),
+        ("재킷", ("재킷", "블레이저", "자켓")),
+        ("코트", ("코트", "트렌치")),
+        ("데님", ("데님", "청바지")),
+        ("슬랙스", ("슬랙스", "치노")),
+        ("카고", ("카고", "조거", "트레이닝")),
+    )
+    for family, words in families:
+        if _clue_has(clue, words):
+            return family
+    return str(_row_style(item).get("subtype") or _item_bucket(item) or "기본").strip().lower()
 
 
 def _diversify_combo_bases(

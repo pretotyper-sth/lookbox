@@ -14,7 +14,7 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_item_bucket", "_pair_score", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
-    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_garment_slot", "_dedupe_combo_garment_slots", "_combo_top_variant_key", "_diversify_combo_bases",
+    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_combo_has_top_and_bottom", "_garment_slot", "_combo_has_unique_garment_slots", "_dedupe_combo_garment_slots", "_combo_core_key", "_combo_shoe_id", "_visual_garment_family", "_combo_top_variant_key", "_diversify_combo_bases", "fallback_combos",
     "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
@@ -113,6 +113,11 @@ class StyleAttrTest(unittest.TestCase):
         weather = {"temp": 18, "feels": 17, "hi": 20, "lo": 14, "cond": "비"}
         self.assertLess(self.ns["_weather_item_penalty"](suede, weather), 0)
 
+    def test_cold_weather_penalises_summer_only_garment(self):
+        summer_tee = item(cat="top", color="화이트", name="린넨 반팔", _seasons=["summer"])
+        weather = {"temp": 7, "feels": 5, "hi": 10, "lo": 3, "cond": "맑음"}
+        self.assertLess(self.ns["_weather_item_penalty"](summer_tee, weather), 0)
+
     def test_coord_rules_forbid_cargo_chelsea(self):
         rules = MAIN_PATH.read_text()
         self.assertIn("첼시 부츠", rules)
@@ -196,6 +201,35 @@ class ComboSlotTest(unittest.TestCase):
         got = self.ns["_diversify_combo_bases"](combos, by_id, 3)
         self.assertEqual(got[0]["item_ids"][0], "top-0")
         self.assertEqual(got[1]["item_ids"][0], "top-2")
+
+    def test_diversify_uses_name_family_when_style_metadata_is_missing(self):
+        items = [
+            item(cat="top", color="차콜", name="차콜 셔츠"),
+            item(cat="top", color="차콜", name="차콜 오버핏 셔츠"),
+            item(cat="top", color="네이비", name="네이비 니트"),
+        ]
+        for idx, it in enumerate(items):
+            it["id"] = f"top-{idx}"
+        by_id = {it["id"]: it for it in items}
+        combos = [
+            {"item_ids": ["top-0", "bottom-0", "shoes"]},
+            {"item_ids": ["top-1", "bottom-1", "shoes"]},
+            {"item_ids": ["top-2", "bottom-2", "shoes"]},
+        ]
+        got = self.ns["_diversify_combo_bases"](combos, by_id, 3)
+        self.assertEqual(got[0]["item_ids"][0], "top-0")
+        self.assertEqual(got[1]["item_ids"][0], "top-2")
+
+    def test_fallback_cards_use_another_top_family_before_repeating_shirt(self):
+        closet = [
+            {**item(cat="top", color="차콜", name="차콜 셔츠"), "id": "shirt-1"},
+            {**item(cat="top", color="차콜", name="차콜 오버핏 셔츠"), "id": "shirt-2"},
+            {**item(cat="top", color="네이비", name="네이비 니트"), "id": "knit"},
+            {**item(cat="bottom", color="베이지", name="치노 팬츠"), "id": "pants"},
+            {**item(cat="shoes", color="화이트", name="화이트 스니커즈"), "id": "shoes"},
+        ]
+        combos = self.ns["fallback_combos"](closet, None, 3, profile={"weather": {"temp": 18, "feels": 17, "hi": 20, "lo": 14}})
+        self.assertEqual([combo["item_ids"][0] for combo in combos[:2]], ["shirt-1", "knit"])
 
 
 class ShoeRotateTest(unittest.TestCase):
