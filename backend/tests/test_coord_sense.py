@@ -108,6 +108,11 @@ class StyleAttrTest(unittest.TestCase):
         self.assertEqual(self.ns["_weather_item_penalty"](tee, weather), 0)
         self.assertIn("최고 29°C", self.ns["_coord_weather_note"](weather))
 
+    def test_rain_penalises_weather_sensitive_shoes(self):
+        suede = item(cat="shoes", color="브라운", name="스웨이드 로퍼")
+        weather = {"temp": 18, "feels": 17, "hi": 20, "lo": 14, "cond": "비"}
+        self.assertLess(self.ns["_weather_item_penalty"](suede, weather), 0)
+
     def test_coord_rules_forbid_cargo_chelsea(self):
         rules = MAIN_PATH.read_text()
         self.assertIn("첼시 부츠", rules)

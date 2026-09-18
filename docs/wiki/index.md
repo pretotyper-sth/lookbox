@@ -15,8 +15,9 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-flatlay-overlap](look-flatlay-overlap.md) — 추천 상품컷은 의류 코어 슬롯만 배치하고, 제안 가방·소품은 작게 한 자리만 둔다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
-- [model-look-toggle](model-look-toggle.md) — AI 캐릭터 착장은 제안 아이템 생성 완료 뒤 왼쪽 첫 카드 한 장만 실제 단계와 함께 만든다
-- [look-latency](look-latency.md) — 상품컷은 API 없는 옷장 조합으로 먼저 보내고, 오른쪽 제안 아이템 뒤 AI 착장을 순차 생성한다
+- [model-look-toggle](model-look-toggle.md) — AI 캐릭터 착장은 첫 일반 상품컷부터 왼쪽 첫 카드 한 장만 실제 단계와 함께 병렬 생성한다
+- [look-latency](look-latency.md) — 상품컷을 먼저 보내고, 오른쪽 제안 아이템과 왼쪽 AI 착장을 병렬 생성한다
+- [location-weather](location-weather.md) — 브라우저 현재 위치의 기온·체감·최고/최저·강수를 데일리 추천 점수에 반영하며 좌표는 저장하지 않는다
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다

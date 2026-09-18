@@ -3829,21 +3829,35 @@ def _coord_weather_note(weather: dict[str, Any] | None = None) -> str:
         guidance = "낮에는 덥다. 패딩·두꺼운 울·기모·무거운 코트는 피한다."
     elif lo <= 8:
         guidance = "아침·밤이 춥다. 반팔 단독·민소매·얇은 린넨만의 코디는 피한다."
-    return f"실제 서울 날씨: 현재 {temp}°C, 최고 {hi}°C, 최저 {lo}°C{(' · ' + cond) if cond else ''}. {guidance}\n"
+    city = str(weather.get("city") or "현재 위치")
+    feels = weather.get("feels")
+    try:
+        feels_note = f", 체감 {round(float(feels))}°C" if feels is not None else ""
+    except (TypeError, ValueError):
+        feels_note = ""
+    return f"실제 {city} 날씨: 현재 {temp}°C{feels_note}, 최고 {hi}°C, 최저 {lo}°C{(' · ' + cond) if cond else ''}. {guidance}\n"
 
 
 def _weather_item_penalty(item: dict[str, Any], weather: dict[str, Any] | None) -> float:
     if not isinstance(weather, dict):
         return 0.0
     try:
+        temp = float(weather.get("temp"))
+        feels = float(weather.get("feels") if weather.get("feels") is not None else temp)
         hi, lo = float(weather.get("hi")), float(weather.get("lo"))
     except (TypeError, ValueError):
         return 0.0
     clue = _item_clue(item)
-    if hi >= 25 and _clue_has(clue, ("패딩", "기모", "플리스", "퍼", "두꺼운 울", "헤비", "롱코트")):
+    daytime = max(temp, feels, hi)
+    cond = str(weather.get("cond") or "")
+    if daytime >= 25 and _clue_has(clue, ("패딩", "기모", "플리스", "퍼", "두꺼운 울", "헤비", "롱코트")):
         return -8.0
-    if lo <= 8 and _clue_has(clue, ("민소매", "나시", "반바지", "숏팬츠", "린넨", "메시")):
+    if min(lo, feels) <= 8 and _clue_has(clue, ("민소매", "나시", "반바지", "숏팬츠", "린넨", "메시")):
         return -8.0
+    if any(token in cond for token in ("비", "소나기", "눈", "뇌우")) and _clue_has(
+        clue, ("스웨이드", "캔버스", "메쉬", "화이트 스니커", "흰 운동화")
+    ):
+        return -3.0
     return 0.0
 
 
@@ -5042,7 +5056,7 @@ def generate_model_look_image(
 
 
 DEPLOY_REV = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "dev"
-_SEOUL_WEATHER_CACHE: tuple[float, dict[str, Any]] | None = None
+_WEATHER_CACHE: dict[tuple[float, float], tuple[float, dict[str, Any]]] = {}
 
 
 def _weather_condition(code: Any) -> str:
@@ -5055,33 +5069,50 @@ def _weather_condition(code: Any) -> str:
     return labels.get(int(code or -1), "날씨 정보")
 
 
-def _seoul_weather() -> dict[str, Any]:
-    """Open-Meteo 서울 관측값을 30분 캐시하고, 실패하면 UI 기본값을 쓴다."""
-    global _SEOUL_WEATHER_CACHE
+def _weather_for_location(latitude: float | None = None, longitude: float | None = None) -> dict[str, Any]:
+    """현재 위치 좌표의 Open-Meteo 관측값을 30분 캐시한다.
+
+    위치 권한이 없을 때만 서울을 안전한 기본값으로 쓴다. 좌표는 요청 처리와 날씨
+    조회에만 사용하며 저장하지 않는다.
+    """
+    has_device_location = (
+        isinstance(latitude, (int, float)) and isinstance(longitude, (int, float))
+        and -90 <= latitude <= 90 and -180 <= longitude <= 180
+    )
+    lat = float(latitude) if has_device_location else 37.5665
+    lon = float(longitude) if has_device_location else 126.9780
+    cache_key = (round(lat, 2), round(lon, 2))
     now = time.monotonic()
-    if _SEOUL_WEATHER_CACHE and now - _SEOUL_WEATHER_CACHE[0] < 1800:
-        return _SEOUL_WEATHER_CACHE[1]
-    fallback = {"city": "서울", "temp": 24, "cond": "날씨 정보", "hi": 27, "lo": 18}
+    cached = _WEATHER_CACHE.get(cache_key)
+    if cached and now - cached[0] < 1800:
+        return cached[1]
+    fallback = {
+        "city": "현재 위치" if has_device_location else "서울",
+        "temp": 24, "feels": 24, "cond": "날씨 정보", "hi": 27, "lo": 18,
+        "source": "device" if has_device_location else "fallback",
+    }
     try:
         url = (
-            "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780"
-            "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min"
+            f"https://api.open-meteo.com/v1/forecast?latitude={lat:.4f}&longitude={lon:.4f}"
+            "&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min"
             "&timezone=Asia%2FSeoul&forecast_days=1"
         )
         with urlopen(url, timeout=4) as response:  # noqa: S310 - fixed public weather URL
             raw = json.load(response)
         current, daily = raw.get("current") or {}, raw.get("daily") or {}
         weather = {
-            "city": "서울",
+            "city": "현재 위치" if has_device_location else "서울",
             "temp": round(float(current.get("temperature_2m"))),
+            "feels": round(float(current.get("apparent_temperature") or current.get("temperature_2m"))),
             "cond": _weather_condition(current.get("weather_code")),
             "hi": round(float((daily.get("temperature_2m_max") or [fallback["hi"]])[0])),
             "lo": round(float((daily.get("temperature_2m_min") or [fallback["lo"]])[0])),
+            "source": "device" if has_device_location else "fallback",
         }
     except Exception as exc:  # noqa: BLE001
-        print(f"[weather] Seoul fetch failed: {exc}", flush=True)
+        print(f"[weather] fetch failed lat={lat:.2f} lon={lon:.2f}: {exc}", flush=True)
         weather = fallback
-    _SEOUL_WEATHER_CACHE = (now, weather)
+    _WEATHER_CACHE[cache_key] = (now, weather)
     return weather
 
 
@@ -5097,8 +5128,11 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/live/weather")
-def live_weather() -> dict[str, Any]:
-    return _seoul_weather()
+def live_weather(
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lon: float | None = Query(default=None, ge=-180, le=180),
+) -> dict[str, Any]:
+    return _weather_for_location(lat, lon)
 
 
 @app.get("/me")

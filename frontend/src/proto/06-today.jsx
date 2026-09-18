@@ -63,9 +63,9 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
       }}>
         <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
-          {w.city} {w.temp}° {w.cond}
+          {w.city} {w.temp == null ? '—' : w.temp + '°'} {w.cond}
         </span>
-        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>
+        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi == null ? '—' : w.hi + '°'} · 최저 {w.lo == null ? '—' : w.lo + '°'}</span>
       </div>
       {action}
       {calOpen && calPos && (
@@ -111,7 +111,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={outfit} items={items} ratio="4 / 5" looking={looking} />
+          <LookComposite outfit={outfit} items={items} ratio="4 / 5" looking={looking} copyButton />
         </div>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',

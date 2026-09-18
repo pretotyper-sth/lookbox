@@ -352,7 +352,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 
 const LOOK_FLAT_CACHE = {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full' }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
@@ -378,10 +378,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   }, [key, scale, ratio, pack, !!(outfit && outfit.lookImg)]);
 
   useEc(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
-  const copyFlat = (event) => {
-    if (!flat) return;
-    event.preventDefault();
-    copyCompositePng(flat).then(() => {
+  const copyImage = (event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const source = (outfit && outfit.lookImg) || flat;
+    if (!source) return;
+    copyCompositePng(source).then(() => {
       setCopyState('이미지를 복사했어요');
     }).catch(() => {
       setCopyState('이미지 복사에 실패했어요');
@@ -390,6 +394,23 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       copyTimer.current = setTimeout(() => setCopyState(''), 1800);
     });
   };
+
+  const copyControl = copyButton && ((outfit && outfit.lookImg) || flat) ? (
+    <button
+      type="button"
+      onClick={copyImage}
+      aria-label="이미지 복사"
+      title="이미지 복사"
+      style={{
+        position: 'absolute', right: 40, bottom: 7, zIndex: 4, width: 24, height: 24,
+        border: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center',
+        color: '#fff', background: 'color-mix(in srgb, var(--ink) 72%, transparent)',
+        boxShadow: '0 0 0 1px rgba(255,255,255,0.12)', cursor: 'pointer',
+      }}
+    >
+      <Icon name="copy" size={12} stroke={2.3} />
+    </button>
+  ) : null;
 
   // 착장 원본은 4:5 전체 전신이다. 레일도 같은 비율로 보여 잘라내지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
@@ -414,6 +435,15 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')}>
           {aiMark === 'icon' ? '✦' : '✦ AI로 생성'}
         </span>
+        {copyControl}
+        {copyState ? (
+          <span style={{
+            position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+            zIndex: 12, padding: '8px 10px', borderRadius: 10, whiteSpace: 'nowrap',
+            background: 'rgba(20,20,18,0.82)', color: '#fff', fontSize: 12, fontWeight: 700,
+            pointerEvents: 'none',
+          }}>{copyState}</span>
+        ) : null}
       </div>
     );
   }
@@ -429,12 +459,12 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     >
       {flat ? (
         <img
+          key={flat}
           src={flat}
           alt={shown.map((i) => i.name).join(' · ')}
-          onContextMenu={copyFlat}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: 'center', display: 'block',
+            objectFit: 'cover', objectPosition: 'center', display: 'block', animation: 'lb-fade-swap 260ms var(--ease)',
           }}
         />
       ) : shown.map((it) => {
@@ -455,6 +485,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         );
       })}
       {pending ? <LookPendingMarks stage={lookPendingStage(outfit)} /> : null}
+      {copyControl}
       {copyState ? (
         <span style={{
           position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',

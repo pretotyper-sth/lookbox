@@ -195,7 +195,10 @@ function coordProfile(prefs) {
     age: p.age || '',
     height: p.height || '',
     weight: p.weight || '',
-    weather: { temp: weather.temp, hi: weather.hi, lo: weather.lo, cond: weather.cond || '' },
+    weather: {
+      city: weather.city || '', temp: weather.temp, feels: weather.feels,
+      hi: weather.hi, lo: weather.lo, cond: weather.cond || '', source: weather.source || '',
+    },
   };
 }
 function wardrobeSigOf(list) {
@@ -960,18 +963,37 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const refreshDeviceWeather = useCallback(async () => {
+    const position = await new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        (value) => resolve(value && value.coords),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10 * 60 * 1000 },
+      );
+    });
+    const coords = position && Number.isFinite(position.latitude) && Number.isFinite(position.longitude)
+      ? `?lat=${position.latitude.toFixed(4)}&lon=${position.longitude.toFixed(4)}`
+      : '';
+    try {
+      const weather = await liveJSON('/api/live/weather' + coords);
+      if (!weather) return null;
+      Object.assign(LB_DATA.WEATHER, weather);
+      setWeatherRev((n) => n + 1);
+      return weather;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!authUid || isShowcase) return undefined;
     let alive = true;
-    liveJSON('/api/live/weather')
-      .then((weather) => {
-        if (!alive || !weather) return;
-        Object.assign(LB_DATA.WEATHER, weather);
-        setWeatherRev((n) => n + 1);
-      })
-      .catch(() => {});
+    refreshDeviceWeather().then((weather) => {
+      if (!alive || !weather) return;
+    });
     return () => { alive = false; };
-  }, [authUid]);
+  }, [authUid, isShowcase, refreshDeviceWeather]);
   const persistPrefs = (p, opts) => {
     try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }
     // 계정 설정을 아직 못 읽은 상태에서 계정에 쓰면, 이 기기의 기본값이 계정에 저장된
@@ -1932,6 +1954,9 @@ function App() {
     } else {
       pruneDailyAgainstOwned(items);
     }
+    // 위치 권한을 받은 경우 매번 현재 좌표의 날씨를 다시 받아, 이동 뒤에도
+    // 데일리 추천이 처음 열었던 지역의 날씨를 쓰지 않게 한다.
+    await refreshDeviceWeather();
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     // AI 착장 이미지 — 토글이 켜져 있으면 성별만 맞춰 룩북 모델을 그린다.
     // 성별은 coordProfile에 이미 들어 있다.
@@ -2005,6 +2030,13 @@ function App() {
         if (!added.length) return;
         cacheDaily();
         bumpDaily();
+        // 첫 일반 상품컷이 보이면 착장 요청을 즉시 시작해, 오른쪽 제안 아이템 생성과 겹친다.
+        if (prefs.modelLook) {
+          const firstReady = (LB_DATA.DAILY || []).find((outfit) => (
+            outfit && !outfit.lookImg && !outfitWishPending(outfit)
+          ));
+          if (firstReady) applyModelLooks([firstReady]).catch(() => {});
+        }
       };
       const onWish = (row) => {
         if (!row || !row.id) return;

@@ -19,4 +19,7 @@
 변환해 보인다. Chrome 우클릭 「이미지 복사」가 PNG를 클립보드에 넣어 WebP를 받지
 않는 붙여넣기 대상에도 그대로 붙는다. (`CopyReadyProductImg`)
 
+2026-09-18: 추천 코디의 합성 이미지는 브라우저 우클릭을 가로채지 않는다. 카드 오른쪽
+아래 돋보기 옆 복사 버튼을 눌렀을 때만 PNG를 클립보드에 넣는다(`LookComposite`).
+
 관련: [[chiprow-sheet-scroll]] [[look-img-flex-min]]

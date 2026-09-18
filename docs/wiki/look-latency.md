@@ -93,7 +93,7 @@ DB 삭제 수백 ms가 앞에 붙는다. 본론은 `gpt-4o` 옷장 47줄 추천 
 `live_coordinate`는 GPT 추천·속성 보정을 더 이상 호출하지 않는다. 마이페이지의
 퍼스널 컬러·선호 무드는 결정적 옷장 페어링 점수에만 반영해 상품컷 카드를 전부 먼저
 SSE로 보낸다. 마지막 제안 카드 수만큼은 화면 오른쪽부터 `images.generate`를 한 장씩
-처리하고, 완료 응답 뒤에만 AI 착장 한 장을 시작한다. 착장 편집도 재촬영을 하지 않아
-실패 시 조용히 두 번째 API 호출을 만들지 않는다. 근거: `backend/app/main.py`
-`live_coordinate`, `generate_model_look_image`; `frontend/src/proto/09-app.jsx`
-`requestDailyOutfits`.
+처리한다. 프론트는 첫 일반 상품컷을 받는 즉시 왼쪽 첫 AI 착장 API를 별도로 시작해,
+제안 생성과 병렬로 진행한다. 착장 편집도 재촬영을 하지 않아 실패 시 조용히 두 번째
+API 호출을 만들지 않는다. 근거: `backend/app/main.py` `live_coordinate`,
+`generate_model_look_image`; `frontend/src/proto/09-app.jsx` `requestDailyOutfits`.
