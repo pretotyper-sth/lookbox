@@ -1108,12 +1108,12 @@ function App() {
           tryOnOther: {
             ...(prev.tryOnOther || emptyTryOnOther()),
             tryOnBody: body || '', tryOnFrame: frame || '', tryOnCut: cut || '',
-            tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon10') : '',
+            tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon11') : '',
             tryOnAssets: assets || (body ? ((prev.tryOnOther || {}).tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
           },
         } : {
           tryOnBody: body || '', tryOnFrame: frame || '', tryOnCut: cut || '',
-          tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon10') : '',
+          tryOnRev: body ? (window.TRYON_BODY_REV || 'tryon11') : '',
           tryOnAssets: assets || (body ? (prev.tryOnAssets || emptyTryOnAssets()) : emptyTryOnAssets()),
         }),
       };
@@ -1186,9 +1186,9 @@ function App() {
         const np = {
           ...prev,
           ...(subject === 'other' ? {
-            tryOnOther: { ...(prev.tryOnOther || emptyTryOnOther()), tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon10', tryOnAssets: assets },
+            tryOnOther: { ...(prev.tryOnOther || emptyTryOnOther()), tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon11', tryOnAssets: assets },
           } : {
-            tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon10', tryOnAssets: assets,
+            tryOnBody: url, tryOnFrame: url, tryOnCut: 'auto', tryOnRev: window.TRYON_BODY_REV || 'tryon11', tryOnAssets: assets,
           }),
         };
         persistPrefs(np);
@@ -1250,7 +1250,7 @@ function App() {
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
     const selected = (prefs.tryOnActive || 'self') === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs;
-    if (!selected.tryOnFrame || (selected.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10')) {
+    if (!selected.tryOnFrame || (selected.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon11')) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (selected.avatar) {
         const made = await makeTryOnBody();
@@ -1737,13 +1737,14 @@ function App() {
   // 둘 다 계정 설정이라 기기를 옮겨도 그대로다.
   const dailyCount = Math.max(2, Math.min(8, parseInt(prefs.dailyCount, 10) || parseInt(t.dailyCount, 10) || 4));
   const parsedWish = parseInt(prefs.wishCount, 10);
-  const wishCount = Math.max(0, Math.min(3, Number.isFinite(parsedWish) ? parsedWish : 1));
+  const wishCount = Math.max(1, Math.min(dailyCount, Number.isFinite(parsedWish) ? parsedWish : 1));
   const setDailyCount = (n) => {
-    const np = { ...prefs, dailyCount: Math.max(2, Math.min(8, parseInt(n, 10) || 4)) };
+    const nextDailyCount = Math.max(2, Math.min(8, parseInt(n, 10) || 4));
+    const np = { ...prefs, dailyCount: nextDailyCount, wishCount: Math.min(wishCount, nextDailyCount) };
     setPrefs(np); persistPrefs(np);
   };
   const setWishCount = (n) => {
-    const np = { ...prefs, wishCount: Math.max(0, Math.min(3, parseInt(n, 10) || 0)) };
+    const np = { ...prefs, wishCount: Math.max(1, Math.min(dailyCount, parseInt(n, 10) || 1)) };
     setPrefs(np); persistPrefs(np);
   };
 
@@ -2912,9 +2913,9 @@ function App() {
           : (prefs.tryOnCut === 'auto' ? (prefs.tryOnBody || prefs.tryOnFrame) : '')}
         assets={prefs.tryOnActive === 'other' ? (prefs.tryOnOther && prefs.tryOnOther.tryOnAssets) : prefs.tryOnAssets}
         canSwitchProfile={!!(
-          prefs.avatar && prefs.tryOnFrame && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+          prefs.avatar && prefs.tryOnFrame && (prefs.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon11')
           && prefs.tryOnOther && prefs.tryOnOther.avatar && prefs.tryOnOther.tryOnFrame
-          && (prefs.tryOnOther.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+          && (prefs.tryOnOther.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon11')
         )}
         onSwitchProfile={(subject) => setTryOnActive(subject)}
         onClose={() => setTryOnCamera(false)}

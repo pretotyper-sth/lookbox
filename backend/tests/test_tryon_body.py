@@ -76,7 +76,7 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 2200]
+        prompt = self.src[start:start + 2800]
         self.assertIn("identity lock", prompt)
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
@@ -86,13 +86,14 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("white low-top sneakers", prompt)
         self.assertIn("6% empty", prompt)
         self.assertIn("SAME person", prompt)
+        self.assertIn("7 to 7.5 head-heights", prompt)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon10-", chunk)
+        self.assertIn("tryon11-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)

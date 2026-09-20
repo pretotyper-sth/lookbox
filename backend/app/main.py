@@ -7687,8 +7687,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         if kind == "top":
             ch = max(r, g, b) - min(r, g, b)
             # 검정 반팔은 판·피부·중청과 명확히 떨어져 안정적으로 분리된다.
-            return 8 <= L <= 105 and ch <= 35 and (b - r) <= 14
-        return b > r + 6 and b >= g - 6 and 32 < L < 175
+            return 6 <= L <= 130 and ch <= 55 and (b - r) <= 28
+        return b > r and b >= g - 12 and 24 < L < 190
 
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
@@ -7742,8 +7742,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
 
 
 def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
-    """1px closing 뒤 가장자리만 페더. 실루엣을 키우거나 안쪽으로 깎지 않는다."""
-    closed = mask.convert("L").filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    """작은 텍스처 구멍까지 메운 뒤 가장자리만 페더한다."""
+    closed = mask.convert("L").filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
     soft = closed.filter(ImageFilter.GaussianBlur(radius=0.9))
     solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
@@ -7851,6 +7851,8 @@ FRAMING:
 Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
 Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
+Keep the head naturally proportional to the body: an adult, balanced figure around 7 to 7.5 head-heights tall.
+Never enlarge a cropped profile face or compress the torso and legs to preserve selfie scale.
 
 OUTFIT:
 matte black short-sleeve crew-neck T-shirt (about RGB 28 28 32), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
@@ -7908,9 +7910,9 @@ def _tryon_body_profile_note(user_id: str, override: dict[str, Any] | None = Non
     return (
         "\nPROFILE PROPORTIONS:\n"
         f"The selected person's profile says {', '.join(facts)}. Use this only as a loose, respectful reference "
-        "for believable adult body scale. Give a subtly flattering, naturally elongated overall silhouette "
-        "(roughly one head taller in impression), especially a slightly longer leg line, while preserving "
-        "realistic anatomy. Do not make the person ultra-thin, change their age, or exaggerate body shape.\n"
+        "for believable adult body scale. Prioritize a balanced adult head-to-body proportion and realistic "
+        "anatomy; a profile selfie must never create an oversized head or compressed torso and legs. A subtly "
+        "flattering leg line is fine, but do not make the person ultra-thin, change their age, or exaggerate body shape.\n"
     )
 
 
@@ -7953,7 +7955,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon10-{sig}-{profile_sig}"
+    key = f"tryon11-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8047,7 +8049,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon10",
+                        "mask": "tryon11",
                         "assets": urls,
                     },
                 }).execute()

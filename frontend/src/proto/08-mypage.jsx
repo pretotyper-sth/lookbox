@@ -515,7 +515,7 @@ function MyPageScreen({ ctx }) {
         nested
         label="새 아이템 포함 코디"
         hint="옷장에 없는 아이템을 넣어요"
-        right={<Stepper value={Math.max(1, wishCount)} min={1} max={3} onChange={(n) => setWishCount && setWishCount(n)} />}
+        right={<Stepper value={Math.max(1, wishCount)} min={1} max={dailyCount} onChange={(n) => setWishCount && setWishCount(n)} />}
       />
     </>
   ) : null;

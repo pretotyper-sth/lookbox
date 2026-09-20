@@ -1540,7 +1540,7 @@ function AddSheet({ ctx }) {
   };
   const canTryOn = !!tryOnAvatar;
   const tryOnBodyReady = canTryOn
-    && (tryOnProfile.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon10')
+    && (tryOnProfile.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon11')
     && !!(tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame);
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
@@ -1548,7 +1548,7 @@ function AddSheet({ ctx }) {
     if (!tryOnAvatar) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    const stale = (tryOnProfile.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon10');
+    const stale = (tryOnProfile.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon11');
     let body = stale ? '' : ((tryOnProfile && (tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       let fail = '';
