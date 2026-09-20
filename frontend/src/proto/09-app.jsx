@@ -172,12 +172,12 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v4';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v5';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
     return cached && cached.date === localYmd() && cached.weather
-      && cached.weather.city && cached.weather.city !== '현재 위치'
+      && cached.weather.city && cached.weather.cityResolved !== false
       && Number.isFinite(Number(cached.weather.temp)) ? cached.weather : null;
   } catch (e) { return null; }
 }
@@ -1021,9 +1021,7 @@ function App() {
         : '';
       try {
         const weather = await liveJSON('/api/live/weather' + coords);
-        // 지역명이 확인되지 않은 응답은 화면·캐시에 남기지 않는다. 다음 진입에서
-        // 다시 조회해 "현재 위치" 같은 임시 문구가 하루 종일 고정되지 않게 한다.
-        if (!weather || !weather.city || weather.city === '현재 위치') return null;
+        if (!weather || !weather.city || weather.cityResolved === false) return null;
         Object.assign(LB_DATA.WEATHER, weather);
         writeDeviceWeatherCache(weather);
         setWeatherRev((n) => n + 1);

@@ -5185,63 +5185,40 @@ def _weather_condition(code: Any) -> str:
         61: "비", 63: "비", 65: "비", 71: "눈", 73: "눈", 75: "눈", 80: "소나기",
         81: "소나기", 82: "소나기", 95: "뇌우",
     }
-    return labels.get(int(code or -1), "날씨 정보")
+    return labels.get(int(code) if code is not None else -1, "날씨 정보")
 
 
-_KOREAN_WEATHER_CITIES = (
-    ("서울", 37.40, 37.72, 126.72, 127.25),
-    ("인천", 37.30, 37.72, 126.25, 126.95),
-    ("세종", 36.40, 36.68, 127.10, 127.42),
-    ("대전", 36.20, 36.52, 127.20, 127.58),
-    ("대구", 35.72, 36.02, 128.42, 128.82),
-    ("울산", 35.40, 35.72, 129.12, 129.48),
-    ("부산", 34.98, 35.42, 128.78, 129.36),
-    ("광주", 35.02, 35.30, 126.68, 127.06),
-)
-
-_KOREAN_WEATHER_REGIONS = (
-    ("경기", 36.80, 38.35, 126.20, 127.95),
-    ("강원", 37.00, 38.70, 127.10, 129.60),
-    ("충북", 36.35, 37.35, 127.20, 128.75),
-    ("충남", 35.85, 36.95, 125.95, 127.55),
-    ("전북", 35.20, 36.20, 126.20, 128.15),
-    ("전남", 33.95, 35.45, 125.00, 127.95),
-    ("경북", 35.55, 37.10, 128.00, 130.95),
-    ("경남", 34.45, 35.75, 127.55, 129.45),
-    ("제주", 33.05, 33.70, 126.10, 126.98),
-)
-
-def _weather_city_fallback(latitude: float, longitude: float) -> str:
-    """역지오코더가 비어도 지역명으로 표시하고 임시 문구를 남기지 않는다."""
-    for city, south, north, west, east in _KOREAN_WEATHER_CITIES:
-        if south <= latitude <= north and west <= longitude <= east:
-            return city
-    for region, south, north, west, east in _KOREAN_WEATHER_REGIONS:
-        if south <= latitude <= north and west <= longitude <= east:
-            return region
-    if 32.0 <= latitude <= 39.8 and 124.0 <= longitude <= 132.0:
-        return "한국"
-    return "위치 기반"
+def _weather_city_label(value: Any) -> str:
+    return str(value or "").strip().replace("특별자치시", "").replace("특별시", "").replace("광역시", "")
 
 
 def _weather_city_name(latitude: float, longitude: float) -> str:
-    """좌표는 요청 중에만 역지오코딩해 시·군 이름만 날씨 칩에 쓴다."""
     try:
         request = UrlRequest(
             "https://nominatim.openstreetmap.org/reverse"
             f"?format=jsonv2&lat={latitude:.4f}&lon={longitude:.4f}&zoom=10&accept-language=ko",
             headers={"User-Agent": "RealCloset weather location/1.0"},
         )
-        with urlopen(request, timeout=1.5) as response:  # noqa: S310 - fixed public geocoder URL
+        with urlopen(request, timeout=10) as response:  # noqa: S310 - fixed public geocoder URL
             address = (json.load(response).get("address") or {})
-        city = str(
+        return _weather_city_label(
             address.get("city") or address.get("town") or address.get("municipality")
             or address.get("county") or address.get("state") or address.get("state_district")
-            or address.get("city_district") or ""
-        ).strip()
-        return city.replace("특별자치시", "").replace("특별시", "").replace("광역시", "") or _weather_city_fallback(latitude, longitude)
-    except Exception:  # noqa: BLE001 - weather display falls back without delaying recommendations
-        return _weather_city_fallback(latitude, longitude)
+            or address.get("city_district")
+        )
+    except Exception:  # noqa: BLE001 - leave the city unresolved rather than guess
+        return ""
+
+
+def _weather_observation(latitude: float, longitude: float) -> tuple[dict[str, Any], dict[str, Any]]:
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={latitude:.4f}&longitude={longitude:.4f}"
+        "&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min"
+        "&timezone=Asia%2FSeoul&forecast_days=1"
+    )
+    with urlopen(url, timeout=4) as response:  # noqa: S310 - fixed public weather URL
+        raw = json.load(response)
+    return raw.get("current") or {}, raw.get("daily") or {}
 
 
 def _weather_for_location(latitude: float | None = None, longitude: float | None = None) -> dict[str, Any]:
@@ -5261,23 +5238,39 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
     cached = _WEATHER_CACHE.get(cache_key)
     if cached and now - cached[0] < 1800:
         return cached[1]
-    city = _weather_city_name(lat, lon) if has_device_location else "서울"
+    city = "서울"
+    current: dict[str, Any] = {}
+    daily: dict[str, Any] = {}
+    weather_error: Exception | None = None
+    executor: ThreadPoolExecutor | None = None
+    try:
+        if has_device_location:
+            executor = ThreadPoolExecutor(max_workers=2)
+            city_future = executor.submit(_weather_city_name, lat, lon)
+            weather_future = executor.submit(_weather_observation, lat, lon)
+            city = city_future.result()
+            current, daily = weather_future.result()
+        else:
+            current, daily = _weather_observation(lat, lon)
+    except Exception as exc:  # noqa: BLE001
+        weather_error = exc
+    finally:
+        if executor:
+            executor.shutdown(wait=False, cancel_futures=True)
+    city_resolved = bool(city)
+    city = city or "지역 확인 중"
     fallback = {
         "city": city,
+        "cityResolved": city_resolved,
         "temp": 24, "feels": 24, "cond": "날씨 정보", "hi": 27, "lo": 18,
         "source": "device" if has_device_location else "fallback",
     }
     try:
-        url = (
-            f"https://api.open-meteo.com/v1/forecast?latitude={lat:.4f}&longitude={lon:.4f}"
-            "&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min"
-            "&timezone=Asia%2FSeoul&forecast_days=1"
-        )
-        with urlopen(url, timeout=4) as response:  # noqa: S310 - fixed public weather URL
-            raw = json.load(response)
-        current, daily = raw.get("current") or {}, raw.get("daily") or {}
+        if weather_error:
+            raise weather_error
         weather = {
             "city": city,
+            "cityResolved": city_resolved,
             "temp": round(float(current.get("temperature_2m"))),
             "feels": round(float(current.get("apparent_temperature") or current.get("temperature_2m"))),
             "cond": _weather_condition(current.get("weather_code")),

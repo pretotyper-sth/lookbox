@@ -14,9 +14,9 @@ test('daily recommendations do not wait for a fresh location lookup', () => {
 });
 
 test('device weather is cached for the local day', () => {
-  assert.match(source, /const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v4'/);
+  assert.match(source, /const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v5'/);
   assert.match(source, /cached\.date === localYmd\(\)/);
-  assert.match(source, /cached\.weather\.city !== '현재 위치'/);
+  assert.match(source, /cached\.weather\.cityResolved !== false/);
   assert.match(source, /maximumAge: 24 \* 60 \* 60 \* 1000/);
 });
 
