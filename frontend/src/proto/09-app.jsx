@@ -744,35 +744,32 @@ async function liveJSON(url, options = {}) {
 
 function formatTryOnErr(raw) {
   const original = String(raw || '').trim();
-  if (original.includes('\n')) return original.replace(/\n{2,}/g, '\n').trim();
   const s = original.replace(/\s+/g, ' ');
-  if (!s) return '이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('프로필 사진')) return '프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.';
-  if (s.includes('한 명')) return '한 명의 얼굴만 나온\n사진을 올려 주세요.';
-  if (s.includes('정면')) return '얼굴이 잘 보이는 정면 사진을\n올려 주세요.';
-  if (s.includes('얼굴을 확인')) return '얼굴을 확인하지 못했어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('처리할 수 없')) return '이 사진은 처리할 수 없어요.\n다른 사진으로 시도해 주세요.';
-  if (s.includes('너무 커요') || s.includes('용량')) return '사진이 너무 커요.\n더 작은 사진으로 올려 주세요.';
+  if (!s) return '이미지를 만들지 못했어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('프로필 사진')) return '프로필 사진을 먼저 올려 주세요 · 얼굴이 나온 사진이면 돼요.';
+  if (s.includes('한 명')) return '한 명의 얼굴만 나온 사진을 올려 주세요.';
+  if (s.includes('정면')) return '얼굴이 잘 보이는 정면 사진을 올려 주세요.';
+  if (s.includes('얼굴을 확인')) return '얼굴을 확인하지 못했어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('처리할 수 없')) return '이 사진은 처리할 수 없어요 · 다른 사진으로 시도해 주세요.';
+  if (s.includes('너무 커요') || s.includes('용량')) return '사진이 너무 커요 · 더 작은 사진으로 올려 주세요.';
   if (s.includes('한 달에') || s.includes('전신 이미지')) {
     const day = s.match(/(\d+월\s*\d+일)/);
-    return '한 달에 2번까지예요.\n' + (day ? `${day[1]}부터 다시 만들 수 있어요.` : '다음 달부터 다시 만들 수 있어요.');
+    return '한 달에 2번까지예요 · ' + (day ? `${day[1]}부터 다시 만들 수 있어요.` : '다음 달부터 다시 만들 수 있어요.');
   }
-  if (s.includes('오늘은 더 시도')) return '오늘은 더 시도하지 않아요.\n문제가 반복되면 알려 주세요.';
-  if (s.includes('만료')) return '로그인이 만료됐어요.\n다시 로그인해 주세요.';
-  if (s.includes('로그인이 필요')) return '로그인이 필요해요.\n로그인 후 다시 시도해 주세요.';
-  if (s.includes('몰려')) return '지금 요청이 몰려 있어요.\n1~2분 뒤에 다시 눌러 주세요.';
-  if (s.includes('이미 만들고')) return '이미 만들고 있어요.\n끝날 때까지 기다려 주세요.';
-  if (s.includes('오래')) return '시간이 너무 오래 걸렸어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('네트워크')) return '네트워크가 불안정해요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('연결이 끊겼') || s.includes('연결하지 못')) return '서버와 연결이 끊겼어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('이미지 서버')) return '이미지 서버가 불안정해요.\n조금 뒤에 다시 시도해 주세요.';
-  if (s.includes('다듬지')) return '이미지를 다듬지 못했어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('지금은') || s.includes('서버 설정')) return '지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.';
-  if (s.includes('이 사진에서') || s.includes('이 사진으로')) return '이 사진으로는 만들지 못했어요.\n다른 사진으로 시도해 주세요.';
-  if (s.includes('처리 중')) return '처리 중 문제가 생겼어요.\n잠시 후 다시 시도해 주세요.';
-  const parts = s.split(/(?<=다\.|요\.)\s+/).filter(Boolean);
-  if (parts.length >= 2) return parts[0] + '\n' + parts.slice(1).join(' ');
-  return (/[.。]$/.test(s) ? s : `${s}.`) + '\n잠시 후 다시 시도해 주세요.';
+  if (s.includes('오늘은 더 시도')) return '오늘은 더 시도하지 않아요 · 문제가 반복되면 알려 주세요.';
+  if (s.includes('만료')) return '로그인이 만료됐어요 · 다시 로그인해 주세요.';
+  if (s.includes('로그인이 필요')) return '로그인이 필요해요 · 로그인 후 다시 시도해 주세요.';
+  if (s.includes('몰려')) return '지금 요청이 몰려 있어요 · 1~2분 뒤에 다시 눌러 주세요.';
+  if (s.includes('이미 만들고')) return '이미 만들고 있어요 · 끝날 때까지 기다려 주세요.';
+  if (s.includes('오래')) return '시간이 너무 오래 걸렸어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('네트워크')) return '네트워크가 불안정해요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('연결이 끊겼') || s.includes('연결하지 못')) return '서버와 연결이 끊겼어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('이미지 서버')) return '이미지 서버가 불안정해요 · 조금 뒤에 다시 시도해 주세요.';
+  if (s.includes('다듬지')) return '옷 경계를 정리하지 못했어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('지금은') || s.includes('서버 설정')) return '지금은 만들 수 없어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('이 사진에서') || s.includes('이 사진으로')) return '이 사진으로는 만들지 못했어요 · 다른 사진으로 시도해 주세요.';
+  if (s.includes('처리 중')) return '처리 중 문제가 생겼어요 · 잠시 후 다시 시도해 주세요.';
+  return `${s.replace(/[.。]+$/, '')} · 잠시 후 다시 시도해 주세요.`;
 }
 
 async function uploadAvatarToAccount(dataUrl, slot = 'profile') {

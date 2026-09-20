@@ -2667,8 +2667,8 @@ function AddSheet({ ctx }) {
                             fontWeight: tryOnErr ? 600 : 400,
                             color: tryOnErr ? '#9D472F' : 'var(--ink-3)',
                             textAlign: 'center', wordBreak: 'keep-all',
-                            whiteSpace: tryOnErr ? 'pre-line' : undefined,
-                            lineHeight: tryOnErr ? 1.45 : undefined,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%',
+                            lineHeight: 1.35,
                           }}>
                             {tryOnErr
                               ? tryOnErr
