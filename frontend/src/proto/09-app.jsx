@@ -172,7 +172,7 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v1';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v2';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
