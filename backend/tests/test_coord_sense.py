@@ -14,7 +14,7 @@ MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
     "_pick", "_clean_style_attrs", "_row_style", "_item_bucket", "_pair_score", "_pair_style_preference", "_catalog_line",
     "_profile_block", "_item_clue", "_clue_has", "_pair_is_forbidden", "_pair_clash",
-    "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_combo_has_top_and_bottom", "_garment_slot", "_combo_has_unique_garment_slots", "_dedupe_combo_garment_slots", "_combo_core_key", "_combo_shoe_id", "_visual_garment_family", "_combo_top_variant_key", "_diversify_combo_bases", "fallback_combos",
+    "_shoe_pair_score", "_pick_rotating_shoe", "_combo_top_bottom", "_rebalance_combo_shoes", "_accent_fit_score", "_combo_has_top_and_bottom", "_garment_slot", "_combo_has_unique_garment_slots", "_dedupe_combo_garment_slots", "_combo_core_key", "_combo_shoe_id", "_visual_garment_family", "_combo_top_variant_key", "_diversify_combo_bases", "fallback_combos",
     "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
@@ -22,7 +22,7 @@ CONSTS = (
     "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS", "_PALETTE_COLOR_HINTS",
     "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
     "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_DRESS_OUTER", "_CLASH_ATH_TOP",
-    "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY",
+    "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY", "_SHOE_UNIQUE_SLACK",
     "_SUMMER_SHOE",
 )
 
@@ -283,6 +283,37 @@ class ShoeRotateTest(unittest.TestCase):
         first = self.pick([chelsea, sneaker], shirt, slacks, None, {})
         second = self.pick([chelsea, sneaker], shirt, slacks, None, {first["id"]: 1})
         self.assertNotEqual(second["id"], first["id"])
+
+    def test_fallback_uses_every_safe_shoe_before_repeating(self):
+        closet = [
+            {**item(cat="top", color="화이트", name="옥스퍼드 셔츠"), "id": "shirt"},
+            {**item(cat="top", color="네이비", name="니트"), "id": "knit"},
+            {**item(cat="top", color="그레이", name="티셔츠"), "id": "tee"},
+            {**item(cat="top", color="블랙", name="후디"), "id": "hoodie"},
+            {**item(cat="bottom", color="네이비", name="데님"), "id": "jeans"},
+            {**item(cat="bottom", color="베이지", name="치노"), "id": "chino"},
+            {**item(cat="shoes", color="화이트", name="화이트 스니커즈"), "id": "shoe-1"},
+            {**item(cat="shoes", color="블랙", name="블랙 스니커즈"), "id": "shoe-2"},
+            {**item(cat="shoes", color="브라운", name="브라운 로퍼"), "id": "shoe-3"},
+            {**item(cat="shoes", color="네이비", name="네이비 캔버스화"), "id": "shoe-4"},
+        ]
+        combos = self.ns["fallback_combos"](closet, None, 4, profile={})
+        used = [self.ns["_combo_shoe_id"](combo["item_ids"], {x["id"]: x for x in closet}) for combo in combos]
+        self.assertEqual(len(used), 4)
+        self.assertEqual(len(set(used)), 4)
+
+    def test_rebalance_replaces_repeated_safe_shoes(self):
+        top = {**item(cat="top", color="화이트", name="셔츠"), "id": "top"}
+        bottom = {**item(cat="bottom", color="네이비", name="데님"), "id": "bottom"}
+        shoes = [
+            {**item(cat="shoes", color=color, name=f"{color} 스니커즈"), "id": f"shoe-{idx}"}
+            for idx, color in enumerate(("화이트", "블랙", "브라운", "네이비"))
+        ]
+        by_id = {x["id"]: x for x in [top, bottom, *shoes]}
+        combos = [{"item_ids": ["top", "bottom", "shoe-0"]} for _ in range(4)]
+        self.ns["_rebalance_combo_shoes"](combos, by_id, {})
+        used = [self.ns["_combo_shoe_id"](combo["item_ids"], by_id) for combo in combos]
+        self.assertEqual(len(set(used)), 4)
 
     def test_rotate_does_not_force_chelsea_on_cargo(self):
         hoodie = item(cat="top", color="블랙", name="후디", subtype="후디")

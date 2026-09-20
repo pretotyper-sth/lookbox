@@ -46,3 +46,10 @@
 점수와 무관하게 후보에서 제외한다. 퍼스널 컬러 외에 저장한 선호 핏·팔레트·무드도
 실제 페어링 순서에 반영한다. 근거: `backend/app/main.py` `fallback_combos`,
 `_diversify_combo_bases`, `_pair_is_forbidden`, `_pair_style_preference`.
+
+2026-09-20: 데일리 카드는 상의·하의뿐 아니라 신발을 포함한 카테고리별로 아직 쓰지
+않은 아이템을 먼저 쓴다. 신발이 카드 수만큼 있으면 한 켤레씩 우선 소진하며, 카고와
+첼시 부츠처럼 강하게 충돌하는 후보는 다양성 때문에 선택하지 않는다. GPT가 같은
+신발을 여러 장에 넣어도 `_rebalance_combo_shoes`가 같은 규칙으로 교체한다. 근거:
+`backend/app/main.py` `_pick_rotating_shoe`, `_rebalance_combo_shoes`,
+`_diversify_combo_bases`; `backend/tests/test_coord_sense.py` `ShoeRotateTest`.
