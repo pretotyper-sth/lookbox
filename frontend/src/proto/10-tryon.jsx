@@ -233,7 +233,6 @@ const TRYON_MODES = [
   { id: 'full', label: '전체' },
 ];
 
-const TRYON_CAM_OK = 'lb_tryon_cam_ok';
 let tryOnCamStream = null;
 
 function stopTryOnCamStream() {
@@ -243,8 +242,9 @@ function stopTryOnCamStream() {
 }
 
 function pauseTryOnCamStream() {
-  if (!tryOnCamStream) return;
-  tryOnCamStream.getTracks().forEach((t) => { t.enabled = false; });
+  // disabled tracks still leave the browser's active-camera indicator visible.
+  // A previously granted site permission is reused on the next mode switch.
+  stopTryOnCamStream();
 }
 
 async function acquireTryOnCamStream() {
@@ -263,7 +263,6 @@ async function acquireTryOnCamStream() {
     },
   });
   tryOnCamStream = stream;
-  try { localStorage.setItem(TRYON_CAM_OK, '1'); } catch (e) { /* noop */ }
   return stream;
 }
 

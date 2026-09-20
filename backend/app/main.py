@@ -7841,7 +7841,7 @@ def _tryon_border_background(rgb: Image.Image) -> Image.Image:
 
 
 def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """가슴·허벅지 시드에서 검정 티 또는 중청만 4방향으로 모은다."""
+    """가슴·허벅지 시드에서 생성본의 실제 옷 색을 따라 4방향으로 모은다."""
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
@@ -7852,68 +7852,84 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     y0 = int(h * (0.14 if kind == "top" else 0.42))
     y1 = int(h * (0.64 if kind == "top" else 0.93))
 
-    def match(r: int, g: int, b: int) -> bool:
-        L = 0.299 * r + 0.587 * g + 0.114 * b
-        if kind == "top":
-            ch = max(r, g, b) - min(r, g, b)
-            # 검정 반팔은 판·피부·중청과 명확히 떨어져 안정적으로 분리된다.
-            return 6 <= L <= 130 and ch <= 55 and (b - r) <= 28
-        return b > r and b >= g - 12 and 24 < L < 190
-
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
         return r > 88 and r > b + 8 and r >= g - 8 and 72 < L < 210
 
+    def distance(a: tuple[int, int, int], b: tuple[int, int, int]) -> int:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2])
+
+    def seed_color(x: int, y: int) -> tuple[int, int, int] | None:
+        radius = max(5, min(w, h) // 28)
+        samples = []
+        for dy in range(-radius, radius + 1, 2):
+            for dx in range(-radius, radius + 1, 2):
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < w and y0 <= ny < y1) or bg_px[nx, ny] > 128:
+                    continue
+                r, g, b = px[nx, ny]
+                if not skin(r, g, b):
+                    samples.append((r, g, b))
+        if not samples:
+            return None
+        samples.sort(key=lambda c: sum(c))
+        return samples[len(samples) // 2]
+
     def valid_seed(x: int, y: int) -> bool:
-        if not (y0 <= y < y1):
-            return False
-        if bg_px[x, y] > 128:
+        if not (y0 <= y < y1) or bg_px[x, y] > 128:
             return False
         r, g, b = px[x, y]
-        return match(r, g, b) and not skin(r, g, b)
+        return not skin(r, g, b) and (0.299 * r + 0.587 * g + 0.114 * b) < 252
 
     out = bytearray(w * h)
-    seed = (sx, sy) if valid_seed(sx, sy) else None
-    if seed is None:
-        radius = max(6, min(w, h) // 14)
+    y_seeds = (0.22, 0.32, 0.42, 0.53) if kind == "top" else (0.54, 0.66, 0.78, 0.88)
+    seeds = []
+    radius = max(6, min(w, h) // 14)
+    for fy in y_seeds:
+        candidate_y = min(y1 - 1, max(y0, int(round(fy * (h - 1)))))
         for dy in range(-radius, radius + 1, 2):
             for dx in range(-radius, radius + 1, 2):
                 x = min(w - 1, max(0, sx + dx))
-                y = min(h - 1, max(0, sy + dy))
+                y = min(y1 - 1, max(y0, candidate_y + dy))
                 if valid_seed(x, y):
-                    seed = (x, y)
+                    seeds.append((x, y))
                     break
-            if seed is not None:
+            if seeds and seeds[-1][1] >= candidate_y - radius:
                 break
-    if seed is None:
-        return Image.frombytes("L", (w, h), bytes(out))
-    sx, sy = seed
-    q: deque[tuple[int, int]] = deque([(sx, sy)])
     seen = bytearray(w * h)
-    while q:
-        x, y = q.popleft()
-        if not (0 <= x < w and y0 <= y < y1):
+    for sx, sy in seeds:
+        target = seed_color(sx, sy)
+        if target is None:
             continue
-        i = y * w + x
-        if seen[i]:
-            continue
-        seen[i] = 1
-        if bg_px[x, y] > 128:
-            continue
-        r, g, b = px[x, y]
-        if skin(r, g, b) or not match(r, g, b):
-            continue
-        out[i] = 255
-        q.append((x + 1, y))
-        q.append((x - 1, y))
-        q.append((x, y + 1))
-        q.append((x, y - 1))
+        target_luma = 0.299 * target[0] + 0.587 * target[1] + 0.114 * target[2]
+        q: deque[tuple[int, int]] = deque([(sx, sy)])
+        while q:
+            x, y = q.popleft()
+            if not (0 <= x < w and y0 <= y < y1):
+                continue
+            i = y * w + x
+            if seen[i]:
+                continue
+            seen[i] = 1
+            if bg_px[x, y] > 128:
+                continue
+            r, g, b = px[x, y]
+            if skin(r, g, b) or (target_luma <= 225 and (0.299 * r + 0.587 * g + 0.114 * b) > 225):
+                continue
+            # GPT가 검정을 갈색으로, 청바지를 초록·갈색으로 흔들어도 같은 옷으로 따라간다.
+            if distance((r, g, b), target) > 112:
+                continue
+            out[i] = 255
+            q.append((x + 1, y))
+            q.append((x - 1, y))
+            q.append((x, y + 1))
+            q.append((x, y - 1))
     return Image.frombytes("L", (w, h), bytes(out))
 
 
 def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
     """작은 텍스처 구멍까지 메운 뒤 가장자리만 페더한다."""
-    closed = mask.convert("L").filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
+    closed = mask.convert("L").filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.MinFilter(7))
     soft = closed.filter(ImageFilter.GaussianBlur(radius=0.9))
     solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
@@ -8021,8 +8037,9 @@ FRAMING:
 Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
 Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
-Keep the head naturally proportional to the body: an adult, balanced figure around 7 to 7.5 head-heights tall.
-Never enlarge a cropped profile face or compress the torso and legs to preserve selfie scale.
+Keep the head visibly smaller and naturally proportional to the body: an adult, balanced figure around 7.5 to 8 head-heights tall,
+with a normal-sized head occupying roughly 12% of the image height, a longer natural torso and full-length legs.
+Never enlarge a cropped profile face, make the body short-legged, or compress the torso and legs to preserve selfie scale.
 
 OUTFIT:
 matte black short-sleeve crew-neck T-shirt (about RGB 28 28 32), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
@@ -8125,7 +8142,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon11-{sig}-{profile_sig}"
+    key = f"tryon12-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8219,7 +8236,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon11",
+                        "mask": "tryon12",
                         "assets": urls,
                     },
                 }).execute()
