@@ -939,3 +939,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-20: 기기 위치 날씨는 좌표를 짧게 역지오코딩해 `현재 위치 28°` 대신 `서울 28°`처럼 시·군 이름을 표시한다. 지명 조회 실패는 추천·기온 조회를 막지 않는다. 근거: `backend/app/main.py` `_weather_city_name`; [[location-weather]].
 2026-09-20: 지역명 표시 배포 후 기존 `현재 위치` 날씨 캐시를 재사용하지 않도록 기기 날씨 캐시 키를 v2로 올렸다. 근거: `frontend/src/proto/09-app.jsx` `DEVICE_WEATHER_CACHE_BASE`; [[location-weather]].
 2026-09-20: 추천 스트림은 서버가 계속 생성 중일 때 클라이언트만 45초에 끊지 않는다. AI 착장 2:3 전신은 카드에서 전체 구도를 보존하고, 프롬프트는 다리 연장 없는 현실적인 7~7.5등신을 요구한다. 근거: `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[look-latency]] [[look-img-flex-min]].
+2026-09-20: 데일리 추천은 동일 하의의 과도한 반복을 제한하고, 테일러드 코트·트렌치와 카고·조거를 금지한다. 저장된 선호 핏·팔레트·무드는 실제 페어링 점수에 반영하며, 외부 제안 상품컷은 1024 정사각 저품질 티어로 빠르게 만든다. 근거: `backend/app/main.py`; [[coord-clash]].

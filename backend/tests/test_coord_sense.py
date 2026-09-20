@@ -12,16 +12,16 @@ from pathlib import Path
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
 FNS = (
-    "_pick", "_clean_style_attrs", "_row_style", "_item_bucket", "_pair_score", "_catalog_line",
-    "_profile_block", "_item_clue", "_clue_has", "_pair_clash",
+    "_pick", "_clean_style_attrs", "_row_style", "_item_bucket", "_pair_score", "_pair_style_preference", "_catalog_line",
+    "_profile_block", "_item_clue", "_clue_has", "_pair_is_forbidden", "_pair_clash",
     "_shoe_pair_score", "_pick_rotating_shoe", "_accent_fit_score", "_combo_has_top_and_bottom", "_garment_slot", "_combo_has_unique_garment_slots", "_dedupe_combo_garment_slots", "_combo_core_key", "_combo_shoe_id", "_visual_garment_family", "_combo_top_variant_key", "_diversify_combo_bases", "fallback_combos",
     "_calendar_seasons", "_coord_season_note", "_coord_weather_note", "_weather_item_penalty", "_is_summer_shoe", "_offseason_shoe",
 )
 CONSTS = (
     "_STYLE_IDS", "_FITS", "_PATTERNS", "_MATERIALS", "_PC_GUIDE",
-    "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS",
+    "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS", "_PALETTE_COLOR_HINTS",
     "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
-    "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_ATH_TOP",
+    "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_DRESS_OUTER", "_CLASH_ATH_TOP",
     "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY",
     "_SUMMER_SHOE",
 )
@@ -156,6 +156,19 @@ class PairScoreTest(unittest.TestCase):
         autumn = {"personal_color": "autumn"}
         self.assertGreater(self.score(warm_top, bottom, autumn), self.score(cool_top, bottom, autumn))
 
+    def test_preferred_palette_and_fit_lift_matching_top(self):
+        navy_regular = item(cat="top", color="네이비", name="레귤러 니트", fit="regular")
+        black_slim = item(cat="top", color="블랙", name="슬림 티셔츠", fit="slim")
+        bottom = item(cat="bottom", color="그레이", name="슬랙스", formality=3)
+        profile = {"palettes": ["navy"], "fit": "레귤러"}
+        self.assertGreater(self.score(navy_regular, bottom, profile), self.score(black_slim, bottom, profile))
+
+    def test_preferred_mood_changes_pair_ranking(self):
+        office = item(cat="top", color="네이비", name="블레이저", styles=["office"])
+        street = item(cat="bottom", color="블랙", name="카고", styles=["street"])
+        self.assertGreater(self.ns["_pair_style_preference"](office, street, ["office"]), 0)
+        self.assertLess(self.ns["_pair_style_preference"](office, street, ["minimal"]), 0)
+
     def test_chelsea_loses_to_sneaker_on_cargo(self):
         cargo = item(cat="bottom", color="블랙", name="와이드 카고 팬츠", subtype="카고 팬츠")
         chelsea = item(cat="shoes", color="블랙", name="미니멀 첼시 부츠", subtype="첼시 부츠")
@@ -167,6 +180,11 @@ class PairScoreTest(unittest.TestCase):
         cargo = item(cat="bottom", color="블랙", name="카고 팬츠", subtype="카고 팬츠")
         slacks = item(cat="bottom", color="블랙", name="슬랙스", subtype="슬랙스")
         self.assertGreater(self.score(shirt, slacks, None), self.score(shirt, cargo, None))
+
+    def test_coat_and_cargo_are_forbidden(self):
+        coat = item(cat="outer", color="브라운", name="울 코트", subtype="코트", formality=4)
+        cargo = item(cat="bottom", color="블랙", name="조거 카고 팬츠", subtype="카고 팬츠", formality=1)
+        self.assertTrue(self.ns["_pair_is_forbidden"](coat, cargo))
 
 
 class ComboSlotTest(unittest.TestCase):
@@ -230,6 +248,20 @@ class ComboSlotTest(unittest.TestCase):
         ]
         combos = self.ns["fallback_combos"](closet, None, 3, profile={"weather": {"temp": 18, "feels": 17, "hi": 20, "lo": 14}})
         self.assertEqual([combo["item_ids"][0] for combo in combos[:2]], ["shirt-1", "knit"])
+
+    def test_fallback_caps_a_repeated_bottom_at_two_cards(self):
+        closet = [
+            {**item(cat="top", color="화이트", name="셔츠", subtype="셔츠"), "id": "shirt"},
+            {**item(cat="top", color="그레이", name="니트", subtype="니트"), "id": "knit"},
+            {**item(cat="top", color="네이비", name="티셔츠", subtype="티셔츠"), "id": "tee"},
+            {**item(cat="bottom", color="네이비", name="데님", subtype="데님"), "id": "jeans"},
+            {**item(cat="bottom", color="베이지", name="치노", subtype="치노"), "id": "chino"},
+            {**item(cat="shoes", color="화이트", name="스니커즈"), "id": "shoes"},
+        ]
+        combos = self.ns["fallback_combos"](closet, None, 3, profile={})
+        bottoms = [next(item_id for item_id in combo["item_ids"] if item_id in {"jeans", "chino"}) for combo in combos]
+        self.assertLessEqual(max(bottoms.count(item_id) for item_id in set(bottoms)), 2)
+        self.assertEqual(set(bottoms), {"jeans", "chino"})
 
 
 class ShoeRotateTest(unittest.TestCase):

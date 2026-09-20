@@ -28,6 +28,13 @@ class LiveCoordinatePipelineTest(unittest.TestCase):
         source = MAIN_PATH.read_text()
         self.assertIn('targets = [o for o in outfits if not o.get("lookImg")][:1]', source)
 
+    def test_wish_product_cut_uses_the_fast_thumbnail_tier(self):
+        source = MAIN_PATH.read_text()
+        start = source.index("def generate_wish_product_image")
+        wish_source = source[start:source.index("\ndef ", start + 1)]
+        self.assertIn("quality = OPENAI_IMAGE_QUALITY_WISH", wish_source)
+        self.assertIn('"size": "1024x1024"', wish_source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -81,6 +81,7 @@ OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
 # medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
 OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
 OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")
+OPENAI_IMAGE_QUALITY_WISH = os.environ.get("OPENAI_IMAGE_QUALITY_WISH", "low")
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
 # 켜기: .env에 AI_TEST_MODE=1  /  끄기: 지우거나 0
@@ -2876,6 +2877,14 @@ _PC_GUIDE = {
     "autumn": ("가을 웜", "warm", "deep", "muted"),
     "winter": ("겨울 쿨", "cool", "deep", "vivid"),
 }
+_PALETTE_COLOR_HINTS = {
+    "mono": ("블랙", "화이트", "그레이", "차콜", "네이비"),
+    "earth": ("브라운", "베이지", "카멜", "올리브", "카키"),
+    "navy": ("네이비", "블루", "인디고", "데님"),
+    "warm": ("아이보리", "크림", "베이지", "카멜", "브라운", "테라코타"),
+    "fresh": ("그린", "올리브", "민트"),
+    "vivid": ("레드", "블루", "옐로", "오렌지", "핑크"),
+}
 _FIT_KO = {
     "slim": "슬림", "regular": "레귤러", "relaxed": "릴랙스", "oversized": "오버사이즈",
     "wide": "와이드", "crop": "크롭", "skinny": "스키니",
@@ -3919,6 +3928,15 @@ def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | 
             score += 0.5
         if sa.get("chroma") == chroma:
             score += 0.5
+    fit_pref = {"슬림": "slim", "레귤러": "regular", "오버핏": "oversized"}.get(
+        str((profile or {}).get("fit") or "").strip()
+    )
+    if fit_pref and sa.get("fit"):
+        score += 1.0 if sa["fit"] == fit_pref else -0.35
+    palette_ids = {str(p).strip() for p in ((profile or {}).get("palettes") or []) if str(p).strip()}
+    top_clue = f"{a.get('color') or ''} {_item_clue(a)}"
+    if any(_clue_has(top_clue, _PALETTE_COLOR_HINTS.get(p, ())) for p in palette_ids):
+        score += 0.75
     # 색이 둘 다 튀면 감점, 한쪽이 무채색이면 가점
     ca, cb = str(a.get("color") or ""), str(b.get("color") or "")
     if any(n in ca for n in _NEUTRAL_COLORS) or any(n in cb for n in _NEUTRAL_COLORS):
@@ -3927,6 +3945,18 @@ def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | 
     score += _weather_item_penalty(a, (profile or {}).get("weather"))
     score += _weather_item_penalty(b, (profile or {}).get("weather"))
     return score
+
+
+def _pair_style_preference(a: dict[str, Any], b: dict[str, Any], desired: list[str] | None) -> float:
+    """선호 무드는 카드 라벨이 아니라 실제 옷장 페어링 순서에 쓴다."""
+    wanted = {str(style).strip() for style in (desired or []) if str(style).strip()}
+    if not wanted:
+        return 0.0
+    item_styles = set(_row_style(a).get("styles") or []) | set(_row_style(b).get("styles") or [])
+    if not item_styles:
+        return 0.0
+    matched = len(wanted & item_styles)
+    return 1.25 * matched if matched else -0.6
 
 
 def _item_clue(item: dict[str, Any]) -> str:
@@ -3977,11 +4007,20 @@ _CLASH_SPORT_SHOE = ("스니커", "운동화", "러닝", "조던", "삼바", "�
 _CLASH_ATH_BOTTOM = ("카고", "조거", "추리닝", "스웻", "스웨트", "트레이닝", "스웻팬츠")
 _CLASH_TAILOR_BOTTOM = ("슬랙스", "수트", "정장", "핀턱", "치노")
 _CLASH_DRESS_TOP = ("셔츠", "옥스퍼드", "블라우스", "드레스셔츠")
+_CLASH_DRESS_OUTER = ("코트", "트렌치", "블레이저", "재킷", "자켓")
 _CLASH_ATH_TOP = ("후디", "후드", "스웻", "트레이닝", "바람막이")
 
 
 def _clue_has(clue: str, keys: tuple[str, ...]) -> bool:
     return any(k in clue for k in keys)
+
+
+def _pair_is_forbidden(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """점수 차이가 아니라 조합 자체가 성립하지 않는 충돌."""
+    ca, cb = _item_clue(a), _item_clue(b)
+    ath_bottom = _clue_has(ca, _CLASH_ATH_BOTTOM) or _clue_has(cb, _CLASH_ATH_BOTTOM)
+    tailored_outer = _clue_has(ca, _CLASH_DRESS_OUTER) or _clue_has(cb, _CLASH_DRESS_OUTER)
+    return ath_bottom and tailored_outer
 
 
 def _pair_clash(a: dict[str, Any], b: dict[str, Any]) -> float:
@@ -3993,11 +4032,14 @@ def _pair_clash(a: dict[str, Any], b: dict[str, Any]) -> float:
     ath_bottom = _clue_has(ca, _CLASH_ATH_BOTTOM) or _clue_has(cb, _CLASH_ATH_BOTTOM)
     tailor_bottom = _clue_has(ca, _CLASH_TAILOR_BOTTOM) or _clue_has(cb, _CLASH_TAILOR_BOTTOM)
     dress_top = _clue_has(ca, _CLASH_DRESS_TOP) or _clue_has(cb, _CLASH_DRESS_TOP)
+    dress_outer = _clue_has(ca, _CLASH_DRESS_OUTER) or _clue_has(cb, _CLASH_DRESS_OUTER)
     ath_top = _clue_has(ca, _CLASH_ATH_TOP) or _clue_has(cb, _CLASH_ATH_TOP)
     if dress_shoe and ath_bottom:
         score -= 6.0
     if dress_top and ath_bottom:
         score -= 4.0
+    if dress_outer and ath_bottom:
+        score -= 8.0
     if ath_top and tailor_bottom:
         score -= 3.0
     if sport_shoe and tailor_bottom:
@@ -4054,10 +4096,11 @@ def fallback_combos(
 
     # 점수가 높은 페어부터. 같은 상의가 연달아 나오지 않게 살짝 흩는다.
     pairs = [
-        (t, b, _pair_score(t, b, profile))
+        (t, b, _pair_score(t, b, profile) + _pair_style_preference(t, b, styles))
         for t in tops
         for b in bottoms
         if t["id"] != b["id"]
+        and not _pair_is_forbidden(t, b)
     ]
     pairs.sort(key=lambda x: -x[2])
     decent = [p for p in pairs if p[2] >= -1.5]
@@ -4097,6 +4140,7 @@ def fallback_combos(
     fresh_new = [p for p in fresh if _combo_top_variant_key(p[0]) not in recent_top_variants]
     fresh_seen = [p for p in fresh if _combo_top_variant_key(p[0]) in recent_top_variants]
     walk = prioritise_variants(fresh_new) + prioritise_variants(fresh_seen) + prioritise_variants(stale)
+    candidate_limit = max(max_combos * 4, max_combos)
     used_tops: dict[str, int] = {}
     used_shoes: dict[str, int] = {}
     for key in exclude_keys or ():
@@ -4120,8 +4164,8 @@ def fallback_combos(
             sid = _combo_shoe_id(ids, by_id)
             if sid:
                 used_shoes[sid] = used_shoes.get(sid, 0) + 1
-        if len(combos) >= max_combos:
-            return combos
+        if len(combos) >= candidate_limit:
+            return _diversify_combo_bases(combos, by_id, max_combos)
 
     # 원피스만으로 최소 조합
     dresses = [i for i in items if _item_bucket(i) == "dress"]
@@ -4133,10 +4177,10 @@ def fallback_combos(
                 ids.append(shoe["id"])
         if len(ids) >= 2:
             _push(ids, f"추천 코디 {len(combos) + 1}")
-        if len(combos) >= max_combos:
-            return combos
+        if len(combos) >= candidate_limit:
+            return _diversify_combo_bases(combos, by_id, max_combos)
 
-    return combos
+    return _diversify_combo_bases(combos, by_id, max_combos)
 
 
 def _combo_top_variant_key(item: dict[str, Any]) -> tuple[str, ...]:
@@ -4181,50 +4225,48 @@ def _visual_garment_family(item: dict[str, Any]) -> str:
 def _diversify_combo_bases(
     combos: list[dict[str, Any]], by_id: dict[str, Any], max_combos: int,
 ) -> list[dict[str, Any]]:
-    """같은 상의 종류·핏·패턴을 반복하는 응답을 뒤로 미룬다."""
+    """상의뿐 아니라 하의도 순환한다. 옷장이 부족할 때만 한 번 더 쓴다."""
     if len(combos) < 2:
         return combos
-    unique: list[dict[str, Any]] = []
-    deferred: list[dict[str, Any]] = []
-    used_tops: set[str] = set()
-    used_variants: set[tuple[str, ...]] = set()
-    for combo in combos:
-        top = next(
-            ((item_id, by_id[item_id]) for item_id in combo.get("item_ids") or []
-             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
-            ("", None),
-        )[1]
-        top_id = next(
-            (item_id for item_id in combo.get("item_ids") or []
-             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
-            "",
-        )
-        variant = _combo_top_variant_key(top) if top else (top_id,)
-        if variant in used_variants:
-            deferred.append(combo)
-            continue
-        unique.append(combo)
-        used_variants.add(variant)
-        if top_id:
-            used_tops.add(top_id)
-    for combo in deferred:
-        if len(unique) >= max_combos:
-            break
-        top_id = next(
-            (item_id for item_id in combo.get("item_ids") or []
-             if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")),
-            "",
-        )
-        if top_id and top_id in used_tops:
-            continue
-        unique.append(combo)
-        if top_id:
-            used_tops.add(top_id)
-    for combo in deferred:
-        if len(unique) >= max_combos or combo in unique:
-            continue
-        unique.append(combo)
-    return unique[:max_combos]
+    remaining = list(combos)
+    picked: list[dict[str, Any]] = []
+    top_ids: dict[str, int] = {}
+    bottom_ids: dict[str, int] = {}
+    top_variants: set[tuple[str, ...]] = set()
+    repeat_cap = max(1, (max_combos + 1) // 2)
+
+    def parts(combo: dict[str, Any]) -> tuple[str, str, tuple[str, ...]]:
+        ids = combo.get("item_ids") or []
+        top_id = next((item_id for item_id in ids if item_id in by_id and _item_bucket(by_id[item_id]) in ("top", "dress")), "")
+        bottom_id = next((item_id for item_id in ids if item_id in by_id and _item_bucket(by_id[item_id]) == "bottom"), "")
+        top = by_id.get(top_id)
+        return top_id, bottom_id, _combo_top_variant_key(top) if top else (top_id,)
+
+    def take(predicate) -> None:
+        for combo in list(remaining):
+            if len(picked) >= max_combos:
+                return
+            top_id, bottom_id, variant = parts(combo)
+            if not predicate(top_id, bottom_id, variant):
+                continue
+            picked.append(combo)
+            remaining.remove(combo)
+            if top_id:
+                top_ids[top_id] = top_ids.get(top_id, 0) + 1
+            if bottom_id:
+                bottom_ids[bottom_id] = bottom_ids.get(bottom_id, 0) + 1
+            top_variants.add(variant)
+
+    take(lambda top, bottom, variant: (
+        variant not in top_variants and top_ids.get(top, 0) == 0 and bottom_ids.get(bottom, 0) == 0
+    ))
+    take(lambda top, bottom, variant: (
+        variant not in top_variants and top_ids.get(top, 0) < repeat_cap and bottom_ids.get(bottom, 0) < repeat_cap
+    ))
+    take(lambda top, bottom, _variant: (
+        top_ids.get(top, 0) < repeat_cap and bottom_ids.get(bottom, 0) < repeat_cap
+    ))
+    return picked[:max_combos]
 
 
 def recommend_closet(
@@ -8647,13 +8689,13 @@ def generate_wish_product_image(
         "No person, mannequin, props, floor, text, logo, or second item."
     )
     model = OPENAI_IMAGE_MODEL
-    quality = OPENAI_IMAGE_QUALITY
+    quality = OPENAI_IMAGE_QUALITY_WISH
     t0 = time.perf_counter()
     try:
         kwargs: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
-            "size": "1024x1536",
+            "size": "1024x1024",
             "quality": quality,
         }
         if _supports_transparent(model):

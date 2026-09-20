@@ -40,3 +40,9 @@
 24°C 이상이면 겨울 전용 태그에도 강한 감점을 적용해 다양성 때문에 계절을 거스르지
 않는다. 근거: `backend/app/main.py` `_visual_garment_family`, `fallback_combos`,
 `_weather_item_penalty`.
+
+2026-09-20: 데일리 추천은 상의뿐 아니라 하의의 동일 아이템도 한 번에 절반을 넘겨
+반복하지 않는다. 코트·트렌치·블레이저 같은 테일러드 아우터와 카고·조거·추리닝은
+점수와 무관하게 후보에서 제외한다. 퍼스널 컬러 외에 저장한 선호 핏·팔레트·무드도
+실제 페어링 순서에 반영한다. 근거: `backend/app/main.py` `fallback_combos`,
+`_diversify_combo_bases`, `_pair_is_forbidden`, `_pair_style_preference`.
