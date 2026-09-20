@@ -2873,7 +2873,7 @@ function App() {
             </button>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>조합 추천받기</Btn>
+              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>구매 전 도움받기</Btn>
               <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
             </div>
           </aside>
