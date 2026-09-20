@@ -172,6 +172,16 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v1';
+function readDeviceWeatherCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
+    return cached && cached.date === localYmd() && cached.weather && Number.isFinite(Number(cached.weather.temp)) ? cached.weather : null;
+  } catch (e) { return null; }
+}
+function writeDeviceWeatherCache(weather) {
+  try { localStorage.setItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd(), JSON.stringify({ date: localYmd(), weather })); } catch (e) { /* noop */ }
+}
 function relativeSavedAt(iso) {
   if (!iso) return '';
   const then = new Date(iso).getTime();
@@ -614,14 +624,31 @@ function lastResultLine(text) {
 
 // 스트림을 읽으면서 _step / _look / _outfit 이벤트가 도착할 때마다 콜백. 전체 본문은
 // 그대로 돌려주므로 이후 파싱 로직은 res.text()와 동일하게 동작한다.
-async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed) {
+async function readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, timeoutMs = 0) {
   if (!res.body || !res.body.getReader) return res.text();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
+  const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   let text = '';
   let buf = '';
   for (;;) {
-    const { done, value } = await reader.read();
+    const remaining = deadline ? deadline - Date.now() : 0;
+    if (deadline && remaining <= 0) {
+      reader.cancel().catch(() => {});
+      throw new Error('추천을 만드는 데 너무 오래 걸려 중단했어요. 다시 시도해 주세요.');
+    }
+    let timer = 0;
+    const next = reader.read();
+    const expiry = deadline ? new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('추천을 만드는 데 너무 오래 걸려 중단했어요. 다시 시도해 주세요.')), remaining);
+    }) : null;
+    let nextResult;
+    try {
+      nextResult = expiry ? await Promise.race([next, expiry]) : await next;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    const { done, value } = nextResult;
     if (done) break;
     const chunk = decoder.decode(value, { stream: true });
     text += chunk;
@@ -693,10 +720,10 @@ async function liveJSON(url, options = {}) {
   let text = '';
   try {
     text = (onProgress || onLook || onOutfit || onWish || onOrder || onView || onEmbed)
-      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed)
+      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, timeoutMs)
       : await res.text();
   } catch (e) {
-    throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
+    throw e instanceof Error ? e : new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
   }
   const trimmed = lastResultLine(text);
   let data = {};
@@ -926,6 +953,7 @@ function App() {
   const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
   const [, setWeatherRev] = useState(0);
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
+  const weatherRequestRef = useRef(null);
 
   // 부팅 시 Supabase 세션을 복원한다. lb_onboarded는 이 기기의 플래그일 뿐이어서,
   // 로그인 계정이 살아 있으면 그 계정으로 바로 들어가고(다른 기기·캐시 삭제 후에도
@@ -963,27 +991,42 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const refreshDeviceWeather = useCallback(async () => {
-    const position = await new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(null); return; }
-      navigator.geolocation.getCurrentPosition(
-        (value) => resolve(value && value.coords),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10 * 60 * 1000 },
-      );
-    });
-    const coords = position && Number.isFinite(position.latitude) && Number.isFinite(position.longitude)
-      ? `?lat=${position.latitude.toFixed(4)}&lon=${position.longitude.toFixed(4)}`
-      : '';
-    try {
-      const weather = await liveJSON('/api/live/weather' + coords);
-      if (!weather) return null;
-      Object.assign(LB_DATA.WEATHER, weather);
+  const refreshDeviceWeather = useCallback(() => {
+    const cached = readDeviceWeatherCache();
+    if (cached) {
+      Object.assign(LB_DATA.WEATHER, cached);
       setWeatherRev((n) => n + 1);
-      return weather;
-    } catch (e) {
-      return null;
+      return Promise.resolve(cached);
     }
+    if (weatherRequestRef.current) return weatherRequestRef.current;
+    const request = (async () => {
+      const position = await new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve(null); return; }
+        navigator.geolocation.getCurrentPosition(
+          (value) => resolve(value && value.coords),
+          () => resolve(null),
+          { enableHighAccuracy: false, timeout: 2500, maximumAge: 24 * 60 * 60 * 1000 },
+        );
+      });
+      const coords = position && Number.isFinite(position.latitude) && Number.isFinite(position.longitude)
+        ? `?lat=${position.latitude.toFixed(4)}&lon=${position.longitude.toFixed(4)}`
+        : '';
+      try {
+        const weather = await liveJSON('/api/live/weather' + coords);
+        if (!weather) return null;
+        Object.assign(LB_DATA.WEATHER, weather);
+        writeDeviceWeatherCache(weather);
+        setWeatherRev((n) => n + 1);
+        return weather;
+      } catch (e) {
+        return null;
+      }
+    })();
+    weatherRequestRef.current = request;
+    request.finally(() => {
+      if (weatherRequestRef.current === request) weatherRequestRef.current = null;
+    });
+    return request;
   }, []);
 
   useEffect(() => {
@@ -1737,14 +1780,14 @@ function App() {
   // 둘 다 계정 설정이라 기기를 옮겨도 그대로다.
   const dailyCount = Math.max(2, Math.min(8, parseInt(prefs.dailyCount, 10) || parseInt(t.dailyCount, 10) || 4));
   const parsedWish = parseInt(prefs.wishCount, 10);
-  const wishCount = Math.max(1, Math.min(dailyCount, Number.isFinite(parsedWish) ? parsedWish : 1));
+  const wishCount = Math.max(0, Math.min(dailyCount, Number.isFinite(parsedWish) ? parsedWish : 1));
   const setDailyCount = (n) => {
     const nextDailyCount = Math.max(2, Math.min(8, parseInt(n, 10) || 4));
     const np = { ...prefs, dailyCount: nextDailyCount, wishCount: Math.min(wishCount, nextDailyCount) };
     setPrefs(np); persistPrefs(np);
   };
   const setWishCount = (n) => {
-    const np = { ...prefs, wishCount: Math.max(1, Math.min(dailyCount, parseInt(n, 10) || 1)) };
+    const np = { ...prefs, wishCount: Math.max(0, Math.min(dailyCount, parseInt(n, 10) || 0)) };
     setPrefs(np); persistPrefs(np);
   };
 
@@ -1955,9 +1998,9 @@ function App() {
     } else {
       pruneDailyAgainstOwned(items);
     }
-    // 위치 권한을 받은 경우 매번 현재 좌표의 날씨를 다시 받아, 이동 뒤에도
-    // 데일리 추천이 처음 열었던 지역의 날씨를 쓰지 않게 한다.
-    await refreshDeviceWeather();
+    // 날씨는 화면 진입과 병렬로 하루에 한 번만 확인한다. 위치 응답이 늦어도
+    // 코디의 첫 카드를 막지 않고, 아직 도착하지 않았다면 계절 기준으로 먼저 추천한다.
+    void refreshDeviceWeather();
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     // AI 착장 이미지 — 토글이 켜져 있으면 성별만 맞춰 룩북 모델을 그린다.
     // 성별은 coordProfile에 이미 들어 있다.
@@ -2061,7 +2104,7 @@ function App() {
         const maxCombos = need > 0 ? need : DAILY_APPEND_BATCH;
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
-          timeoutMs: 240000,
+          timeoutMs: 45000,
           onOutfit,
           onWish,
           body: JSON.stringify({
@@ -2093,7 +2136,7 @@ function App() {
       }
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
-          timeoutMs: 240000,
+          timeoutMs: 45000,
           onOutfit,
           onWish,
           body: JSON.stringify({

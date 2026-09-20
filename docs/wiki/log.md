@@ -933,3 +933,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-18: 추천 코디의 AI 착장·제안 아이템 생성 중에는 카드 좌상단 단계 문구를 보이지 않는다. 실제 진행 키는 생성 대상 판별에만 쓰고, 화면은 중앙 sparkle 아이콘과 스켈레톤 물결만 유지한다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookPendingMarks`; `frontend/src/proto/proto.css`; [[model-look-toggle]].
 2026-09-18: 데일리 4개·추가 2개 추천은 같은 셔츠·니트 등 상의 실루엣을 우선 한 번씩만 쓰고, 최근 추천에서 쓴 실루엣도 후순위로 보낸다. 속성 없는 아이템은 이름으로 유형을 판별한다. 실제 기온이 낮은 날의 여름 전용·더운 날의 겨울 전용 옷은 다양성 후보에서도 강하게 감점한다. 근거: `backend/app/main.py` `fallback_combos`, `_visual_garment_family`, `_weather_item_penalty`; [[coord-clash]] [[location-weather]].
 2026-09-20: 오늘의 추천 코디에서 새 아이템 포함 수의 상한을 받을 코디 수에 연동하고, 축소 시 함께 제한했다. 바로 보기 `tryon11`은 얼굴·몸 비율 프롬프트와 5px 마스크 closing으로 불완전한 의류 투명화를 보완했다. 근거: `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`, `frontend/src/proto/03-data.jsx`, `backend/app/main.py`; [[tryon-setup-from-mypage]].
+2026-09-20: 오늘의 추천은 위치·날씨 조회를 기다리지 않고 즉시 시작한다. 위치는 브라우저에서 날짜별로 한 번만 확인·저장하며, 첫 추천은 계절 기준으로 그리고 이후 추천은 저장한 현재 날씨를 함께 쓴다. 근거: `frontend/src/proto/09-app.jsx`; [[location-weather]].
+2026-09-20: 오늘의 추천 설정에서 새 아이템 포함 코디를 0개로 낮출 수 있게 해, 옷장 안의 아이템만으로 추천받을 수 있다. 근거: `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`.
+2026-09-20: 추천 SSE가 keep-alive ping만 받으며 결과 없이 멈추는 경우를 45초에 종료해, 무한 스켈레톤 대신 재시도 가능한 오류로 전환했다. 근거: `frontend/src/proto/09-app.jsx`; [[look-latency]].

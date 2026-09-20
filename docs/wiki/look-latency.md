@@ -97,3 +97,6 @@ SSE로 보낸다. 마지막 제안 카드 수만큼은 화면 오른쪽부터 `i
 제안 생성과 병렬로 진행한다. 착장 편집도 재촬영을 하지 않아 실패 시 조용히 두 번째
 API 호출을 만들지 않는다. 근거: `backend/app/main.py` `live_coordinate`,
 `generate_model_look_image`; `frontend/src/proto/09-app.jsx` `requestDailyOutfits`.
+
+추천 SSE는 서버의 keep-alive ping만 계속되고 결과가 오지 않는 경우를 45초 뒤 중단한다.
+무한 스켈레톤 대신 오류 메시지와 재시도 진입점으로 돌아간다(2026-09-20).
