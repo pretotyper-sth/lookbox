@@ -34,7 +34,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from openai import APIConnectionError, APITimeoutError, OpenAI
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from pydantic import BaseModel
 from supabase import Client, create_client
 
@@ -7948,6 +7948,50 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     bg = _tryon_border_background(segment_rgb)
     top_m = _tryon_seed_component(segment_rgb, bg, "top")
     bot_m = _tryon_seed_component(segment_rgb, bg, "bottom")
+
+    # 흰 옷은 스튜디오 판색과 연결되어 flood-fill에서 배경으로 오인될 수 있다.
+    # 정면 2:3 전신 포즈의 의류 영역을 보조 마스크로 사용하되 피부·신발은 남긴다.
+    def geometry_mask(kind: str) -> Image.Image:
+        w, h = segment_rgb.size
+        mask = Image.new("L", (w, h), 0)
+        draw = ImageDraw.Draw(mask)
+        if kind == "top":
+            points = [
+                (round(w * 0.22), round(h * 0.28)),
+                (round(w * 0.78), round(h * 0.28)),
+                (round(w * 0.82), round(h * 0.43)),
+                (round(w * 0.72), round(h * 0.60)),
+                (round(w * 0.28), round(h * 0.60)),
+                (round(w * 0.18), round(h * 0.43)),
+            ]
+            draw.polygon(points, fill=255)
+        else:
+            draw.polygon([
+                (round(w * 0.29), round(h * 0.54)), (round(w * 0.49), round(h * 0.54)),
+                (round(w * 0.47), round(h * 0.89)), (round(w * 0.30), round(h * 0.89)),
+            ], fill=255)
+            draw.polygon([
+                (round(w * 0.51), round(h * 0.54)), (round(w * 0.71), round(h * 0.54)),
+                (round(w * 0.70), round(h * 0.89)), (round(w * 0.53), round(h * 0.89)),
+            ], fill=255)
+        raw = bytearray(mask.tobytes())
+        pixels = segment_rgb.convert("RGB").load()
+        bg_pixels = bg.load()
+        for y in range(h):
+            for x in range(w):
+                interior = (
+                    (kind == "top" and w * 0.33 <= x <= w * 0.67)
+                    or (kind == "bottom" and (w * 0.33 <= x <= w * 0.47 or w * 0.53 <= x <= w * 0.67))
+                )
+                if not raw[y * w + x] or (bg_pixels[x, y] > 128 and not interior):
+                    continue
+                r, g, b = pixels[x, y]
+                if r > 88 and r > b + 8 and r >= g - 8 and 72 < (0.299 * r + 0.587 * g + 0.114 * b) < 210:
+                    raw[y * w + x] = 0
+        return Image.frombytes("L", (w, h), bytes(raw))
+
+    top_m = ImageChops.lighter(top_m, geometry_mask("top"))
+    bot_m = ImageChops.lighter(bot_m, geometry_mask("bottom"))
     overlap = ImageChops.multiply(top_m, bot_m)
     if overlap.getbbox():
         w, h = segment_rgb.size
@@ -8047,6 +8091,9 @@ The T-shirt is a solid near-black, clearly darker than the background, never gra
 The jeans are distinctly blue denim, not charcoal and not black.
 Each garment is one solid color with a sharp edge against skin and against the other garment so they can be separated.
 No pattern, logo, extra garments, or black leather.
+The reference may contain background clutter or objects. Ignore every background object completely:
+never copy keyboards, keys, letters, screens, furniture, hands, props, patterns, or text into the clothing.
+The shirt and jeans must be visually boring, plain, matte, and uninterrupted so they can be removed cleanly.
 
 - background is ONE continuous solid fill of #F2F1EE from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
@@ -8142,7 +8189,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon12-{sig}-{profile_sig}"
+    key = f"tryon13-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8236,7 +8283,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon12",
+                        "mask": "tryon13",
                         "assets": urls,
                     },
                 }).execute()
