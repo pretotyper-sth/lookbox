@@ -39,14 +39,17 @@ class WeatherLocationTest(unittest.TestCase):
 
     def test_seoul_coordinates_have_a_local_city_fallback(self):
         const = next(node for node in self.tree.body if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "_KOREAN_WEATHER_CITIES")
+        regions = next(node for node in self.tree.body if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "_KOREAN_WEATHER_REGIONS")
         fn = next(node for node in self.tree.body if isinstance(node, ast.FunctionDef) and node.name == "_weather_city_fallback")
         ns = {}
-        exec(compile(ast.Module(body=[const, fn], type_ignores=[]), "<weather>", "exec"), ns)
+        exec(compile(ast.Module(body=[const, regions, fn], type_ignores=[]), "<weather>", "exec"), ns)
         self.assertEqual(ns["_weather_city_fallback"](37.5665, 126.9780), "서울")
+        self.assertEqual(ns["_weather_city_fallback"](37.2636, 127.0286), "경기")
+        self.assertNotEqual(ns["_weather_city_fallback"](37.2636, 127.0286), "현재 위치")
 
     def test_unresolved_city_is_not_reused_from_the_device_cache(self):
         text = FRONTEND_PATH.read_text()
-        self.assertIn("const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v3'", text)
+        self.assertIn("const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v4'", text)
         self.assertIn("cached.weather.city !== '현재 위치'", text)
 
 

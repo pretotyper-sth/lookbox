@@ -92,8 +92,11 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
+  const displayOutfit = !showModelLook && items.some((item) => item.img)
+    ? { ...outfit, lookImg: null }
+    : outfit;
   return (
     <div className="lb-daily-card-reveal" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
@@ -111,7 +114,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={outfit} items={items} ratio="4 / 5" looking={looking} copyButton />
+          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} />
         </div>
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
@@ -605,6 +608,7 @@ function TodayScreen({ ctx }) {
                   onWear={isToday ? () => wearToday(o.id) : pastLockToast}
                   wearLocked={!isToday}
                   itemsById={isToday ? null : pastItemsById}
+                  showModelLook={wide}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (

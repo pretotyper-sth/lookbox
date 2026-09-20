@@ -172,7 +172,7 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v3';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v4';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
@@ -830,6 +830,10 @@ function liveOrderInput(body) {
 }
 
 function liveOrderCancel() {
+  // Render API에는 이 컴퓨터에서 연 Chrome 주문 창이 없다. 취소 요청을 보내면
+  // 로컬 전용 보호가 403을 반환하므로, 로컬 개발/확장 흐름에서만 호출한다.
+  const host = window.location.hostname || '';
+  if (!/^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(host)) return Promise.resolve(null);
   return fetch('/api/live/orders/cancel', { method: 'POST' }).catch(() => null);
 }
 
@@ -1017,7 +1021,9 @@ function App() {
         : '';
       try {
         const weather = await liveJSON('/api/live/weather' + coords);
-        if (!weather) return null;
+        // 지역명이 확인되지 않은 응답은 화면·캐시에 남기지 않는다. 다음 진입에서
+        // 다시 조회해 "현재 위치" 같은 임시 문구가 하루 종일 고정되지 않게 한다.
+        if (!weather || !weather.city || weather.city === '현재 위치') return null;
         Object.assign(LB_DATA.WEATHER, weather);
         writeDeviceWeatherCache(weather);
         setWeatherRev((n) => n + 1);

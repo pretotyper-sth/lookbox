@@ -5199,12 +5199,29 @@ _KOREAN_WEATHER_CITIES = (
     ("광주", 35.02, 35.30, 126.68, 127.06),
 )
 
+_KOREAN_WEATHER_REGIONS = (
+    ("경기", 36.80, 38.35, 126.20, 127.95),
+    ("강원", 37.00, 38.70, 127.10, 129.60),
+    ("충북", 36.35, 37.35, 127.20, 128.75),
+    ("충남", 35.85, 36.95, 125.95, 127.55),
+    ("전북", 35.20, 36.20, 126.20, 128.15),
+    ("전남", 33.95, 35.45, 125.00, 127.95),
+    ("경북", 35.55, 37.10, 128.00, 130.95),
+    ("경남", 34.45, 35.75, 127.55, 129.45),
+    ("제주", 33.05, 33.70, 126.10, 126.98),
+)
+
 def _weather_city_fallback(latitude: float, longitude: float) -> str:
-    """역지오코더가 비어도 주요 국내 도시는 좌표만으로 바로 표시한다."""
+    """역지오코더가 비어도 지역명으로 표시하고 임시 문구를 남기지 않는다."""
     for city, south, north, west, east in _KOREAN_WEATHER_CITIES:
         if south <= latitude <= north and west <= longitude <= east:
             return city
-    return "현재 위치"
+    for region, south, north, west, east in _KOREAN_WEATHER_REGIONS:
+        if south <= latitude <= north and west <= longitude <= east:
+            return region
+    if 32.0 <= latitude <= 39.8 and 124.0 <= longitude <= 132.0:
+        return "한국"
+    return "위치 기반"
 
 
 def _weather_city_name(latitude: float, longitude: float) -> str:
