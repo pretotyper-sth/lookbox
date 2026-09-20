@@ -10,6 +10,8 @@ test('every multi-item flatlay uses independent cells', () => {
   assert.match(source, /function lookRectInCell\(it, im, cell, w, h, scale\)/);
   assert.match(source, /const visible = lookVisibleBox\(im\)/);
   assert.match(source, /const safeCells = layerSafeCells\(items\)/);
+  assert.match(source, /ordered\.length === 3/);
+  assert.match(source, /const keepGridMargins = safeCells && items\.length === 3/);
   assert.match(source, /ordered\.length === 5/);
-  assert.match(source, /\|flat17/);
+  assert.match(source, /\|flat18/);
 });

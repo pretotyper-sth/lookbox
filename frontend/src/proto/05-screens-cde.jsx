@@ -153,7 +153,7 @@ function layerSafeCells(items) {
   const cells = ordered.length === 2
     ? [{ x0: 5, y0: 6, x1: 46, y1: 94 }, { x0: 54, y0: 6, x1: 95, y1: 94 }]
     : ordered.length === 3
-      ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 28, y0: 53, x1: 72, y1: 95 }]
+      ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }]
       : ordered.length === 4
         ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }, { x0: 54, y0: 58, x1: 95, y1: 89 }]
         : ordered.length === 5
@@ -392,7 +392,10 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
       const y = cy - dh / 2;
       return { im, x, y, dw, dh };
     });
-    const drawn = nudgeLookRects(pack ? packLookRects(rects, w, h) : rects, h);
+    // 세 칸은 2×2의 마지막 칸을 비운 레이아웃이다. 이 경우 bbox를 다시 카드 끝까지
+    // 확대하면 좌상단의 넓은 니트처럼 실루엣이 가장자리로 밀리므로, 셀 여백을 유지한다.
+    const keepGridMargins = safeCells && items.length === 3;
+    const drawn = nudgeLookRects(pack && !keepGridMargins ? packLookRects(rects, w, h) : rects, h);
     drawn.forEach((r) => {
       drawLookCutout(ctx, r.im, r.x, r.y, r.dw, r.dh);
     });
@@ -410,7 +413,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat17' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat18' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
   const copyTimer = React.useRef(0);
