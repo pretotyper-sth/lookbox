@@ -137,7 +137,7 @@ function layerSafeCells(items) {
   const owned = (items || []).filter(Boolean);
   const outer = owned.filter((it) => LOOK_ROLE[it.category] === 'outer');
   const top = owned.filter((it) => LOOK_ROLE[it.category] === 'top');
-  if (!outer.length || !top.length) return null;
+  if (owned.length < 2) return null;
   const used = new Set();
   const take = (list) => list.filter((it) => {
     if (used.has(it.id)) return false;
@@ -156,8 +156,10 @@ function layerSafeCells(items) {
       ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 28, y0: 53, x1: 72, y1: 95 }]
       : ordered.length === 4
         ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }, { x0: 54, y0: 58, x1: 95, y1: 89 }]
+        : ordered.length === 5
+          ? [{ x0: 5, y0: 4, x1: 46, y1: 30 }, { x0: 54, y0: 4, x1: 95, y1: 30 }, { x0: 5, y0: 37, x1: 46, y1: 63 }, { x0: 54, y0: 37, x1: 95, y1: 63 }, { x0: 28, y0: 70, x1: 72, y1: 96 }]
         : ordered.map((_, i) => {
-          const cols = 2;
+          const cols = ordered.length <= 6 ? 2 : 3;
           const rows = Math.ceil(ordered.length / cols);
           const col = i % cols;
           const row = Math.floor(i / cols);
@@ -169,7 +171,7 @@ function layerSafeCells(items) {
   return Object.fromEntries(ordered.map((it, i) => [it.id, cells[i]]));
 }
 
-/** 아우터와 상의가 함께면 실루엣을 독립 셀에 배치해 서로 가리지 않게 한다. */
+/** 여러 상품컷을 항상 독립 셀에 배치해 카드마다 읽기 쉽게 정렬한다. */
 function lookPlacement(items) {
   const owned = (items || []).filter(Boolean);
   const safeCells = layerSafeCells(owned);
@@ -408,7 +410,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat16' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat17' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
   const copyTimer = React.useRef(0);

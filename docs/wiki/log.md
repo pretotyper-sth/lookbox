@@ -899,6 +899,10 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - 현재 제품·기획 문서와 Acloset 공식 자료·실사용 캡처를 비교해, Lookbox의 목표 자리를 `범용 AI 옷장`이 아닌 `구매 전 적합성 검증과 구매결정`으로 정리했다.
 - 구매/보류/패스, 활용도·중복도·상황 커버리지, 예상 착용당 비용을 차별화 핵심으로 제안하고 현재 IA·문서 부채를 기록했다. [[acloset-positioning-2026-09]]
 
+# 2026-09-20 — 구매 검토 중심 UX 반영
+
+- 첫 탭을 구매 검토로 전환하고, URL·사진 입력 → 조합 근거 → 구매/보류/패스 → 보류함 재검토 흐름을 구현했다. `considering` 상태는 서버에서 다시 읽는다. [[acloset-positioning-2026-09]]
+
 # 2026-09-16 — 바로보기 본인 외 입력 시트 스크롤 보정
 
 - `frontend/src/proto/04-screens-ab.jsx`: 본인 외 입력 시트를 열 때 내부 스크롤을 상단으로 초기화하고 다음 열림에도 같은 동작을 보장했다.
@@ -946,3 +950,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-20: 좌표 범위로 서울·시도를 추정하던 보정을 제거했다. 기존 Nominatim 역지오더의 실제 도시명만 쓰고 Open-Meteo 날씨 조회와 병렬 처리하며, 맑음 코드 `0`을 결측치로 처리해 `날씨 정보`가 나오던 오류도 수정했다. 확인되지 않은 위치는 캐시하지 않는다. 근거: `backend/app/main.py`, `frontend/src/proto/09-app.jsx`; [[location-weather]].
 2026-09-20: 플랫레이의 아우터·상의은 같은 고정 자리에서 겹치지 않고, 합성 시점에 PNG 알파 실루엣을 읽어 독립 셀 안에 맞춘다. 원본 캔버스 크기·투명 여백이 달라도 실제 옷의 크기로 보정하고, 4개 핵심 아이템은 2×2 배치로 서로 가리지 않는다. 근거: `frontend/src/proto/05-screens-cde.jsx`; [[look-flatlay-overlap]].
 2026-09-20: 데일리 추천은 신발·상의·하의 등 카테고리별로 남은 아이템을 우선 배정한다. 신발이 충분하면 한 켤레씩 소진하고, GPT가 같은 신발을 중복해도 후처리에서 안전한 미사용 켤레로 교체한다. 근거: `backend/app/main.py` `_pick_rotating_shoe`, `_rebalance_combo_shoes`, `_diversify_combo_bases`; `backend/tests/test_coord_sense.py` `ShoeRotateTest`.
+2026-09-20: 데일리 신발은 잘 어울리면 최대 두 코디까지 유지하되, 한 켤레가 모든 카드를 차지하지 않도록 세 번째부터 안전한 대안으로 교체한다. 상품컷 합성은 2·3·4·5개를 각각 읽기 좋은 독립 셀로 정렬하고, 6개 이상은 균등 그리드로 이어진다. 근거: `backend/app/main.py` `_pick_rotating_shoe`, `_rebalance_combo_shoes`; `frontend/src/proto/05-screens-cde.jsx` `layerSafeCells`.

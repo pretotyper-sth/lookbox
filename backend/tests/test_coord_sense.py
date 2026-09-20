@@ -22,7 +22,7 @@ CONSTS = (
     "_FIT_KO", "_SEASON_KO", "_NEUTRAL_COLORS", "_PALETTE_COLOR_HINTS",
     "_CLASH_DRESS_SHOE", "_CLASH_SPORT_SHOE", "_CLASH_ATH_BOTTOM",
     "_CLASH_TAILOR_BOTTOM", "_CLASH_DRESS_TOP", "_CLASH_DRESS_OUTER", "_CLASH_ATH_TOP",
-    "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY", "_SHOE_UNIQUE_SLACK",
+    "_SHOE_ROTATE_SLACK", "_SHOE_ROTATE_PENALTY", "_SHOE_REPEAT_SLACK", "_SHOE_REPEAT_LIMIT",
     "_SUMMER_SHOE",
 )
 
@@ -284,7 +284,7 @@ class ShoeRotateTest(unittest.TestCase):
         second = self.pick([chelsea, sneaker], shirt, slacks, None, {first["id"]: 1})
         self.assertNotEqual(second["id"], first["id"])
 
-    def test_fallback_uses_every_safe_shoe_before_repeating(self):
+    def test_fallback_never_uses_one_safe_shoe_more_than_twice(self):
         closet = [
             {**item(cat="top", color="화이트", name="옥스퍼드 셔츠"), "id": "shirt"},
             {**item(cat="top", color="네이비", name="니트"), "id": "knit"},
@@ -300,7 +300,7 @@ class ShoeRotateTest(unittest.TestCase):
         combos = self.ns["fallback_combos"](closet, None, 4, profile={})
         used = [self.ns["_combo_shoe_id"](combo["item_ids"], {x["id"]: x for x in closet}) for combo in combos]
         self.assertEqual(len(used), 4)
-        self.assertEqual(len(set(used)), 4)
+        self.assertLessEqual(max(used.count(shoe) for shoe in set(used)), 2)
 
     def test_rebalance_replaces_repeated_safe_shoes(self):
         top = {**item(cat="top", color="화이트", name="셔츠"), "id": "top"}
@@ -313,7 +313,7 @@ class ShoeRotateTest(unittest.TestCase):
         combos = [{"item_ids": ["top", "bottom", "shoe-0"]} for _ in range(4)]
         self.ns["_rebalance_combo_shoes"](combos, by_id, {})
         used = [self.ns["_combo_shoe_id"](combo["item_ids"], by_id) for combo in combos]
-        self.assertEqual(len(set(used)), 4)
+        self.assertLessEqual(max(used.count(shoe) for shoe in set(used)), 2)
 
     def test_rotate_does_not_force_chelsea_on_cargo(self):
         hoodie = item(cat="top", color="블랙", name="후디", subtype="후디")

@@ -3609,7 +3609,8 @@ def _fill_wish_quota(
 
 _SHOE_ROTATE_SLACK = 3.0
 _SHOE_ROTATE_PENALTY = 3.5
-_SHOE_UNIQUE_SLACK = 7.0
+_SHOE_REPEAT_SLACK = 5.0
+_SHOE_REPEAT_LIMIT = 2
 
 
 def _combo_shoe_id(ids: list[str], by_id: dict[str, Any]) -> str | None:
@@ -3657,22 +3658,28 @@ def _pick_rotating_shoe(
     in_season = [(sh, score) for sh, score in pool if not _offseason_shoe(sh)]
     if in_season:
         pool = in_season
-    # 한 켤레를 다시 쓰기 전에, 터무니없는 조합만 제외하고 아직 쓰지 않은 신발을
-    # 먼저 소비한다. 기존 3점 이내 후보만 돌리면 품질 점수의 작은 차이 때문에
-    # 사계절 신발이 충분한 옷장에서도 같은 신발만 계속 골라졌다.
-    unused = [
+    # 가장 잘 어울리는 신발은 두 코디까지 허용한다. 다만 세 번째부터는 비슷하게
+    # 어울리는 다른 켤레를 먼저 고른다. 매 카드에 다른 신발을 억지로 넣는 대신,
+    # 한 켤레가 전부를 차지하는 결과만 막는다.
+    rotation_pool = [
         (sh, score) for sh, score in ranked
-        if used_counts.get(sh["id"], 0) == 0
-        and not _offseason_shoe(sh)
-        and score >= best - _SHOE_UNIQUE_SLACK
+        if not _offseason_shoe(sh)
+        and score >= best - _SHOE_REPEAT_SLACK
         and not any(
             _pair_clash(piece, sh) <= -5.0
             for piece in (top, bottom)
             if piece
         )
     ]
-    if unused:
-        return max(unused, key=lambda row: row[1])[0]
+    under_limit = [
+        row for row in rotation_pool
+        if used_counts.get(row[0]["id"], 0) < _SHOE_REPEAT_LIMIT
+    ]
+    if under_limit:
+        return max(
+            under_limit,
+            key=lambda row: row[1] - _SHOE_ROTATE_PENALTY * used_counts.get(row[0]["id"], 0),
+        )[0]
     return max(
         pool,
         key=lambda row: row[1] - _SHOE_ROTATE_PENALTY * used_counts.get(row[0]["id"], 0),
@@ -3734,8 +3741,7 @@ def _rebalance_combo_shoes(
         sid = _combo_shoe_id(combo.get("item_ids") or [], by_id)
         if sid:
             used[sid] = used.get(sid, 0) + 1
-    shoe_slots = min(len(shoes), len(combos))
-    repeat_cap = max(1, (len(combos) + shoe_slots - 1) // shoe_slots)
+    repeat_cap = _SHOE_REPEAT_LIMIT
     for combo in combos:
         ids = [i for i in (combo.get("item_ids") or []) if i in by_id]
         sid = _combo_shoe_id(ids, by_id)
@@ -4290,30 +4296,30 @@ def _diversify_combo_bases(
         }
         return top_id, bottom_id, _combo_top_variant_key(top) if top else (top_id,), slots
 
+    def repeat_cap(slot: str, options: set[str]) -> int:
+        if slot == "shoes":
+            return _SHOE_REPEAT_LIMIT
+        return max(1, (max_combos + len(options) - 1) // len(options))
+
     def under_cap(slots: dict[str, str]) -> bool:
         for slot, item_id in slots.items():
             options = category_options.get(slot, set())
             if len(options) < 2:
                 continue
-            cap = max(1, (max_combos + len(options) - 1) // len(options))
+            cap = repeat_cap(slot, options)
             if category_ids.get(slot, {}).get(item_id, 0) >= cap:
                 return False
         return True
 
     def unused_slots(slots: dict[str, str]) -> bool:
-        return all(
-            len(category_options.get(slot, set())) < 2
-            or category_ids.get(slot, {}).get(item_id, 0) == 0
-            for slot, item_id in slots.items()
-        )
-
-    def has_unused_shoe(slots: dict[str, str]) -> bool:
-        shoe_id = slots.get("shoes")
-        return bool(
-            shoe_id
-            and len(category_options.get("shoes", set())) > 1
-            and category_ids.get("shoes", {}).get(shoe_id, 0) == 0
-        )
+        for slot, item_id in slots.items():
+            options = category_options.get(slot, set())
+            if len(options) < 2:
+                continue
+            allowed = _SHOE_REPEAT_LIMIT if slot == "shoes" else 1
+            if category_ids.get(slot, {}).get(item_id, 0) >= allowed:
+                return False
+        return True
 
     def take(predicate) -> None:
         for combo in list(remaining):
@@ -4332,10 +4338,6 @@ def _diversify_combo_bases(
     take(lambda _top, _bottom, variant, slots: (
         variant not in top_variants and unused_slots(slots)
     ))
-    # 신발은 모든 카드에 들어가는 핵심 카테고리라, 새로운 한 켤레를 쓸 수 있으면
-    # 상의 실루엣이 먼저 반복되더라도 우선한다. 그 뒤의 패스에서 상·하의·아우터도
-    # 같은 방식으로 반복을 제한한다.
-    take(lambda _top, _bottom, _variant, slots: has_unused_shoe(slots))
     take(lambda _top, _bottom, variant, slots: (
         variant not in top_variants and under_cap(slots)
     ))
