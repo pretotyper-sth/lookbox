@@ -133,9 +133,53 @@ function drawLookCutout(ctx, im, x, y, dw, dh) {
   ctx.drawImage(im, x, y, dw, dh);
 }
 
-/** 아이템별 자리를 정한다. 같은 분면에 둘 이상이면 조금씩 밀어 겹쳐 놓는다. */
+function layerSafeCells(items) {
+  const owned = (items || []).filter(Boolean);
+  const outer = owned.filter((it) => LOOK_ROLE[it.category] === 'outer');
+  const top = owned.filter((it) => LOOK_ROLE[it.category] === 'top');
+  if (!outer.length || !top.length) return null;
+  const used = new Set();
+  const take = (list) => list.filter((it) => {
+    if (used.has(it.id)) return false;
+    used.add(it.id);
+    return true;
+  });
+  const ordered = [
+    ...take(outer), ...take(top),
+    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'bottom')),
+    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'shoes')),
+    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'acc')),
+  ];
+  const cells = ordered.length === 2
+    ? [{ x0: 5, y0: 6, x1: 46, y1: 94 }, { x0: 54, y0: 6, x1: 95, y1: 94 }]
+    : ordered.length === 3
+      ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 28, y0: 53, x1: 72, y1: 95 }]
+      : ordered.length === 4
+        ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }, { x0: 54, y0: 58, x1: 95, y1: 89 }]
+        : ordered.map((_, i) => {
+          const cols = 2;
+          const rows = Math.ceil(ordered.length / cols);
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const gap = 5;
+          const cw = (100 - gap * (cols + 1)) / cols;
+          const ch = (100 - gap * (rows + 1)) / rows;
+          return { x0: gap + col * (cw + gap), y0: gap + row * (ch + gap), x1: gap + col * (cw + gap) + cw, y1: gap + row * (ch + gap) + ch };
+        });
+  return Object.fromEntries(ordered.map((it, i) => [it.id, cells[i]]));
+}
+
+/** 아우터와 상의가 함께면 실루엣을 독립 셀에 배치해 서로 가리지 않게 한다. */
 function lookPlacement(items) {
   const owned = (items || []).filter(Boolean);
+  const safeCells = layerSafeCells(owned);
+  if (safeCells) {
+    return Object.fromEntries(owned.map((it, i) => {
+      const cell = safeCells[it.id];
+      if (!cell) return [it.id, { ...LOOK_SPOT.acc, z: 8 + i }];
+      return [it.id, { cx: (cell.x0 + cell.x1) / 2, cy: (cell.y0 + cell.y1) / 2, z: i + 1 }];
+    }));
+  }
   const hasOuter = owned.some((it) => LOOK_ROLE[it.category] === 'outer');
   const hasLower = owned.some((it) => {
     const role = LOOK_ROLE[it.category];
@@ -300,6 +344,22 @@ function nudgeLookRects(rects, h) {
   return rects.map((r) => ({ ...r, y: r.y + dy }));
 }
 
+function lookRectInCell(it, im, cell, w, h, scale) {
+  const visible = lookVisibleBox(im);
+  const vw = Math.max(1, visible.x1 - visible.x0);
+  const vh = Math.max(1, visible.y1 - visible.y0);
+  const cellW = ((cell.x1 - cell.x0) / 100) * w;
+  const cellH = ((cell.y1 - cell.y0) / 100) * h;
+  const preferred = (lookItemSize(it, scale) / 100) * Math.min(w, h) * lookImageZoom(it.category);
+  const fit = Math.min((cellW * 0.9) / vw, (cellH * 0.9) / vh);
+  const s = Math.min(preferred / Math.max(vw, vh), fit);
+  const cx = ((cell.x0 + cell.x1) / 200) * w;
+  const cy = ((cell.y0 + cell.y1) / 200) * h;
+  const visibleCx = (visible.x0 + visible.x1) / 2;
+  const visibleCy = (visible.y0 + visible.y1) / 2;
+  return { im, x: cx - visibleCx * s, y: cy - visibleCy * s, dw: im.naturalWidth * s, dh: im.naturalHeight * s };
+}
+
 function flattenLookBoard(items, place, scale, ratio, pack) {
   const w = 720;
   const h = Math.round(w / parseLookRatio(ratio));
@@ -310,11 +370,14 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
   ctx.fillStyle = '#E5E3DE';
   ctx.fillRect(0, 0, w, h);
   return Promise.all(items.map((it) => loadLookImage(it.thumb || it.img))).then((images) => {
+    const safeCells = layerSafeCells(items);
     const layered = items.map((it, i) => ({ it, im: images[i], z: (place[it.id] || LOOK_SPOT.top).z }))
       .filter((x) => x.im)
       .sort((a, b) => a.z - b.z);
     if (layered.length !== items.length) return '';
     const rects = layered.map(({ it, im }) => {
+      const cell = safeCells && safeCells[it.id];
+      if (cell) return lookRectInCell(it, im, cell, w, h, scale);
       const at = place[it.id] || LOOK_SPOT.top;
       const size = lookItemSize(it, scale);
       const box = (size / 100) * Math.min(w, h) * lookImageZoom(it.category) * lookAccentScale(it, im);
@@ -345,7 +408,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat15' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat16' : '|flat1');
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
   const copyTimer = React.useRef(0);
