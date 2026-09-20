@@ -936,3 +936,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-20: 오늘의 추천은 위치·날씨 조회를 기다리지 않고 즉시 시작한다. 위치는 브라우저에서 날짜별로 한 번만 확인·저장하며, 첫 추천은 계절 기준으로 그리고 이후 추천은 저장한 현재 날씨를 함께 쓴다. 근거: `frontend/src/proto/09-app.jsx`; [[location-weather]].
 2026-09-20: 오늘의 추천 설정에서 새 아이템 포함 코디를 0개로 낮출 수 있게 해, 옷장 안의 아이템만으로 추천받을 수 있다. 근거: `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`.
 2026-09-20: 추천 SSE가 keep-alive ping만 받으며 결과 없이 멈추는 경우를 45초에 종료해, 무한 스켈레톤 대신 재시도 가능한 오류로 전환했다. 근거: `frontend/src/proto/09-app.jsx`; [[look-latency]].
+2026-09-20: 기기 위치 날씨는 좌표를 짧게 역지오코딩해 `현재 위치 28°` 대신 `서울 28°`처럼 시·군 이름을 표시한다. 지명 조회 실패는 추천·기온 조회를 막지 않는다. 근거: `backend/app/main.py` `_weather_city_name`; [[location-weather]].

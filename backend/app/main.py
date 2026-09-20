@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 from urllib.parse import parse_qs, urljoin, urlparse
-from urllib.request import urlopen
+from urllib.request import Request as UrlRequest, urlopen
 
 import requests
 import truststore
@@ -5128,6 +5128,22 @@ def _weather_condition(code: Any) -> str:
     return labels.get(int(code or -1), "날씨 정보")
 
 
+def _weather_city_name(latitude: float, longitude: float) -> str:
+    """좌표는 요청 중에만 역지오코딩해 시·군 이름만 날씨 칩에 쓴다."""
+    try:
+        request = UrlRequest(
+            "https://nominatim.openstreetmap.org/reverse"
+            f"?format=jsonv2&lat={latitude:.4f}&lon={longitude:.4f}&zoom=10&accept-language=ko",
+            headers={"User-Agent": "RealCloset weather location/1.0"},
+        )
+        with urlopen(request, timeout=1.5) as response:  # noqa: S310 - fixed public geocoder URL
+            address = (json.load(response).get("address") or {})
+        city = str(address.get("city") or address.get("town") or address.get("municipality") or address.get("county") or "").strip()
+        return city.replace("특별자치시", "").replace("특별시", "").replace("광역시", "") or "현재 위치"
+    except Exception:  # noqa: BLE001 - weather display falls back without delaying recommendations
+        return "현재 위치"
+
+
 def _weather_for_location(latitude: float | None = None, longitude: float | None = None) -> dict[str, Any]:
     """현재 위치 좌표의 Open-Meteo 관측값을 30분 캐시한다.
 
@@ -5145,8 +5161,9 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
     cached = _WEATHER_CACHE.get(cache_key)
     if cached and now - cached[0] < 1800:
         return cached[1]
+    city = _weather_city_name(lat, lon) if has_device_location else "서울"
     fallback = {
-        "city": "현재 위치" if has_device_location else "서울",
+        "city": city,
         "temp": 24, "feels": 24, "cond": "날씨 정보", "hi": 27, "lo": 18,
         "source": "device" if has_device_location else "fallback",
     }
@@ -5160,7 +5177,7 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
             raw = json.load(response)
         current, daily = raw.get("current") or {}, raw.get("daily") or {}
         weather = {
-            "city": "현재 위치" if has_device_location else "서울",
+            "city": city,
             "temp": round(float(current.get("temperature_2m"))),
             "feels": round(float(current.get("apparent_temperature") or current.get("temperature_2m"))),
             "cond": _weather_condition(current.get("weather_code")),

@@ -25,7 +25,15 @@ class WeatherLocationTest(unittest.TestCase):
         text = ast.get_source_segment(self.source, fn) or ""
         self.assertIn("latitude={lat:.4f}&longitude={lon:.4f}", text)
         self.assertIn("apparent_temperature", text)
-        self.assertIn('"city": "현재 위치" if has_device_location else "서울"', text)
+        self.assertIn('city = _weather_city_name(lat, lon) if has_device_location else "서울"', text)
+        self.assertIn('"city": city', text)
+
+    def test_weather_lookup_resolves_a_concise_city_label(self):
+        fn = next(node for node in self.tree.body if isinstance(node, ast.FunctionDef) and node.name == "_weather_city_name")
+        text = ast.get_source_segment(self.source, fn) or ""
+        self.assertIn("nominatim.openstreetmap.org/reverse", text)
+        self.assertIn("accept-language=ko", text)
+        self.assertIn('replace("특별시", "")', text)
 
 
 if __name__ == "__main__":
