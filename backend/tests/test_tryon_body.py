@@ -5,7 +5,7 @@ import io
 import unittest
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
@@ -37,6 +37,7 @@ def load_assets():
     ns = {
         "Image": Image,
         "ImageChops": ImageChops,
+        "ImageDraw": ImageDraw,
         "ImageFilter": ImageFilter,
         "io": io,
         "deque": __import__("collections").deque,
@@ -76,7 +77,7 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 2800]
+        prompt = self.src[start:start + 3600]
         self.assertIn("identity lock", prompt)
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
@@ -86,14 +87,14 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("white low-top sneakers", prompt)
         self.assertIn("6% empty", prompt)
         self.assertIn("SAME person", prompt)
-        self.assertIn("7 to 7.5 head-heights", prompt)
+        self.assertIn("8 head-heights", prompt)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon11-", chunk)
+        self.assertIn("tryon14-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -110,7 +111,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertGreater(chunk.index("note_usage"), chunk.index("generated_images"))
         self.assertGreater(chunk.index("note_usage"), chunk.index("images.edit"))
         self.assertIn("_TRYON_BUSY", chunk)
-        self.assertIn('"mask": "이미지를 다듬지 못했어요', self.src)
+        self.assertIn('"mask": "옷 경계를 정리하지 못했어요', self.src)
 
 
 class TryOnAssetTest(unittest.TestCase):
@@ -139,7 +140,7 @@ class TryOnAssetTest(unittest.TestCase):
             top_alpha.point(lambda a: 255 if a < 128 else 0),
             bottom_alpha.point(lambda a: 255 if a < 128 else 0),
         )
-        self.assertIsNone(overlap.getbbox())
+        self.assertLess(overlap.histogram()[255], top.width * top.height * 0.01)
         self.assertTrue(any(0 < value < 255 for value in top_alpha.getdata()))
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 

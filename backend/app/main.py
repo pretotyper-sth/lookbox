@@ -7968,11 +7968,11 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
         else:
             draw.polygon([
                 (round(w * 0.29), round(h * 0.54)), (round(w * 0.49), round(h * 0.54)),
-                (round(w * 0.47), round(h * 0.89)), (round(w * 0.30), round(h * 0.89)),
+                (round(w * 0.47), round(h * 0.87)), (round(w * 0.30), round(h * 0.87)),
             ], fill=255)
             draw.polygon([
                 (round(w * 0.51), round(h * 0.54)), (round(w * 0.71), round(h * 0.54)),
-                (round(w * 0.70), round(h * 0.89)), (round(w * 0.53), round(h * 0.89)),
+                (round(w * 0.70), round(h * 0.87)), (round(w * 0.53), round(h * 0.87)),
             ], fill=255)
         raw = bytearray(mask.tobytes())
         pixels = segment_rgb.convert("RGB").load()
@@ -8036,6 +8036,11 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     n = w * h
     if n < 8:
         return False
+    body = Image.open(io.BytesIO(assets["body"])).convert("RGB")
+    plate = Image.new("RGB", body.size, _TRYON_PLATE_RGB)
+    signal = sum(value > 12 for value in ImageChops.difference(body, plate).convert("L").getdata())
+    if signal < n * 0.03:
+        return False
     top_a = top.getchannel("A")
     bot_a = bottom.getchannel("A")
     top_hole = sum(top_a.histogram()[:128])
@@ -8047,7 +8052,9 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     top_hole_mask = top_a.point(lambda a: 255 if a < 128 else 0)
     bot_hole_mask = bot_a.point(lambda a: 255 if a < 128 else 0)
     overlap = ImageChops.multiply(top_hole_mask, bot_hole_mask).histogram()[255]
-    if overlap > n * 0.002:
+    # 상의·하의 경계의 1~2px 페더가 겹치는 것은 정상이다. 이 값을 실패로 보면
+    # 실제로는 쓸 수 있는 전신 결과도 mask 실패로 재생성하게 된다.
+    if overlap > n * 0.01:
         return False
     shoe_y0 = int(h * 0.88)
     x0, x1 = int(w * 0.25), int(w * 0.75)
@@ -8081,8 +8088,10 @@ FRAMING:
 Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
 Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
-Keep the head visibly smaller and naturally proportional to the body: an adult, balanced figure around 7.5 to 8 head-heights tall,
-with a normal-sized head occupying roughly 12% of the image height, a longer natural torso and full-length legs.
+The reference photo is a face-identity reference only, never a body-scale reference. Do not enlarge the face because the
+input is a portrait crop. Build a naturally proportioned adult around 8 head-heights tall: crown-to-chin about 11–12%
+of the final image height, shoulders around 22%, waist around 48%, crotch around 62%, ankles around 90%, and shoes ending
+around 96%. The torso must be long enough and the legs must be visibly full-length; never make a short-legged or squat figure.
 Never enlarge a cropped profile face, make the body short-legged, or compress the torso and legs to preserve selfie scale.
 
 OUTFIT:
@@ -8097,6 +8106,8 @@ The shirt and jeans must be visually boring, plain, matte, and uninterrupted so 
 
 - background is ONE continuous solid fill of #F2F1EE from edge to edge.
   no second gray, no side panels, no gradient split, no letterbox of a different color
+- Use the face photo only for eyes, nose, mouth, jaw, hair, skin tone, and identity. Discard its original background,
+  crop boundaries, camera distance, pose, clothing, objects, and perspective entirely.
 - minimal contact shadow under the shoes
 - no text, watermark, frame, or other people
 """
@@ -8189,7 +8200,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon13-{sig}-{profile_sig}"
+    key = f"tryon14-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8283,7 +8294,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon13",
+                        "mask": "tryon14",
                         "assets": urls,
                     },
                 }).execute()
