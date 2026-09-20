@@ -941,3 +941,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-20: 추천 스트림은 서버가 계속 생성 중일 때 클라이언트만 45초에 끊지 않는다. AI 착장 2:3 전신은 카드에서 전체 구도를 보존하고, 프롬프트는 다리 연장 없는 현실적인 7~7.5등신을 요구한다. 근거: `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[look-latency]] [[look-img-flex-min]].
 2026-09-20: 데일리 추천은 동일 하의의 과도한 반복을 제한하고, 테일러드 코트·트렌치와 카고·조거를 금지한다. 저장된 선호 핏·팔레트·무드는 실제 페어링 점수에 반영하며, 외부 제안 상품컷은 1024 정사각 저품질 티어로 빠르게 만든다. 근거: `backend/app/main.py`; [[coord-clash]].
 2026-09-20: 오늘 추천 카드가 스트림 수신 단위와 무관하게 첫 카드 뒤부터 360ms 간격으로 한 장씩 나타나고, 추가 추천 중에는 스켈레톤 한 장만 보인다. 근거: `frontend/src/proto/09-app.jsx`, `frontend/src/proto/06-today.jsx`, `frontend/src/proto/proto.css`; [[look-latency]].
+2026-09-20: `현재 위치`처럼 역지오코딩이 끝나지 않은 날씨는 기기 캐시에 남기지 않아 다음 진입에서 다시 실제 지명을 조회한다. 외부 아이템 보정은 고정 미니 크로스백 대신 빈 이너·하의·신발을 먼저 채우고, 완성된 코디에서는 아우터·시계·벨트·가방을 최근 제안과 겹치지 않게 고른다. 근거: `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[location-weather]] [[coord-clash]].

@@ -3138,12 +3138,28 @@ _WISH_CATEGORIES = ("top", "bottom", "skirt", "outer", "dress", "shoes", "bag", 
 _WISH_GAP_ITEMS = (
     {"name": "화이트 스니커즈", "category": "shoes", "color": "화이트",
      "reason": "하의 기장이 정리되고 외출 완성도가 올라간다"},
-    {"name": "미니 크로스백", "category": "bag", "color": "블랙",
-     "reason": "손이 자유롭고 코디가 한 덩어리로 보인다"},
-    {"name": "볼캡", "category": "hat", "color": "블랙",
-     "reason": "캐주얼 무드를 잡아 주는 기본 모자"},
-    {"name": "라이트 자켓", "category": "outer", "color": "네이비",
-     "reason": "겉옷 한 겹이면 바깥에서 코디가 끝난다"},
+    {"name": "브라운 레더 로퍼", "category": "shoes", "color": "브라운",
+     "reason": "차분한 하의와 자연스럽게 이어져 발끝까지 정돈된다"},
+    {"name": "아이보리 파인 게이지 니트", "category": "top", "color": "아이보리",
+     "reason": "아우터 안에 단정한 이너를 더해 코디의 중심을 잡아 준다"},
+    {"name": "블루 옥스퍼드 셔츠", "category": "top", "color": "블루",
+     "reason": "레이어에 선명한 이너 한 겹을 더해 실루엣이 완성된다"},
+    {"name": "차콜 테이퍼드 슬랙스", "category": "bottom", "color": "차콜",
+     "reason": "상의의 무드를 살리면서 바지 실루엣을 정돈해 준다"},
+    {"name": "인디고 스트레이트 데님", "category": "bottom", "color": "네이비",
+     "reason": "상의를 받쳐 주는 담백한 하의로 활용도가 높다"},
+    {"name": "네이비 라이트 블루종", "category": "outer", "color": "네이비",
+     "reason": "기온 차에 대응하면서 코디에 단단한 레이어를 더한다"},
+    {"name": "베이지 맥 코트", "category": "outer", "color": "베이지",
+     "reason": "간결한 이너 위에 걸쳐 외출용 균형을 완성한다"},
+    {"name": "다크 브라운 레더 토트백", "category": "bag", "color": "브라운",
+     "reason": "정돈된 소재감으로 코디의 완성도를 높인다"},
+    {"name": "블랙 나일론 메신저백", "category": "bag", "color": "블랙",
+     "reason": "활동적인 무드에 필요한 수납을 자연스럽게 더한다"},
+    {"name": "실버 메탈 시계", "category": "misc", "color": "실버",
+     "reason": "과하지 않은 금속 포인트로 손목까지 마무리한다"},
+    {"name": "다크 브라운 레더 벨트", "category": "misc", "color": "브라운",
+     "reason": "상의와 하의의 경계를 정돈해 전체 비율을 안정시킨다"},
 )
 
 
@@ -3480,36 +3496,38 @@ def _wish_slot_key(item: dict[str, Any] | None) -> str:
     """wish가 차지하는 한 자리. 신발끼리·가방끼리만 겹친다."""
     if not item:
         return ""
-    bucket = _item_bucket(item)
-    if bucket != "other":
-        return bucket
-    cat = str(item.get("category") or "").strip().lower()
-    if cat in ("bag", "가방"):
-        return "bag"
-    if cat in ("hat", "모자"):
-        return "hat"
-    if cat in ("outer", "아우터"):
-        return "outer"
-    if cat in ("misc", "기타"):
-        return "misc"
-    return cat or "other"
+    return _garment_slot(item)
 
 
 def _gap_wish(
     ids: list[str], by_id: dict[str, Any], slot: int = 0,
     avoid_wishes: set[tuple[str, str, str]] | None = None,
 ) -> dict[str, Any]:
-    """옷장 조합에서 비는 자리를 채울 제안 아이템. 모델이 wish를 빼먹어도 쿼타를 맞춘다."""
-    ranked: list[dict[str, Any]] = []
-    if not _combo_has_category(ids, by_id, ("shoes", "신발")):
-        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "shoes")
-    if not _combo_has_category(ids, by_id, ("bag", "가방")):
-        ranked.extend(x for x in _WISH_GAP_ITEMS if x["category"] == "bag")
-    # 외부 아이템은 빈자리를 억지로 채우는 안전장치다. 모자는 명백한 스트리트
-    # 근거가 있을 때만 모델이 고르고, 이 fallback 목록에서는 절대 만들지 않는다.
+    """옷장 조합에서 실제로 비는 스타일링 자리를 채울 제안 아이템."""
+    slots = {_garment_slot(by_id[item_id]) for item_id in ids if item_id in by_id}
+    if "top" not in slots:
+        preferred = "top"
+    elif "bottom" not in slots:
+        preferred = "bottom"
+    elif "shoes" not in slots:
+        preferred = "shoes"
+    elif "outer" not in slots:
+        preferred = "outer"
+    elif "misc" not in slots:
+        preferred = "misc"
+    elif "bag" not in slots:
+        preferred = "bag"
+    else:
+        preferred = ""
+    primary = [item for item in _WISH_GAP_ITEMS if item["category"] == preferred]
+    ranked = primary[:]
+    # 모든 자리가 찬 경우에도 최근 제안과 겹치지 않는 완성도용 아이템을 고른다.
     ranked.extend(x for x in _WISH_GAP_ITEMS if x not in ranked)
+    available_primary = [item for item in primary if _wish_key(item) not in (avoid_wishes or set())]
     available = [item for item in ranked if _wish_key(item) not in (avoid_wishes or set())]
-    pick = (available or ranked)[slot % len(available or ranked)]
+    choices = available_primary or available or primary or ranked
+    seed = sum(ord(ch) for item_id in sorted(map(str, ids)) for ch in item_id)
+    pick = choices[(seed + slot) % len(choices)]
     return dict(pick)
 
 
@@ -5170,6 +5188,25 @@ def _weather_condition(code: Any) -> str:
     return labels.get(int(code or -1), "날씨 정보")
 
 
+_KOREAN_WEATHER_CITIES = (
+    ("서울", 37.40, 37.72, 126.72, 127.25),
+    ("인천", 37.30, 37.72, 126.25, 126.95),
+    ("세종", 36.40, 36.68, 127.10, 127.42),
+    ("대전", 36.20, 36.52, 127.20, 127.58),
+    ("대구", 35.72, 36.02, 128.42, 128.82),
+    ("울산", 35.40, 35.72, 129.12, 129.48),
+    ("부산", 34.98, 35.42, 128.78, 129.36),
+    ("광주", 35.02, 35.30, 126.68, 127.06),
+)
+
+def _weather_city_fallback(latitude: float, longitude: float) -> str:
+    """역지오코더가 비어도 주요 국내 도시는 좌표만으로 바로 표시한다."""
+    for city, south, north, west, east in _KOREAN_WEATHER_CITIES:
+        if south <= latitude <= north and west <= longitude <= east:
+            return city
+    return "현재 위치"
+
+
 def _weather_city_name(latitude: float, longitude: float) -> str:
     """좌표는 요청 중에만 역지오코딩해 시·군 이름만 날씨 칩에 쓴다."""
     try:
@@ -5180,10 +5217,14 @@ def _weather_city_name(latitude: float, longitude: float) -> str:
         )
         with urlopen(request, timeout=1.5) as response:  # noqa: S310 - fixed public geocoder URL
             address = (json.load(response).get("address") or {})
-        city = str(address.get("city") or address.get("town") or address.get("municipality") or address.get("county") or "").strip()
-        return city.replace("특별자치시", "").replace("특별시", "").replace("광역시", "") or "현재 위치"
+        city = str(
+            address.get("city") or address.get("town") or address.get("municipality")
+            or address.get("county") or address.get("state") or address.get("state_district")
+            or address.get("city_district") or ""
+        ).strip()
+        return city.replace("특별자치시", "").replace("특별시", "").replace("광역시", "") or _weather_city_fallback(latitude, longitude)
     except Exception:  # noqa: BLE001 - weather display falls back without delaying recommendations
-        return "현재 위치"
+        return _weather_city_fallback(latitude, longitude)
 
 
 def _weather_for_location(latitude: float | None = None, longitude: float | None = None) -> dict[str, Any]:
@@ -8853,6 +8894,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
         recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
+        recent_wishes = _recent_daily_wishes(user.id, body.for_date)
         exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
         outfits: list[dict[str, Any]] = []
@@ -8928,9 +8970,11 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             body.include_item_ids or None,
         )
         wish_n = min(wish_combos, len(combos))
+        used_wishes = {_wish_key(wish) for wish in recent_wishes if _wish_key(wish) != ("", "", "")}
         for offset in range(wish_n):
             combo = combos[len(combos) - wish_n + offset]
-            wish = _gap_wish(combo.get("item_ids") or [], by_id, offset)
+            wish = _gap_wish(combo.get("item_ids") or [], by_id, offset, used_wishes)
+            used_wishes.add(_wish_key(wish))
             combo["wish"] = wish
             _apply_wish_slot(combo, by_id)
         for i, combo in enumerate(combos):

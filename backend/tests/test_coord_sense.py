@@ -413,7 +413,17 @@ class IncludeAndWishTest(unittest.TestCase):
         }
         recent = {self.ns["_wish_key"]({"category": "shoes", "name": "화이트 스니커즈", "color": "화이트"})}
         wish = self.ns["_gap_wish"](["t", "b"], by_id, avoid_wishes=recent)
-        self.assertEqual(wish["category"], "bag")
+        self.assertEqual(wish["category"], "shoes")
+        self.assertNotIn(self.ns["_wish_key"](wish), recent)
+
+    def test_outer_bottom_shoes_get_an_inner_top_before_an_accessory(self):
+        by_id = {
+            "o": {"id": "o", "category": "outer", "name": "울 코트"},
+            "b": {"id": "b", "category": "bottom", "name": "카키 카고 팬츠"},
+            "s": {"id": "s", "category": "shoes", "name": "화이트 스니커즈"},
+        }
+        wish = self.ns["_gap_wish"](["o", "b", "s"], by_id)
+        self.assertEqual(wish["category"], "top")
 
     def test_overlapping_core_wish_keeps_wardrobe_shoes(self):
         by_id = {
@@ -428,7 +438,7 @@ class IncludeAndWishTest(unittest.TestCase):
         }]
         self.ns["_fill_wish_quota"](combos, 1, by_id)
         self.assertEqual(combos[0]["item_ids"], ["t", "b", "s"])
-        self.assertEqual(combos[0]["wish"]["category"], "bag")
+        self.assertNotEqual(combos[0]["wish"]["category"], "shoes")
 
     def test_misplaced_wish_moves_to_last_card(self):
         by_id = {

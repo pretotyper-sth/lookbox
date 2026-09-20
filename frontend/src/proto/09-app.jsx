@@ -172,11 +172,13 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v2';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v3';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
-    return cached && cached.date === localYmd() && cached.weather && Number.isFinite(Number(cached.weather.temp)) ? cached.weather : null;
+    return cached && cached.date === localYmd() && cached.weather
+      && cached.weather.city && cached.weather.city !== '현재 위치'
+      && Number.isFinite(Number(cached.weather.temp)) ? cached.weather : null;
   } catch (e) { return null; }
 }
 function writeDeviceWeatherCache(weather) {
