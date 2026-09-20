@@ -31,5 +31,11 @@
 그 창이 얼굴을 자른다. 2026-09-10부터는 같은 비상 경로에서 머리를 남긴다.
 모델이 머리 위 여백을 지키면 위아래 스튜디오만 잘려 얼굴·다리·신발은 그대로다.
 
+2026-09-20: 2:3 전신 생성본은 4:5 카드로 세로 크롭하지 않고, 전체 구도를 축소한 뒤
+좌우 스튜디오 배경만 이어서 넣는다. 이렇게 하면 카드가 세로여도 인물을 키우거나 다리를
+늘려 보이게 하지 않는다. 생성 프롬프트도 7~7.5등신의 현실적인 성인 비율과 신발까지의
+여백을 명시한다. 근거: `backend/app/main.py` `_crop_look_to_card`,
+`_model_look_prompt_with_reference`.
+
 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`;
 `backend/app/main.py` `_crop_look_to_card`. 관련 [[image-viewer-gestures]]

@@ -87,7 +87,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id31-", src)
+        self.assertIn("model-id32-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -108,13 +108,15 @@ class ModelLookPromptTest(unittest.TestCase):
         short = self.ns['_bottom_hem_note']([{"category": "bottom", "name": "데님 반바지"}], "x")
         self.assertIn("반바지", short)
 
-    def test_reference_prompt_only_locks_person_and_garments(self):
+    def test_reference_prompt_preserves_realistic_body_proportions(self):
         prompt_fn = self.ns['_model_look_prompt_with_reference']
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
         self.assertIn("Image 1 is the person and look framing", prompt)
         self.assertIn("Images after that are the outfit pieces", prompt)
         self.assertNotIn("셔츠", prompt)
         self.assertIn("same person", prompt)
+        self.assertIn("do not lengthen the legs", prompt)
+        self.assertIn("7 to 7.5 head-height", prompt)
         self.assertNotIn("Requested mood", prompt)
         self.assertNotIn("COMPOSITION", prompt)
 
@@ -296,7 +298,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id31-", src)
+        self.assertIn("model-id32-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

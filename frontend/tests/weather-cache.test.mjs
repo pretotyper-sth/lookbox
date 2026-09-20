@@ -23,13 +23,13 @@ test('new-item recommendations can be disabled', () => {
   assert.match(source, /wishCount: Math\.max\(0, Math\.min\(dailyCount/);
 });
 
-test('a stalled daily recommendation stream has a fixed timeout', () => {
+test('daily recommendations are not cut off while the server is still generating', () => {
   const start = source.indexOf('async function readProgressStream');
   const stream = source.slice(start, source.indexOf('function formatTryOnErr', start));
-  const dailyStart = source.indexOf('const requestDailyOutfits');
-  const daily = source.slice(dailyStart, dailyStart + 7000);
+  const liveJsonStart = source.indexOf('async function liveJSON');
+  const liveJson = source.slice(liveJsonStart, source.indexOf('function formatTryOnErr', liveJsonStart));
 
   assert.match(stream, /const deadline = timeoutMs \? Date\.now\(\) \+ timeoutMs : 0/);
-  assert.match(stream, /추천을 만드는 데 너무 오래 걸려 중단했어요/);
-  assert.match(daily, /timeoutMs: 45000/);
+  assert.match(liveJson, /const streamTimeoutMs = options\.streamTimeoutMs \|\| 0/);
+  assert.match(liveJson, /onEmbed, streamTimeoutMs\)/);
 });

@@ -685,7 +685,8 @@ async function liveJSON(url, options = {}) {
   // 일반 추출은 60초, 고난도만 120초다. 분류·업로드 여유를 포함해도 정상 요청이
   // 먼저 끊기지 않으면서, 비정상 요청을 4분 동안 붙잡지 않게 한다.
   const timeoutMs = options.timeoutMs || 165000;
-  const { timeoutMs: _t, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, ...fetchOpts } = options;
+  const streamTimeoutMs = options.streamTimeoutMs || 0;
+  const { timeoutMs: _t, streamTimeoutMs: _st, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, ...fetchOpts } = options;
   const headers = { ...(options.headers || {}) };
   // GET에 application/json을 붙이면 매번 CORS preflight가 나간다.
   // Render가 잠든 직후 OPTIONS가 실패하면 '네트워크가 불안정해요'로 떨어진다.
@@ -720,7 +721,7 @@ async function liveJSON(url, options = {}) {
   let text = '';
   try {
     text = (onProgress || onLook || onOutfit || onWish || onOrder || onView || onEmbed)
-      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, timeoutMs)
+      ? await readProgressStream(res, onProgress, onLook, onOutfit, onWish, onOrder, onView, onEmbed, streamTimeoutMs)
       : await res.text();
   } catch (e) {
     throw e instanceof Error ? e : new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');

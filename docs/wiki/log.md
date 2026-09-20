@@ -938,3 +938,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-20: 추천 SSE가 keep-alive ping만 받으며 결과 없이 멈추는 경우를 45초에 종료해, 무한 스켈레톤 대신 재시도 가능한 오류로 전환했다. 근거: `frontend/src/proto/09-app.jsx`; [[look-latency]].
 2026-09-20: 기기 위치 날씨는 좌표를 짧게 역지오코딩해 `현재 위치 28°` 대신 `서울 28°`처럼 시·군 이름을 표시한다. 지명 조회 실패는 추천·기온 조회를 막지 않는다. 근거: `backend/app/main.py` `_weather_city_name`; [[location-weather]].
 2026-09-20: 지역명 표시 배포 후 기존 `현재 위치` 날씨 캐시를 재사용하지 않도록 기기 날씨 캐시 키를 v2로 올렸다. 근거: `frontend/src/proto/09-app.jsx` `DEVICE_WEATHER_CACHE_BASE`; [[location-weather]].
+2026-09-20: 추천 스트림은 서버가 계속 생성 중일 때 클라이언트만 45초에 끊지 않는다. AI 착장 2:3 전신은 카드에서 전체 구도를 보존하고, 프롬프트는 다리 연장 없는 현실적인 7~7.5등신을 요구한다. 근거: `frontend/src/proto/09-app.jsx`, `backend/app/main.py`; [[look-latency]] [[look-img-flex-min]].

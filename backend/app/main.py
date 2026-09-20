@@ -4519,7 +4519,10 @@ def _model_look_prompt_with_reference(
     return (
         f"{reference_lines} Images after that are the outfit pieces. "
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
-        "Keep the person, full body, studio framing, and garment count unchanged."
+        "Keep the person, full body, studio framing, and garment count unchanged. "
+        "Match Image 1's realistic adult anatomy: do not lengthen the legs, narrow the torso, or make a fashion-model silhouette. "
+        "Keep a natural 7 to 7.5 head-height body, with the whole person at a relaxed scale and clear studio space above the hair and below the shoes. "
+        "Do not zoom in or crop the shoes."
     )
 
 
@@ -4875,7 +4878,7 @@ def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int) -> 
 
 
 def _crop_look_to_card(png_bytes: bytes) -> bytes:
-    """생성본을 카드 비율(4:5)로 맞춘다. 인물은 자르지 않고 스튜디오 여백만 자른다."""
+    """생성본을 카드 비율(4:5)로 맞춘다. 세로 전신은 통째로 보존한다."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     w, h = img.size
     if w < 8 or h < 8:
@@ -4888,20 +4891,17 @@ def _crop_look_to_card(png_bytes: bytes) -> bytes:
         new_w, new_h = w, int(round(w / _LOOK_CARD_RATIO))
         if new_h >= h:
             return png_bytes
-        pad = max(8, int(round(new_h * _LOOK_CROP_PAD)))
-        if not box:
-            top = max(0, (h - new_h) // 2)
-            img = img.crop((0, top, w, top + new_h))
-        else:
-            _, y0, _, y1 = box
-            if y1 - y0 + 2 * pad > new_h:
-                return _fit_look_to_card(img, new_w, new_h, box, pad)
-            extra = new_h - (y1 - y0) - 2 * pad
-            top = y0 - pad - extra // 2
-            top = max(0, min(h - new_h, top))
-            if top > y0 or top + new_h < y1:
-                return _fit_look_to_card(img, new_w, new_h, box, pad)
-            img = img.crop((0, top, w, top + new_h))
+        # 2:3 전신 원본을 세로로 잘라 4:5에 채우면 다리가 과하게 길고 인물이
+        # 커 보인다. 원본 구도를 통째로 줄이고 좌우 스튜디오 결만 자연스럽게 잇는다.
+        region = img.copy()
+        region.thumbnail((new_w, new_h), Image.Resampling.LANCZOS)
+        left, top = (new_w - region.width) // 2, (new_h - region.height) // 2
+        canvas = Image.new("RGB", (new_w, new_h))
+        canvas.paste(region, (left, top))
+        _pad_look_edges(canvas, left, top, left + region.width, top + region.height)
+        buf = io.BytesIO()
+        canvas.save(buf, format="PNG")
+        return buf.getvalue()
     else:
         new_w, new_h = int(round(h * _LOOK_CARD_RATIO)), h
         if new_w >= w:
@@ -5025,9 +5025,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-id31-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+        key = f"model-id32-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
     else:
-        key = f"model-id31-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
+        key = f"model-id32-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
