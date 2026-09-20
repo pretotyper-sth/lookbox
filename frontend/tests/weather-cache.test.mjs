@@ -33,3 +33,10 @@ test('daily recommendations are not cut off while the server is still generating
   assert.match(liveJson, /const streamTimeoutMs = options\.streamTimeoutMs \|\| 0/);
   assert.match(liveJson, /onEmbed, streamTimeoutMs\)/);
 });
+
+test('daily cards are revealed one at a time at a steady cadence', () => {
+  assert.match(source, /const DAILY_REVEAL_INTERVAL_MS = 360/);
+  assert.match(source, /dailyRevealQueue\.push\(\{ outfits: \[outfit\]/);
+  assert.match(source, /setTimeout\(revealNextDaily, DAILY_REVEAL_INTERVAL_MS\)/);
+  assert.match(source, /await waitForDailyReveal\(\)/);
+});

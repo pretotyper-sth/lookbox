@@ -100,3 +100,8 @@ API 호출을 만들지 않는다. 근거: `backend/app/main.py` `live_coordinat
 
 추천 SSE는 서버의 keep-alive ping만 계속되고 결과가 오지 않는 경우를 45초 뒤 중단한다.
 무한 스켈레톤 대신 오류 메시지와 재시도 진입점으로 돌아간다(2026-09-20).
+
+2026-09-20: 브라우저가 같은 스트림 청크로 여러 `_outfit`을 받아도 첫 카드는 즉시,
+그 다음부터는 360ms 간격으로 왼쪽부터 한 장씩 공개한다. 추가 추천 중 스켈레톤도 한 장만
+남겨 2개 묶음 생성처럼 보이지 않게 한다. 근거: `frontend/src/proto/09-app.jsx`
+`requestDailyOutfits`, `frontend/src/proto/06-today.jsx` `TodayScreen`.

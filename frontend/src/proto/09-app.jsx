@@ -363,6 +363,7 @@ function dailyWardrobeGrewSinceCache(ownedItems) {
   return owned.length > used.size;
 }
 const DAILY_APPEND_BATCH = 2;
+const DAILY_REVEAL_INTERVAL_MS = 360;
 function ownedIdSet(ownedItems) {
   return new Set((ownedItems || []).map((it) => it && (it.id || it.serverId)).filter(Boolean).map(String));
 }
@@ -2068,20 +2069,66 @@ function App() {
           wardrobeCount: items.length,
         });
       };
+      // 스트림 청크 하나에 여러 코디가 묶여도, 화면은 왼쪽부터 한 장씩 같은 박자로 공개한다.
+      const dailyRevealQueue = [];
+      const queuedDailyKeys = new Set(LB_DATA.DAILY.map((o) => (o.itemIds || []).map(String).sort().join('|')));
+      let dailyRevealTimer = 0;
+      let lastDailyRevealAt = 0;
+      let resolveDailyReveal = null;
+      let revealedAddedCount = 0;
+      const finishDailyReveal = () => {
+        if (dailyRevealQueue.length || dailyRevealTimer || !resolveDailyReveal) return;
+        const resolve = resolveDailyReveal;
+        resolveDailyReveal = null;
+        resolve();
+      };
+      const revealNextDaily = () => {
+        dailyRevealTimer = 0;
+        const next = dailyRevealQueue.shift();
+        if (!next) { finishDailyReveal(); return; }
+        lastDailyRevealAt = Date.now();
+        const added = liveAppendDaily(next, items);
+        if (added.length) {
+          revealedAddedCount += added.length;
+          cacheDaily();
+          bumpDaily();
+          // 첫 일반 상품컷이 보이면 착장 요청을 즉시 시작해, 오른쪽 제안 아이템 생성과 겹친다.
+          if (prefs.modelLook) {
+            const firstReady = (LB_DATA.DAILY || []).find((outfit) => (
+              outfit && !outfit.lookImg && !outfitWishPending(outfit)
+            ));
+            if (firstReady) applyModelLooks([firstReady]).catch(() => {});
+          }
+        }
+        if (dailyRevealQueue.length) {
+          dailyRevealTimer = setTimeout(revealNextDaily, DAILY_REVEAL_INTERVAL_MS);
+        } else {
+          finishDailyReveal();
+        }
+      };
+      const queueDailyOutfits = (payload) => {
+        const fresh = (payload.outfits || []).filter((outfit) => {
+          const key = (outfit.itemIds || []).map(String).sort().join('|');
+          if (!key || queuedDailyKeys.has(key)) return false;
+          queuedDailyKeys.add(key);
+          return true;
+        });
+        if (!fresh.length) return;
+        fresh.forEach((outfit) => dailyRevealQueue.push({ outfits: [outfit], items: payload.items || [] }));
+        if (!dailyRevealTimer && dailyRevealQueue.length === fresh.length) {
+          const delay = Math.max(0, DAILY_REVEAL_INTERVAL_MS - (Date.now() - lastDailyRevealAt));
+          if (delay) dailyRevealTimer = setTimeout(revealNextDaily, delay);
+          else revealNextDaily();
+        }
+      };
+      const waitForDailyReveal = () => {
+        if (!dailyRevealQueue.length && !dailyRevealTimer) return Promise.resolve();
+        return new Promise((resolve) => { resolveDailyReveal = resolve; });
+      };
       const onOutfit = (row) => {
         if (!row || !row.outfit) return;
         stampOutfitStyle([row.outfit]);
-        const added = liveAppendDaily({ outfits: [row.outfit], items: row.items || [] }, items);
-        if (!added.length) return;
-        cacheDaily();
-        bumpDaily();
-        // 첫 일반 상품컷이 보이면 착장 요청을 즉시 시작해, 오른쪽 제안 아이템 생성과 겹친다.
-        if (prefs.modelLook) {
-          const firstReady = (LB_DATA.DAILY || []).find((outfit) => (
-            outfit && !outfit.lookImg && !outfitWishPending(outfit)
-          ));
-          if (firstReady) applyModelLooks([firstReady]).catch(() => {});
-        }
+        queueDailyOutfits({ outfits: [row.outfit], items: row.items || [] });
       };
       const onWish = (row) => {
         if (!row || !row.id) return;
@@ -2119,16 +2166,17 @@ function App() {
           }),
         });
         stampOutfitStyle(payload.outfits);
-        const added = liveAppendDaily(payload, items);
+        queueDailyOutfits(payload);
+        await waitForDailyReveal();
         pruneDailyAgainstOwned(items);
         cacheDaily();
         bumpDaily();
-        if (added.length) showToast(`${added.length}개 더 가져왔어요`, 'sparkle');
+        if (revealedAddedCount) showToast(`${revealedAddedCount}개 더 가져왔어요`, 'sparkle');
         else if (!quiet) showToast('더 만들 조합이 없어요');
         if (prefs.modelLook) {
           applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg && !outfitWishPending(o)));
         }
-        return { added: added.length, wardrobeGrew };
+        return { added: revealedAddedCount, wardrobeGrew };
       }
       // force여도 당일 이력이 있으면 전체 리셋 대신 추가만 (위에서 처리). 여기 도달 = 오늘 첫 추천.
       if (!force && LB_DATA.DAILY.length > 0) {
@@ -2152,11 +2200,12 @@ function App() {
       });
       stampOutfitStyle(payload.outfits);
       (payload.items || []).forEach(liveRememberItem);
-      // 스트림으로 이미 붙인 카드는 건너뛰고, 끊긴 경우에만 최종 JSON으로 채운다.
-      liveAppendDaily({
+      // 스트림으로 이미 받은 카드는 건너뛰고, 빠진 카드도 같은 속도로 한 장씩 붙인다.
+      queueDailyOutfits({
         outfits: filterDailyOutfitsByOwned(payload.outfits || [], items).slice(0, baseCount),
         items: payload.items || [],
-      }, items);
+      });
+      await waitForDailyReveal();
       cacheDaily();
       bumpDaily();
       reloadBilling();
@@ -2164,7 +2213,7 @@ function App() {
       if (prefs.modelLook) {
         applyModelLooks(LB_DATA.DAILY.filter((o) => !o.lookImg && !outfitWishPending(o)));
       }
-      return { added: LB_DATA.DAILY.length, wardrobeGrew: false };
+      return { added: revealedAddedCount, wardrobeGrew: false };
     } catch (e) {
       setDailyAllowed(false);
       showToast(e.message || '코디를 만들지 못했어요');

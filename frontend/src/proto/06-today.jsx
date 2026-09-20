@@ -95,7 +95,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
 function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking }) {
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+    <div className="lb-daily-card-reveal" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
         <div
@@ -618,7 +618,7 @@ function TodayScreen({ ctx }) {
               {fillingFirst && Array.from({ length: COLS - picks.length }).map((_, i) => (
                 <TodayCardSkeleton key={'fsk' + i} />
               ))}
-              {fillingMore && Array.from({ length: 2 }).map((_, i) => (
+              {fillingMore && Array.from({ length: 1 }).map((_, i) => (
                 <TodayCardSkeleton key={'ask' + i} />
               ))}
             </>

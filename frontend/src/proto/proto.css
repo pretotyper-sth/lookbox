@@ -370,6 +370,11 @@ img { display: block; max-width: 100%; }
 @keyframes lb-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .lb-anim-in { animation: none; } }
 
+/* 오늘 추천은 스트림 청크와 무관하게 한 장씩 은은하게 들어온다. */
+.lb-daily-card-reveal { animation: lb-daily-card-reveal 420ms var(--ease) both; }
+@keyframes lb-daily-card-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lb-daily-card-reveal { animation: none; } }
+
 /* 랜딩 코디 전환 — 교체되는 칸만 부드럽게 들어온다(앵커는 자리를 지킴) */
 .lb-fade-swap { animation: lb-fade-swap 320ms var(--ease) both; }
 @keyframes lb-fade-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
