@@ -78,3 +78,5 @@ PC 기본 폭(`wide`, 760px+)에서는 생성을 돌리지 않는다. Chrome 검
 
 근거: `04-screens-ab.jsx` `launchTryOnFromSheet`; `09-app.jsx` `setAvatar`·`startTryOn`;
 `08-mypage.jsx` `ProfileAvatar`.
+
+2026-09-21부터 바로보기 전신 캐시는 `tryon15`로 올렸다. 생성된 기본 착장은 프로필 프사와 키·몸무게를 얼굴 신원·현실적인 전신 비율 기준으로만 사용하고, 카메라 전환용 상의·하의·전체 PNG는 옷 색으로 확인된 연결 영역만 투명화한다. 넓은 포즈 다각형으로 배경·소품까지 뚫던 보조 마스크를 제거해 각 부위가 만들어진 옷 실루엣에 맞게만 비워진다. 근거: `backend/app/main.py` `_tryon_seed_component`, `_tryon_make_assets`; `frontend/src/proto/03-data.jsx` `TRYON_BODY_REV`.

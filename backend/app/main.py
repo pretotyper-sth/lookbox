@@ -7916,8 +7916,13 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
             r, g, b = px[x, y]
             if skin(r, g, b) or (target_luma <= 225 and (0.299 * r + 0.587 * g + 0.114 * b) > 225):
                 continue
-            # GPT가 검정을 갈색으로, 청바지를 초록·갈색으로 흔들어도 같은 옷으로 따라간다.
-            if distance((r, g, b), target) > 112:
+            # 생성 결과 안에 섞인 화면·키보드·가구 색이 옷으로 연결되지 않게 한다.
+            chroma = max(r, g, b) - min(r, g, b)
+            if kind == "top" and chroma > 78:
+                continue
+            if kind == "bottom" and not (b > r + 15 and g > r + 6):
+                continue
+            if distance((r, g, b), target) > 72:
                 continue
             out[i] = 255
             q.append((x + 1, y))
@@ -7949,8 +7954,8 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     top_m = _tryon_seed_component(segment_rgb, bg, "top")
     bot_m = _tryon_seed_component(segment_rgb, bg, "bottom")
 
-    # 흰 옷은 스튜디오 판색과 연결되어 flood-fill에서 배경으로 오인될 수 있다.
-    # 정면 2:3 전신 포즈의 의류 영역을 보조 마스크로 사용하되 피부·신발은 남긴다.
+    # flood-fill이 끊긴 부분을 보강하되, 옷 색으로 확인된 픽셀만 보조한다.
+    # 넓은 포즈 다각형을 그대로 쓰면 생성 중 복사된 배경·소품까지 옷으로 뚫린다.
     def geometry_mask(kind: str) -> Image.Image:
         w, h = segment_rgb.size
         mask = Image.new("L", (w, h), 0)
@@ -7979,14 +7984,17 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
         bg_pixels = bg.load()
         for y in range(h):
             for x in range(w):
-                interior = (
-                    (kind == "top" and w * 0.33 <= x <= w * 0.67)
-                    or (kind == "bottom" and (w * 0.33 <= x <= w * 0.47 or w * 0.53 <= x <= w * 0.67))
-                )
-                if not raw[y * w + x] or (bg_pixels[x, y] > 128 and not interior):
+                if not raw[y * w + x] or bg_pixels[x, y] > 128:
                     continue
                 r, g, b = pixels[x, y]
                 if r > 88 and r > b + 8 and r >= g - 8 and 72 < (0.299 * r + 0.587 * g + 0.114 * b) < 210:
+                    raw[y * w + x] = 0
+                    continue
+                luma = 0.299 * r + 0.587 * g + 0.114 * b
+                chroma = max(r, g, b) - min(r, g, b)
+                is_top_color = luma < 125 and chroma < 72
+                is_bottom_color = b > r + 22 and g > r + 10 and b > 90
+                if not (is_top_color if kind == "top" else is_bottom_color):
                     raw[y * w + x] = 0
         return Image.frombytes("L", (w, h), bytes(raw))
 
@@ -8200,7 +8208,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon14-{sig}-{profile_sig}"
+    key = f"tryon14-clean-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
