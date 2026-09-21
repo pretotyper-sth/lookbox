@@ -70,6 +70,22 @@ def neutral_body() -> bytes:
     return out.getvalue()
 
 
+def body_with_nearby_dark_prop() -> bytes:
+    im = Image.open(io.BytesIO(neutral_body())).convert("RGB")
+    px = im.load()
+    # 상의와 떨어졌지만 옛 포즈 다각형 안에 있는 어두운 소품.
+    for y in range(58, 88):
+        for x in range(8, 22):
+            px[x, y] = (40, 40, 44)
+    # 상의 한가운데의 작은 질감 구멍. 옷 전체는 뚫리되 바깥은 남긴다.
+    for y in range(70, 72):
+        for x in range(60, 62):
+            px[x, y] = (242, 241, 238)
+    out = io.BytesIO()
+    im.save(out, format="PNG")
+    return out.getvalue()
+
+
 class TryOnBodyTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -94,7 +110,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon14-", chunk)
+        self.assertIn("tryon16-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -142,6 +158,16 @@ class TryOnAssetTest(unittest.TestCase):
         )
         self.assertLess(overlap.histogram()[255], top.width * top.height * 0.01)
         self.assertTrue(any(0 < value < 255 for value in top_alpha.getdata()))
+        self.assertTrue(self.ns["_tryon_assets_valid"](assets))
+
+    def test_top_hole_matches_shirt_not_nearby_dark_area(self):
+        assets = self.ns["_tryon_make_assets"](body_with_nearby_dark_prop())
+        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
+        self.assertLess(top.getpixel((60, 70))[3], 64)
+        self.assertLess(top.getpixel((61, 71))[3], 64)
+        self.assertGreater(top.getpixel((15, 70))[3], 200)
+        self.assertGreater(top.getpixel((35, 70))[3], 200)
+        self.assertGreater(top.getpixel((41, 70))[3], 160)
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 
     def test_empty_plate_fails_quality_gate(self):

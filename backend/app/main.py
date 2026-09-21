@@ -7849,8 +7849,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     fx, fy = _TRYON_TOP_SEED if kind == "top" else _TRYON_BOTTOM_SEED
     sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
     sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
-    y0 = int(h * (0.14 if kind == "top" else 0.42))
-    y1 = int(h * (0.64 if kind == "top" else 0.93))
+    y0 = int(h * (0.20 if kind == "top" else 0.46))
+    y1 = int(h * (0.56 if kind == "top" else 0.90))
 
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
@@ -7882,9 +7882,9 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         return not skin(r, g, b) and (0.299 * r + 0.587 * g + 0.114 * b) < 252
 
     out = bytearray(w * h)
-    y_seeds = (0.22, 0.32, 0.42, 0.53) if kind == "top" else (0.54, 0.66, 0.78, 0.88)
+    y_seeds = (0.26, 0.34, 0.42, 0.48) if kind == "top" else (0.54, 0.66, 0.78, 0.86)
     seeds = []
-    radius = max(6, min(w, h) // 14)
+    radius = max(4, min(w, h) // 28)
     for fy in y_seeds:
         candidate_y = min(y1 - 1, max(y0, int(round(fy * (h - 1)))))
         for dy in range(-radius, radius + 1, 2):
@@ -7922,7 +7922,7 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
                 continue
             if kind == "bottom" and not (b > r + 15 and g > r + 6):
                 continue
-            if distance((r, g, b), target) > 72:
+            if distance((r, g, b), target) > 48:
                 continue
             out[i] = 255
             q.append((x + 1, y))
@@ -7933,9 +7933,16 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
 
 
 def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
-    """작은 텍스처 구멍까지 메운 뒤 가장자리만 페더한다."""
-    closed = mask.convert("L").filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.MinFilter(7))
-    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.9))
+    """옷 실루엣 안의 질감 구멍만 메우고, 바깥 윤곽은 키우지 않는다."""
+    binary = mask.convert("L").point(lambda v: 255 if v > 40 else 0)
+    inverted = binary.point(lambda v: 0 if v else 255)
+    w, h = inverted.size
+    for xy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        if inverted.getpixel(xy):
+            ImageDraw.floodfill(inverted, xy, 0)
+    filled = ImageChops.lighter(binary, inverted)
+    closed = filled.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.6))
     solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
 
@@ -7953,53 +7960,6 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     bg = _tryon_border_background(segment_rgb)
     top_m = _tryon_seed_component(segment_rgb, bg, "top")
     bot_m = _tryon_seed_component(segment_rgb, bg, "bottom")
-
-    # flood-fill이 끊긴 부분을 보강하되, 옷 색으로 확인된 픽셀만 보조한다.
-    # 넓은 포즈 다각형을 그대로 쓰면 생성 중 복사된 배경·소품까지 옷으로 뚫린다.
-    def geometry_mask(kind: str) -> Image.Image:
-        w, h = segment_rgb.size
-        mask = Image.new("L", (w, h), 0)
-        draw = ImageDraw.Draw(mask)
-        if kind == "top":
-            points = [
-                (round(w * 0.22), round(h * 0.28)),
-                (round(w * 0.78), round(h * 0.28)),
-                (round(w * 0.82), round(h * 0.43)),
-                (round(w * 0.72), round(h * 0.60)),
-                (round(w * 0.28), round(h * 0.60)),
-                (round(w * 0.18), round(h * 0.43)),
-            ]
-            draw.polygon(points, fill=255)
-        else:
-            draw.polygon([
-                (round(w * 0.29), round(h * 0.54)), (round(w * 0.49), round(h * 0.54)),
-                (round(w * 0.47), round(h * 0.87)), (round(w * 0.30), round(h * 0.87)),
-            ], fill=255)
-            draw.polygon([
-                (round(w * 0.51), round(h * 0.54)), (round(w * 0.71), round(h * 0.54)),
-                (round(w * 0.70), round(h * 0.87)), (round(w * 0.53), round(h * 0.87)),
-            ], fill=255)
-        raw = bytearray(mask.tobytes())
-        pixels = segment_rgb.convert("RGB").load()
-        bg_pixels = bg.load()
-        for y in range(h):
-            for x in range(w):
-                if not raw[y * w + x] or bg_pixels[x, y] > 128:
-                    continue
-                r, g, b = pixels[x, y]
-                if r > 88 and r > b + 8 and r >= g - 8 and 72 < (0.299 * r + 0.587 * g + 0.114 * b) < 210:
-                    raw[y * w + x] = 0
-                    continue
-                luma = 0.299 * r + 0.587 * g + 0.114 * b
-                chroma = max(r, g, b) - min(r, g, b)
-                is_top_color = luma < 125 and chroma < 72
-                is_bottom_color = b > r + 22 and g > r + 10 and b > 90
-                if not (is_top_color if kind == "top" else is_bottom_color):
-                    raw[y * w + x] = 0
-        return Image.frombytes("L", (w, h), bytes(raw))
-
-    top_m = ImageChops.lighter(top_m, geometry_mask("top"))
-    bot_m = ImageChops.lighter(bot_m, geometry_mask("bottom"))
     overlap = ImageChops.multiply(top_m, bot_m)
     if overlap.getbbox():
         w, h = segment_rgb.size
@@ -8208,7 +8168,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon14-clean-{sig}-{profile_sig}"
+    key = f"tryon16-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8302,7 +8262,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon14",
+                        "mask": "tryon16",
                         "assets": urls,
                     },
                 }).execute()
