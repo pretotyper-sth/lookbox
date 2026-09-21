@@ -81,6 +81,8 @@ OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
 # medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
 OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
 OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")
+# 상의·하의 구멍은 씨앗만 있으면 원본 실루엣으로 채운다. high는 장당 1분 넘어 94%에 멈춘 것처럼 보인다.
+OPENAI_IMAGE_QUALITY_TRYON_MASK = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON_MASK", "medium")
 OPENAI_IMAGE_QUALITY_WISH = os.environ.get("OPENAI_IMAGE_QUALITY_WISH", "low")
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
@@ -179,9 +181,9 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
     "tryon_profile": ("프로필을 확인하고 있어요", 0, 8, 3),
     "tryon_generate": ("기본 착장을 만들고 있어요", 8, 78, 70),
-    "tryon_segment": ("상의와 하의를 자르고 있어요", 78, 94, 50),
-    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 94, 98, 70),
-    "tryon_save": ("바로 보기를 준비하고 있어요", 94, 99, 3),
+    "tryon_segment": ("상의와 하의를 자르고 있어요", 78, 97, 80),
+    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 97, 98, 70),
+    "tryon_save": ("바로 보기를 준비하고 있어요", 97, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
     "orders_ready": ("주문내역으로 이동했어요", 35, 40, 4),
@@ -8091,7 +8093,7 @@ Do not cut the shoes.
 
 
 def _tryon_request_garment_mask(body_png: bytes, kind: str, user_id: str) -> bytes | None:
-    """gpt-image-1 high로 상의 또는 하의만 투명 자른 마스크를 받는다."""
+    """gpt-image-1로 상의 또는 하의만 투명 자른 마스크를 받는다. 기본 품질은 medium."""
     if not openai_client:
         return None
     buf = io.BytesIO(body_png)
@@ -8102,7 +8104,7 @@ def _tryon_request_garment_mask(body_png: bytes, kind: str, user_id: str) -> byt
         "image": buf,
         "prompt": _TRYON_MASK_PROMPTS[kind],
         "size": "1024x1536",
-        "quality": OPENAI_IMAGE_QUALITY_TRYON,
+        "quality": OPENAI_IMAGE_QUALITY_TRYON_MASK,
     }
     if _supports_transparent(model):
         kwargs["background"] = "transparent"
@@ -8112,7 +8114,7 @@ def _tryon_request_garment_mask(body_png: bytes, kind: str, user_id: str) -> byt
         result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(**kwargs)
         log_ai_usage(
             user_id, "tryon_body", model,
-            {"quality": OPENAI_IMAGE_QUALITY_TRYON, "mask": kind, "transparent": "background" in kwargs},
+            {"quality": OPENAI_IMAGE_QUALITY_TRYON_MASK, "mask": kind, "transparent": "background" in kwargs},
             usage=getattr(result, "usage", None),
         )
         return base64.b64decode(result.data[0].b64_json)

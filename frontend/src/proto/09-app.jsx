@@ -1224,7 +1224,7 @@ function App() {
           face_data_url: selected.avatar,
           profile: { gender: selected.gender || '', age: selected.age || '', height: selected.height || '', weight: selected.weight || '' },
         }),
-        timeoutMs: 180000,
+        timeoutMs: 300000,
         onProgress: (step) => setTryOnProgress(step),
       });
       const url = res && res.imageUrl;

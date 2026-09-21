@@ -115,7 +115,9 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("100% of that shirt", prompts)
         self.assertIn("100% of the jeans", prompts)
         self.assertIn("short-sleeve", prompts)
-        self.assertIn("input_fidelity", self.src[self.src.index("def _tryon_request_garment_mask"):self.src.index("def _tryon_request_garment_mask") + 1600])
+        fn = self.src[self.src.index("def _tryon_request_garment_mask"):self.src.index("def _tryon_request_garment_mask") + 1600]
+        self.assertIn("OPENAI_IMAGE_QUALITY_TRYON_MASK", fn)
+        self.assertIn("input_fidelity", fn)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
