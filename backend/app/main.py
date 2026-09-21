@@ -81,8 +81,6 @@ OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
 # medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
 OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
 OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")
-# 상의·하의 구멍은 씨앗만 있으면 원본 실루엣으로 채운다. high는 장당 1분 넘어 94%에 멈춘 것처럼 보인다.
-OPENAI_IMAGE_QUALITY_TRYON_MASK = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON_MASK", "medium")
 OPENAI_IMAGE_QUALITY_WISH = os.environ.get("OPENAI_IMAGE_QUALITY_WISH", "low")
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
 # 패션 여부 분류(classify_item)는 키가 있으면 그대로 돌려 고양이 등 비패션을 거른다.
@@ -181,9 +179,9 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
     "tryon_profile": ("프로필을 확인하고 있어요", 0, 8, 3),
     "tryon_generate": ("기본 착장을 만들고 있어요", 8, 78, 70),
-    "tryon_segment": ("상의와 하의를 자르고 있어요", 78, 97, 80),
-    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 97, 98, 70),
-    "tryon_save": ("바로 보기를 준비하고 있어요", 97, 99, 3),
+    "tryon_segment": ("옷 경계를 정리하고 있어요", 78, 92, 8),
+    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 92, 98, 70),
+    "tryon_save": ("바로 보기를 준비하고 있어요", 92, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
     "orders_ready": ("주문내역으로 이동했어요", 35, 40, 4),
@@ -7922,9 +7920,11 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
             chroma = max(r, g, b) - min(r, g, b)
             if kind == "top" and chroma > 78:
                 continue
-            if kind == "bottom" and not (b > r + 15 and g > r + 6):
-                continue
-            if distance((r, g, b), target) > 48:
+            if kind == "bottom":
+                luma = 0.299 * r + 0.587 * g + 0.114 * b
+                if luma > 210 or (chroma > 110 and b <= r + 6):
+                    continue
+            if distance((r, g, b), target) > (56 if kind == "bottom" else 48):
                 continue
             out[i] = 255
             q.append((x + 1, y))
@@ -7947,29 +7947,6 @@ def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
     soft = closed.filter(ImageFilter.GaussianBlur(radius=0.8))
     solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
-
-
-def _tryon_hole_from_model_image(im: Image.Image) -> Image.Image | None:
-    """GPT가 준 투명 컷 또는 흑백 마스크에서 옷 구멍을 읽는다."""
-    rgba = im.convert("RGBA")
-    w, h = rgba.size
-    n = w * h
-    if n < 8:
-        return None
-    alpha = rgba.getchannel("A")
-    trans = sum(alpha.histogram()[:128])
-    if 0 < trans <= n * 0.55:
-        return alpha.point(lambda v: 255 if v < 128 else 0)
-    luma = rgba.convert("L")
-    white = sum(luma.histogram()[200:])
-    black = sum(luma.histogram()[:50])
-    if white + black < n * 0.75:
-        return None
-    if 0 < white <= n * 0.55 and white <= black:
-        return luma.point(lambda v: 255 if v > 180 else 0)
-    if 0 < black <= n * 0.55:
-        return luma.point(lambda v: 255 if v < 75 else 0)
-    return None
 
 
 def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
@@ -8006,7 +7983,7 @@ def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> I
 
 
 def _tryon_grow_through(seed: Image.Image, candidates: Image.Image) -> Image.Image:
-    """GPT 구멍을 씨앗으로, 원본의 옷 픽셀을 따라 실루엣까지 채운다."""
+    """시드에서 이어진 옷 픽셀만 따라 실루엣까지 채운다."""
     seed_im = seed.convert("L")
     cand_im = candidates.convert("L")
     if cand_im.size != seed_im.size:
@@ -8067,79 +8044,11 @@ def _tryon_largest_blob(mask: Image.Image) -> Image.Image:
     return Image.frombytes("L", (w, h), bytes(out))
 
 
-_TRYON_MASK_PROMPTS = {
-    "top": """This is a garment knockout for a camera overlay, not a new photo or product extract.
-Image 1 is a full-body studio photograph. Keep the SAME framing, pose, scale, and person.
-
-Make every pixel of the matte black short-sleeve crew-neck T-shirt fully transparent,
-including the collar, the entire chest, both sleeves, and the hem. 100% of that shirt
-must disappear — no leftover black fabric on the shoulders or neckline.
-
-Keep fully opaque: face, hair, neck skin, bare arms, hands, jeans, shoes, and the
-#F2F1EE studio background. Follow the exact cloth silhouette. Do not cut a rectangle.
-Do not eat into the armpit skin gap or into the jeans.
-""",
-    "bottom": """This is a garment knockout for a camera overlay, not a new photo or product extract.
-Image 1 is a full-body studio photograph. Keep the SAME framing, pose, scale, and person.
-
-Make every pixel of the mid-blue denim jeans fully transparent, including wrinkles,
-pockets, and both legs from waistband to hem. 100% of the jeans must disappear.
-
-Keep fully opaque: the black T-shirt, skin, white sneakers, hair, face, and the
-#F2F1EE studio background. Follow the exact denim silhouette. Do not cut a rectangle.
-Do not cut the shoes.
-""",
-}
-
-
-def _tryon_request_garment_mask(body_png: bytes, kind: str, user_id: str) -> bytes | None:
-    """gpt-image-1로 상의 또는 하의만 투명 자른 마스크를 받는다. 기본 품질은 medium."""
-    if not openai_client:
-        return None
-    buf = io.BytesIO(body_png)
-    buf.name = "body.png"
-    model = os.environ.get("OPENAI_IMAGE_MODEL_TRYON_MASK") or OPENAI_IMAGE_MODEL
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "image": buf,
-        "prompt": _TRYON_MASK_PROMPTS[kind],
-        "size": "1024x1536",
-        "quality": OPENAI_IMAGE_QUALITY_TRYON_MASK,
-    }
-    if _supports_transparent(model):
-        kwargs["background"] = "transparent"
-    if "gpt-image-2" not in (model or ""):
-        kwargs["input_fidelity"] = "high"
-    try:
-        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(**kwargs)
-        log_ai_usage(
-            user_id, "tryon_body", model,
-            {"quality": OPENAI_IMAGE_QUALITY_TRYON_MASK, "mask": kind, "transparent": "background" in kwargs},
-            usage=getattr(result, "usage", None),
-        )
-        return base64.b64decode(result.data[0].b64_json)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[tryon] {kind} mask failed: {exc}", flush=True)
-        return None
-
-
-def _tryon_request_garment_masks(body_png: bytes, user_id: str) -> tuple[bytes | None, bytes | None]:
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        top_f = pool.submit(_tryon_request_garment_mask, body_png, "top", user_id)
-        bot_f = pool.submit(_tryon_request_garment_mask, body_png, "bottom", user_id)
-        return top_f.result(), bot_f.result()
-
-
-def _tryon_make_assets(
-    png_bytes: bytes,
-    top_mask_bytes: bytes | None = None,
-    bottom_mask_bytes: bytes | None = None,
-) -> dict[str, bytes]:
+def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
     rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    use_ai = bool(top_mask_bytes or bottom_mask_bytes)
     segment_rgb = rgb
-    if not use_ai and max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
+    if max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
         scale = _TRYON_SEGMENT_MAX_SIDE / max(rgb.size)
         segment_rgb = rgb.resize(
             (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale))),
@@ -8147,24 +8056,14 @@ def _tryon_make_assets(
         )
     bg = _tryon_border_background(segment_rgb)
 
-    def hole_from(kind: str, mask_bytes: bytes | None) -> Image.Image:
-        grown = None
-        if mask_bytes:
-            try:
-                parsed = _tryon_hole_from_model_image(Image.open(io.BytesIO(mask_bytes)))
-            except Exception:  # noqa: BLE001
-                parsed = None
-            if parsed is not None:
-                if parsed.size != segment_rgb.size:
-                    parsed = parsed.resize(segment_rgb.size, Image.NEAREST)
-                cand = _tryon_garment_candidates(segment_rgb, bg, kind)
-                grown = _tryon_largest_blob(_tryon_grow_through(parsed, cand))
-        if grown is None or not grown.getbbox():
-            grown = _tryon_seed_component(segment_rgb, bg, kind)
-        return grown
+    def hole_from(kind: str) -> Image.Image:
+        seed = _tryon_seed_component(segment_rgb, bg, kind)
+        cand = _tryon_garment_candidates(segment_rgb, bg, kind)
+        grown = _tryon_largest_blob(_tryon_grow_through(seed, cand))
+        return grown if grown.getbbox() else seed
 
-    top_m = hole_from("top", top_mask_bytes)
-    bot_m = hole_from("bottom", bottom_mask_bytes)
+    top_m = hole_from("top")
+    bot_m = hole_from("bottom")
     overlap = ImageChops.multiply(top_m, bot_m)
     if overlap.getbbox():
         w, h = segment_rgb.size
@@ -8373,7 +8272,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon17-{sig}-{profile_sig}"
+    key = f"tryon18-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8440,8 +8339,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                         detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
                     ) from exc
                 report("tryon_segment")
-                top_mask, bottom_mask = _tryon_request_garment_masks(out, uid)
-                assets_bytes = _tryon_make_assets(out, top_mask, bottom_mask)
+                assets_bytes = _tryon_make_assets(out)
                 if _tryon_assets_valid(assets_bytes):
                     for name, cat in (("top", "top"), ("bottom", "bottom"), ("full", "bottom")):
                         assets_bytes[name] = _polish_cutout_alpha(assets_bytes[name], cat)
@@ -8470,7 +8368,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon17",
+                        "mask": "tryon18",
                         "assets": urls,
                     },
                 }).execute()

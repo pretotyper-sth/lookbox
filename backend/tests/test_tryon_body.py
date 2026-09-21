@@ -13,7 +13,6 @@ FNS = (
     "_tryon_border_background",
     "_tryon_seed_component",
     "_tryon_soft_hole",
-    "_tryon_hole_from_model_image",
     "_tryon_garment_candidates",
     "_tryon_grow_through",
     "_tryon_largest_blob",
@@ -109,26 +108,16 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("SAME person", prompt)
         self.assertIn("8 head-heights", prompt)
 
-    def test_mask_prompts_knock_out_full_garments(self):
-        start = self.src.index("_TRYON_MASK_PROMPTS")
-        prompts = self.src[start:start + 2800]
-        self.assertIn("100% of that shirt", prompts)
-        self.assertIn("100% of the jeans", prompts)
-        self.assertIn("short-sleeve", prompts)
-        fn = self.src[self.src.index("def _tryon_request_garment_mask"):self.src.index("def _tryon_request_garment_mask") + 1600]
-        self.assertIn("OPENAI_IMAGE_QUALITY_TRYON_MASK", fn)
-        self.assertIn("input_fidelity", fn)
-
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon17-", chunk)
+        self.assertIn("tryon18-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
-        self.assertIn("_tryon_request_garment_masks", chunk)
+        self.assertNotIn("_tryon_request_garment_masks", chunk)
         self.assertNotIn("input_fidelity", chunk)
 
     def test_mask_fail_retries_then_notes_daily_fail_not_monthly(self):
@@ -175,15 +164,8 @@ class TryOnAssetTest(unittest.TestCase):
         self.assertTrue(any(0 < value < 255 for value in top_alpha.getdata()))
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 
-    def test_partial_ai_mask_grows_to_full_shirt_and_skips_prop(self):
-        mask = Image.new("RGB", (120, 180), (0, 0, 0))
-        px = mask.load()
-        for y in range(68, 80):
-            for x in range(52, 68):
-                px[x, y] = (255, 255, 255)
-        buf = io.BytesIO()
-        mask.save(buf, format="PNG")
-        assets = self.ns["_tryon_make_assets"](body_with_nearby_dark_prop(), buf.getvalue(), None)
+    def test_seed_grows_to_full_shirt_and_skips_prop(self):
+        assets = self.ns["_tryon_make_assets"](body_with_nearby_dark_prop())
         top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
         self.assertLess(top.getpixel((60, 55))[3], 64)
         self.assertLess(top.getpixel((60, 70))[3], 64)

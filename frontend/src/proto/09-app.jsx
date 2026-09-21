@@ -765,11 +765,13 @@ function formatTryOnErr(raw) {
   if (s.includes('네트워크')) return '네트워크가 불안정해요 · 잠시 후 다시 시도해 주세요.';
   if (s.includes('연결이 끊겼') || s.includes('연결하지 못')) return '서버와 연결이 끊겼어요 · 잠시 후 다시 시도해 주세요.';
   if (s.includes('이미지 서버')) return '이미지 서버가 불안정해요 · 조금 뒤에 다시 시도해 주세요.';
-  if (s.includes('다듬지')) return '옷 경계를 정리하지 못했어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('정리하지') || s.includes('다듬지')) return '옷 경계를 정리하지 못했어요 · 잠시 후 다시 시도해 주세요.';
   if (s.includes('지금은') || s.includes('서버 설정')) return '지금은 만들 수 없어요 · 잠시 후 다시 시도해 주세요.';
   if (s.includes('이 사진에서') || s.includes('이 사진으로')) return '이 사진으로는 만들지 못했어요 · 다른 사진으로 시도해 주세요.';
   if (s.includes('처리 중')) return '처리 중 문제가 생겼어요 · 잠시 후 다시 시도해 주세요.';
-  return `${s.replace(/[.。]+$/, '')} · 잠시 후 다시 시도해 주세요.`;
+  const compact = s.replace(/[.。]\s*/g, ' · ').replace(/(?:\s*·\s*)+/g, ' · ').replace(/\s+/g, ' ').trim();
+  if (/다시 시도|올려 주세요|알려 주세요|기다려 주세요/.test(compact)) return compact;
+  return `${compact.replace(/[.。]+$/, '')} · 잠시 후 다시 시도해 주세요.`;
 }
 
 async function uploadAvatarToAccount(dataUrl, slot = 'profile') {
