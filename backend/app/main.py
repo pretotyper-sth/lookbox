@@ -179,9 +179,9 @@ _IMPORT_STEPS: dict[str, tuple[str, int, int, int]] = {
     "look": ("AI 착장을 만들고 있어요", 10, 90, 40),
     "tryon_profile": ("프로필을 확인하고 있어요", 0, 8, 3),
     "tryon_generate": ("기본 착장을 만들고 있어요", 8, 78, 70),
-    "tryon_segment": ("옷 경계를 정리하고 있어요", 78, 92, 4),
-    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 92, 98, 70),
-    "tryon_save": ("바로 보기를 준비하고 있어요", 92, 99, 3),
+    "tryon_segment": ("상의와 하의를 자르고 있어요", 78, 94, 50),
+    "tryon_retry": ("결과를 한 번 더 확인하고 있어요", 94, 98, 70),
+    "tryon_save": ("바로 보기를 준비하고 있어요", 94, 99, 3),
     "open": ("쇼핑몰 로그인 창을 열고 있어요", 8, 20, 4),
     "need_login": ("열린 창에서 로그인해 주세요", 20, 35, 90),
     "orders_ready": ("주문내역으로 이동했어요", 35, 40, 4),
@@ -7942,24 +7942,227 @@ def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
             ImageDraw.floodfill(inverted, xy, 0)
     filled = ImageChops.lighter(binary, inverted)
     closed = filled.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
-    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.6))
+    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.8))
     solid = closed.point(lambda v: 255 if v > 200 else 0)
     return ImageChops.lighter(soft, solid)
 
 
-def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
+def _tryon_hole_from_model_image(im: Image.Image) -> Image.Image | None:
+    """GPT가 준 투명 컷 또는 흑백 마스크에서 옷 구멍을 읽는다."""
+    rgba = im.convert("RGBA")
+    w, h = rgba.size
+    n = w * h
+    if n < 8:
+        return None
+    alpha = rgba.getchannel("A")
+    trans = sum(alpha.histogram()[:128])
+    if 0 < trans <= n * 0.55:
+        return alpha.point(lambda v: 255 if v < 128 else 0)
+    luma = rgba.convert("L")
+    white = sum(luma.histogram()[200:])
+    black = sum(luma.histogram()[:50])
+    if white + black < n * 0.75:
+        return None
+    if 0 < white <= n * 0.55 and white <= black:
+        return luma.point(lambda v: 255 if v > 180 else 0)
+    if 0 < black <= n * 0.55:
+        return luma.point(lambda v: 255 if v < 75 else 0)
+    return None
+
+
+def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
+    """원본에서 피부·배경·신발을 뺀, 그 부위 옷일 수 있는 픽셀."""
+    im = rgb.convert("RGB")
+    w, h = im.size
+    px = im.load()
+    bg_px = bg.convert("L").load()
+    y0 = int(h * (0.16 if kind == "top" else 0.46))
+    y1 = int(h * (0.58 if kind == "top" else 0.90))
+    out = bytearray(w * h)
+    for y in range(y0, y1):
+        row = y * w
+        for x in range(w):
+            if bg_px[x, y] > 128:
+                continue
+            r, g, b = px[x, y]
+            luma = 0.299 * r + 0.587 * g + 0.114 * b
+            if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
+                continue
+            chroma = max(r, g, b) - min(r, g, b)
+            if kind == "top":
+                if luma >= 175 or chroma > 90:
+                    continue
+            else:
+                if luma >= 210:
+                    continue
+                bluish = b > r + 6 and g > r
+                shadowed = luma < 165 and chroma < 90
+                if not (bluish or shadowed):
+                    continue
+            out[row + x] = 255
+    return Image.frombytes("L", (w, h), bytes(out))
+
+
+def _tryon_grow_through(seed: Image.Image, candidates: Image.Image) -> Image.Image:
+    """GPT 구멍을 씨앗으로, 원본의 옷 픽셀을 따라 실루엣까지 채운다."""
+    seed_im = seed.convert("L")
+    cand_im = candidates.convert("L")
+    if cand_im.size != seed_im.size:
+        cand_im = cand_im.resize(seed_im.size, Image.NEAREST)
+    w, h = seed_im.size
+    seed_b = seed_im.tobytes()
+    cand_b = cand_im.tobytes()
+    out = bytearray(w * h)
+    q: deque[int] = deque()
+    for i, v in enumerate(seed_b):
+        if v > 80 and cand_b[i] > 80:
+            out[i] = 255
+            q.append(i)
+    while q:
+        i = q.popleft()
+        x, y = i % w, i // w
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < w and 0 <= ny < h):
+                continue
+            j = ny * w + nx
+            if out[j] or cand_b[j] < 80:
+                continue
+            out[j] = 255
+            q.append(j)
+    return Image.frombytes("L", (w, h), bytes(out))
+
+
+def _tryon_largest_blob(mask: Image.Image) -> Image.Image:
+    """떨어진 소품 덩어리는 버리고 가장 큰 옷만 남긴다."""
+    im = mask.convert("L")
+    w, h = im.size
+    data = im.tobytes()
+    seen = bytearray(w * h)
+    best: list[int] = []
+    for i, v in enumerate(data):
+        if v < 80 or seen[i]:
+            continue
+        blob: list[int] = []
+        q: deque[int] = deque([i])
+        seen[i] = 1
+        while q:
+            j = q.popleft()
+            blob.append(j)
+            x, y = j % w, j // w
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if not (0 <= nx < w and 0 <= ny < h):
+                    continue
+                k = ny * w + nx
+                if seen[k] or data[k] < 80:
+                    continue
+                seen[k] = 1
+                q.append(k)
+        if len(blob) > len(best):
+            best = blob
+    out = bytearray(w * h)
+    for j in best:
+        out[j] = 255
+    return Image.frombytes("L", (w, h), bytes(out))
+
+
+_TRYON_MASK_PROMPTS = {
+    "top": """This is a garment knockout for a camera overlay, not a new photo or product extract.
+Image 1 is a full-body studio photograph. Keep the SAME framing, pose, scale, and person.
+
+Make every pixel of the matte black short-sleeve crew-neck T-shirt fully transparent,
+including the collar, the entire chest, both sleeves, and the hem. 100% of that shirt
+must disappear — no leftover black fabric on the shoulders or neckline.
+
+Keep fully opaque: face, hair, neck skin, bare arms, hands, jeans, shoes, and the
+#F2F1EE studio background. Follow the exact cloth silhouette. Do not cut a rectangle.
+Do not eat into the armpit skin gap or into the jeans.
+""",
+    "bottom": """This is a garment knockout for a camera overlay, not a new photo or product extract.
+Image 1 is a full-body studio photograph. Keep the SAME framing, pose, scale, and person.
+
+Make every pixel of the mid-blue denim jeans fully transparent, including wrinkles,
+pockets, and both legs from waistband to hem. 100% of the jeans must disappear.
+
+Keep fully opaque: the black T-shirt, skin, white sneakers, hair, face, and the
+#F2F1EE studio background. Follow the exact denim silhouette. Do not cut a rectangle.
+Do not cut the shoes.
+""",
+}
+
+
+def _tryon_request_garment_mask(body_png: bytes, kind: str, user_id: str) -> bytes | None:
+    """gpt-image-1 high로 상의 또는 하의만 투명 자른 마스크를 받는다."""
+    if not openai_client:
+        return None
+    buf = io.BytesIO(body_png)
+    buf.name = "body.png"
+    model = os.environ.get("OPENAI_IMAGE_MODEL_TRYON_MASK") or OPENAI_IMAGE_MODEL
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "image": buf,
+        "prompt": _TRYON_MASK_PROMPTS[kind],
+        "size": "1024x1536",
+        "quality": OPENAI_IMAGE_QUALITY_TRYON,
+    }
+    if _supports_transparent(model):
+        kwargs["background"] = "transparent"
+    if "gpt-image-2" not in (model or ""):
+        kwargs["input_fidelity"] = "high"
+    try:
+        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(**kwargs)
+        log_ai_usage(
+            user_id, "tryon_body", model,
+            {"quality": OPENAI_IMAGE_QUALITY_TRYON, "mask": kind, "transparent": "background" in kwargs},
+            usage=getattr(result, "usage", None),
+        )
+        return base64.b64decode(result.data[0].b64_json)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[tryon] {kind} mask failed: {exc}", flush=True)
+        return None
+
+
+def _tryon_request_garment_masks(body_png: bytes, user_id: str) -> tuple[bytes | None, bytes | None]:
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        top_f = pool.submit(_tryon_request_garment_mask, body_png, "top", user_id)
+        bot_f = pool.submit(_tryon_request_garment_mask, body_png, "bottom", user_id)
+        return top_f.result(), bot_f.result()
+
+
+def _tryon_make_assets(
+    png_bytes: bytes,
+    top_mask_bytes: bytes | None = None,
+    bottom_mask_bytes: bytes | None = None,
+) -> dict[str, bytes]:
     """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
     rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    use_ai = bool(top_mask_bytes or bottom_mask_bytes)
     segment_rgb = rgb
-    if max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
+    if not use_ai and max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
         scale = _TRYON_SEGMENT_MAX_SIDE / max(rgb.size)
         segment_rgb = rgb.resize(
             (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale))),
             Image.BILINEAR,
         )
     bg = _tryon_border_background(segment_rgb)
-    top_m = _tryon_seed_component(segment_rgb, bg, "top")
-    bot_m = _tryon_seed_component(segment_rgb, bg, "bottom")
+
+    def hole_from(kind: str, mask_bytes: bytes | None) -> Image.Image:
+        grown = None
+        if mask_bytes:
+            try:
+                parsed = _tryon_hole_from_model_image(Image.open(io.BytesIO(mask_bytes)))
+            except Exception:  # noqa: BLE001
+                parsed = None
+            if parsed is not None:
+                if parsed.size != segment_rgb.size:
+                    parsed = parsed.resize(segment_rgb.size, Image.NEAREST)
+                cand = _tryon_garment_candidates(segment_rgb, bg, kind)
+                grown = _tryon_largest_blob(_tryon_grow_through(parsed, cand))
+        if grown is None or not grown.getbbox():
+            grown = _tryon_seed_component(segment_rgb, bg, kind)
+        return grown
+
+    top_m = hole_from("top", top_mask_bytes)
+    bot_m = hole_from("bottom", bottom_mask_bytes)
     overlap = ImageChops.multiply(top_m, bot_m)
     if overlap.getbbox():
         w, h = segment_rgb.size
@@ -8168,7 +8371,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon16-{sig}-{profile_sig}"
+    key = f"tryon17-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8235,8 +8438,11 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                         detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
                     ) from exc
                 report("tryon_segment")
-                assets_bytes = _tryon_make_assets(out)
+                top_mask, bottom_mask = _tryon_request_garment_masks(out, uid)
+                assets_bytes = _tryon_make_assets(out, top_mask, bottom_mask)
                 if _tryon_assets_valid(assets_bytes):
+                    for name, cat in (("top", "top"), ("bottom", "bottom"), ("full", "bottom")):
+                        assets_bytes[name] = _polish_cutout_alpha(assets_bytes[name], cat)
                     break
                 print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
                 assets_bytes = None
@@ -8262,7 +8468,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon16",
+                        "mask": "tryon17",
                         "assets": urls,
                     },
                 }).execute()
