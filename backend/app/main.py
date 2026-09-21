@@ -7849,8 +7849,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     fx, fy = _TRYON_TOP_SEED if kind == "top" else _TRYON_BOTTOM_SEED
     sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
     sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
-    y0 = int(h * (0.20 if kind == "top" else 0.46))
-    y1 = int(h * (0.56 if kind == "top" else 0.90))
+    y0 = int(h * (0.14 if kind == "top" else 0.44))
+    y1 = int(h * (0.60 if kind == "top" else 0.92))
 
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
@@ -7882,7 +7882,7 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
         return not skin(r, g, b) and (0.299 * r + 0.587 * g + 0.114 * b) < 252
 
     out = bytearray(w * h)
-    y_seeds = (0.26, 0.34, 0.42, 0.48) if kind == "top" else (0.54, 0.66, 0.78, 0.86)
+    y_seeds = (0.22, 0.30, 0.38, 0.46) if kind == "top" else (0.54, 0.66, 0.78, 0.86)
     seeds = []
     radius = max(4, min(w, h) // 28)
     for fy in y_seeds:
@@ -7955,8 +7955,8 @@ def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> I
     w, h = im.size
     px = im.load()
     bg_px = bg.convert("L").load()
-    y0 = int(h * (0.16 if kind == "top" else 0.46))
-    y1 = int(h * (0.58 if kind == "top" else 0.90))
+    y0 = int(h * (0.12 if kind == "top" else 0.44))
+    y1 = int(h * (0.62 if kind == "top" else 0.93))
     out = bytearray(w * h)
     for y in range(y0, y1):
         row = y * w
@@ -7969,14 +7969,13 @@ def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> I
                 continue
             chroma = max(r, g, b) - min(r, g, b)
             if kind == "top":
-                if luma >= 175 or chroma > 90:
+                # 밝은 크루넥·회색 티도 옷이다. 판색 배경은 bg 마스크가 이미 걸렀다.
+                if chroma > 90:
                     continue
             else:
-                if luma >= 210:
+                if luma >= 225 and y >= int(h * 0.78):
                     continue
-                bluish = b > r + 6 and g > r
-                shadowed = luma < 165 and chroma < 90
-                if not (bluish or shadowed):
+                if chroma > 110 and b <= r + 6:
                     continue
             out[row + x] = 255
     return Image.frombytes("L", (w, h), bytes(out))
@@ -8044,6 +8043,52 @@ def _tryon_largest_blob(mask: Image.Image) -> Image.Image:
     return Image.frombytes("L", (w, h), bytes(out))
 
 
+def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, kind: str) -> Image.Image:
+    """시드 실루엣의 각 세로줄에서 피부·배경·신발이 나올 때까지 구멍을 목·발목까지 늘린다."""
+    im = rgb.convert("RGB")
+    w, h = im.size
+    px = im.load()
+    bg_px = bg.convert("L").load()
+    data = bytearray(mask.convert("L").tobytes())
+    y_lo = int(h * (0.12 if kind == "top" else 0.42))
+    y_hi = int(h * (0.64 if kind == "top" else 0.93))
+    xs = [i % w for i, v in enumerate(data) if v > 80]
+    if not xs:
+        return mask
+
+    def garment_pixel(x: int, y: int) -> bool:
+        if bg_px[x, y] > 128:
+            return False
+        r, g, b = px[x, y]
+        luma = 0.299 * r + 0.587 * g + 0.114 * b
+        chroma = max(r, g, b) - min(r, g, b)
+        if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
+            return False
+        if kind == "top" and y < h * 0.28 and luma < 70 and chroma < 40:
+            return False
+        if kind == "bottom" and y > h * 0.78 and luma > 205:
+            return False
+        if kind == "top" and chroma > 90:
+            return False
+        if kind == "bottom" and chroma > 110 and b <= r + 6:
+            return False
+        return True
+
+    for x in range(min(xs), max(xs) + 1):
+        ys = [y for y in range(y_lo, y_hi) if data[y * w + x] > 80]
+        if not ys:
+            continue
+        y = min(ys) - 1
+        while y >= y_lo and garment_pixel(x, y):
+            data[y * w + x] = 255
+            y -= 1
+        y = max(ys) + 1
+        while y < y_hi and garment_pixel(x, y):
+            data[y * w + x] = 255
+            y += 1
+    return Image.frombytes("L", (w, h), bytes(data))
+
+
 def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
     rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
@@ -8060,7 +8105,9 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
         seed = _tryon_seed_component(segment_rgb, bg, kind)
         cand = _tryon_garment_candidates(segment_rgb, bg, kind)
         grown = _tryon_largest_blob(_tryon_grow_through(seed, cand))
-        return grown if grown.getbbox() else seed
+        if not grown.getbbox():
+            grown = seed
+        return _tryon_extend_columns(segment_rgb, bg, grown, kind)
 
     top_m = hole_from("top")
     bot_m = hole_from("bottom")
@@ -8142,6 +8189,15 @@ same eyes, nose, lips, jawline, hairline, hair part, hair color, skin tone, mole
 Do not replace them with a similar-looking or generic person. Do not beautify into someone else.
 If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head as the same person.
 
+NON-NEGOTIABLE:
+The result is a straight-on passport-like standing portrait. Both ears equally visible, both eyes equally visible,
+facial midline vertical, no three-quarter view. Completely ignore Image 1's camera angle, head yaw, tilt, and crop.
+Even if the selfie is diagonal or looking aside, the output face looks directly at the lens.
+Adult 8-head proportion is mandatory: crown-to-chin 11–12% of image height, shoulders 22%, waist 48%,
+crotch 62%, ankles 90%, shoes 96%. Long full legs. Never a large head, never short legs, never a distant tiny figure.
+The T-shirt is matte black RGB 28 28 32. Forbidden shirt colors: white, gray, cream, heather, light.
+The jeans are mid-blue RGB 64 104 150. Forbidden pant colors: white, gray, black, khaki.
+
 FACE:
 A sharper, well-lit photograph of the SAME person in Image 1 — not a different model.
 Skin must look real: visible pores, subtle texture, faint natural variation.
@@ -8168,8 +8224,8 @@ Never enlarge a cropped profile face, make the body short-legged, or compress th
 
 OUTFIT:
 matte black short-sleeve crew-neck T-shirt (about RGB 28 28 32), mid-blue straight-leg denim jeans (clearly blue, about RGB 64 104 150), and white low-top sneakers only.
-The T-shirt is a solid near-black, clearly darker than the background, never gray-blue, and never the same color as the jeans.
-The jeans are distinctly blue denim, not charcoal and not black.
+The T-shirt MUST be solid near-black, clearly darker than the background and darker than skin. Never white, never gray, never cream, never gray-blue, never the same color as the jeans.
+The jeans are distinctly blue denim, not charcoal, not black, not white, and not light-wash gray.
 Each garment is one solid color with a sharp edge against skin and against the other garment so they can be separated.
 No pattern, logo, extra garments, or black leather.
 The reference may contain background clutter or objects. Ignore every background object completely:
@@ -8227,8 +8283,9 @@ def _tryon_body_profile_note(user_id: str, override: dict[str, Any] | None = Non
     return (
         "\nPROFILE PROPORTIONS:\n"
         f"The selected person's profile says {', '.join(facts)}. Use this only as a loose, respectful reference "
-        "for believable adult body scale. Prioritize a balanced adult head-to-body proportion and realistic "
-        "anatomy; a profile selfie must never create an oversized head or compressed torso and legs. A subtly "
+        "for believable adult body scale. Prioritize a balanced adult 8-head proportion and realistic "
+        "anatomy; a profile selfie must never create an oversized head or compressed torso and legs, and its "
+        "camera angle is never used. The final image stays straight-on. A subtly "
         "flattering leg line is fine, but do not make the person ultra-thin, change their age, or exaggerate body shape.\n"
     )
 
@@ -8272,7 +8329,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon18-{sig}-{profile_sig}"
+    key = f"tryon19-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8368,7 +8425,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon18",
+                        "mask": "tryon19",
                         "assets": urls,
                     },
                 }).execute()

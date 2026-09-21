@@ -16,6 +16,7 @@ FNS = (
     "_tryon_garment_candidates",
     "_tryon_grow_through",
     "_tryon_largest_blob",
+    "_tryon_extend_columns",
     "_tryon_make_assets",
     "_tryon_assets_valid",
 )
@@ -89,6 +90,21 @@ def body_with_nearby_dark_prop() -> bytes:
     return out.getvalue()
 
 
+def body_with_light_collar_and_hem() -> bytes:
+    im = Image.open(io.BytesIO(neutral_body())).convert("RGB")
+    px = im.load()
+    # 생성본이 흰 티·연청이 되어도 목라인·발목까지 뚫려야 한다.
+    for y in range(50, 64):
+        for x in range(42, 78):
+            px[x, y] = (220, 220, 218)
+    for y in range(130, 156):
+        for x in range(44, 76):
+            px[x, y] = (190, 196, 200)
+    out = io.BytesIO()
+    im.save(out, format="PNG")
+    return out.getvalue()
+
+
 class TryOnBodyTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -96,7 +112,7 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 3600]
+        prompt = self.src[start:start + 4800]
         self.assertIn("identity lock", prompt)
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
@@ -107,13 +123,16 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("6% empty", prompt)
         self.assertIn("SAME person", prompt)
         self.assertIn("8 head-heights", prompt)
+        self.assertIn("passport-like", prompt)
+        self.assertIn("Forbidden shirt colors", prompt)
+        self.assertIn("three-quarter", prompt)
 
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon18-", chunk)
+        self.assertIn("tryon19-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -183,6 +202,18 @@ class TryOnAssetTest(unittest.TestCase):
         self.assertGreater(top.getpixel((15, 70))[3], 200)
         self.assertGreater(top.getpixel((35, 70))[3], 200)
         self.assertGreater(top.getpixel((41, 70))[3], 160)
+        self.assertTrue(self.ns["_tryon_assets_valid"](assets))
+
+    def test_light_collar_and_hem_punch_to_neckline_and_ankle(self):
+        assets = self.ns["_tryon_make_assets"](body_with_light_collar_and_hem())
+        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
+        bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
+        self.assertLess(top.getpixel((60, 52))[3], 64)
+        self.assertLess(top.getpixel((60, 70))[3], 64)
+        self.assertGreater(top.getpixel((60, 30))[3], 200)
+        self.assertLess(bottom.getpixel((60, 140))[3], 64)
+        self.assertLess(bottom.getpixel((60, 152))[3], 64)
+        self.assertGreater(bottom.getpixel((50, 160))[3], 200)
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 
     def test_empty_plate_fails_quality_gate(self):
