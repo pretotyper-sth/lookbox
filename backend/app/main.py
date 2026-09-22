@@ -7801,375 +7801,75 @@ def live_check_duplicates(body: DupeCheck, user: UserContext = Depends(current_u
 
 
 _TRYON_PLATE_RGB = (242, 241, 238)
-_TRYON_TOP_SEED = (0.50, 0.39)
-_TRYON_BOTTOM_SEED = (0.50, 0.67)
-_TRYON_SEGMENT_MAX_SIDE = 768
-
-
-def _tryon_border_background(rgb: Image.Image) -> Image.Image:
-    """가장자리에서 이어진 판색만 배경으로 본다. 검정 티와 값이 충분히 다르다."""
+def _tryon_garment_mask(rgb: Image.Image, kind: str) -> Image.Image:
+    """Only connected pixels of the prescribed black shirt or blue jeans are removable."""
     im = rgb.convert("RGB")
     w, h = im.size
-    px = im.load()
-    pr, pg, pb = _TRYON_PLATE_RGB
-    bg = bytearray(w * h)
-    q: deque[tuple[int, int]] = deque()
-    for x in range(w):
-        q.append((x, 0))
-        q.append((x, h - 1))
-    for y in range(h):
-        q.append((0, y))
-        q.append((w - 1, y))
+    pixels = im.load()
+    candidates = bytearray(w * h)
+    y0, y1 = (int(h * 0.20), int(h * 0.60)) if kind == "top" else (int(h * 0.40), int(h * 0.94))
+    for y in range(y0, y1):
+        for x in range(w):
+            r, g, b = pixels[x, y]
+            if kind == "top":
+                garment = max(r, g, b) < 145 and max(r, g, b) - min(r, g, b) < 32
+                garment = garment and not (r > b + 6 and r > g + 4)
+            else:
+                garment = b > r + 18 and b > g + 8 and g > r + 8
+            if garment:
+                candidates[y * w + x] = 255
+
+    # Seeds select garments, never paint them. Preserve disconnected trouser legs.
+    seed_y0, seed_y1 = (0.34, 0.44) if kind == "top" else (0.60, 0.74)
     seen = bytearray(w * h)
-    while q:
-        x, y = q.popleft()
-        if not (0 <= x < w and 0 <= y < h):
-            continue
-        i = y * w + x
-        if seen[i]:
-            continue
-        seen[i] = 1
-        r, g, b = px[x, y]
-        if abs(r - pr) + abs(g - pg) + abs(b - pb) >= 18:
-            continue
-        bg[i] = 1
-        q.append((x + 1, y))
-        q.append((x - 1, y))
-        q.append((x, y + 1))
-        q.append((x, y - 1))
-    return Image.frombytes("L", (w, h), bytes(255 if v else 0 for v in bg))
-
-
-def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """가슴·허벅지 시드에서 생성본의 실제 옷 색을 따라 4방향으로 모은다."""
-    im = rgb.convert("RGB")
-    w, h = im.size
-    px = im.load()
-    bg_px = bg.convert("L").load()
-    fx, fy = _TRYON_TOP_SEED if kind == "top" else _TRYON_BOTTOM_SEED
-    sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
-    sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
-    y0 = int(h * (0.14 if kind == "top" else 0.42))
-    y1 = int(h * (0.64 if kind == "top" else 0.93))
-
-    def skin(r: int, g: int, b: int) -> bool:
-        L = 0.299 * r + 0.587 * g + 0.114 * b
-        return r > 88 and r > b + 8 and r >= g - 8 and 72 < L < 210
-
-    def distance(a: tuple[int, int, int], b: tuple[int, int, int]) -> int:
-        return abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2])
-
-    def seed_color(x: int, y: int) -> tuple[int, int, int] | None:
-        radius = max(5, min(w, h) // 28)
-        samples = []
-        for dy in range(-radius, radius + 1, 2):
-            for dx in range(-radius, radius + 1, 2):
-                nx, ny = x + dx, y + dy
-                if not (0 <= nx < w and y0 <= ny < y1) or bg_px[nx, ny] > 128:
-                    continue
-                r, g, b = px[nx, ny]
-                if not skin(r, g, b):
-                    samples.append((r, g, b))
-        if not samples:
-            return None
-        samples.sort(key=lambda c: sum(c))
-        return samples[len(samples) // 2]
-
-    def valid_seed(x: int, y: int) -> bool:
-        if not (y0 <= y < y1) or bg_px[x, y] > 128:
-            return False
-        r, g, b = px[x, y]
-        return not skin(r, g, b) and (0.299 * r + 0.587 * g + 0.114 * b) < 252
-
     out = bytearray(w * h)
-    y_seeds = (0.22, 0.30, 0.38, 0.46) if kind == "top" else (0.54, 0.66, 0.78, 0.86)
-    seeds = []
-    radius = max(4, min(w, h) // 28)
-    for fy in y_seeds:
-        candidate_y = min(y1 - 1, max(y0, int(round(fy * (h - 1)))))
-        for dy in range(-radius, radius + 1, 2):
-            for dx in range(-radius, radius + 1, 2):
-                x = min(w - 1, max(0, sx + dx))
-                y = min(y1 - 1, max(y0, candidate_y + dy))
-                if valid_seed(x, y):
-                    seeds.append((x, y))
-                    break
-            if seeds and seeds[-1][1] >= candidate_y - radius:
-                break
-    seen = bytearray(w * h)
-    for sx, sy in seeds:
-        target = seed_color(sx, sy)
-        if target is None:
-            continue
-        target_luma = 0.299 * target[0] + 0.587 * target[1] + 0.114 * target[2]
-        q: deque[tuple[int, int]] = deque([(sx, sy)])
-        while q:
-            x, y = q.popleft()
-            if not (0 <= x < w and y0 <= y < y1):
+    for sy in range(int(h * seed_y0), int(h * seed_y1)):
+        for sx in range(int(w * 0.38), int(w * 0.62)):
+            start = sy * w + sx
+            if seen[start] or not candidates[start]:
                 continue
-            i = y * w + x
-            if seen[i]:
-                continue
-            seen[i] = 1
-            if bg_px[x, y] > 128:
-                continue
-            r, g, b = px[x, y]
-            if skin(r, g, b) or (target_luma <= 225 and (0.299 * r + 0.587 * g + 0.114 * b) > 225):
-                continue
-            # 생성 결과 안에 섞인 화면·키보드·가구 색이 옷으로 연결되지 않게 한다.
-            chroma = max(r, g, b) - min(r, g, b)
-            if kind == "top" and chroma > 78:
-                continue
-            if kind == "bottom":
-                luma = 0.299 * r + 0.587 * g + 0.114 * b
-                if luma > 210 or (chroma > 110 and b <= r + 6):
-                    continue
-            if distance((r, g, b), target) > 112:
-                continue
-            out[i] = 255
-            q.append((x + 1, y))
-            q.append((x - 1, y))
-            q.append((x, y + 1))
-            q.append((x, y - 1))
-    return Image.frombytes("L", (w, h), bytes(out))
+            seen[start] = 1
+            q = deque([start])
+            blob = []
+            while q:
+                i = q.popleft()
+                blob.append(i)
+                x, y = i % w, i // w
+                for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                    if not (0 <= nx < w and y0 <= ny < y1):
+                        continue
+                    j = ny * w + nx
+                    if not seen[j] and candidates[j]:
+                        seen[j] = 1
+                        q.append(j)
+            if len(blob) >= w * h * 0.008:
+                for i in blob:
+                    out[i] = 255
+    mask = Image.frombytes("L", (w, h), bytes(out))
+    enclosed = ImageChops.invert(mask)
+    ImageDraw.floodfill(enclosed, (0, 0), 0)
+    # Only tiny, enclosed neutral highlights are fabric texture. Never fill skin.
+    if enclosed.histogram()[255] <= max(4, sum(bool(v) for v in out) * 0.01):
+        for i, v in enumerate(enclosed.tobytes()):
+            if v:
+                r, g, b = pixels[i % w, i // w]
+                if max(r, g, b) - min(r, g, b) < 12:
+                    out[i] = 255
+        mask = Image.frombytes("L", (w, h), bytes(out))
+    return mask
 
 
 def _tryon_soft_hole(mask: Image.Image) -> Image.Image:
-    """옷 실루엣 안의 질감 구멍만 메우고, 바깥 윤곽은 키우지 않는다."""
-    binary = mask.convert("L").point(lambda v: 255 if v > 40 else 0)
-    inverted = binary.point(lambda v: 0 if v else 255)
-    w, h = inverted.size
-    for xy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
-        if inverted.getpixel(xy):
-            ImageDraw.floodfill(inverted, xy, 0)
-    filled = ImageChops.lighter(binary, inverted)
-    closed = filled.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
-    soft = closed.filter(ImageFilter.GaussianBlur(radius=0.8))
-    solid = closed.point(lambda v: 255 if v > 200 else 0)
-    return ImageChops.lighter(soft, solid)
-
-
-def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """원본에서 피부·배경·신발을 뺀, 그 부위 옷일 수 있는 픽셀."""
-    im = rgb.convert("RGB")
-    w, h = im.size
-    px = im.load()
-    bg_px = bg.convert("L").load()
-    y0 = int(h * (0.12 if kind == "top" else 0.44))
-    y1 = int(h * (0.62 if kind == "top" else 0.93))
-    out = bytearray(w * h)
-    for y in range(y0, y1):
-        row = y * w
-        for x in range(w):
-            if bg_px[x, y] > 128:
-                continue
-            r, g, b = px[x, y]
-            luma = 0.299 * r + 0.587 * g + 0.114 * b
-            if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
-                continue
-            chroma = max(r, g, b) - min(r, g, b)
-            if kind == "top":
-                # 밝은 크루넥·회색 티도 옷이다. 판색 배경은 bg 마스크가 이미 걸렀다.
-                if chroma > 90:
-                    continue
-            else:
-                if luma >= 225 and y >= int(h * 0.86):
-                    continue
-                if chroma > 110 and b <= r + 6:
-                    continue
-            out[row + x] = 255
-    return Image.frombytes("L", (w, h), bytes(out))
-
-
-def _tryon_grow_through(seed: Image.Image, candidates: Image.Image) -> Image.Image:
-    """시드에서 이어진 옷 픽셀만 따라 실루엣까지 채운다."""
-    seed_im = seed.convert("L")
-    cand_im = candidates.convert("L")
-    if cand_im.size != seed_im.size:
-        cand_im = cand_im.resize(seed_im.size, Image.NEAREST)
-    w, h = seed_im.size
-    seed_b = seed_im.tobytes()
-    cand_b = cand_im.tobytes()
-    out = bytearray(w * h)
-    q: deque[int] = deque()
-    for i, v in enumerate(seed_b):
-        if v > 80 and cand_b[i] > 80:
-            out[i] = 255
-            q.append(i)
-    while q:
-        i = q.popleft()
-        x, y = i % w, i // w
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if not (0 <= nx < w and 0 <= ny < h):
-                continue
-            j = ny * w + nx
-            if out[j] or cand_b[j] < 80:
-                continue
-            out[j] = 255
-            q.append(j)
-    return Image.frombytes("L", (w, h), bytes(out))
-
-
-def _tryon_largest_blob(mask: Image.Image) -> Image.Image:
-    """떨어진 소품 덩어리는 버리고 가장 큰 옷만 남긴다."""
-    im = mask.convert("L")
-    w, h = im.size
-    data = im.tobytes()
-    seen = bytearray(w * h)
-    best: list[int] = []
-    for i, v in enumerate(data):
-        if v < 80 or seen[i]:
-            continue
-        blob: list[int] = []
-        q: deque[int] = deque([i])
-        seen[i] = 1
-        while q:
-            j = q.popleft()
-            blob.append(j)
-            x, y = j % w, j // w
-            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-                if not (0 <= nx < w and 0 <= ny < h):
-                    continue
-                k = ny * w + nx
-                if seen[k] or data[k] < 80:
-                    continue
-                seen[k] = 1
-                q.append(k)
-        if len(blob) > len(best):
-            best = blob
-    out = bytearray(w * h)
-    for j in best:
-        out[j] = 255
-    return Image.frombytes("L", (w, h), bytes(out))
-
-
-def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, kind: str) -> Image.Image:
-    """시드 실루엣의 각 세로줄에서 피부·배경·신발이 나올 때까지 구멍을 목·발목까지 늘린다."""
-    im = rgb.convert("RGB")
-    w, h = im.size
-    px = im.load()
-    data = bytearray(mask.convert("L").tobytes())
-    y_lo = int(h * (0.12 if kind == "top" else 0.42))
-    y_hi = int(h * (0.64 if kind == "top" else 0.93))
-    xs = [i % w for i, v in enumerate(data) if v > 80]
-    if not xs:
-        return mask
-
-    def garment_pixel(x: int, y: int) -> bool:
-        r, g, b = px[x, y]
-        luma = 0.299 * r + 0.587 * g + 0.114 * b
-        chroma = max(r, g, b) - min(r, g, b)
-        if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
-            return False
-        if kind == "top" and y < h * 0.28 and luma < 70 and chroma < 40:
-            return False
-        if kind == "bottom" and y > h * 0.86 and luma > 200:
-            return False
-        if kind == "top" and chroma > 90:
-            return False
-        if kind == "bottom" and chroma > 110 and b <= r + 6:
-            return False
-        # 흰 티·연청은 판색 flood에 먹혀 bg가 된다. 세로줄로만 이어가면
-        # 허벅지 사이 배경은 마스크가 없는 줄이라 건너뛴다.
-        return True
-
-    for x in range(min(xs), max(xs) + 1):
-        ys = [y for y in range(y_lo, y_hi) if data[y * w + x] > 80]
-        if not ys:
-            continue
-        if max(ys) - min(ys) < int(h * 0.08):
-            continue
-        y = min(ys) - 1
-        while y >= y_lo and garment_pixel(x, y):
-            data[y * w + x] = 255
-            y -= 1
-        y = max(ys) + 1
-        while y < y_hi and garment_pixel(x, y):
-            data[y * w + x] = 255
-            y += 1
-    return Image.frombytes("L", (w, h), bytes(data))
-
-
-def _tryon_geometry_mask(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
-    """흰 옷이 판색으로 먹혀도 목~밑단·허리~발목 기하는 뚫는다. 피부·신발은 남긴다."""
-    im = rgb.convert("RGB")
-    w, h = im.size
-    mask = Image.new("L", (w, h), 0)
-    draw = ImageDraw.Draw(mask)
-    if kind == "top":
-        draw.polygon([
-            (round(w * 0.40), round(h * 0.18)),
-            (round(w * 0.60), round(h * 0.18)),
-            (round(w * 0.78), round(h * 0.28)),
-            (round(w * 0.82), round(h * 0.42)),
-            (round(w * 0.72), round(h * 0.58)),
-            (round(w * 0.28), round(h * 0.58)),
-            (round(w * 0.18), round(h * 0.42)),
-            (round(w * 0.22), round(h * 0.28)),
-        ], fill=255)
-    else:
-        draw.polygon([
-            (round(w * 0.29), round(h * 0.54)), (round(w * 0.49), round(h * 0.54)),
-            (round(w * 0.47), round(h * 0.90)), (round(w * 0.30), round(h * 0.90)),
-        ], fill=255)
-        draw.polygon([
-            (round(w * 0.51), round(h * 0.54)), (round(w * 0.71), round(h * 0.54)),
-            (round(w * 0.70), round(h * 0.90)), (round(w * 0.53), round(h * 0.90)),
-        ], fill=255)
-    raw = bytearray(mask.tobytes())
-    pixels = im.load()
-    bg_pixels = bg.convert("L").load()
-    for y in range(h):
-        for x in range(w):
-            interior = (
-                (kind == "top" and w * 0.32 <= x <= w * 0.68)
-                or (kind == "bottom" and (w * 0.32 <= x <= w * 0.48 or w * 0.52 <= x <= w * 0.68))
-            )
-            if not raw[y * w + x] or (bg_pixels[x, y] > 128 and not interior):
-                continue
-            r, g, b = pixels[x, y]
-            luma = 0.299 * r + 0.587 * g + 0.114 * b
-            if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
-                raw[y * w + x] = 0
-                continue
-            if kind == "bottom" and y > h * 0.86 and luma > 200:
-                raw[y * w + x] = 0
-    return Image.frombytes("L", (w, h), bytes(raw))
+    # Feather inward only: skin, background and the gap between legs stay opaque.
+    binary = mask.convert("L").point(lambda v: 255 if v > 128 else 0)
+    return ImageChops.darker(binary, binary.filter(ImageFilter.GaussianBlur(0.6)))
 
 
 def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     """전신 PNG에서 상의·하의·전체 구멍 PNG를 만든다. 신발은 항상 불투명."""
     rgb = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    segment_rgb = rgb
-    if max(rgb.size) > _TRYON_SEGMENT_MAX_SIDE:
-        scale = _TRYON_SEGMENT_MAX_SIDE / max(rgb.size)
-        segment_rgb = rgb.resize(
-            (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale))),
-            Image.BILINEAR,
-        )
-    bg = _tryon_border_background(segment_rgb)
-
-    def hole_from(kind: str) -> Image.Image:
-        seed = _tryon_seed_component(segment_rgb, bg, kind)
-        cand = _tryon_garment_candidates(segment_rgb, bg, kind)
-        grown = _tryon_largest_blob(_tryon_grow_through(seed, cand))
-        if not grown.getbbox():
-            grown = seed
-        grown = _tryon_extend_columns(segment_rgb, bg, grown, kind)
-        return ImageChops.lighter(grown, _tryon_geometry_mask(segment_rgb, bg, kind))
-
-    top_m = hole_from("top")
-    bot_m = hole_from("bottom")
-    overlap = ImageChops.multiply(top_m, bot_m)
-    if overlap.getbbox():
-        w, h = segment_rgb.size
-        split_y = int(round((_TRYON_TOP_SEED[1] + _TRYON_BOTTOM_SEED[1]) * 0.5 * h))
-        overlap_upper = overlap.copy()
-        overlap_upper.paste(0, (0, split_y, w, h))
-        overlap_lower = overlap.copy()
-        overlap_lower.paste(0, (0, 0, w, split_y))
-        top_m = ImageChops.subtract(top_m, overlap_lower)
-        bot_m = ImageChops.subtract(bot_m, overlap_upper)
+    top_m = _tryon_garment_mask(rgb, "top")
+    bot_m = _tryon_garment_mask(rgb, "bottom")
 
     def png(im: Image.Image) -> bytes:
         buf = io.BytesIO()
@@ -8183,9 +7883,6 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
 
     top_h = _tryon_soft_hole(top_m)
     bot_h = _tryon_soft_hole(bot_m)
-    if top_h.size != rgb.size:
-        top_h = top_h.resize(rgb.size, Image.BILINEAR)
-        bot_h = bot_h.resize(rgb.size, Image.BILINEAR)
     full_h = ImageChops.lighter(top_h, bot_h)
     return {
         "body": png(rgb.convert("RGBA")),
@@ -8198,16 +7895,27 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
 def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     if not assets or not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
         return False
-    top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
-    bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
-    w, h = top.size
+    images = {k: Image.open(io.BytesIO(assets[k])).convert("RGBA") for k in ("body", "top", "bottom", "full")}
+    body, top, bottom = (images[k] for k in ("body", "top", "bottom"))
+    w, h = body.size
     n = w * h
-    if n < 8:
+    if n < 8 or any(im.size != body.size for im in images.values()):
         return False
-    body = Image.open(io.BytesIO(assets["body"])).convert("RGB")
-    plate = Image.new("RGB", body.size, _TRYON_PLATE_RGB)
-    signal = sum(value > 12 for value in ImageChops.difference(body, plate).convert("L").getdata())
-    if signal < n * 0.03:
+    for kind, rows in (("top", (0.32, 0.39, 0.47)), ("bottom", (0.60, 0.70, 0.82))):
+        alpha = images[kind].getchannel("A")
+        # A large hole alone is not evidence of a correctly segmented garment.
+        for fy in rows:
+            strip = alpha.crop((int(w * 0.40), int(h * fy), int(w * 0.60), int(h * fy) + 1))
+            if sum(strip.histogram()[:128]) < strip.width * 0.6:
+                return False
+        expected = _tryon_garment_mask(body.convert("RGB"), kind)
+        hole = ImageChops.invert(alpha)
+        spill = ImageChops.subtract(hole, expected)
+        if spill.getbbox():
+            return False
+    if ImageChops.difference(images["full"].getchannel("A"), ImageChops.darker(
+        top.getchannel("A"), bottom.getchannel("A")
+    )).getbbox():
         return False
     top_a = top.getchannel("A")
     bot_a = bottom.getchannel("A")
@@ -8242,8 +7950,8 @@ NON-NEGOTIABLE:
 The result is a straight-on passport-like standing portrait. Both ears equally visible, both eyes equally visible,
 facial midline vertical, no three-quarter view. Completely ignore Image 1's camera angle, head yaw, tilt, and crop.
 Even if the selfie is diagonal or looking aside, the output face looks directly at the lens.
-Adult 8-head proportion is mandatory: crown-to-chin 11–12% of image height, shoulders 22%, waist 48%,
-crotch 62%, ankles 90%, shoes 96%. Long full legs. Never a large head, never short legs, never a distant tiny figure.
+Adult 8-head proportion is mandatory: crown at 6%, chin at 17%, shoulders at 21%, waist at 44%,
+crotch at 53%, ankles at 88%, soles at 94% of image height. Long full legs. Never a large head, never short legs, never a distant tiny figure.
 The T-shirt is matte black RGB 28 28 32. Forbidden shirt colors: white, gray, cream, heather, light.
 The jeans are mid-blue RGB 64 104 150. Forbidden pant colors: white, gray, black, khaki.
 
@@ -8258,7 +7966,7 @@ Strictly straight-on, front-facing standing pose, shoulders and hips square to t
 Face the lens directly: both eyes equally visible, eyes parallel to the horizon, facial midline vertical,
 and no head yaw, roll, pitch, or three-quarter view. Keep the head and face naturally level even if
 the reference selfie is tilted or diagonal.
-Use a slight natural weight shift, relaxed shoulders, and arms slightly away from
+Keep weight evenly distributed, shoulders level, and arms slightly away from
 the torso so sleeves are visible. Do not copy the selfie angle or tilt the face.
 
 FRAMING:
@@ -8266,9 +7974,9 @@ Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
 Leave about 6% empty studio above the hair and below the shoes.
 The garments should fill most of the frame width — tight full-body crop, not a distant figure.
 The reference photo is a face-identity reference only, never a body-scale reference. Do not enlarge the face because the
-input is a portrait crop. Build a naturally proportioned adult around 8 head-heights tall: crown-to-chin about 11–12%
-of the final image height, shoulders around 22%, waist around 48%, crotch around 62%, ankles around 90%, and shoes ending
-around 96%. The torso must be long enough and the legs must be visibly full-length; never make a short-legged or squat figure.
+input is a portrait crop. Build a naturally proportioned adult around 8 head-heights tall: crown-to-chin about 11%
+of the final image height, crown at 6%, chin at 17%, shoulders around 21%, waist around 44%, crotch around 53%, ankles around 88%, and soles ending
+around 94%. The torso must be long enough and the legs must be visibly full-length; never make a short-legged or squat figure.
 Never enlarge a cropped profile face, make the body short-legged, or compress the torso and legs to preserve selfie scale.
 
 OUTFIT:
@@ -8378,7 +8086,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon20-{sig}-{profile_sig}"
+    key = f"tryon21-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8447,8 +8155,6 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                 report("tryon_segment")
                 assets_bytes = _tryon_make_assets(out)
                 if _tryon_assets_valid(assets_bytes):
-                    for name, cat in (("top", "top"), ("bottom", "bottom"), ("full", "bottom")):
-                        assets_bytes[name] = _polish_cutout_alpha(assets_bytes[name], cat)
                     break
                 print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
                 assets_bytes = None
@@ -8474,7 +8180,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon20",
+                        "mask": "tryon21",
                         "assets": urls,
                     },
                 }).execute()

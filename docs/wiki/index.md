@@ -9,6 +9,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 
 ## Features
+- [tryon-mask-boundaries](tryon-mask-boundaries.md) — tryon21은 다각형·세로 확장·브라우저 임의 누끼를 제거하고 실제 검정 티·파란 청바지 경계만 사용; 불분명한 생성본은 실패 처리
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님
@@ -21,7 +22,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 대상 선택 행만큼 프사 스테이지를 144px로 줄여 사진·URL과 전체 높이 통일. tryon20은 흰 옷이 판색으로 먹혀도 목라인·발목까지 기하+세로줄로 투명화한다. 실패는 일 3회
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 대상 선택 행만큼 프사 스테이지를 144px로 줄여 사진·URL과 전체 높이 통일. 마스크는 tryon21에서 옷 밖 확장을 제거했다([[tryon-mask-boundaries]]). 실패는 일 3회
 - [tryon-multiple-profiles](tryon-multiple-profiles.md) — 바로보기에서 본인·본인 외 프로필을 저장하고 카메라 우상단에서 즉시 전환; 생성 %는 작업에 붙어 탭을 다녀도 되감지 않음. 본인 외 입력 시트 위치까지 보존
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px

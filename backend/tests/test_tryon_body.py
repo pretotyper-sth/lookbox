@@ -9,24 +9,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = (
-    "_tryon_border_background",
-    "_tryon_seed_component",
-    "_tryon_soft_hole",
-    "_tryon_garment_candidates",
-    "_tryon_grow_through",
-    "_tryon_largest_blob",
-    "_tryon_extend_columns",
-    "_tryon_geometry_mask",
-    "_tryon_make_assets",
-    "_tryon_assets_valid",
-)
-CONSTS = (
-    "_TRYON_PLATE_RGB",
-    "_TRYON_TOP_SEED",
-    "_TRYON_BOTTOM_SEED",
-    "_TRYON_SEGMENT_MAX_SIDE",
-)
+FNS = ("_tryon_garment_mask", "_tryon_soft_hole", "_tryon_make_assets", "_tryon_assets_valid")
+CONSTS = ("_TRYON_PLATE_RGB",)
 
 
 def load_assets():
@@ -148,7 +132,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon20-", chunk)
+        self.assertIn("tryon21-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -220,29 +204,82 @@ class TryOnAssetTest(unittest.TestCase):
         self.assertGreater(top.getpixel((41, 70))[3], 160)
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 
-    def test_light_collar_and_hem_punch_to_neckline_and_ankle(self):
-        assets = self.ns["_tryon_make_assets"](body_with_light_collar_and_hem())
-        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
-        bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
-        self.assertLess(top.getpixel((60, 52))[3], 64)
-        self.assertLess(top.getpixel((60, 70))[3], 64)
-        self.assertGreater(top.getpixel((60, 30))[3], 200)
-        self.assertLess(bottom.getpixel((60, 140))[3], 64)
-        self.assertLess(bottom.getpixel((60, 152))[3], 64)
-        self.assertGreater(bottom.getpixel((50, 160))[3], 200)
+    def test_unsegmentable_light_clothes_fail_instead_of_inventing_holes(self):
+        for fixture in (body_with_light_collar_and_hem, body_with_plate_like_white_clothes):
+            with self.subTest(fixture=fixture.__name__):
+                assets = self.ns["_tryon_make_assets"](fixture())
+                self.assertFalse(self.ns["_tryon_assets_valid"](assets))
+                top = Image.open(io.BytesIO(assets["top"]))
+                self.assertEqual(top.getpixel((25, 65))[3], 255)
+                self.assertEqual(top.getpixel((60, 40))[3], 255)
+
+    def test_gradient_background_and_highlighted_skin_stay_completely_opaque(self):
+        im = Image.open(io.BytesIO(neutral_body())).convert("RGB")
+        expected = im.copy()
+        px = im.load()
+        for y in range(im.height):
+            for x in range(im.width):
+                if px[x, y] == (242, 241, 238):
+                    px[x, y] = (230 + x % 20, 226 + x % 20, 220 + x % 20)
+                elif px[x, y] == (198, 146, 119):
+                    px[x, y] = ((246, 221, 205) if y % 3 else (82, 57, 43))
+        out = io.BytesIO(); im.save(out, format="PNG")
+        assets = self.ns["_tryon_make_assets"](out.getvalue())
+        self.assertTrue(self.ns["_tryon_assets_valid"](assets))
+        full = Image.open(io.BytesIO(assets["full"]))
+        for y in range(im.height):
+            for x in range(im.width):
+                if expected.getpixel((x, y)) not in ((52, 52, 55), (64, 104, 150)):
+                    self.assertEqual(full.getpixel((x, y))[3], 255, (x, y))
+
+    def test_separate_trouser_legs_keep_the_gap(self):
+        im = Image.open(io.BytesIO(neutral_body())).convert("RGB")
+        ImageDraw.Draw(im).rectangle((58, 94, 61, 155), fill=(242, 241, 238))
+        out = io.BytesIO(); im.save(out, format="PNG")
+        assets = self.ns["_tryon_make_assets"](out.getvalue())
+        bottom = Image.open(io.BytesIO(assets["bottom"]))
+        for y in (110, 130, 150):
+            self.assertLess(bottom.getpixel((50, y))[3], 64)
+            self.assertLess(bottom.getpixel((70, y))[3], 64)
+            self.assertEqual(bottom.getpixel((60, y))[3], 255)
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
 
-    def test_plate_like_collar_and_calves_still_punch_to_neck_and_ankle(self):
-        assets = self.ns["_tryon_make_assets"](body_with_plate_like_white_clothes())
-        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
-        bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
-        self.assertLess(top.getpixel((60, 52))[3], 64)
-        self.assertLess(top.getpixel((60, 70))[3], 64)
-        self.assertGreater(top.getpixel((60, 30))[3], 200)
-        self.assertLess(bottom.getpixel((60, 140))[3], 64)
-        self.assertLess(bottom.getpixel((60, 152))[3], 64)
-        self.assertGreater(bottom.getpixel((50, 160))[3], 200)
+    def test_full_resolution_curved_edges_match_independent_garment_shapes(self):
+        w, h = 1024, 1536
+        im = Image.new("RGB", (w, h), (237, 231, 223))
+        top_truth = Image.new("L", (w, h))
+        bottom_truth = Image.new("L", (w, h))
+        top_draw = ImageDraw.Draw(top_truth)
+        top_draw.polygon([(425, 330), (599, 330), (685, 380), (730, 560),
+                          (655, 590), (635, 510), (645, 775), (379, 775),
+                          (389, 510), (369, 590), (294, 560), (339, 380)], fill=255)
+        top_draw.ellipse((453, 302, 571, 386), fill=0)
+        pants_draw = ImageDraw.Draw(bottom_truth)
+        pants_draw.polygon([(379, 776), (645, 776), (638, 1340), (534, 1340),
+                            (515, 915), (509, 915), (490, 1340), (386, 1340)], fill=255)
+        im.paste((35, 36, 40), mask=top_truth)
+        im.paste((64, 104, 150), mask=bottom_truth)
+        # A hand crossing the shirt is foreground skin, including bright highlights.
+        hand = (405, 595, 439, 690)
+        ImageDraw.Draw(im).ellipse(hand, fill=(246, 221, 205))
+        top_draw.ellipse(hand, fill=0)
+        out = io.BytesIO(); im.save(out, format="PNG")
+        assets = self.ns["_tryon_make_assets"](out.getvalue())
         self.assertTrue(self.ns["_tryon_assets_valid"](assets))
+        for kind, truth in (("top", top_truth), ("bottom", bottom_truth)):
+            alpha = Image.open(io.BytesIO(assets[kind])).getchannel("A")
+            predicted = alpha.point(lambda a: 255 if a < 128 else 0)
+            intersection = ImageChops.multiply(predicted, truth).histogram()[255]
+            union = ImageChops.lighter(predicted, truth).histogram()[255]
+            self.assertGreater(intersection / union, 0.995)
+            self.assertIsNone(ImageChops.subtract(ImageChops.invert(alpha), truth).getbbox())
+
+    def test_quality_gate_rejects_polygon_spill(self):
+        assets = self.ns["_tryon_make_assets"](neutral_body())
+        im = Image.open(io.BytesIO(assets["top"]))
+        im.putpixel((25, 65), (242, 241, 238, 0))
+        out = io.BytesIO(); im.save(out, format="PNG"); assets["top"] = out.getvalue()
+        self.assertFalse(self.ns["_tryon_assets_valid"](assets))
 
     def test_empty_plate_fails_quality_gate(self):
         out = io.BytesIO()

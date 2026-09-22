@@ -964,3 +964,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 2026-09-22: 바로보기 전신 생성 중 본인 외·다른 탭을 다녀오면 보간 %가 단계 시작값(8·78)으로 되감기던 문제를 고쳤다. 진행률 훅은 보고 있는 대상이 아니라 `tryOnMaking` 작업에 붙고, 같은 단계를 다시 넣어도 보간 시작 시각을 유지한다. 근거: `frontend/src/proto/04-screens-ab.jsx` `useImportProgress`. 위키: [[tryon-multiple-profiles]] [[tryon-setup-from-mypage]].
 2026-09-22: 바로보기 전신을 `tryon20`으로 올렸다. 흰 티·종아리가 스튜디오 판색으로 먹혀 목·발목이 안 뚫리던 문제를 tryon14 기하 보조 마스크와 세로줄 확장으로 되돌렸다. 근거: `backend/app/main.py` `_tryon_geometry_mask` `_tryon_extend_columns`; `frontend/src/proto/03-data.jsx` `TRYON_BODY_REV`. 위키: [[tryon-setup-from-mypage]].
 2026-09-20: 바로 보기 전신을 `tryon12`로 올려 이전 캐시를 무효화했다. 생성본의 옷 색이 흔들려도 상의·하의 시드 색을 기준으로 연결 마스크를 만들고, 9px closing으로 내부 질감 구멍을 메운다. 전신 프롬프트는 얼굴을 약 12% 높이·7.5~8등신으로 제한해 큰 얼굴과 짧은 비율을 줄였다. 카메라 착장 모드에서는 비활성화만 하지 않고 트랙을 해제해 브라우저 활성 카메라 표시가 남지 않게 했다. 근거: `backend/app/main.py` `_tryon_seed_component`, `_TRYON_BODY_PROMPT`, `frontend/src/proto/10-tryon.jsx`, `frontend/src/proto/03-data.jsx`.
+
+- 2026-09-22: 바로 보기 tryon21 — 다각형·세로 확장·검증 후 알파 변형 제거, 지정 의류 색의 연결 영역 및 경계 검증, 캐시/준비 상태 갱신, 8등신 좌표 모순 수정. 마스크 12개·프론트 8개·빌드 통과; 기존 HEAD에서 재현한 회귀 3건. 실제 생성/카메라/배포 미검증. [[tryon-mask-boundaries]]

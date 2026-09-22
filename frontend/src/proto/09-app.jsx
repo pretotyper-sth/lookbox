@@ -1300,7 +1300,8 @@ function App() {
   const openTryOn = async () => {
     if (wide) { setTryOnDesktopHint(true); return; }
     const selected = (prefs.tryOnActive || 'self') === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs;
-    if (!selected.tryOnFrame || (selected.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon11')) {
+    if (!selected.tryOnFrame || (selected.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon11')
+      || !['top', 'bottom', 'full'].every((key) => selected.tryOnAssets?.[key])) {
       // 프로필 사진이 있으면 만들어서 바로 연다. 없으면 예전처럼 바로 보기 탭에서 사진을 고른다.
       if (selected.avatar) {
         const made = await makeTryOnBody();

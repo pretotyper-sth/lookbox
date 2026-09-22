@@ -6,7 +6,7 @@ const { BottomSheet, Btn, Chip, Icon, useEscapeClose } = window;
 // RealCloset — 바로 보기: 전신 사진에서 옷을 비우고, 카메라로 실제 옷에 겹쳐 본다.
 // 설정은 바텀시트(서비스 안). 사진 없으면 프로필처럼 바로 앨범을 연다.
 
-const { useState, useEffect, useLayoutEffect, useRef } = React;
+const { useState, useEffect, useRef } = React;
 
 function loadImage(src, cors = false) {
   return new Promise((resolve, reject) => {
@@ -59,173 +59,6 @@ function punchPreset(ctx, w, h, cut) {
   ctx.restore();
 }
 
-function lumaOf(r, g, b) {
-  return 0.299 * r + 0.587 * g + 0.114 * b;
-}
-
-function sampleBackdrop(data, W, H, dx, dy, dw, dh) {
-  // 생성본 배경은 #F2F1EE가 아닐 때가 많다. 모서리에서 실제 판색을 읽어 양옆을 맞춘다.
-  const inset = Math.max(2, Math.round(Math.min(dw, dh) * 0.02));
-  const pts = [
-    [dx + inset, dy + inset],
-    [dx + dw - inset - 1, dy + inset],
-    [dx + inset, dy + dh - inset - 1],
-    [dx + dw - inset - 1, dy + dh - inset - 1],
-    [dx + inset, dy + Math.round(dh * 0.45)],
-    [dx + dw - inset - 1, dy + Math.round(dh * 0.45)],
-    [dx + Math.round(dw * 0.5), dy + inset],
-  ];
-  let r = 0, g = 0, b = 0, n = 0;
-  for (let p = 0; p < pts.length; p += 1) {
-    const x = pts[p][0];
-    const y = pts[p][1];
-    if (x < 0 || y < 0 || x >= W || y >= H) continue;
-    const i = (y * W + x) * 4;
-    r += data[i];
-    g += data[i + 1];
-    b += data[i + 2];
-    n += 1;
-  }
-  if (!n) return { r: 242, g: 241, b: 238 };
-  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) };
-}
-
-function isPlatePixel(r, g, b, plate) {
-  const dr = Math.abs(r - plate.r) + Math.abs(g - plate.g) + Math.abs(b - plate.b);
-  if (dr < 46) return true;
-  const L = lumaOf(r, g, b);
-  return L > 198 && (Math.max(r, g, b) - Math.min(r, g, b)) < 28;
-}
-
-function isSkinPixel(r, g, b) {
-  const L = lumaOf(r, g, b);
-  return r > 88 && r > b + 8 && r >= g - 8 && L > 72 && L < 210;
-}
-
-function isGarmentPixel(r, g, b, plate) {
-  if (isPlatePixel(r, g, b, plate) || isSkinPixel(r, g, b)) return false;
-  const L = lumaOf(r, g, b);
-  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
-  if (L > 178 && chroma < 26) return false;
-  return L < 205;
-}
-
-function garmentBand(mode) {
-  // 소매·기장이 밴드 밖으로 나가면 구멍이 직선으로 잘린다. 밑단은 발끝까지.
-  if (mode === 'top') return { y0: 0.16, y1: 0.58, x0: 0.06, x1: 0.94 };
-  if (mode === 'bottom') return { y0: 0.44, y1: 0.995, x0: 0.08, x1: 0.92 };
-  return { y0: 0.16, y1: 0.995, x0: 0.06, x1: 0.94 };
-}
-
-function morphOnce(src, W, H, x0, x1, y0, y1, radius, grow) {
-  const out = new Uint8Array(W * H);
-  for (let y = y0; y < y1; y += 1) {
-    for (let x = x0; x < x1; x += 1) {
-      let hit = grow ? 0 : 1;
-      loop: for (let oy = -radius; oy <= radius; oy += 1) {
-        for (let ox = -radius; ox <= radius; ox += 1) {
-          const nx = x + ox;
-          const ny = y + oy;
-          const inside = nx >= x0 && ny >= y0 && nx < x1 && ny < y1;
-          const on = inside && src[ny * W + nx];
-          if (grow) {
-            if (on) { hit = 1; break loop; }
-          } else if (!on) {
-            hit = 0;
-            break loop;
-          }
-        }
-      }
-      out[y * W + x] = hit;
-    }
-  }
-  return out;
-}
-
-function punchGarmentMask(srcData, W, H, dx, dy, dw, dh, mode, plate) {
-  const band = garmentBand(mode);
-  const x0 = Math.max(0, Math.floor(dx + dw * band.x0));
-  const x1 = Math.min(W, Math.ceil(dx + dw * band.x1));
-  const y0 = Math.max(0, Math.floor(dy + dh * band.y0));
-  const y1 = Math.min(H, Math.ceil(dy + dh * band.y1));
-  const yBot = Math.min(H, dy + (mode === 'bottom' || mode === 'full' ? Math.round(dh * 0.92) : dh));
-  const punch = new Uint8Array(W * H);
-  const src = srcData.data;
-  for (let y = y0; y < y1; y += 1) {
-    for (let x = x0; x < x1; x += 1) {
-      const i = (y * W + x) * 4;
-      if (isGarmentPixel(src[i], src[i + 1], src[i + 2], plate)) punch[y * W + x] = 1;
-    }
-  }
-  // 옷 실루엣은 키우지 않는다. 1px closing만 해서 안쪽 구멍만 메운다.
-  const closed = morphOnce(morphOnce(punch, W, H, x0, x1, y0, y1, 1, true), W, H, x0, x1, y0, y1, 1, false);
-  // 하의·전체: 기장이 덜 잡히면 그 폭 그대로 발 아래까지 이어서 뚫는다. 좌우는 옷 폭을 넘지 않는다.
-  if (mode === 'bottom' || mode === 'full') {
-    let minX = x1;
-    let maxX = x0;
-    let maxY = y0;
-    for (let y = y0; y < y1; y += 1) {
-      for (let x = x0; x < x1; x += 1) {
-        if (!closed[y * W + x]) continue;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-    if (maxY > y0 && maxX > minX) {
-      for (let y = maxY; y < yBot; y += 1) {
-        for (let x = minX; x <= maxX; x += 1) closed[y * W + x] = 1;
-      }
-    }
-  }
-  return closed;
-}
-
-async function punchBody(src, mode, stageW, stageH) {
-  const img = await loadImage(src, !src.startsWith('data:'));
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-  const sw = Math.max(2, Math.round(stageW || iw));
-  const sh = Math.max(2, Math.round(stageH || ih));
-  const scale = Math.min(sw / iw, sh / ih);
-  const dw = Math.max(1, Math.round(iw * scale));
-  const dh = Math.max(1, Math.round(ih * scale));
-  const dx = Math.round((sw - dw) / 2);
-  const dy = Math.round((sh - dh) / 2);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = sw;
-  canvas.height = sh;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(img, dx, dy, dw, dh);
-  const sampled = ctx.getImageData(0, 0, sw, sh);
-  const plate = sampleBackdrop(sampled.data, sw, sh, dx, dy, dw, dh);
-  ctx.fillStyle = `rgb(${plate.r},${plate.g},${plate.b})`;
-  ctx.fillRect(0, 0, sw, sh);
-  ctx.drawImage(img, dx, dy, dw, dh);
-  const filled = ctx.getImageData(0, 0, sw, sh);
-
-  const punch = punchGarmentMask(filled, sw, sh, dx, dy, dw, dh, mode, plate);
-  const out = ctx.createImageData(sw, sh);
-  for (let i = 0; i < punch.length; i += 1) {
-    if (!punch[i]) continue;
-    const o = i * 4;
-    out.data[o] = 255;
-    out.data[o + 1] = 255;
-    out.data[o + 2] = 255;
-    out.data[o + 3] = 255;
-  }
-  const mask = document.createElement('canvas');
-  mask.width = sw;
-  mask.height = sh;
-  mask.getContext('2d').putImageData(out, 0, 0);
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(mask, 0, 0);
-  ctx.globalCompositeOperation = 'source-over';
-  return canvas.toDataURL('image/png');
-}
-
-// 카메라에서 부위를 바꿀 때마다 새로 뚫는다. 캔버스 한 번이면 되니 전환이 즉시다.
 const TRYON_MODES = [
   { id: '', label: '착장' },
   { id: 'top', label: '상의' },
@@ -598,52 +431,20 @@ function TryOnSetupOverlay({ open, onClose, initialBody, initialFrame, initialCu
    ============================================================ */
 function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, profileName = '본인', activeProfile = 'self', canSwitchProfile, onSwitchProfile }) {
   const videoRef = useRef(null);
-  const stageRef = useRef(null);
   const streamRef = useRef(null);
   const [err, setErr] = useState('');
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState('');
-  const [overlay, setOverlay] = useState('');
-  const [stage, setStage] = useState({ w: 0, h: 0 });
   const swipeX = useRef(null);
-  const serverAssets = assets && (assets.body || assets.top || assets.bottom || assets.full) ? assets : null;
-
-  useLayoutEffect(() => {
-    if (!open) return undefined;
-    const el = stageRef.current;
-    if (!el) return undefined;
-    const measure = () => setStage({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    if (ro) ro.observe(el);
-    return () => { if (ro) ro.disconnect(); };
-  }, [open]);
+  const hasCut = Boolean(mode && assets?.[mode]);
+  const overlay = (mode && assets?.[mode]) || assets?.body || bodySrc || frameSrc || '';
+  const assetError = mode && !hasCut ? '옷 경계 이미지가 없어요. 닫고 바로 보기를 다시 만들어 주세요.' : '';
 
   useEffect(() => {
     if (!open) {
       setMode('');
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    let dead = false;
-    const src = bodySrc || frameSrc;
-    if (!src) { setOverlay(''); return undefined; }
-    if (serverAssets) {
-      const picked = (mode && serverAssets[mode]) || serverAssets.body || src;
-      setOverlay(picked);
-      return undefined;
-    }
-    if (!bodySrc || !mode) { setOverlay(frameSrc || bodySrc || ''); return undefined; }
-    const w = stage.w || (typeof window !== 'undefined' ? window.innerWidth : 0);
-    const h = stage.h || (typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.62) : 0);
-    if (!w || !h) return undefined;
-    punchBody(bodySrc, mode, w, h)
-      .then((url) => { if (!dead) setOverlay(url); })
-      .catch(() => { if (!dead) setOverlay(frameSrc || ''); });
-    return () => { dead = true; };
-  }, [open, bodySrc, frameSrc, mode, stage.w, stage.h, serverAssets]);
 
   const cycleModes = TRYON_MODES.map((m) => m.id);
   const shiftMode = (dir) => {
@@ -678,7 +479,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
     }
     // 착장만 볼 때는 카메라를 켜지 않는다. 상의·하의·전체에서만 요청해서
     // 켤 때마다 브라우저 권한 배너가 뜨지 않게 한다.
-    if (!mode) {
+    if (!mode || !hasCut) {
       pause();
       return undefined;
     }
@@ -705,7 +506,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
     })();
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, wide, mode]);
+  }, [open, wide, mode, hasCut]);
 
   useEffect(() => () => stop(), []);
 
@@ -781,7 +582,6 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
         }}
       >
       <div
-        ref={stageRef}
         className="lb-tryon-frame"
         style={{ touchAction: 'pan-y' }}
         onPointerDown={(e) => { swipeX.current = e.clientX; }}
@@ -814,7 +614,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
             }}
           />
         )}
-        {mode && !ready && !err && (
+        {mode && hasCut && !ready && !err && (
           <div style={{
             position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
             color: 'rgba(255,255,255,0.8)', fontSize: 13.5, fontWeight: 600,
@@ -822,13 +622,13 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
             카메라 여는 중…
           </div>
         )}
-        {err && (
+        {(assetError || err) && (
           <div style={{
             position: 'absolute', left: 18, right: 18, top: '40%',
             padding: '14px 16px', borderRadius: 'var(--r-md)',
             background: 'rgba(0,0,0,0.72)', color: '#fff',
             fontSize: 13.5, lineHeight: 1.5, textAlign: 'center', fontWeight: 600,
-          }}>{err}</div>
+          }}>{assetError || err}</div>
         )}
       </div>
       </div>

@@ -1550,14 +1550,15 @@ function AddSheet({ ctx }) {
   const canTryOn = !!tryOnAvatar;
   const tryOnBodyReady = canTryOn
     && (tryOnProfile.tryOnRev || '') === (window.TRYON_BODY_REV || 'tryon11')
-    && !!(tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame);
+    && !!(tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame)
+    && ['top', 'bottom', 'full'].every((key) => tryOnProfile.tryOnAssets?.[key]);
   const tryOnStayRef = useR(false);
   tryOnStayRef.current = !!(addSheet.open && tab === 'tryon');
   const launchTryOnFromSheet = async () => {
     if (!tryOnAvatar) return;
     const gen = ++tryOnLaunchGen.current;
     setTryOnErr('');
-    const stale = (tryOnProfile.tryOnRev || '') !== (window.TRYON_BODY_REV || 'tryon11');
+    const stale = !tryOnBodyReady;
     let body = stale ? '' : ((tryOnProfile && (tryOnProfile.tryOnBody || tryOnProfile.tryOnFrame)) || '');
     if (!body && typeof makeTryOnBody === 'function') {
       let fail = '';
