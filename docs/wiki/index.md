@@ -9,7 +9,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 
 ## Features
-- [tryon-mask-boundaries](tryon-mask-boundaries.md) — tryon21은 다각형·세로 확장·브라우저 임의 누끼를 제거하고 실제 검정 티·파란 청바지 경계만 사용; 불분명한 생성본은 실패 처리
+- [tryon-mask-boundaries](tryon-mask-boundaries.md) — tryon21은 옷 밖 마스크 확장 제거. 목·바짓단 흰 띠는 카메라 contain 여백이므로 영상만 cover, 인물 PNG는 contain
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님

@@ -599,7 +599,8 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
           autoPlay
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'contain',
+            objectFit: 'cover',
+            objectPosition: 'center',
             opacity: mode && ready ? 1 : 0,
           }}
         />
