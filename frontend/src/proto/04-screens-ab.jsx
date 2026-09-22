@@ -1019,6 +1019,13 @@ function useImportProgress(active) {
     // 이미 지나온 구간의 단계는 버린다. 비교 기준은 표시된 %다 — 단계의 시작 %와
     // 비교하면, 앞 단계가 구간 끝까지 차오른 뒤 다음 이벤트가 오는 순간 뒤로 간다.
     if (stepRef.current && next.until <= pctRef.current) return;
+    // 같은 단계를 다시 넣어도 보간 시작 시각은 유지한다. 탭을 다녀오면
+    // Date.now()로 리셋돼 85%가 단계 시작값(8·78)으로 되감겼다.
+    if (stepRef.current && stepRef.current.key === next.key) {
+      stepRef.current = { ...stepRef.current, ...next, at: stepRef.current.at };
+      setStep(next);
+      return;
+    }
     stepRef.current = { ...next, at: Date.now() };
     setStep(next);
     advance(next.pct);
@@ -1390,10 +1397,12 @@ function AddSheet({ ctx }) {
   const tryOnAvatar = (tryOnProfile && tryOnProfile.avatar) || '';
   const tryOnSubjectMaking = !!tryOnMaking && tryOnMakingSubject === tryOnSubject;
   const tryOnOtherSubjectMaking = !!tryOnMaking && tryOnMakingSubject !== tryOnSubject;
-  const tryOnUi = useImportProgress(tryOnSubjectMaking);
+  // 보간 %는 생성 작업(tryOnMaking)에 붙인다. 보고 있는 대상·탭에 묶으면
+  // 본인 외/사진 탭으로 갔다가 올 때 0으로 리셋된 뒤 단계 시작값부터 다시 그린다.
+  const tryOnUi = useImportProgress(!!tryOnMaking);
   useE(() => {
     if (tryOnProgress) tryOnUi.report(tryOnProgress);
-  }, [tryOnProgress, tryOnMaking, tryOnMakingSubject, tryOnSubject]);
+  }, [tryOnProgress]);
 
   // 닫기/ESC 시 진행 중 인식·draft를 폐기하기 위한 세션 플래그
   const cancelledRef = useR(false);
