@@ -4619,6 +4619,16 @@ def _look_styling_block(
     return mood_line, occasion_line, request_line
 
 
+def _model_look_outfit_rules(items: list[dict[str, Any]]) -> str:
+    return (
+        "The outfit inventory below is exhaustive. Wear only these listed items. "
+        "Reference-person clothing and accessories are not outfit inputs; remove them unless listed. "
+        "Do not invent a belt, watch, jewelry, bag, or extra layer. Empty slots mean none. "
+        "Belt loops on trousers do not authorize a belt. Preserve integral garment details.\n"
+        f"OUTFIT INVENTORY:\n{_model_look_outfit_block(items)}\n"
+    )
+
+
 def _model_look_prompt_with_reference(
     gender: str | None,
     items: list[dict[str, Any]],
@@ -4634,15 +4644,22 @@ def _model_look_prompt_with_reference(
 ) -> str:
     if personal:
         reference_lines = "Image 1 is the person. Image 2 is the look framing."
+        anatomy_reference = "Image 2"
     else:
         reference_lines = "Image 1 is the person and look framing."
+        anatomy_reference = "Image 1"
     return (
         f"{reference_lines} Images after that are the outfit pieces. "
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
-        "Keep the person, full body, studio framing, and garment count unchanged. "
-        "Match Image 1's realistic adult anatomy: do not lengthen the legs, narrow the torso, or make a fashion-model silhouette. "
+        "Keep the person's identity, full body, and studio framing. "
+        f"Use {anatomy_reference} as the body-proportion baseline, with one deliberate adjustment: "
+        "shorten the anatomical crotch-to-floor length by about 2% of the reference person's full height "
+        "(roughly 4% of leg length), keeping the head, torso width, and natural joints believable. "
+        "This is a body-proportion correction, not cropped trousers or shorter hems. "
+        "Do not raise the waist or shrink the head to simulate longer legs; do not lengthen the legs, narrow the torso, or make a fashion-model silhouette. "
         "Keep a natural 7 to 7.5 head-height body, with the whole person at a relaxed scale and clear studio space above the hair and below the shoes. "
-        "Do not zoom in or crop the shoes."
+        "Do not zoom in or crop the shoes.\n"
+        + _model_look_outfit_rules(items)
     )
 
 
@@ -5145,9 +5162,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-id32-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+        key = f"model-id33-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
     else:
-        key = f"model-id32-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
+        key = f"model-id33-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5202,7 +5219,8 @@ def generate_model_look_image(
             result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
                 model=look_model,
                 image=_png_named(board, "clothes.png"),
-                prompt=_model_look_prompt(gender),
+                prompt=_model_look_prompt(gender) + "\n" + _model_look_outfit_rules(items)
+                + "Use natural adult proportions, 7 to 7.5 head-heights tall, without elongated fashion-model legs.",
                 size="1024x1536",
                 quality=quality,
             )

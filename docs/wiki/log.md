@@ -970,3 +970,7 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - 2026-09-22: 바로 보기 목·바짓단의 흰 띠는 영상 contain 여백으로 재현. 카메라만 cover로 수정, PNG/캐시 유지. Chromium 영상 비율 3종 합성 픽셀 검증·빌드 통과. Safari 실기기 미검증. [[tryon-mask-boundaries]]
 
 - 2026-09-22: 사용자가 바로 보기 라이브 결과를 의도대로라고 최종 승인하고 다른 작업 중 변경 금지를 요청함. `3d5eef0`을 `checkpoint/tryon-approved-2026-09-22`로 보존하고 루트 AGENTS.md·[[tryon-mask-boundaries]]·index에 보호 범위와 명시적 변경 요청 요건 기록. 기능 코드 변경 없음.
+
+- 2026-09-22: AI 착장 요청 시작부터 왼쪽 카드에 작업 픽토그램을 표시해 오른쪽 외부 아이템 표시가 먼저 뜨는 문제 수정. 서버 단계·완료·실패 처리는 유지. 근거: `frontend/src/proto/09-app.jsx` `applyModelLooks`. [[model-look-toggle]]
+
+- 2026-09-22: AI 코디의 목록 밖 벨트·시계 복제 방지와 레퍼런스 대비 다리 비율 소폭 축소 지시 추가. 착장 캐시 model-id33, 바로 보기 변경 없음. 근거: `backend/app/main.py` `_model_look_outfit_rules`, `_model_look_prompt_with_reference`. [[model-look-toggle]]

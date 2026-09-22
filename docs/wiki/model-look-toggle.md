@@ -136,3 +136,18 @@ hydrate가 제안 아이템을 ALL에 넣지 않으면 상세에 옷장만 보�
 근거: `backend/app/main.py` `_model_look_outfit_block`, `_model_look_prompt_with_reference`,
 `_apply_wish_slot`, `generate_model_look_image`; `frontend/src/proto/05-screens-cde.jsx`
 `LookPendingMarks`; `frontend/src/proto/proto.css` `--thumb-bg`.
+
+2026-09-22: 왼쪽 AI 착장 카드의 작업 표시는 요청 시작 즉시 `queued`로 켜고,
+서버의 실제 단계가 도착하면 이어받는다. 서버 첫 응답을 기다리는 동안 오른쪽 외부
+아이템 작업 표시만 먼저 뜨던 순서 역전을 없앴다. 완료·실패 시에는 기존 `finally`에서
+표시를 정리한다. 근거: `frontend/src/proto/09-app.jsx` `applyModelLooks`.
+
+2026-09-22: 남성 레퍼런스에 있는 벨트·시계가 코디에 없는 상태로 복제되는 것을 막기 위해
+실제 전달 아이템을 슬롯별 완결 목록으로 프롬프트에 넣고, 목록에 없는 액세서리·추가 의류는
+금지한다. 바지 벨트 고리는 벨트 추가 근거가 아니다. 레퍼런스의 인물·구도는 유지하되
+해부학적 가랑이부터 바닥까지 길이를 레퍼런스 전신 높이의 약 2%(다리 길이의 약 4%)만큼
+줄이도록 지시한다. 바지 밑단 단축으로 대체하지 않는다. 개인화에서는 Image 2가 비율 기준이다.
+착장 캐시는 `model-id33-`으로 분리하며 기존 저장 착장 URL은 자동 재생성하지 않는다.
+바로 보기 tryon21은 변경하지 않는다. 근거: `backend/app/main.py`
+`_model_look_outfit_rules`, `_model_look_prompt_with_reference`, `generate_model_look_image`.
+프롬프트 회귀 테스트로 검증하며, 실제 새 생성물의 시각적 준수 여부는 별도 확인이 필요하다.

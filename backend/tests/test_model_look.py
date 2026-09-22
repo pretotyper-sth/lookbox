@@ -20,6 +20,7 @@ FNS = (
     '_garment_desc',
     '_model_look_garment_lines',
     '_model_look_outfit_block',
+    '_model_look_outfit_rules',
     '_look_styling_block',
     '_model_look_prompt_with_reference',
     '_look_row_backdrop',
@@ -87,7 +88,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id32-", src)
+        self.assertIn("model-id33-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -113,10 +114,12 @@ class ModelLookPromptTest(unittest.TestCase):
         prompt = prompt_fn("남성", [{"category": "top", "name": "셔츠"}])
         self.assertIn("Image 1 is the person and look framing", prompt)
         self.assertIn("Images after that are the outfit pieces", prompt)
-        self.assertNotIn("셔츠", prompt)
+        self.assertIn("셔츠", prompt)
         self.assertIn("same person", prompt)
         self.assertIn("do not lengthen the legs", prompt)
         self.assertIn("7 to 7.5 head-height", prompt)
+        self.assertIn("shorten the anatomical crotch-to-floor length by about 2%", prompt)
+        self.assertIn("not cropped trousers or shorter hems", prompt)
         self.assertNotIn("Requested mood", prompt)
         self.assertNotIn("COMPOSITION", prompt)
 
@@ -128,6 +131,25 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("165 cm", prompt)
         self.assertNotIn("52 kg", prompt)
         self.assertIn("Images after that are the outfit pieces", prompt)
+        self.assertIn("Use Image 2 as the body-proportion baseline", prompt)
+
+    def test_outfit_inventory_excludes_reference_accessories(self):
+        prompt = self.ns['_model_look_prompt_with_reference']("남성", [
+            {"category": "top", "name": "블랙 티셔츠"},
+            {"category": "bottom", "name": "데님"},
+            {"category": "shoes", "name": "스니커즈"},
+        ])
+        self.assertIn("ACCESSORIES:\n- none", prompt)
+        self.assertIn("remove them unless listed", prompt)
+        self.assertIn("Do not invent a belt, watch", prompt)
+        self.assertIn("Belt loops on trousers do not authorize a belt", prompt)
+
+    def test_listed_accessories_remain_allowed(self):
+        prompt = self.ns['_model_look_prompt_with_reference']("남성", [
+            {"category": "accessory", "name": "블랙 벨트"},
+        ])
+        self.assertIn("블랙 벨트", prompt)
+        self.assertIn("Wear only these listed items", prompt)
 
     def test_background_seam_is_removed_without_touching_person(self):
         image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
@@ -298,7 +320,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id32-", src)
+        self.assertIn("model-id33-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

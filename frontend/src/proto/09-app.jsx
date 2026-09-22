@@ -1830,9 +1830,13 @@ function App() {
     const room = Math.max(0, lookLimit - have);
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
-    targets.forEach((o) => lookInflight.current.add(o.id));
+    targets.forEach((o) => {
+      lookInflight.current.add(o.id);
+      LB_DATA.LOOK_STAGE[o.id] = 'queued';
+    });
+    bumpDaily();
     const completed = new Set();
-    // 서버가 단계를 흘려보낸다(prep/dress/finish/save). 카드 문구는 이 값만 보고 그린다.
+    // 요청 대기부터 표시하고 서버 단계(prep/dress/finish/save)가 오면 이어받는다.
     const markStage = (id, key) => {
       if (!id || !key) return;
       LB_DATA.LOOK_STAGE[id] = key;
