@@ -21,7 +21,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 대상 선택 행만큼 프사 스테이지를 144px로 줄여 사진·URL과 전체 높이 통일. tryon19는 정면·8등신으로 전신을 만들고, 상의는 목라인·하의는 발목까지 로컬에서 투명화한다. 실패는 일 3회
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — 바로 보기: 대상 선택 행만큼 프사 스테이지를 144px로 줄여 사진·URL과 전체 높이 통일. tryon20은 흰 옷이 판색으로 먹혀도 목라인·발목까지 기하+세로줄로 투명화한다. 실패는 일 3회
 - [tryon-multiple-profiles](tryon-multiple-profiles.md) — 바로보기에서 본인·본인 외 프로필을 저장하고 카메라 우상단에서 즉시 전환; 생성 %는 작업에 붙어 탭을 다녀도 되감지 않음. 본인 외 입력 시트 위치까지 보존
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px

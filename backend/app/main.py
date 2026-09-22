@@ -7849,8 +7849,8 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
     fx, fy = _TRYON_TOP_SEED if kind == "top" else _TRYON_BOTTOM_SEED
     sx = min(w - 1, max(0, int(round(fx * (w - 1)))))
     sy = min(h - 1, max(0, int(round(fy * (h - 1)))))
-    y0 = int(h * (0.14 if kind == "top" else 0.44))
-    y1 = int(h * (0.60 if kind == "top" else 0.92))
+    y0 = int(h * (0.14 if kind == "top" else 0.42))
+    y1 = int(h * (0.64 if kind == "top" else 0.93))
 
     def skin(r: int, g: int, b: int) -> bool:
         L = 0.299 * r + 0.587 * g + 0.114 * b
@@ -7924,7 +7924,7 @@ def _tryon_seed_component(rgb: Image.Image, bg: Image.Image, kind: str) -> Image
                 luma = 0.299 * r + 0.587 * g + 0.114 * b
                 if luma > 210 or (chroma > 110 and b <= r + 6):
                     continue
-            if distance((r, g, b), target) > (56 if kind == "bottom" else 48):
+            if distance((r, g, b), target) > 112:
                 continue
             out[i] = 255
             q.append((x + 1, y))
@@ -7973,7 +7973,7 @@ def _tryon_garment_candidates(rgb: Image.Image, bg: Image.Image, kind: str) -> I
                 if chroma > 90:
                     continue
             else:
-                if luma >= 225 and y >= int(h * 0.78):
+                if luma >= 225 and y >= int(h * 0.86):
                     continue
                 if chroma > 110 and b <= r + 6:
                     continue
@@ -8048,7 +8048,6 @@ def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, 
     im = rgb.convert("RGB")
     w, h = im.size
     px = im.load()
-    bg_px = bg.convert("L").load()
     data = bytearray(mask.convert("L").tobytes())
     y_lo = int(h * (0.12 if kind == "top" else 0.42))
     y_hi = int(h * (0.64 if kind == "top" else 0.93))
@@ -8057,8 +8056,6 @@ def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, 
         return mask
 
     def garment_pixel(x: int, y: int) -> bool:
-        if bg_px[x, y] > 128:
-            return False
         r, g, b = px[x, y]
         luma = 0.299 * r + 0.587 * g + 0.114 * b
         chroma = max(r, g, b) - min(r, g, b)
@@ -8066,17 +8063,21 @@ def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, 
             return False
         if kind == "top" and y < h * 0.28 and luma < 70 and chroma < 40:
             return False
-        if kind == "bottom" and y > h * 0.78 and luma > 205:
+        if kind == "bottom" and y > h * 0.86 and luma > 200:
             return False
         if kind == "top" and chroma > 90:
             return False
         if kind == "bottom" and chroma > 110 and b <= r + 6:
             return False
+        # 흰 티·연청은 판색 flood에 먹혀 bg가 된다. 세로줄로만 이어가면
+        # 허벅지 사이 배경은 마스크가 없는 줄이라 건너뛴다.
         return True
 
     for x in range(min(xs), max(xs) + 1):
         ys = [y for y in range(y_lo, y_hi) if data[y * w + x] > 80]
         if not ys:
+            continue
+        if max(ys) - min(ys) < int(h * 0.08):
             continue
         y = min(ys) - 1
         while y >= y_lo and garment_pixel(x, y):
@@ -8087,6 +8088,53 @@ def _tryon_extend_columns(rgb: Image.Image, bg: Image.Image, mask: Image.Image, 
             data[y * w + x] = 255
             y += 1
     return Image.frombytes("L", (w, h), bytes(data))
+
+
+def _tryon_geometry_mask(rgb: Image.Image, bg: Image.Image, kind: str) -> Image.Image:
+    """흰 옷이 판색으로 먹혀도 목~밑단·허리~발목 기하는 뚫는다. 피부·신발은 남긴다."""
+    im = rgb.convert("RGB")
+    w, h = im.size
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    if kind == "top":
+        draw.polygon([
+            (round(w * 0.40), round(h * 0.18)),
+            (round(w * 0.60), round(h * 0.18)),
+            (round(w * 0.78), round(h * 0.28)),
+            (round(w * 0.82), round(h * 0.42)),
+            (round(w * 0.72), round(h * 0.58)),
+            (round(w * 0.28), round(h * 0.58)),
+            (round(w * 0.18), round(h * 0.42)),
+            (round(w * 0.22), round(h * 0.28)),
+        ], fill=255)
+    else:
+        draw.polygon([
+            (round(w * 0.29), round(h * 0.54)), (round(w * 0.49), round(h * 0.54)),
+            (round(w * 0.47), round(h * 0.90)), (round(w * 0.30), round(h * 0.90)),
+        ], fill=255)
+        draw.polygon([
+            (round(w * 0.51), round(h * 0.54)), (round(w * 0.71), round(h * 0.54)),
+            (round(w * 0.70), round(h * 0.90)), (round(w * 0.53), round(h * 0.90)),
+        ], fill=255)
+    raw = bytearray(mask.tobytes())
+    pixels = im.load()
+    bg_pixels = bg.convert("L").load()
+    for y in range(h):
+        for x in range(w):
+            interior = (
+                (kind == "top" and w * 0.32 <= x <= w * 0.68)
+                or (kind == "bottom" and (w * 0.32 <= x <= w * 0.48 or w * 0.52 <= x <= w * 0.68))
+            )
+            if not raw[y * w + x] or (bg_pixels[x, y] > 128 and not interior):
+                continue
+            r, g, b = pixels[x, y]
+            luma = 0.299 * r + 0.587 * g + 0.114 * b
+            if r > 88 and r > b + 8 and r >= g - 8 and 72 < luma < 210:
+                raw[y * w + x] = 0
+                continue
+            if kind == "bottom" and y > h * 0.86 and luma > 200:
+                raw[y * w + x] = 0
+    return Image.frombytes("L", (w, h), bytes(raw))
 
 
 def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
@@ -8107,7 +8155,8 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
         grown = _tryon_largest_blob(_tryon_grow_through(seed, cand))
         if not grown.getbbox():
             grown = seed
-        return _tryon_extend_columns(segment_rgb, bg, grown, kind)
+        grown = _tryon_extend_columns(segment_rgb, bg, grown, kind)
+        return ImageChops.lighter(grown, _tryon_geometry_mask(segment_rgb, bg, kind))
 
     top_m = hole_from("top")
     bot_m = hole_from("bottom")
@@ -8329,7 +8378,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon19-{sig}-{profile_sig}"
+    key = f"tryon20-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8425,7 +8474,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon19",
+                        "mask": "tryon20",
                         "assets": urls,
                     },
                 }).execute()

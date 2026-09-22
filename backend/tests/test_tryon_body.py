@@ -17,6 +17,7 @@ FNS = (
     "_tryon_grow_through",
     "_tryon_largest_blob",
     "_tryon_extend_columns",
+    "_tryon_geometry_mask",
     "_tryon_make_assets",
     "_tryon_assets_valid",
 )
@@ -105,6 +106,21 @@ def body_with_light_collar_and_hem() -> bytes:
     return out.getvalue()
 
 
+def body_with_plate_like_white_clothes() -> bytes:
+    im = Image.open(io.BytesIO(neutral_body())).convert("RGB")
+    px = im.load()
+    # 실제 생성본처럼 목·종아리가 판색에 붙어 가장자리 flood에 먹힌다.
+    for y in range(50, 64):
+        for x in range(42, 78):
+            px[x, y] = (240, 239, 236)
+    for y in range(130, 156):
+        for x in range(44, 76):
+            px[x, y] = (241, 240, 237)
+    out = io.BytesIO()
+    im.save(out, format="PNG")
+    return out.getvalue()
+
+
 class TryOnBodyTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -132,7 +148,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon19-", chunk)
+        self.assertIn("tryon20-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -206,6 +222,18 @@ class TryOnAssetTest(unittest.TestCase):
 
     def test_light_collar_and_hem_punch_to_neckline_and_ankle(self):
         assets = self.ns["_tryon_make_assets"](body_with_light_collar_and_hem())
+        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
+        bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
+        self.assertLess(top.getpixel((60, 52))[3], 64)
+        self.assertLess(top.getpixel((60, 70))[3], 64)
+        self.assertGreater(top.getpixel((60, 30))[3], 200)
+        self.assertLess(bottom.getpixel((60, 140))[3], 64)
+        self.assertLess(bottom.getpixel((60, 152))[3], 64)
+        self.assertGreater(bottom.getpixel((50, 160))[3], 200)
+        self.assertTrue(self.ns["_tryon_assets_valid"](assets))
+
+    def test_plate_like_collar_and_calves_still_punch_to_neck_and_ankle(self):
+        assets = self.ns["_tryon_make_assets"](body_with_plate_like_white_clothes())
         top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
         bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
         self.assertLess(top.getpixel((60, 52))[3], 64)
