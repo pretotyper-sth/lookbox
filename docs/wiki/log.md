@@ -974,3 +974,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - 2026-09-22: AI 착장 요청 시작부터 왼쪽 카드에 작업 픽토그램을 표시해 오른쪽 외부 아이템 표시가 먼저 뜨는 문제 수정. 서버 단계·완료·실패 처리는 유지. 근거: `frontend/src/proto/09-app.jsx` `applyModelLooks`. [[model-look-toggle]]
 
 - 2026-09-22: AI 코디의 목록 밖 벨트·시계 복제 방지와 레퍼런스 대비 다리 비율 소폭 축소 지시 추가. 착장 캐시 model-id33, 바로 보기 변경 없음. 근거: `backend/app/main.py` `_model_look_outfit_rules`, `_model_look_prompt_with_reference`. [[model-look-toggle]]
+
+- 2026-09-24: 바로보기 명시 수정 요청. tryon22 재생성, 캐시 PNG 검증, 부분 마스크 거부, 검증 응답 필수, 기본 전체 투명화, 한국어 오류 폴백 및 대칭 정면 포즈 지시. backend/tests/test_tryon_body.py 14개·프론트 10개·빌드 통과. 실사진·카메라·배포 미검증. [[tryon-mask-boundaries]]

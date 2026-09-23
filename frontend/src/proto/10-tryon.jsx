@@ -434,7 +434,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
   const streamRef = useRef(null);
   const [err, setErr] = useState('');
   const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState('');
+  const [mode, setMode] = useState('full');
   const swipeX = useRef(null);
   const hasCut = Boolean(mode && assets?.[mode]);
   const overlay = (mode && assets?.[mode]) || assets?.body || bodySrc || frameSrc || '';
@@ -442,7 +442,7 @@ function TryOnCameraOverlay({ open, frameSrc, bodySrc, assets, onClose, wide, pr
 
   useEffect(() => {
     if (!open) {
-      setMode('');
+      setMode('full');
     }
   }, [open]);
 

@@ -3,13 +3,14 @@
 import ast
 import io
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 
 MAIN_PATH = Path(__file__).parents[1].joinpath("app/main.py")
-FNS = ("_tryon_garment_mask", "_tryon_soft_hole", "_tryon_make_assets", "_tryon_assets_valid")
+FNS = ("_tryon_garment_mask", "_tryon_soft_hole", "_tryon_make_assets", "_tryon_assets_valid", "_tryon_cached_assets_valid")
 CONSTS = ("_TRYON_PLATE_RGB",)
 
 
@@ -31,6 +32,7 @@ def load_assets():
         "io": io,
         "deque": __import__("collections").deque,
         "Any": object,
+        "ThreadPoolExecutor": ThreadPoolExecutor,
     }
     exec(compile(ast.Module(body=body, type_ignores=[]), "<tryon-assets>", "exec"), ns)
     return ns
@@ -112,7 +114,7 @@ class TryOnBodyTest(unittest.TestCase):
 
     def test_prompt_locks_face(self):
         start = self.src.index("_TRYON_BODY_PROMPT")
-        prompt = self.src[start:start + 4800]
+        prompt = self.src[start:self.src.index("class TryOnBody", start)]
         self.assertIn("identity lock", prompt)
         self.assertIn("exact face", prompt)
         self.assertIn("#F2F1EE", prompt)
@@ -132,7 +134,7 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)
         start = self.src.index("def live_tryon_body")
         chunk = self.src[start:start + 4000]
-        self.assertIn("tryon21-", chunk)
+        self.assertIn("tryon22-", chunk)
         self.assertIn("OPENAI_IMAGE_MODEL_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_QUALITY_TRYON", chunk)
         self.assertIn("OPENAI_IMAGE_TIMEOUT_TRYON", chunk)
@@ -280,6 +282,35 @@ class TryOnAssetTest(unittest.TestCase):
         im.putpixel((25, 65), (242, 241, 238, 0))
         out = io.BytesIO(); im.save(out, format="PNG"); assets["top"] = out.getvalue()
         self.assertFalse(self.ns["_tryon_assets_valid"](assets))
+
+    def test_partial_garment_hole_is_rejected(self):
+        assets = self.ns["_tryon_make_assets"](neutral_body())
+        top = Image.open(io.BytesIO(assets["top"])).convert("RGBA")
+        alpha = top.getchannel("A")
+        ImageDraw.Draw(alpha).rectangle((42, 50, 48, 90), fill=255)
+        top.putalpha(alpha)
+        out = io.BytesIO()
+        top.save(out, format="PNG")
+        assets["top"] = out.getvalue()
+        full = Image.open(io.BytesIO(assets["full"])).convert("RGBA")
+        bottom = Image.open(io.BytesIO(assets["bottom"])).convert("RGBA")
+        full.putalpha(ImageChops.darker(alpha, bottom.getchannel("A")))
+        out = io.BytesIO()
+        full.save(out, format="PNG")
+        assets["full"] = out.getvalue()
+        self.assertFalse(self.ns["_tryon_assets_valid"](assets))
+
+    def test_cached_urls_require_valid_image_contents(self):
+        assets = self.ns["_tryon_make_assets"](neutral_body())
+        urls = {k: k for k in assets}
+        self.ns["_fetch_bytes"] = lambda url, limit: assets[url]
+        self.assertTrue(self.ns["_tryon_cached_assets_valid"](urls))
+        assets["top"] = assets["body"]
+        self.assertFalse(self.ns["_tryon_cached_assets_valid"](urls))
+        assets["top"] = b"broken image"
+        self.assertFalse(self.ns["_tryon_cached_assets_valid"](urls))
+        assets["top"] = None
+        self.assertFalse(self.ns["_tryon_cached_assets_valid"](urls))
 
     def test_empty_plate_fails_quality_gate(self):
         out = io.BytesIO()

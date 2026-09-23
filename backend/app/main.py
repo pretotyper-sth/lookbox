@@ -2767,23 +2767,23 @@ _EXTRACT_FAIL_MSG = {
     "edit_failed": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
 }
 
-# 바로 보기 전용. 상품 추출 문구(옷이 또렷하게)를 쓰지 않는다. 시트는 두 줄로 보여 준다.
+# 바로 보기 전용. 실패 문구는 한 줄 한국어로만 보낸다.
 _TRYON_FAIL_MSG = {
-    "timeout": "시간이 너무 오래 걸렸어요.\n잠시 후 다시 시도해 주세요.",
-    "network": "서버에 연결하지 못했어요.\n잠시 후 다시 시도해 주세요.",
-    "rate_limit": "지금 요청이 몰려 있어요.\n1~2분 뒤에 다시 눌러 주세요.",
-    "moderation": "이 사진은 처리할 수 없어요.\n다른 사진으로 시도해 주세요.",
-    "too_large": "사진이 너무 커요.\n더 작은 사진으로 올려 주세요.",
-    "bad_request": "이 사진으로는 만들지 못했어요.\n다른 사진으로 시도해 주세요.",
-    "upstream": "이미지 서버가 불안정해요.\n조금 뒤에 다시 시도해 주세요.",
-    "auth": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
-    "quota": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
-    "bad_setup": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
-    "no_openai": "지금은 만들 수 없어요.\n잠시 후 다시 시도해 주세요.",
-    "api_error": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
-    "edit_failed": "이미지를 만들지 못했어요.\n잠시 후 다시 시도해 주세요.",
-    "mask": "옷 경계를 정리하지 못했어요.\n잠시 후 다시 시도해 주세요.",
-    "daily_fail": "오늘은 더 시도하지 않아요.\n문제가 반복되면 알려 주세요.",
+    "timeout": "시간이 너무 오래 걸렸어요. 잠시 후 다시 시도해 주세요.",
+    "network": "서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "rate_limit": "지금 요청이 몰려 있어요. 잠시 뒤에 다시 눌러 주세요.",
+    "moderation": "이 사진은 처리할 수 없어요. 다른 사진으로 시도해 주세요.",
+    "too_large": "사진이 너무 커요. 더 작은 사진으로 올려 주세요.",
+    "bad_request": "이 사진으로는 만들지 못했어요. 다른 사진으로 시도해 주세요.",
+    "upstream": "이미지 서버가 불안정해요. 조금 뒤에 다시 시도해 주세요.",
+    "auth": "지금은 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "quota": "지금은 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "bad_setup": "지금은 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "no_openai": "지금은 만들 수 없어요. 잠시 후 다시 시도해 주세요.",
+    "api_error": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "edit_failed": "이미지를 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "mask": "옷 경계를 정리하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    "daily_fail": "오늘은 더 시도하지 않아요. 문제가 반복되면 알려 주세요.",
 }
 
 
@@ -7913,7 +7913,10 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
 def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     if not assets or not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
         return False
-    images = {k: Image.open(io.BytesIO(assets[k])).convert("RGBA") for k in ("body", "top", "bottom", "full")}
+    try:
+        images = {k: Image.open(io.BytesIO(assets[k])).convert("RGBA") for k in ("body", "top", "bottom", "full")}
+    except (OSError, ValueError):
+        return False
     body, top, bottom = (images[k] for k in ("body", "top", "bottom"))
     w, h = body.size
     n = w * h
@@ -7928,6 +7931,10 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
                 return False
         expected = _tryon_garment_mask(body.convert("RGB"), kind)
         hole = ImageChops.invert(alpha)
+        required = _tryon_soft_hole(expected)
+        missing = ImageChops.subtract(required, hole)
+        if sum(i * count for i, count in enumerate(missing.histogram())) > sum(i * count for i, count in enumerate(required.histogram())) * 0.01:
+            return False
         spill = ImageChops.subtract(hole, expected)
         if spill.getbbox():
             return False
@@ -7958,6 +7965,20 @@ def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
     return shoe_n == 0 or (shoe_ok / shoe_n) >= 0.7
 
 
+def _tryon_cached_assets_valid(assets: dict[str, str]) -> bool:
+    if not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
+        return False
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            blobs = dict(pool.map(
+                lambda k: (k, _fetch_bytes(assets[k], limit=20_000_000)),
+                ("body", "top", "bottom", "full"),
+            ))
+        return _tryon_assets_valid(blobs)
+    except Exception:
+        return False
+
+
 _TRYON_BODY_PROMPT = """This is an identity lock, not a new person.
 Image 1 is a photograph of the actual user. Reconstruct that exact face at photographic fidelity:
 same eyes, nose, lips, jawline, hairline, hair part, hair color, skin tone, moles, and apparent age.
@@ -7984,8 +8005,10 @@ Strictly straight-on, front-facing standing pose, shoulders and hips square to t
 Face the lens directly: both eyes equally visible, eyes parallel to the horizon, facial midline vertical,
 and no head yaw, roll, pitch, or three-quarter view. Keep the head and face naturally level even if
 the reference selfie is tilted or diagonal.
-Keep weight evenly distributed, shoulders level, and arms slightly away from
-the torso so sleeves are visible. Do not copy the selfie angle or tilt the face.
+Use the same symmetric neutral stance for every person: weight evenly distributed, shoulders level,
+arms straight down and ten degrees away from the torso, palms facing thighs, fingers relaxed.
+Feet parallel and hip-width apart, toes forward, knees straight, neither leg in front.
+No contrapposto, bent elbow, crossed limb, gesture, or head tilt. Redraw the head frontally; never paste the selfie.
 
 FRAMING:
 Full body, crown of hair to shoes fully in frame, balanced 2:3 portrait.
@@ -8099,12 +8122,12 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
     require_supabase()
     face = _face_image_bytes(body.face_data_url)
     if not face:
-        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.\n얼굴이 나온 사진이면 돼요.")
+        raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.")
     uid = user.id
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon21-{sig}-{profile_sig}"
+    key = f"tryon22-{sig}-{profile_sig}"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")
@@ -8122,15 +8145,16 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
             meta = cached[0].get("metadata") or {}
             assets = dict(meta.get("assets") or {})
             body_url = assets.get("body") or cached[0].get("image_url") or ""
-            if body_url and all(assets.get(k) for k in ("top", "bottom", "full")):
-                assets["body"] = body_url
-                return {"imageUrl": body_url, "assets": assets, "cached": True}
+            assets["body"] = body_url
+            report("tryon_segment")
+            if meta.get("mask") == "tryon22" and _tryon_cached_assets_valid(assets):
+                return {"imageUrl": body_url, "assets": assets, "cached": True, "validated": True}
 
         with _TRYON_BUSY_LOCK:
             if uid in _TRYON_BUSY:
                 raise HTTPException(
                     status_code=429,
-                    detail="이미 만들고 있어요.\n끝날 때까지 기다려 주세요.",
+                    detail="이미 만들고 있어요. 잠시 기다려 주세요.",
                 )
             _TRYON_BUSY.add(uid)
         try:
@@ -8168,10 +8192,13 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     msg = _TRYON_FAIL_MSG.get(_openai_fail_key(last_info), _TRYON_FAIL_MSG["api_error"])
                     raise HTTPException(
                         status_code=502,
-                        detail=msg + (f" (코드: {_fail_code(last_info)})" if SHOW_ERROR_CODES else ""),
+                        detail=msg,
                     ) from exc
                 report("tryon_segment")
-                assets_bytes = _tryon_make_assets(out)
+                try:
+                    assets_bytes = _tryon_make_assets(out)
+                except (OSError, ValueError):
+                    assets_bytes = None
                 if _tryon_assets_valid(assets_bytes):
                     break
                 print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
@@ -8198,14 +8225,14 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     "metadata": {
                         "model": OPENAI_IMAGE_MODEL_TRYON,
                         "quality": OPENAI_IMAGE_QUALITY_TRYON,
-                        "mask": "tryon21",
+                        "mask": "tryon22",
                         "assets": urls,
                     },
                 }).execute()
             except Exception as exc:  # noqa: BLE001
                 print(f"[tryon] cache save failed: {exc}", flush=True)
             note_usage(uid, "tryon_body", {"key": key})
-            return {"imageUrl": urls["body"], "assets": urls, "cached": False}
+            return {"imageUrl": urls["body"], "assets": urls, "cached": False, "validated": True}
         finally:
             with _TRYON_BUSY_LOCK:
                 _TRYON_BUSY.discard(uid)
