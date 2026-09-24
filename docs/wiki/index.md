@@ -13,6 +13,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님
+- [lookbook-model-look-switch](lookbook-model-look-switch.md) — 정사각 룩북 썸네일은 AI 착장 좌우를 채워 표시. 상세·오늘 카드에서 상품컷/AI 착장 전환, 없으면 10크레딧 생성 확인
 - [look-flatlay-overlap](look-flatlay-overlap.md) — 추천 상품컷은 의류 코어 슬롯만 배치하고, 제안 가방·소품은 작게 한 자리만 둔다
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만

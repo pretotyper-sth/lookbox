@@ -485,7 +485,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'contain', objectPosition: 'center',
+            objectFit: ratio === '1 / 1' ? 'cover' : 'contain', objectPosition: 'center',
             boxSizing: 'border-box',
           }}
         />
@@ -1365,7 +1365,10 @@ function DetailScreen({ ctx }) {
     back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide,
     savedLooks, openDetail, requestUnsave, saveOutfit, openOutfitViewer,
     detailLooks, detailListLabel, detailFromLookbook,
+    applyModelLooks,
   } = ctx;
+  const [showModelLook, setShowModelLook] = useSc(true);
+  const [confirmModelLook, setConfirmModelLook] = useSc(false);
   // 룩북에서 왔으면 룩북의 나머지를, 오늘 코디에서 왔으면 그날 코디를 옆에 깐다.
   const looks = (detailLooks && detailLooks.length ? detailLooks : savedLooks) || [];
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
@@ -1499,7 +1502,7 @@ function DetailScreen({ ctx }) {
             textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={outfit} items={items} ratio="4 / 5" />
+          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" />
           {openOutfitViewer ? <LookExpandBadge /> : null}
         </div>
         {/* 오늘 코디에서 연 상세만 하트. 룩북은 카드 더보기·선택 빼기. */}
@@ -1515,6 +1518,14 @@ function DetailScreen({ ctx }) {
           <Icon name="heart" size={15} fill={isSaved ? 'currentColor' : 'none'} stroke={isSaved ? 0 : 2} />
         </button>
         )}
+        {outfit.lookImg ? (
+          <button type="button" onClick={(e) => { e.stopPropagation(); setShowModelLook((v) => !v); }} aria-label={showModelLook ? '상품컷 이미지 보기' : 'AI 착장 이미지 보기'} title={showModelLook ? '상품컷 이미지' : 'AI 착장 이미지'} style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{showModelLook ? '상품컷' : 'AI 착장'}</button>
+        ) : (
+          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmModelLook(true); }} aria-label="AI 착장 이미지 만들기" title="AI 착장 이미지 만들기" style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✦ AI 착장 만들기</button>
+        )}
+        <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
+          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); setShowModelLook(true); applyModelLooks && applyModelLooks([outfit]); }}>만들기</Btn></div></div>
+        </BottomSheet>
         {!wide && multi && (
           <>
             <ArrowBtn d={-1} name="chevL" side="left" />

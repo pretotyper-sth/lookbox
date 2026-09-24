@@ -1895,17 +1895,17 @@ function App() {
   const lookInflight = useRef(new Set());
   const lookFailed = useRef(new Set());
   const dailyPipelineRef = useRef(false);
-  const applyModelLooks = useCallback(async (list) => {
+  const applyModelLooks = useCallback(async (list, force = false) => {
     const pending = (list || LB_DATA.DAILY || []).filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id
       && !lookInflight.current.has(o.id) && !lookFailed.current.has(o.id) && !o.lookError && !outfitWishPending(o)
     ));
     if (!pending.length) return 0;
-    const lookLimit = 1;
+    const lookLimit = force ? pending.length : 1;
     if (lookInflight.current.size > 0) return 0;
     const daily = LB_DATA.DAILY || [];
     const fromDaily = pending.every((o) => daily.some((d) => d && d.id === o.id));
-    const have = fromDaily
+    const have = force ? 0 : fromDaily
       ? daily.filter((o) => o && o.lookImg).length
       : pending.filter((o) => o && o.lookImg).length;
     const room = Math.max(0, lookLimit - have);
@@ -2866,6 +2866,7 @@ function App() {
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
     modelLook: !!prefs.modelLook, setModelLook,
+    applyModelLooks: (list) => applyModelLooks(list, true).catch((e) => { showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'); return 0; }),
     personalModelLook: !!prefs.personalModelLook, onTogglePersonalModelLook, personalSetupOpen,
     closePersonalSetup: () => setPersonalSetupOpen(false), savePersonalModelLook,
     dailyWardrobeGrew: dailyWardrobeGrewSinceCache(items),

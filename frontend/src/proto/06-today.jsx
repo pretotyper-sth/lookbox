@@ -92,9 +92,11 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true, onMakeModelLook }) {
+  const [useModelLook, setUseModelLook] = useTd(true);
+  const [confirmModelLook, setConfirmModelLook] = useTd(false);
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
-  const displayOutfit = !showModelLook && items.some((item) => item.img)
+  const displayOutfit = (!showModelLook || !useModelLook) && items.some((item) => item.img)
     ? { ...outfit, lookImg: null }
     : outfit;
   return (
@@ -116,6 +118,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         >
           <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} />
         </div>
+        {onOpen && LookExpandBadge ? <LookExpandBadge size={24} inset={7} /> : null}
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
@@ -125,6 +128,14 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         }}>
           <Icon name="heart" size={15} fill={saved ? 'currentColor' : 'none'} stroke={saved ? 0 : 2} />
         </button>
+        {outfit.lookImg ? (
+          <button type="button" onClick={() => setUseModelLook((v) => !v)} aria-label={useModelLook ? '상품컷 이미지 보기' : 'AI 착장 이미지 보기'} style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700 }}>{useModelLook ? '상품컷' : 'AI 착장'}</button>
+        ) : (
+          <button type="button" onClick={() => setConfirmModelLook(true)} aria-label="AI 착장 이미지 만들기" style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700 }}>✦ AI 착장 만들기</button>
+        )}
+        <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
+          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
+        </BottomSheet>
       </div>
 
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>
@@ -353,6 +364,7 @@ function TodayScreen({ ctx }) {
     dailyWardrobeGrew, dailyTick,
     getDayRecord, openDetail, refreshLive, showToast,
     comboNeed, comboProgress,
+    applyModelLooks,
   } = ctx;
   const pool = LB_DATA.DAILY;
   const ready = comboReady;
@@ -608,7 +620,8 @@ function TodayScreen({ ctx }) {
                   onWear={isToday ? () => wearToday(o.id) : pastLockToast}
                   wearLocked={!isToday}
                   itemsById={isToday ? null : pastItemsById}
-                  showModelLook={wide}
+                  showModelLook
+                  onMakeModelLook={applyModelLooks}
                   onOpen={openLook} />
               ))}
               {Array.from({ length: empty }).map((_, i) => (
