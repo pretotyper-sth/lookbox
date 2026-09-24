@@ -1894,7 +1894,8 @@ function App() {
   const lookFailed = useRef(new Set());
   const dailyPipelineRef = useRef(false);
   const applyModelLooks = useCallback(async (list, force = false) => {
-    const pending = (list || LB_DATA.DAILY || []).filter((o) => (
+    const candidates = Array.isArray(list) ? list : (list ? [list] : (LB_DATA.DAILY || []));
+    const pending = candidates.filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id
       && !lookInflight.current.has(o.id)
       && (force || (!lookFailed.current.has(o.id) && !o.lookError))
