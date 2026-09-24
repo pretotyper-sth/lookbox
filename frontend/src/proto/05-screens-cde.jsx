@@ -408,8 +408,6 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 }
 
 const LOOK_FLAT_CACHE = {};
-const LOOK_AI_BG_CACHE = {};
-const LOOK_AI_BG_FALLBACK = '#b0aeaf';
 window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false }) {
@@ -417,12 +415,9 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
   const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat18' : '|flat1');
-  const lookUrl = outfit && outfit.lookImg || '';
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
-  const [lookBg, setLookBg] = useSc(LOOK_AI_BG_CACHE[lookUrl] || LOOK_AI_BG_FALLBACK);
   const [copyState, setCopyState] = useSc('');
   const copyTimer = React.useRef(0);
-  useEc(() => { setLookBg(LOOK_AI_BG_CACHE[lookUrl] || LOOK_AI_BG_FALLBACK); }, [lookUrl]);
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
       setFlat('');
@@ -482,24 +477,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     return (
       <div style={{
         position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
-        background: ratio === '1 / 1' ? lookBg : bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
+        background: bg,
+        backgroundImage: ratio === '1 / 1' ? `url("${outfit.lookImg}")` : undefined,
+        backgroundSize: '100% 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+        borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
         <img
           src={outfit.lookImg}
-          onLoad={(event) => {
-            if (ratio !== '1 / 1' || LOOK_AI_BG_CACHE[outfit.lookImg]) return;
-            try {
-              const source = event.currentTarget;
-              const canvas = document.createElement('canvas');
-              canvas.width = canvas.height = 1;
-              const context = canvas.getContext('2d', { willReadFrequently: true });
-              context.drawImage(source, 2, 2, 1, 1, 0, 0, 1, 1);
-              const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-              LOOK_AI_BG_CACHE[outfit.lookImg] = `rgb(${r} ${g} ${b})`;
-              setLookBg(LOOK_AI_BG_CACHE[outfit.lookImg]);
-            } catch (error) { /* cross-origin images keep the neutral fallback */ }
-          }}
           alt={cleanItems.map((i) => i.name).join(' · ')}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
