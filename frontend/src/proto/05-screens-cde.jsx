@@ -1629,10 +1629,9 @@ function DetailScreen({ ctx }) {
                 scrollBehavior: 'smooth', padding: '2px 0 4px',
               }}>
                 {looks.map((lk) => (
-                  // 148px에서 시작해 줄을 채울 때까지 늘어난다. 상한 188px은 예전
-                  // auto-fill 그리드가 한 칸에 줄 수 있던 최대 폭이라, 코디가 둘뿐일 때도
-                  // 카드가 혼자 커지지 않는다.
-                  <div key={lk.id} style={{ flex: '1 1 148px', minWidth: 148, maxWidth: 188, overflow: 'hidden' }}>
+                  // 간격 12px 세 개를 빼고 레일 폭을 4등분해 한 번에 최대 네 장만 보인다.
+                  // 레일이 좁으면 148px 최소 폭에서 가로 스크롤한다.
+                  <div key={lk.id} style={{ flex: '0 0 calc((100% - 36px) / 4)', minWidth: 148, overflow: 'hidden' }}>
                     <RailCard look={lk} active={lk.id === detailLook.id}
                       onClick={() => openDetail(lk, looks, detailListLabel, { fromLookbook: detailFromLookbook })} />
                   </div>
