@@ -1008,3 +1008,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 # 2026-09-24 — 룩북 배경 경계 일치
 흐린 전체 이미지 배경을 제거하고 AI 이미지 좌우 끝 픽셀을 카드의 빈 영역으로 늘려 붙였다. 중심 원본의 좌우 배경과 카드 여백이 같은 세로 색 흐름을 공유하도록 처리했다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[lookbook-model-look-switch]]
+
+# 2026-09-24 — 상세 이미지 진입 시 흔들림 제거
+상세 큰 사진 컨테이너의 진입 애니메이션을 제거하고 AI 원본을 우선 로드하도록 해 진입·새로고침 때 폭이 움직이는 듯한 느낌을 줄인다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `DetailScreen`. [[lookbook-model-look-switch]]

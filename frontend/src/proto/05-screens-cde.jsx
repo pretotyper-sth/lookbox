@@ -525,6 +525,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         <img
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
+          fetchPriority="high"
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
@@ -1651,7 +1652,7 @@ function DetailScreen({ ctx }) {
             gridTemplateColumns: 'minmax(300px, 400px) minmax(0, 1fr)',
             justifyContent: 'start',
           }}>
-            <div key={detailLook.id} className="lb-anim-in">
+            <div key={detailLook.id}>
               {surface(photoBlock)}
             </div>
             <div>
