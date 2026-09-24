@@ -999,3 +999,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 # 2026-09-24 — 룩북 카드 보기 모드와 AI 배경 테두리
 룩북 목록이 상세에서 선택한 코디별 보기 모드를 반영해 상품컷/AI 착장 이미지를 유지한다. 작은 카드에는 AI 메타포만 표시하고, 큰 상세 사진의 생성 문구는 유지한다. 정사각 AI 썸네일 배경은 원본 비율을 유지해 펼치고 불필요한 테두리를 제거했다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `SavedCard`. [[lookbook-model-look-switch]]
+
+# 2026-09-24 — 룩북 썸네일의 중복 배경 제거
+정사각 AI 썸네일의 배경을 원본 이미지 그대로 재표시하던 방식을 흐린 확장 레이어로 교체했다. 전신과 신발 아래 그림자가 배경에 한 번 더 비쳐 겹쳐 보이는 현상을 줄인다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[lookbook-model-look-switch]]

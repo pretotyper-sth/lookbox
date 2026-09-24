@@ -478,11 +478,14 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       <div style={{
         position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
         background: bg,
-        backgroundImage: ratio === '1 / 1' ? `url("${outfit.lookImg}")` : undefined,
-        backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
         borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
+        {ratio === '1 / 1' ? <div aria-hidden="true" style={{
+          position: 'absolute', inset: -36,
+          backgroundImage: `url("${outfit.lookImg}")`, backgroundSize: 'cover', backgroundPosition: 'center',
+          filter: 'blur(36px)', transform: 'scale(1.08)',
+        }} /> : null}
         <img
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
