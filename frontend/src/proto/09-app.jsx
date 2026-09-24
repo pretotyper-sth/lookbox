@@ -172,13 +172,14 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v5';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v6';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
     return cached && cached.date === localYmd() && cached.weather
       && cached.weather.city && cached.weather.cityResolved !== false
-      && Number.isFinite(Number(cached.weather.temp)) ? cached.weather : null;
+      && Number.isFinite(Number(cached.weather.temp))
+      && cached.weather.cond && cached.weather.cond !== '날씨 정보' ? cached.weather : null;
   } catch (e) { return null; }
 }
 function writeDeviceWeatherCache(weather) {
@@ -1060,11 +1061,16 @@ function App() {
         : '';
       try {
         const weather = await liveJSON('/api/live/weather' + coords);
-        if (!weather || !weather.city || weather.cityResolved === false) return null;
-        Object.assign(LB_DATA.WEATHER, weather);
-        writeDeviceWeatherCache(weather);
+        if (!weather || !Number.isFinite(Number(weather.temp)) || !weather.cond || weather.cond === '날씨 정보') return null;
+        const resolvedWeather = {
+          ...weather,
+          city: weather.cityResolved === false || !weather.city || weather.city === '지역 확인 중' ? '현재 위치' : weather.city,
+          cityResolved: true,
+        };
+        Object.assign(LB_DATA.WEATHER, resolvedWeather);
+        writeDeviceWeatherCache(resolvedWeather);
         setWeatherRev((n) => n + 1);
-        return weather;
+        return resolvedWeather;
       } catch (e) {
         return null;
       }

@@ -1002,3 +1002,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 # 2026-09-24 — 룩북 썸네일의 중복 배경 제거
 정사각 AI 썸네일의 배경을 원본 이미지 그대로 재표시하던 방식을 흐린 확장 레이어로 교체했다. 전신과 신발 아래 그림자가 배경에 한 번 더 비쳐 겹쳐 보이는 현상을 줄인다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[lookbook-model-look-switch]]
+
+# 2026-09-24 — 날씨 상태 누락과 실패 캐시 수정
+역지오코딩 실패 때문에 유효한 날씨 응답 전체를 버리던 프론트엔드 검사를 제거하고 지역명은 '현재 위치'로 대체한다. '날씨 정보' 상태의 임시 응답은 기기 하루 캐시와 서버 30분 캐시에 넣지 않으며 Open-Meteo 요청 제한 시간을 늘렸다. 근거: `frontend/src/proto/09-app.jsx` `refreshDeviceWeather`; `backend/app/main.py` `_weather_for_location`. [[location-weather]]

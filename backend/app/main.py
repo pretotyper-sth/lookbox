@@ -5294,7 +5294,7 @@ def _weather_observation(latitude: float, longitude: float) -> tuple[dict[str, A
         "&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min"
         "&timezone=Asia%2FSeoul&forecast_days=1"
     )
-    with urlopen(url, timeout=4) as response:  # noqa: S310 - fixed public weather URL
+    with urlopen(url, timeout=10) as response:  # noqa: S310 - fixed public weather URL
         raw = json.load(response)
     return raw.get("current") or {}, raw.get("daily") or {}
 
@@ -5359,7 +5359,8 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
     except Exception as exc:  # noqa: BLE001
         print(f"[weather] fetch failed lat={lat:.2f} lon={lon:.2f}: {exc}", flush=True)
         weather = fallback
-    _WEATHER_CACHE[cache_key] = (now, weather)
+    if weather.get("cond") != "날씨 정보":
+        _WEATHER_CACHE[cache_key] = (now, weather)
     return weather
 
 
