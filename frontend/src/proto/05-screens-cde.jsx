@@ -1529,7 +1529,7 @@ function DetailScreen({ ctx }) {
           window.LOOK_IMAGE_MODES[outfit.id] = next;
           setShowModelLook(next);
         }} aria-label={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} title={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 42, bottom: 8, zIndex: 3, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
-          {outfit.lookImg ? <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1 }}>&lt;&gt;</span> : <Icon name="sparkle" size={14} />}
+          {outfit.lookImg ? <Icon name="swap" size={15} stroke={2.2} /> : <Icon name="sparkle" size={14} />}
         </button>
         <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
           <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setShowModelLook(true); applyModelLooks && applyModelLooks([outfit]); }}>만들기</Btn></div></div>

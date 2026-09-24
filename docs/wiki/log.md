@@ -982,3 +982,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 정사각 룩북 썸네일은 AI 착장 이미지를 cover로 보여 좌우 빈 배경 띠를 없앴다. 코디 상세와 오늘 추천 카드에 상품컷/AI 착장 전환을 추가하고, AI 착장이 없으면 10크레딧 생성 확인 뒤 기존 모델 착장 API를 호출한다. 명시적 생성은 자동 생성 개수 제한을 우회한다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `DetailScreen`; `frontend/src/proto/06-today.jsx` `TodayCard`; `frontend/src/proto/09-app.jsx` `applyModelLooks`. [[lookbook-model-look-switch]]
 # 2026-09-24 — AI 착장 크기·전환 아이콘·보기 상태 유지
 정사각 썸네일 AI 이미지를 92%로 줄였다. 텍스트 버튼을 돋보기와 같은 크기의 `<>`/sparkle 아이콘으로 바꾸고, 코디 ID별 보기 모드를 기억해 상세의 큰 이미지·우측 레일 카드·오늘 추천 카드에 함께 반영한다. [[lookbook-model-look-switch]]
+# 2026-09-24 — 전환 아이콘 정렬·의미 개선
+전환 버튼을 돋보기 버튼과 같은 하단 기준선·지름으로 맞췄다. `<>` 대신 양방향 화살표 아이콘을 써 이미지 간 전환 의미를 명확히 했다. [[lookbook-model-look-switch]]
