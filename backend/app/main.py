@@ -5686,6 +5686,7 @@ class LiveLooks(BaseModel):
     face_data_url: str | None = None
     height: str | None = None
     weight: str | None = None
+    explicit: bool = False
     outfits: list[LiveLookOutfit] = []
 
 
@@ -8766,6 +8767,7 @@ def _apply_model_looks(
     personal: bool = False,
     height: str | None = None,
     weight: str | None = None,
+    explicit: bool = False,
 ) -> None:
     """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
 
@@ -8778,7 +8780,7 @@ def _apply_model_looks(
     # 비용·품질 확인 중에는 어떤 호출 경로로 들어와도 왼쪽 첫 카드 한 장만 만든다.
     targets = [o for o in outfits if not o.get("lookImg")][:1]
     claimed = False
-    if LOOK_TEST_LIMIT > 0:
+    if LOOK_TEST_LIMIT > 0 and not explicit:
         with _LOOK_FILLING_LOCK:
             if user_id in _LOOK_FILLING:
                 print("[model-look] LOOK_TEST_LIMIT skip — already filling", flush=True)
@@ -8836,6 +8838,8 @@ def _apply_model_looks(
                 "storage_path": wish["storage_path"],
             })
         if not members:
+            if explicit:
+                raise ValueError("옷장 상품 정보를 찾지 못했어요. 상품을 확인한 뒤 다시 시도해 주세요.")
             return outfit, None
         oid = outfit.get("id")
 
@@ -8866,8 +8870,14 @@ def _apply_model_looks(
                 outfit, url = one(outfit, identity)
                 if url:
                     persist(outfit, url)
+                elif explicit:
+                    raise HTTPException(status_code=402, detail="AI 착장 이미지를 만들지 못했어요. 크레딧이나 이미지 설정을 확인해 주세요.")
             except Exception as exc:  # noqa: BLE001
                 print(f"[model-look] sequential skip: {exc}", flush=True)
+                if explicit:
+                    if isinstance(exc, HTTPException):
+                        raise
+                    raise HTTPException(status_code=500, detail="AI 착장 이미지 생성에 실패했어요. 잠시 후 다시 시도해 주세요.") from exc
     finally:
         if claimed:
             with _LOOK_FILLING_LOCK:
@@ -9238,7 +9248,7 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
         _apply_model_looks(
             user.id, outfits, by_id, body.gender, report=report,
             reference_png=reference, personal=body.personal_model_look,
-            height=body.height, weight=body.weight,
+            height=body.height, weight=body.weight, explicit=body.explicit,
         )
         return {"outfits": [{"id": o["id"], "lookImg": o.get("lookImg")} for o in outfits]}
 
