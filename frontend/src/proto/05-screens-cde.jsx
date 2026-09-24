@@ -420,7 +420,21 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const [copyState, setCopyState] = useSc('');
   const lookImg = outfit && outfit.lookImg;
   const [squareBg, setSquareBg] = useSc(lookImg ? LOOK_SQUARE_BG_CACHE[lookImg] || '' : '');
+  const [decodedLook, setDecodedLook] = useSc('');
   const copyTimer = React.useRef(0);
+  useEc(() => {
+    setDecodedLook('');
+    if (!lookImg) return undefined;
+    let dead = false;
+    loadLookImage(lookImg).then(async (image) => {
+      if (!image) return;
+      if (image.decode) {
+        try { await image.decode(); } catch (e) { /* loaded images may reject duplicate decode */ }
+      }
+      if (!dead) setDecodedLook(lookImg);
+    });
+    return () => { dead = true; };
+  }, [lookImg]);
   useEc(() => {
     if (ratio !== '1 / 1' || !lookImg) {
       setSquareBg('');
@@ -529,7 +543,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
-            objectFit: 'contain', objectPosition: 'center',
+            objectFit: 'contain', objectPosition: 'center', opacity: decodedLook === lookImg ? 1 : 0,
             boxSizing: 'border-box',
           }}
         />
