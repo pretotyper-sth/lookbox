@@ -638,7 +638,7 @@ function TodayScreen({ ctx }) {
               {fillingFirst && Array.from({ length: COLS - picks.length }).map((_, i) => (
                 <TodayCardSkeleton key={'fsk' + i} />
               ))}
-              {fillingMore && Array.from({ length: 1 }).map((_, i) => (
+              {fillingMore && Array.from({ length: 2 }).map((_, i) => (
                 <TodayCardSkeleton key={'ask' + i} />
               ))}
             </>

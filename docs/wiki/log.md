@@ -990,5 +990,7 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 단일 샘플 픽셀의 단색 추정을 제거했다. AI 원본을 정사각 카드 배경으로 펼치고, 그 위에 원본 비율 이미지 전체를 contain으로 놓아 배경 톤 차이를 없앤다. [[lookbook-model-look-switch]]
 # 2026-09-24 — 룩북·오늘 추천에서 직접 AI 착장 생성 동작 수정
 직접 생성 요청에 `explicit` 플래그를 붙여 서버의 자동 생성 테스트 장수 제한을 우회한다. 명시 요청 중 생성 실패와 옷장 상품 누락은 성공처럼 삼키지 않고 오류 응답으로 전달한다. 근거: `frontend/src/proto/09-app.jsx` `applyModelLooks`; `backend/app/main.py` `LiveLooks`, `_apply_model_looks`. [[lookbook-model-look-switch]]
+# 2026-09-24 — 직접 AI 착장 재시도와 추가 추천 순서
+직접 생성을 누르면 이전 자동 실패 기록에 막히지 않고 재시도한다. 오늘 코디 추가 추천 중 스켈레톤 두 장을 보여주며, append 과정에서 기존 wish 코디를 재정렬하지 않고 새 코디만 뒤에 붙인다. 근거: `frontend/src/proto/09-app.jsx` `applyModelLooks`, `liveAppendDaily`; `frontend/src/proto/06-today.jsx` `fillingMore`. [[model-look-toggle]]
 # 2026-09-24 — 상세 우측 코디 레일은 최대 4장 표시
 레일 카드 폭을 사용 가능한 너비의 1/4로 고정하고 간격을 반영해, 넓은 화면도 한 번에 최대 네 장만 보이게 했다. 좁은 레일은 최소 폭과 가로 스크롤을 유지한다. [[detail-wide-layout]]

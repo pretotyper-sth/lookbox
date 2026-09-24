@@ -602,8 +602,6 @@ function liveAppendDaily(payload, ownedItems) {
     LB_DATA.OUTFIT_BY_ID[o.id] = o;
     added.push(o);
   }
-  const ordered = pinDailyWishesToTail(LB_DATA.DAILY);
-  LB_DATA.DAILY.splice(0, LB_DATA.DAILY.length, ...ordered);
   return added;
 }
 
@@ -1898,7 +1896,9 @@ function App() {
   const applyModelLooks = useCallback(async (list, force = false) => {
     const pending = (list || LB_DATA.DAILY || []).filter((o) => (
       o && (o.itemIds || []).length && !o.lookImg && o.id
-      && !lookInflight.current.has(o.id) && !lookFailed.current.has(o.id) && !o.lookError && !outfitWishPending(o)
+      && !lookInflight.current.has(o.id)
+      && (force || (!lookFailed.current.has(o.id) && !o.lookError))
+      && !outfitWishPending(o)
     ));
     if (!pending.length) return 0;
     const lookLimit = force ? pending.length : 1;
@@ -1912,6 +1912,8 @@ function App() {
     const targets = pending.slice(0, room);
     if (!targets.length) return 0;
     targets.forEach((o) => {
+      lookFailed.current.delete(o.id);
+      delete o.lookError;
       lookInflight.current.add(o.id);
       LB_DATA.LOOK_STAGE[o.id] = 'queued';
     });
@@ -1954,6 +1956,7 @@ function App() {
           face_data_url: prefs.personalModelLook ? (prefs.avatar || '') : '',
           height: prefs.personalModelLook ? (prefs.height || '') : '',
           weight: prefs.personalModelLook ? (prefs.weight || '') : '',
+          explicit: force,
           outfits: targets.map((o) => ({
             id: o.id,
             item_ids: o.itemIds || [],
@@ -3182,4 +3185,3 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-          explicit: force,
