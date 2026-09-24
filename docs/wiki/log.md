@@ -1005,3 +1005,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 
 # 2026-09-24 — 날씨 상태 누락과 실패 캐시 수정
 역지오코딩 실패 때문에 유효한 날씨 응답 전체를 버리던 프론트엔드 검사를 제거하고 지역명은 '현재 위치'로 대체한다. '날씨 정보' 상태의 임시 응답은 기기 하루 캐시와 서버 30분 캐시에 넣지 않으며 Open-Meteo 요청 제한 시간을 늘렸다. 근거: `frontend/src/proto/09-app.jsx` `refreshDeviceWeather`; `backend/app/main.py` `_weather_for_location`. [[location-weather]]
+
+# 2026-09-24 — 룩북 배경 경계 일치
+흐린 전체 이미지 배경을 제거하고 AI 이미지 좌우 끝 픽셀을 카드의 빈 영역으로 늘려 붙였다. 중심 원본의 좌우 배경과 카드 여백이 같은 세로 색 흐름을 공유하도록 처리했다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`. [[lookbook-model-look-switch]]
