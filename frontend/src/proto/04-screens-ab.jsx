@@ -1305,7 +1305,7 @@ function AddSheet({ ctx }) {
     importOrders, checkDuplicates, knownSourceUrls = [], liveCollectOrders,
     liveOrderInput, liveOrderCancel,
     openTryOn, openTryOnSetup, startTryOn, prefs, wide, comboReady, comboNeed, comboProgress, openAdd, openImageViewer,
-    tryOnMaking, tryOnMakingSubject, tryOnProgress, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
+    tryOnMaking, tryOnMakingSubject, tryOnProgress, tryOnErrors, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
@@ -1396,6 +1396,9 @@ function AddSheet({ ctx }) {
   const tryOnProfile = tryOnSubject === 'other' ? tryOnOther : prefs;
   const tryOnAvatar = (tryOnProfile && tryOnProfile.avatar) || '';
   const tryOnSubjectMaking = !!tryOnMaking && tryOnMakingSubject === tryOnSubject;
+  useE(() => {
+    setTryOnErr(tryOnErrors?.[tryOnSubject] || '');
+  }, [tryOnErrors, tryOnSubject, addSheet.open]);
   const tryOnOtherSubjectMaking = !!tryOnMaking && tryOnMakingSubject !== tryOnSubject;
   // 보간 %는 생성 작업(tryOnMaking)에 붙인다. 보고 있는 대상·탭에 묶으면
   // 본인 외/사진 탭으로 갔다가 올 때 0으로 리셋된 뒤 단계 시작값부터 다시 그린다.
@@ -1418,7 +1421,7 @@ function AddSheet({ ctx }) {
     setTab(addSheet.initialSourceTab || 'photo'); setPicked(false); setUrls(['']); setFile(null); setHint(''); setShowHint(false);
     setHintHistory(readExtractHints());
     setBusy(false); setErr('');
-    setTryOnErr(''); tryOnLaunchGen.current += 1;
+    setTryOnErr(tryOnErrors?.[tryOnSubject] || ''); tryOnLaunchGen.current += 1;
     setBulk(null); setBulkRun(null); setBulkResult(null); setBulkChecking(false); setBulkAuto(false);
     setOrderShop('musinsa'); setOrderBusy(false); setOrderNeedLogin(false); orderTabRef.current = null; setOrderTabId(null); setOrderExtImage(false); setOrderPreviewItems([]); setOrderSession(null);
     setStoreRequestOpen(false); setStoreRequestName(''); setStoreRequestUrl(''); setStoreRequestBusy(false); setStoreRequestDone(false);

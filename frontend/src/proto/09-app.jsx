@@ -735,7 +735,11 @@ async function liveJSON(url, options = {}) {
   if (trimmed) {
     try { data = JSON.parse(trimmed); parsed = true; } catch (e) { parsed = false; }
   }
-  if (!res.ok) throw new Error((parsed && data.error) || '요청에 실패했어요');
+  if (!res.ok) {
+    const error = new Error((parsed && (data.error || data.detail)) || '요청에 실패했어요');
+    error.status = res.status;
+    throw error;
+  }
   // keep-alive 스트리밍 응답은 항상 200이므로 본문의 error 필드로 실패를 전달한다
   if (parsed && data && data.error) throw new Error(data.error);
   if (!parsed) throw new Error('서버와 연결이 끊겼어요. 잠시 후 다시 시도해 주세요.');
@@ -746,6 +750,8 @@ function formatTryOnErr(raw) {
   const original = String(raw || '').trim();
   const s = original.replace(/\s+/g, ' ');
   if (!s) return '이미지를 만들지 못했어요 · 잠시 후 다시 시도해 주세요.';
+  if (s.includes('다시 열어')) return '연결을 확인한 뒤 다시 열어 주세요.';
+  if (s.includes('작업이 중단')) return '작업이 중단됐어요 · 다시 시도해 주세요.';
   if (s.includes('프로필 사진')) return '프로필 사진을 먼저 올려 주세요 · 얼굴이 나온 사진이면 돼요.';
   if (s.includes('한 명')) return '한 명의 얼굴만 나온 사진을 올려 주세요.';
   if (s.includes('정면')) return '얼굴이 잘 보이는 정면 사진을 올려 주세요.';
@@ -770,6 +776,44 @@ function formatTryOnErr(raw) {
   if (s.includes('이 사진에서') || s.includes('이 사진으로')) return '이 사진으로는 만들지 못했어요 · 다른 사진으로 시도해 주세요.';
   if (s.includes('처리 중')) return '처리 중 문제가 생겼어요 · 잠시 후 다시 시도해 주세요.';
   return '이미지를 만들지 못했어요 · 다시 시도해 주세요.';
+}
+
+function tryOnProfileKey(profile) {
+  return JSON.stringify([profile.avatar || '', profile.gender || '', profile.age || '', String(profile.height || ''), String(profile.weight || '')]);
+}
+
+async function waitTryOnJob(pending, onProgress, isCurrent = () => true) {
+  const deadline = Date.now() + 30 * 60 * 1000;
+  let job = null;
+  while (Date.now() < deadline) {
+    if (!isCurrent()) {
+      const error = new Error('로그인이 변경됐어요.');
+      error.reconnect = true;
+      throw error;
+    }
+    try {
+      job = await liveJSON(`/api/live/tryon/jobs/${pending.jobId}`, { timeoutMs: 20000 });
+      if (!isCurrent()) continue;
+      if (job.status === 'missing') {
+        job = await liveJSON('/api/live/tryon/body', {
+          method: 'POST', timeoutMs: 30000,
+          body: JSON.stringify({ face_data_url: pending.profile.avatar, profile: pending.profile, request_id: pending.jobId }),
+        });
+      }
+    } catch (e) {
+      if (e.status >= 400 && e.status < 500 && e.status !== 408) throw e;
+      onProgress({ key: 'tryon_reconnect', label: '연결을 다시 확인하고 있어요', pct: 0, until: 99, eta: 30 });
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      continue;
+    }
+    if (job.step) onProgress(job.step);
+    if (job.status === 'succeeded') return job.result;
+    if (job.status === 'failed') throw new Error(job.failure || '이미지를 만들지 못했어요.');
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+  }
+  const error = new Error('연결을 확인한 뒤 다시 열어 주세요.');
+  error.reconnect = true;
+  throw error;
 }
 
 async function uploadAvatarToAccount(dataUrl, slot = 'profile') {
@@ -1199,40 +1243,64 @@ function App() {
   const [tryOnMaking, setTryOnMaking] = useState(false);
   const [tryOnMakingSubject, setTryOnMakingSubject] = useState(null);
   const [tryOnProgress, setTryOnProgress] = useState(null);
-  const tryOnMakingRef = useRef(false);
+  const tryOnMakingRef = useRef(null);
+  const [tryOnErrors, setTryOnErrors] = useState({});
+  const tryOnAccountRef = useRef(authUid);
+  const tryOnPrefsRef = useRef(prefs);
+  tryOnAccountRef.current = authUid;
+  tryOnPrefsRef.current = prefs;
   const makeTryOnBody = async (opts) => {
     const silent = !!(opts && opts.silent);
     const onFail = opts && opts.onFail;
     const subject = (opts && opts.subject) || prefs.tryOnActive || 'self';
-    const selected = subject === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs;
+    const selected = opts?.pending?.profile || (subject === 'other' ? (prefs.tryOnOther || emptyTryOnOther()) : prefs);
+    const owner = authUid;
+    const storageKey = `lb_tryon_job_${owner}`;
     const fail = (raw) => {
       const msg = formatTryOnErr(raw);
+      setTryOnErrors((prev) => ({ ...prev, [subject]: msg }));
       if (typeof onFail === 'function') onFail(msg);
       if (!silent) showToast(msg.replace(/\n/g, ' '));
       return msg;
     };
     if (tryOnMakingRef.current) return '';
+    if (!owner) { fail('로그인이 필요해요.'); return ''; }
     if (!selected.avatar) { fail(subject === 'other' ? '본인 외 사진을 먼저 올려 주세요.' : '프로필 사진을 먼저 올려 주세요.'); return ''; }
-    tryOnMakingRef.current = true;
+    let previous = opts?.pending;
+    if (!previous) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        if (stored?.subject === subject && tryOnProfileKey(stored.profile || {}) === tryOnProfileKey(selected)) previous = stored;
+      } catch (e) { /* noop */ }
+    }
+    const pending = previous || {
+      jobId: crypto.randomUUID(), subject,
+      profile: { avatar: selected.avatar, gender: selected.gender || '', age: selected.age || '', height: selected.height || '', weight: selected.weight || '' },
+    };
+    tryOnMakingRef.current = pending;
+    setTryOnErrors((prev) => ({ ...prev, [subject]: '' }));
+    try { localStorage.setItem(storageKey, JSON.stringify(pending)); } catch (e) { /* 기기 저장 공간 부족이어도 작업은 유지 */ }
     setTryOnMakingSubject(subject);
     setTryOnMaking(true);
     setTryOnProgress({ key: 'tryon_profile', label: '프로필을 확인하고 있어요', pct: 0, until: 8, eta: 3 });
     try {
-      const res = await liveJSON('/api/live/tryon/body', {
-        method: 'POST',
-        body: JSON.stringify({
-          face_data_url: selected.avatar,
-          profile: { gender: selected.gender || '', age: selected.age || '', height: selected.height || '', weight: selected.weight || '' },
-        }),
-        timeoutMs: 300000,
-        onProgress: (step) => setTryOnProgress(step),
-      });
+      const res = await waitTryOnJob(pending, (step) => {
+        if (tryOnAccountRef.current === owner) setTryOnProgress(step);
+      }, () => tryOnAccountRef.current === owner);
+      if (tryOnAccountRef.current !== owner) return '';
+      const currentProfile = subject === 'other' ? (tryOnPrefsRef.current.tryOnOther || emptyTryOnOther()) : tryOnPrefsRef.current;
+      if (tryOnProfileKey(currentProfile) !== tryOnProfileKey(selected)) {
+        try { localStorage.removeItem(storageKey); } catch (e) { /* noop */ }
+        return '';
+      }
       const url = res && res.imageUrl;
       const assets = res?.assets;
       if (!url || res.validated !== true || !['body', 'top', 'bottom', 'full'].every((key) => assets?.[key])) {
         throw new Error('옷 경계를 정리하지 못했어요.');
       }
       setPrefs((prev) => {
+        const current = subject === 'other' ? (prev.tryOnOther || emptyTryOnOther()) : prev;
+        if (tryOnProfileKey(current) !== tryOnProfileKey(selected)) return prev;
         const np = {
           ...prev,
           ...(subject === 'other' ? {
@@ -1244,19 +1312,32 @@ function App() {
         persistPrefs(np);
         return np;
       });
+      try { localStorage.removeItem(storageKey); } catch (e) { /* noop */ }
       reloadBilling();
       showToast(res.cached ? '바로 보기 이미지를 불러왔어요' : '바로 보기 이미지를 만들었어요', 'check');
       return url;
     } catch (e) {
-      fail(e.message);
+      if (!e.reconnect) {
+        try { localStorage.removeItem(storageKey); } catch (err) { /* noop */ }
+      }
+      if (tryOnAccountRef.current === owner) fail(e.message);
       return '';
     } finally {
-      tryOnMakingRef.current = false;
+      tryOnMakingRef.current = null;
       setTryOnMakingSubject(null);
       setTryOnMaking(false);
       setTryOnProgress(null);
     }
   };
+  useEffect(() => {
+    if (!authUid || isShowcase || tryOnMakingRef.current) return;
+    try {
+      const pending = JSON.parse(localStorage.getItem(`lb_tryon_job_${authUid}`) || 'null');
+      if (pending?.jobId && pending?.profile?.avatar) {
+        void makeTryOnBody({ subject: pending.subject, pending, silent: true });
+      }
+    } catch (e) { /* 잘못된 기기 저장값은 무시 */ }
+  }, [authUid]);
   const openTryOnSetup = async (seed, opts) => {
     const settings = !!(opts && opts.settings);
     setTryOnSetupAsSettings(settings);
@@ -2799,7 +2880,7 @@ function App() {
       .filter(Boolean),
     openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
     openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
-    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnMakingSubject, tryOnProgress,
+    openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnMakingSubject, tryOnProgress, tryOnErrors,
     setTryOnActive, saveTryOnOther,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),

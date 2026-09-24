@@ -7910,59 +7910,63 @@ def _tryon_make_assets(png_bytes: bytes) -> dict[str, bytes]:
     }
 
 
-def _tryon_assets_valid(assets: dict[str, bytes] | None) -> bool:
-    if not assets or not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
+def _tryon_assets_valid(assets: dict[str, bytes] | None, reasons: list[str] | None = None) -> bool:
+    def reject(reason):
+        if reasons is not None:
+            reasons.append(reason)
         return False
+    if not assets or not all(assets.get(k) for k in ("body", "top", "bottom", "full")):
+        return reject('missing_assets')
     try:
         images = {k: Image.open(io.BytesIO(assets[k])).convert("RGBA") for k in ("body", "top", "bottom", "full")}
     except (OSError, ValueError):
-        return False
+        return reject('invalid_image')
     body, top, bottom = (images[k] for k in ("body", "top", "bottom"))
     w, h = body.size
     n = w * h
     if n < 8 or any(im.size != body.size for im in images.values()):
-        return False
+        return reject('image_dimensions')
     for kind, rows in (("top", (0.32, 0.39, 0.47)), ("bottom", (0.60, 0.70, 0.82))):
         alpha = images[kind].getchannel("A")
         # A large hole alone is not evidence of a correctly segmented garment.
         for fy in rows:
             strip = alpha.crop((int(w * 0.40), int(h * fy), int(w * 0.60), int(h * fy) + 1))
             if sum(strip.histogram()[:128]) < strip.width * 0.6:
-                return False
+                return reject('vertical_coverage')
         expected = _tryon_garment_mask(body.convert("RGB"), kind)
         hole = ImageChops.invert(alpha)
         required = _tryon_soft_hole(expected)
         missing = ImageChops.subtract(required, hole)
         if sum(i * count for i, count in enumerate(missing.histogram())) > sum(i * count for i, count in enumerate(required.histogram())) * 0.01:
-            return False
+            return reject('incomplete_garment')
         spill = ImageChops.subtract(hole, expected)
         if spill.getbbox():
-            return False
+            return reject('outside_garment')
     if ImageChops.difference(images["full"].getchannel("A"), ImageChops.darker(
         top.getchannel("A"), bottom.getchannel("A")
     )).getbbox():
-        return False
+        return reject('full_union')
     top_a = top.getchannel("A")
     bot_a = bottom.getchannel("A")
     top_hole = sum(top_a.histogram()[:128])
     bot_hole = sum(bot_a.histogram()[:128])
     if top_hole < n * 0.015 or top_hole > n * 0.35:
-        return False
+        return reject('top_area')
     if bot_hole < n * 0.02 or bot_hole > n * 0.35:
-        return False
+        return reject('bottom_area')
     top_hole_mask = top_a.point(lambda a: 255 if a < 128 else 0)
     bot_hole_mask = bot_a.point(lambda a: 255 if a < 128 else 0)
     overlap = ImageChops.multiply(top_hole_mask, bot_hole_mask).histogram()[255]
     # 상의·하의 경계의 1~2px 페더가 겹치는 것은 정상이다. 이 값을 실패로 보면
     # 실제로는 쓸 수 있는 전신 결과도 mask 실패로 재생성하게 된다.
     if overlap > n * 0.01:
-        return False
+        return reject('overlap')
     shoe_y0 = int(h * 0.88)
     x0, x1 = int(w * 0.25), int(w * 0.75)
     shoe = bot_a.crop((x0, shoe_y0, x1, h))
     shoe_n = shoe.width * shoe.height
     shoe_ok = sum(shoe.histogram()[200:])
-    return shoe_n == 0 or (shoe_ok / shoe_n) >= 0.7
+    return shoe_n == 0 or (shoe_ok / shoe_n) >= 0.7 or reject("shoe_preservation")
 
 
 def _tryon_cached_assets_valid(assets: dict[str, str]) -> bool:
@@ -8042,6 +8046,7 @@ The shirt and jeans must be visually boring, plain, matte, and uninterrupted so 
 class TryOnBody(BaseModel):
     face_data_url: str
     profile: dict[str, Any] | None = None
+    request_id: uuid.UUID | None = None
 
 
 def _tryon_body_profile_note(user_id: str, override: dict[str, Any] | None = None) -> str:
@@ -8116,10 +8121,88 @@ def live_profile_avatar(body: ProfileAvatarIn, user: UserContext = Depends(curre
     return {"avatarUrl": url}
 
 
-@app.post("/api/live/tryon/body")
-def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) -> StreamingResponse:
+
+def _tryon_job_read(uid: str, job_id: str) -> dict[str, Any] | None:
+    rows = (supabase_admin.table("generated_images").select("metadata")
+            .eq("user_id", uid).eq("cache_key", f"tryon-job-{job_id}")
+            .eq("kind", "tryon_job").limit(1).execute().data or [])
+    if not rows:
+        return None
+    job = rows[0]["metadata"]
+    if job.get("status") == "running" and time.time() - job.get("updated", 0) > 1800:
+        return {"jobId": job_id, "status": "failed", "failure": "작업이 중단됐어요. 다시 시도해 주세요."}
+    return job
+
+
+def _tryon_job_write(uid: str, job_id: str, job: dict[str, Any]) -> None:
+    job = {**job, "jobId": job_id, "updated": time.time()}
+    for attempt in range(3):
+        try:
+            (supabase_admin.table("generated_images").update({"metadata": job})
+             .eq("user_id", uid).eq("cache_key", f"tryon-job-{job_id}")
+             .eq("kind", "tryon_job").execute())
+            return
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(attempt + 1)
+
+
+def _tryon_job_start(uid: str, job_id: str, work: Callable) -> dict[str, Any]:
+    job = {"jobId": job_id, "status": "running", "updated": time.time()}
+    try:
+        supabase_admin.table("generated_images").insert({
+            "user_id": uid, "cache_key": f"tryon-job-{job_id}", "kind": "tryon_job",
+            "storage_path": "", "image_url": "", "metadata": job,
+        }).execute()
+    except Exception:
+        existing = _tryon_job_read(uid, job_id)
+        if existing:
+            return existing
+        raise
+
+    def run():
+        def report(key):
+            label, pct, until, eta = _IMPORT_STEPS[key]
+            job["step"] = {"key": key, "label": label, "pct": pct, "until": until, "eta": eta}
+            try:
+                _tryon_job_write(uid, job_id, job)
+            except Exception as exc:
+                print(f"[tryon] progress save failed: {type(exc).__name__}", flush=True)
+        try:
+            result = work(report)
+            job.update(status="succeeded", result=result)
+        except HTTPException as exc:
+            job.update(status="failed", failure=str(exc.detail))
+        except Exception as exc:
+            print(f"[tryon] job failed: {type(exc).__name__}: {exc}", flush=True)
+            note_fail(uid, "tryon_body", {"why": "job", "code": type(exc).__name__})
+            job.update(status="failed", failure="작업을 마치지 못했어요. 다시 시도해 주세요.")
+        try:
+            _tryon_job_write(uid, job_id, job)
+        except Exception as exc:
+            print(f"[tryon] result save failed: {type(exc).__name__}", flush=True)
+    threading.Thread(target=run, daemon=True).start()
+    return {"jobId": job_id, "status": "running"}
+
+
+@app.get("/api/live/tryon/jobs/{job_id}")
+def live_tryon_job(job_id: uuid.UUID, user: UserContext = Depends(current_user)) -> dict[str, Any]:
+    require_supabase()
+    job = _tryon_job_read(user.id, str(job_id))
+    if not job:
+        return {"jobId": str(job_id), "status": "missing"}
+    return job
+
+
+@app.post("/api/live/tryon/body", response_model=None)
+def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)):
     """프로필 사진으로 '바로 보기'용 전신과 상의·하의 구멍을 만든다."""
     require_supabase()
+    if body.request_id:
+        existing = _tryon_job_read(user.id, str(body.request_id))
+        if existing:
+            return existing
     face = _face_image_bytes(body.face_data_url)
     if not face:
         raise HTTPException(status_code=400, detail="프로필 사진을 먼저 올려 주세요.")
@@ -8165,12 +8248,12 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
 
             last_info = None
             assets_bytes = None
-            for attempt in (0, 1):
-                report("tryon_generate")
+            for attempt in range(3):
+                report("tryon_generate" if attempt == 0 else "tryon_retry")
                 try:
                     source = io.BytesIO(face)
                     source.name = "face.png"
-                    result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON).images.edit(
+                    result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON, max_retries=0).images.edit(
                         model=OPENAI_IMAGE_MODEL_TRYON,
                         image=source,
                         prompt=_TRYON_BODY_PROMPT + profile_note,
@@ -8180,15 +8263,16 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     out = base64.b64decode(result.data[0].b64_json)
                     log_ai_usage(
                         uid, "tryon_body", OPENAI_IMAGE_MODEL_TRYON,
-                        {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt},
+                        {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt, "key": key},
                         usage=getattr(result, "usage", None),
                     )
                 except Exception as exc:  # noqa: BLE001
                     last_info = _openai_error_info(exc)
                     print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
-                    if attempt == 0:
+                    if attempt < 2 and _openai_fail_key(last_info) in ("timeout", "network", "rate_limit", "upstream", "api_error"):
+                        time.sleep(2 ** attempt)
                         continue
-                    note_fail(uid, "tryon_body", {"key": key, "why": "api"})
+                    note_fail(uid, "tryon_body", {"key": key, "why": "api", "code": _openai_fail_key(last_info), "attempt": attempt})
                     msg = _TRYON_FAIL_MSG.get(_openai_fail_key(last_info), _TRYON_FAIL_MSG["api_error"])
                     raise HTTPException(
                         status_code=502,
@@ -8199,27 +8283,35 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                     assets_bytes = _tryon_make_assets(out)
                 except (OSError, ValueError):
                     assets_bytes = None
-                if _tryon_assets_valid(assets_bytes):
+                mask_reasons = []
+                if _tryon_assets_valid(assets_bytes, mask_reasons):
                     break
                 print(f"[tryon] mask quality weak — retry gen attempt={attempt}", flush=True)
+                log_ai_usage(uid, "tryon_validation", OPENAI_IMAGE_MODEL_TRYON, {"key": key, "attempt": attempt, "reasons": mask_reasons})
                 assets_bytes = None
-                if attempt == 0:
+                if attempt < 2:
                     report("tryon_retry")
             if not assets_bytes:
-                note_fail(uid, "tryon_body", {"key": key, "why": "mask"})
+                note_fail(uid, "tryon_body", {"key": key, "why": "mask", "reasons": mask_reasons})
                 raise HTTPException(status_code=502, detail=_TRYON_FAIL_MSG["mask"])
 
             report("tryon_save")
             def save_asset(entry: tuple[str, bytes]) -> tuple[str, str]:
                 name, blob = entry
                 path = f"{uid}/tryon/{key}-{name}.png"
-                return name, upload_bytes(path, blob, "image/png")
+                for save_attempt in range(3):
+                    try:
+                        return name, upload_bytes(path, blob, "image/png")
+                    except Exception:
+                        if save_attempt == 2:
+                            raise
+                        time.sleep(save_attempt + 1)
 
             with ThreadPoolExecutor(max_workers=4) as pool:
                 urls = dict(pool.map(save_asset, assets_bytes.items()))
             storage_path = f"{uid}/tryon/{key}-body.png"
             try:
-                supabase_admin.table("generated_images").insert({
+                supabase_admin.table("generated_images").upsert({
                     "user_id": uid, "cache_key": key, "kind": "tryon_body",
                     "storage_path": storage_path, "image_url": urls["body"],
                     "metadata": {
@@ -8228,7 +8320,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
                         "mask": "tryon22",
                         "assets": urls,
                     },
-                }).execute()
+                }, on_conflict="user_id,cache_key,kind").execute()
             except Exception as exc:  # noqa: BLE001
                 print(f"[tryon] cache save failed: {exc}", flush=True)
             note_usage(uid, "tryon_body", {"key": key})
@@ -8237,6 +8329,8 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)) 
             with _TRYON_BUSY_LOCK:
                 _TRYON_BUSY.discard(uid)
 
+    if body.request_id:
+        return _tryon_job_start(uid, str(body.request_id), work)
     return stream_with_keepalive(work)
 
 

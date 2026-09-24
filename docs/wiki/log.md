@@ -976,3 +976,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - 2026-09-22: AI 코디의 목록 밖 벨트·시계 복제 방지와 레퍼런스 대비 다리 비율 소폭 축소 지시 추가. 착장 캐시 model-id33, 바로 보기 변경 없음. 근거: `backend/app/main.py` `_model_look_outfit_rules`, `_model_look_prompt_with_reference`. [[model-look-toggle]]
 
 - 2026-09-24: 바로보기 명시 수정 요청. tryon22 재생성, 캐시 PNG 검증, 부분 마스크 거부, 검증 응답 필수, 기본 전체 투명화, 한국어 오류 폴백 및 대칭 정면 포즈 지시. backend/tests/test_tryon_body.py 14개·프론트 10개·빌드 통과. 실사진·카메라·배포 미검증. [[tryon-mask-boundaries]]
+
+- 2026-09-24: 최근 본인 외 생성 실패는 서버 마스크 검증 탈락으로 확인. 생성 백그라운드 작업·상태 저장·재접속 복귀, 생성 세 번 및 저장 재시도, 탈락 항목 기록 추가. tryon22·프롬프트·분리·검증 기준·화면 적용 유지. 백엔드 21개·프론트 15개·빌드 통과. [[tryon-multiple-profiles]]
