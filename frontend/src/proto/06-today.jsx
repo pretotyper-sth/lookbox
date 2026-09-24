@@ -93,7 +93,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
 function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true, onMakeModelLook }) {
-  const [useModelLook, setUseModelLook] = useTd(true);
+  const [useModelLook, setUseModelLook] = useTd(window.LOOK_IMAGE_MODES[outfit.id] !== false);
   const [confirmModelLook, setConfirmModelLook] = useTd(false);
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
   const displayOutfit = (!showModelLook || !useModelLook) && items.some((item) => item.img)
@@ -128,13 +128,16 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         }}>
           <Icon name="heart" size={15} fill={saved ? 'currentColor' : 'none'} stroke={saved ? 0 : 2} />
         </button>
-        {outfit.lookImg ? (
-          <button type="button" onClick={() => setUseModelLook((v) => !v)} aria-label={useModelLook ? '상품컷 이미지 보기' : 'AI 착장 이미지 보기'} style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700 }}>{useModelLook ? '상품컷' : 'AI 착장'}</button>
-        ) : (
-          <button type="button" onClick={() => setConfirmModelLook(true)} aria-label="AI 착장 이미지 만들기" style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700 }}>✦ AI 착장 만들기</button>
-        )}
+        <button type="button" onClick={() => {
+          if (!outfit.lookImg) { setConfirmModelLook(true); return; }
+          const next = !useModelLook;
+          window.LOOK_IMAGE_MODES[outfit.id] = next;
+          setUseModelLook(next);
+        }} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 39, bottom: 8, zIndex: 3, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+          {outfit.lookImg ? <span style={{ fontSize: 9, fontWeight: 700, lineHeight: 1 }}>&lt;&gt;</span> : <Icon name="sparkle" size={13} />}
+        </button>
         <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
-          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
+          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setUseModelLook(true); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
         </BottomSheet>
       </div>
 

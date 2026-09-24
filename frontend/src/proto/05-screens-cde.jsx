@@ -408,6 +408,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 }
 
 const LOOK_FLAT_CACHE = {};
+window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false }) {
   const cleanItems = (items || []).filter(Boolean);
@@ -483,7 +484,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            position: 'absolute', inset: ratio === '1 / 1' ? '4%' : 0,
+            width: ratio === '1 / 1' ? '92%' : '100%', height: ratio === '1 / 1' ? '92%' : '100%',
             maxWidth: '100%', maxHeight: '100%', minWidth: 0, minHeight: 0,
             objectFit: ratio === '1 / 1' ? 'cover' : 'contain', objectPosition: 'center',
             boxSizing: 'border-box',
@@ -1344,6 +1346,7 @@ function RailCard({ look, active, onClick }) {
   const o = LB_DATA.OUTFIT_BY_ID[look.outfitId];
   if (!o) return null;
   const its = (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+  const showModelLook = window.LOOK_IMAGE_MODES[o.id] !== false;
   return (
     <button onClick={onClick} className="lb-rail-card" aria-current={active ? 'true' : undefined} style={{
       textAlign: 'left', display: 'block', width: '100%', boxSizing: 'border-box', padding: 8, borderRadius: 'var(--r-lg)',
@@ -1351,7 +1354,7 @@ function RailCard({ look, active, onClick }) {
       border: active ? '2px solid var(--ink)' : '2px solid transparent',
       opacity: active ? 1 : 0.45,
     }}>
-      <LookComposite outfit={o} items={its} ratio="4 / 5" aiMark="icon" />
+      <LookComposite outfit={showModelLook ? o : { ...o, lookImg: null }} items={its} ratio="4 / 5" aiMark="icon" />
       <div style={{
         padding: '8px 2px 0', fontSize: 12.5, fontWeight: 700, lineHeight: 1.3,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1367,8 +1370,9 @@ function DetailScreen({ ctx }) {
     detailLooks, detailListLabel, detailFromLookbook,
     applyModelLooks,
   } = ctx;
-  const [showModelLook, setShowModelLook] = useSc(true);
+  const [showModelLook, setShowModelLook] = useSc(window.LOOK_IMAGE_MODES[LB_DATA.OUTFIT_BY_ID[detailLook.outfitId]?.id] !== false);
   const [confirmModelLook, setConfirmModelLook] = useSc(false);
+  useEc(() => { setShowModelLook(window.LOOK_IMAGE_MODES[detailLook.outfitId] !== false); }, [detailLook.id]);
   // 룩북에서 왔으면 룩북의 나머지를, 오늘 코디에서 왔으면 그날 코디를 옆에 깐다.
   const looks = (detailLooks && detailLooks.length ? detailLooks : savedLooks) || [];
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
@@ -1518,13 +1522,17 @@ function DetailScreen({ ctx }) {
           <Icon name="heart" size={15} fill={isSaved ? 'currentColor' : 'none'} stroke={isSaved ? 0 : 2} />
         </button>
         )}
-        {outfit.lookImg ? (
-          <button type="button" onClick={(e) => { e.stopPropagation(); setShowModelLook((v) => !v); }} aria-label={showModelLook ? '상품컷 이미지 보기' : 'AI 착장 이미지 보기'} title={showModelLook ? '상품컷 이미지' : 'AI 착장 이미지'} style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{showModelLook ? '상품컷' : 'AI 착장'}</button>
-        ) : (
-          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmModelLook(true); }} aria-label="AI 착장 이미지 만들기" title="AI 착장 이미지 만들기" style={{ position: 'absolute', right: 44, bottom: 8, zIndex: 3, height: 28, padding: '0 10px', border: 0, borderRadius: 14, background: 'color-mix(in srgb, var(--ink) 78%, transparent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✦ AI 착장 만들기</button>
-        )}
+        <button type="button" onClick={(e) => {
+          e.stopPropagation();
+          if (!outfit.lookImg) { setConfirmModelLook(true); return; }
+          const next = !showModelLook;
+          window.LOOK_IMAGE_MODES[outfit.id] = next;
+          setShowModelLook(next);
+        }} aria-label={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} title={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 42, bottom: 8, zIndex: 3, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+          {outfit.lookImg ? <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1 }}>&lt;&gt;</span> : <Icon name="sparkle" size={14} />}
+        </button>
         <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
-          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); setShowModelLook(true); applyModelLooks && applyModelLooks([outfit]); }}>만들기</Btn></div></div>
+          <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setShowModelLook(true); applyModelLooks && applyModelLooks([outfit]); }}>만들기</Btn></div></div>
         </BottomSheet>
         {!wide && multi && (
           <>

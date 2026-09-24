@@ -980,3 +980,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 - 2026-09-24: 최근 본인 외 생성 실패는 서버 마스크 검증 탈락으로 확인. 생성 백그라운드 작업·상태 저장·재접속 복귀, 생성 세 번 및 저장 재시도, 탈락 항목 기록 추가. tryon22·프롬프트·분리·검증 기준·화면 적용 유지. 백엔드 21개·프론트 15개·빌드 통과. [[tryon-multiple-profiles]]
 # 2026-09-24 — 룩북·오늘 추천 AI 착장 이미지 전환
 정사각 룩북 썸네일은 AI 착장 이미지를 cover로 보여 좌우 빈 배경 띠를 없앴다. 코디 상세와 오늘 추천 카드에 상품컷/AI 착장 전환을 추가하고, AI 착장이 없으면 10크레딧 생성 확인 뒤 기존 모델 착장 API를 호출한다. 명시적 생성은 자동 생성 개수 제한을 우회한다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `DetailScreen`; `frontend/src/proto/06-today.jsx` `TodayCard`; `frontend/src/proto/09-app.jsx` `applyModelLooks`. [[lookbook-model-look-switch]]
+# 2026-09-24 — AI 착장 크기·전환 아이콘·보기 상태 유지
+정사각 썸네일 AI 이미지를 92%로 줄였다. 텍스트 버튼을 돋보기와 같은 크기의 `<>`/sparkle 아이콘으로 바꾸고, 코디 ID별 보기 모드를 기억해 상세의 큰 이미지·우측 레일 카드·오늘 추천 카드에 함께 반영한다. [[lookbook-model-look-switch]]
