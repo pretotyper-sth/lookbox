@@ -996,3 +996,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 오늘 카드 callback이 단일 코디 객체를 보내던 경로를 확인했다. `applyModelLooks`가 배열만 받으며 `.filter is not a function` 오류가 났으므로 단일 객체와 배열 모두를 정규화한다. 근거: `frontend/src/proto/06-today.jsx` `TodayCard`; `frontend/src/proto/09-app.jsx` `applyModelLooks`. [[model-look-toggle]]
 # 2026-09-24 — 상세 우측 코디 레일은 최대 4장 표시
 레일 카드 폭을 사용 가능한 너비의 1/4로 고정하고 간격을 반영해, 넓은 화면도 한 번에 최대 네 장만 보이게 했다. 좁은 레일은 최소 폭과 가로 스크롤을 유지한다. [[detail-wide-layout]]
+
+# 2026-09-24 — 룩북 카드 보기 모드와 AI 배경 테두리
+룩북 목록이 상세에서 선택한 코디별 보기 모드를 반영해 상품컷/AI 착장 이미지를 유지한다. 작은 카드에는 AI 메타포만 표시하고, 큰 상세 사진의 생성 문구는 유지한다. 정사각 AI 썸네일 배경은 원본 비율을 유지해 펼치고 불필요한 테두리를 제거했다. 근거: `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `SavedCard`. [[lookbook-model-look-switch]]

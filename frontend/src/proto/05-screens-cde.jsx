@@ -479,7 +479,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
         background: bg,
         backgroundImage: ratio === '1 / 1' ? `url("${outfit.lookImg}")` : undefined,
-        backgroundSize: '100% 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+        backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
         borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
@@ -845,11 +845,12 @@ function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSel
   const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId];
   if (!outfit) return null;
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
+  const showModelLook = window.LOOK_IMAGE_MODES[outfit.id] !== false;
   return (
     <div style={{ position: 'relative', minWidth: 0 }}>
       <div style={{ position: 'relative' }}>
         <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
-          <LookComposite outfit={outfit} items={items} ratio="1 / 1" lined pack={false} />
+          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="1 / 1" pack={false} aiMark="icon" />
         </button>
         {onToggleSel && (showSel || wide) && (
           <button
