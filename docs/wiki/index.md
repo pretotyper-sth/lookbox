@@ -7,6 +7,8 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Architecture
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
+- [mobile-bottom-nav](mobile-bottom-nav.md) — 모바일 하단 메뉴에는 옷장·오늘 코디·룩북·마이만 표시하고 구매 검토는 두지 않는다
+- [mobile-ai-mark](mobile-ai-mark.md) — 모바일 AI 착장 카드에서는 생성 문구 없이 ✦ 메타포만 표시한다
 
 ## Features
 - [tryon-mask-boundaries](tryon-mask-boundaries.md) — 승인 체크포인트 보호. 9/24 명시 요청으로 tryon22·캐시 PNG 재검증·부분 투명화 거부·정면 자세 강화; 영상 cover·PNG contain 유지

@@ -532,8 +532,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             boxSizing: 'border-box',
           }}
         />
-        <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')}>
-          {aiMark === 'icon' ? '✦' : '✦ AI로 생성'}
+        <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 이미지">
+          <span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI로 생성</span>}
         </span>
         {copyControl}
         {copyState ? (
