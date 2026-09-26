@@ -80,6 +80,6 @@ PC 기본 폭(`wide`, 760px+)에서는 생성을 돌리지 않는다. Chrome 검
 근거: `04-screens-ab.jsx` `launchTryOnFromSheet`; `09-app.jsx` `setAvatar`·`startTryOn`;
 `08-mypage.jsx` `ProfileAvatar`.
 
-2026-09-26 PC·모바일 모두 생성 전후 동일하게 「이 사진으로 옷을 바로 비춰 볼 수 있어요 · (모바일 전용)」를 보이고 CTA만 생성 상태에 따라 바꾼다. 보조 문구는 생성 완료 시 별도 absolute 위치를 주지 않아 프사·안내와의 순서가 생성 전과 같다.
+2026-09-26 PC·모바일 모두 생성 전후 동일하게 「이 사진으로 옷을 바로 비춰 볼 수 있어요 · (모바일 전용)」를 보인다. 본인 외도 본인 탭과 같은 패널 마크업을 쓰고, CTA만 생성 상태에 따라 바꾼다.
 
 2026-09-22부터 바로보기 전신 캐시는 `tryon20`으로 올렸다. 흰 옷이 판색 flood에 먹혀도 tryon14 기하 보조로 목라인·발목까지 뚫는다. 근거: `backend/app/main.py` `_tryon_geometry_mask` `_tryon_extend_columns`; `frontend/src/proto/03-data.jsx` `TRYON_BODY_REV`.
