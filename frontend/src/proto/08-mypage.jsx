@@ -806,9 +806,8 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
             <NumberSlider label="키" hint="선택 · 비워둬도 돼요" value={d.height} onChange={set('height')} min={140} max={200} unit="cm" defaultValue={165} />
             <NumberSlider label="몸무게" hint="선택 · 비워둬도 돼요" value={d.weight} onChange={set('weight')} min={30} max={150} unit="kg" defaultValue={60} />
           </div>
-          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 18 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>계정 보안</div>
-            <button type="button" onClick={() => setView('password')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 6 }}>
+            <button type="button" onClick={() => setView('password')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호</span><span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>새 비밀번호로 변경</span></span><Icon name="chevR" size={17} style={{ color: 'var(--ink-3)' }} />
             </button>
           </div>
