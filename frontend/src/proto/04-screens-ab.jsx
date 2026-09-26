@@ -2672,7 +2672,6 @@ function AddSheet({ ctx }) {
                               ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
                               : '프로필 사진 올리기'}
                           </span>
-                          {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady) || !wide) && (
                           <span className={tryOnProfilePanel && tryOnBodyReady ? 'lb-tryon-ready-note' : undefined} style={{
                             fontSize: tryOnErr ? 12.5 : 12,
                             fontWeight: tryOnErr ? 600 : 400,
@@ -2685,7 +2684,6 @@ function AddSheet({ ctx }) {
                               ? tryOnErr
                               : tryOnAvatar ? '(모바일 전용)' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
                           </span>
-                          )}
                         </div>
                       </div>
                       )
