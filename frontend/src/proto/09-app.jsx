@@ -2424,7 +2424,7 @@ function App() {
     (LB_DATA.OUTFITS || []).forEach((o) => { if (o && o.id === outfitId) o.feedback = feedback; });
     setDetailLook((cur) => cur && cur.outfitId === outfitId ? { ...cur, feedback } : cur);
     persistOutfitState(outfitId, { feedback });
-    showToast(feedback === 1 ? '다음 추천에 반영할게요' : feedback === -1 ? '다음 추천에서 줄일게요' : '평가를 취소했어요', feedback === 1 ? 'thumb' : undefined);
+    showToast(feedback ? '다음 추천에 반영할게요' : '평가를 취소했어요', feedback === 1 ? 'thumb' : undefined);
   };
   const renameSavedLook = (outfitId, name) => {
     const label = String(name || '').trim().slice(0, 40);
