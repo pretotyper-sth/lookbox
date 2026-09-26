@@ -2672,7 +2672,7 @@ function AddSheet({ ctx }) {
                               ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
                               : '프로필 사진 올리기'}
                           </span>
-                          <span className={tryOnProfilePanel && tryOnBodyReady ? 'lb-tryon-ready-note' : undefined} style={{
+                          <span style={{
                             fontSize: tryOnErr ? 12.5 : 12,
                             fontWeight: tryOnErr ? 600 : 400,
                             color: tryOnErr ? '#9D472F' : 'var(--ink-3)',

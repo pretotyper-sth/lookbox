@@ -326,12 +326,6 @@ img { display: block; max-width: 100%; }
   left: 50%;
   transform: translate(-50%, -10px);
 }
-.lb-tryon-ready-note {
-  position: absolute;
-  top: 120px;
-  left: 16px;
-  right: 16px;
-}
 @media (max-width: 759px) {
   .lb-tryon-other-card { position: relative; }
   .lb-tryon-other-edit {

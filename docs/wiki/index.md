@@ -23,7 +23,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다
-- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — PC·모바일 모두 바로 보기 생성 전후 안내 문구는 같고 CTA만 상태에 따라 바뀐다. 마스크는 tryon21에서 옷 밖 확장을 제거했다([[tryon-mask-boundaries]])
+- [tryon-setup-from-mypage](tryon-setup-from-mypage.md) — PC·모바일 모두 바로 보기 생성 전후 안내 문구와 프사·보조 문구 배치가 같다. CTA만 상태에 따라 바뀐다([[tryon-mask-boundaries]])
 - [tryon-multiple-profiles](tryon-multiple-profiles.md) — 본인·본인 외 전환. 서버 백그라운드 생성·계정별 작업 복귀, 최대 세 번 검증 재시도, 이미지 적용 방식 유지
 - [empty-state-center](empty-state-center.md) — 빈 화면 문구는 콘텐츠 칸 세로 가운데. 가짜 상단바 패딩을 넣으면 아래로 내려감
 - [mobile-page-zoom](mobile-page-zoom.md) — iOS는 13px 검색창 포커스로 페이지를 확대하고 기억한다. 모바일 input 16px, 검색 힌트만 13.5px
