@@ -164,6 +164,18 @@ img { display: block; max-width: 100%; }
   gap: 16px 12px;
 }
 .lb-grid > * { min-width: 0; }
+.lb-look-card {
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s3);
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 @media (min-width: 560px) {
   .lb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 14px; }
 }

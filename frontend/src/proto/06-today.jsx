@@ -100,7 +100,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
     ? { ...outfit, lookImg: null }
     : outfit;
   return (
-    <div className="lb-daily-card-reveal" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s3)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+    <div className="lb-look-card lb-daily-card-reveal" style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       {/* HERO — 조합 전체를 하나의 룩 이미지로, 상황 태그·저장은 오버레이 */}
       <div style={{ position: 'relative' }}>
         <div

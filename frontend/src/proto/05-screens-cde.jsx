@@ -482,11 +482,6 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
-        {ratio === '1 / 1' ? <div aria-hidden="true" style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `url("${lookImg}")`, backgroundSize: 'cover', backgroundPosition: 'center',
-          filter: 'blur(14px) saturate(.85)', transform: 'scale(1.06)',
-        }} /> : null}
         <img
           src={outfit.lookImg}
           alt={cleanItems.map((i) => i.name).join(' · ')}
@@ -844,17 +839,17 @@ function ResultsScreen({ ctx }) {
 /* ============================================================
    D · Lookbook (saved coordis)
    ============================================================ */
-/* 옷장 카드와 같은 뼈대: 정사각 썸네일 + 아래 두 줄. 빼기는 선택 모드에서만. */
+/* 오늘 코디와 같은 카드 바탕·안쪽 간격·4:5 이미지. 빼기는 선택 모드에서만. */
 function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSelectUx, wide }) {
   const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId];
   if (!outfit) return null;
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const showModelLook = window.LOOK_IMAGE_MODES[outfit.id] !== false;
   return (
-    <div style={{ position: 'relative', minWidth: 0 }}>
+    <div className="lb-look-card" style={{ position: 'relative', minWidth: 0 }}>
       <div style={{ position: 'relative' }}>
         <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', padding: 0 }}>
-          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="1 / 1" pack={false} aiMark="icon" />
+          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" pack={false} aiMark="icon" />
         </button>
         {onToggleSel && (showSel || wide) && (
           <button
@@ -892,13 +887,13 @@ function SavedCard({ look, onOpen, onMore, selected, showSel, onToggleSel, inSel
           </button>
         )}
       </div>
-      <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
+      <button onClick={onOpen} className="lb-itembtn" style={{ display: 'block', width: '100%', minWidth: 0, flex: 1, textAlign: 'left', padding: '11px 3px 0' }}>
         <div style={{
-          fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
+          fontSize: 14.5, fontWeight: 700, lineHeight: 1.35,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{look.label}</div>
         <div style={{
-          fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.3,
+          fontSize: 11.5, color: 'var(--ink-3)', marginTop: 3, lineHeight: 1.3,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{(items.length || (outfit.itemIds || []).length)}개 품목 · {look.savedAt}</div>
       </button>
