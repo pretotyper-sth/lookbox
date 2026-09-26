@@ -136,7 +136,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         }} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 37, bottom: 7, zIndex: 3, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
           {outfit.lookImg ? <Icon name="swap" size={12} stroke={2.2} /> : <Icon name="sparkle" size={13} />}
         </button>
-        <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420}>
+        <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420} centered>
           <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setUseModelLook(true); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
         </BottomSheet>
       </div>

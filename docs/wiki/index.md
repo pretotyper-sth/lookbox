@@ -18,6 +18,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [model-look-toggle](model-look-toggle.md) — AI 착장은 왼쪽 첫 카드 요청부터 작업 표시. model-id33은 목록 밖 액세서리 금지·레퍼런스 대비 다리 길이 소폭 축소
+- [model-look-confirm-modal](model-look-confirm-modal.md) — AI 착장 생성 확인은 모바일에서도 가운데 표시하고 작은 화면에서 내부 스크롤
 - [look-latency](look-latency.md) — 상품컷을 먼저 보내고, 오른쪽 제안 아이템과 왼쪽 AI 착장을 병렬 생성한다
 - [location-weather](location-weather.md) — 브라우저 현재 위치의 기온·체감·최고/최저·강수를 데일리 추천 점수에 반영하며 좌표는 저장하지 않는다
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다

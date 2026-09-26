@@ -701,7 +701,7 @@ function IconBtn({ name, onClick, label, active, size = 40, iconSize = 21, style
 /* ----------------------------------------------------------------
    BottomSheet — bottom sheet on mobile, centered modal on desktop
 ---------------------------------------------------------------- */
-function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, dismissOnScrim = true, zIndex = 60, tightBottom = false }) {
+function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, dismissOnScrim = true, zIndex = 60, tightBottom = false, centered = false }) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   // 닫는 동안 children을 비우면 손잡이만 남은 작은 상자가 한 프레임 보인다.
@@ -722,24 +722,24 @@ function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, d
     else { setShown(false); const t = setTimeout(() => setMounted(false), 280); return () => clearTimeout(t); }
   }, [open]);
   if (!mounted) return null;
-  const hiddenTf = wide ? 'translateY(10px) scale(0.97)' : 'translateY(101%)';
+  const hiddenTf = wide || centered ? 'translateY(10px) scale(0.97)' : 'translateY(101%)';
   return (
     <div onClick={dismissOnScrim ? onClose : undefined} style={{
       position: 'fixed', inset: 0, zIndex, display: 'flex',
-      alignItems: wide ? 'center' : 'flex-end', justifyContent: 'center',
+      alignItems: wide || centered ? 'center' : 'flex-end', justifyContent: 'center',
       background: shown ? 'rgba(30,27,21,0.42)' : 'rgba(30,27,21,0)',
-      transition: 'background var(--dur) var(--ease)', padding: wide ? 24 : 0,
+      transition: 'background var(--dur) var(--ease)', padding: wide ? 24 : (centered ? 16 : 0),
     }} className="lb-sheet-scrim">
       <div onClick={(e) => e.stopPropagation()} className="lb-sheet" style={{
-        width: '100%', maxWidth: wide ? desktopMaxW : maxW, background: 'var(--surface)',
-        borderRadius: wide ? 'var(--r-lg)' : 'var(--r-lg) var(--r-lg) 0 0',
-        boxShadow: wide ? 'var(--pop-shadow)' : 'var(--sheet-shadow)',
+        width: '100%', maxWidth: wide ? desktopMaxW : maxW, maxHeight: centered ? 'calc(100dvh - 32px)' : undefined, overflowY: centered ? 'auto' : undefined, background: 'var(--surface)',
+        borderRadius: wide || centered ? 'var(--r-lg)' : 'var(--r-lg) var(--r-lg) 0 0',
+        boxShadow: wide || centered ? 'var(--pop-shadow)' : 'var(--sheet-shadow)',
         transform: shown ? (dragY ? `translateY(${dragY}px)` : 'translateY(0) scale(1)') : hiddenTf,
-        opacity: wide ? (shown ? 1 : 0) : 1,
+        opacity: wide || centered ? (shown ? 1 : 0) : 1,
         transition: dragY ? 'none' : 'transform var(--dur) var(--ease), opacity var(--dur) var(--ease)',
-        paddingBottom: wide ? 6 : (tightBottom ? 'env(safe-area-inset-bottom, 0px)' : 'max(env(safe-area-inset-bottom), 12px)'),
+        paddingBottom: wide || centered ? 6 : (tightBottom ? 'env(safe-area-inset-bottom, 0px)' : 'max(env(safe-area-inset-bottom), 12px)'),
       }}>
-        {!wide && (
+        {!wide && !centered && (
           <div
             onPointerDown={(e) => { dragFrom.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
             onPointerMove={(e) => { if (dragFrom.current != null) setDragY(Math.max(0, e.clientY - dragFrom.current)); }}
