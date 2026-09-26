@@ -404,6 +404,29 @@ def _patch_user_prefs(user_id: str, patch: dict[str, Any]) -> None:
         print(f"[profile] prefs patch skip: {exc}", flush=True)
 
 
+def _record_style_feedback(
+    user_id: str, outfit_id: str, feedback: int, item_ids: list[str], styles: list[str],
+) -> None:
+    """Keep recent outfit feedback on the account so it survives daily outfit cleanup."""
+    res = supabase_admin.auth.admin.get_user_by_id(user_id)
+    user = getattr(res, "user", None) or res
+    meta = dict(getattr(user, "user_metadata", None) or {})
+    rows = [
+        r for r in (meta.get("style_feedback") or [])
+        if isinstance(r, dict) and r.get("outfit_id") != outfit_id
+    ]
+    if feedback:
+        rows.insert(0, {
+            "outfit_id": outfit_id,
+            "feedback": feedback,
+            "item_ids": [str(item_id) for item_id in item_ids if item_id],
+            "styles": [str(style) for style in styles if style],
+            "updated_at": now_iso(),
+        })
+    meta["style_feedback"] = rows[:40]
+    supabase_admin.auth.admin.update_user_by_id(user_id, {"user_metadata": meta})
+
+
 def public_url(path: str) -> str:
     return supabase_admin.storage.from_(SUPABASE_BUCKET).get_public_url(path)
 
@@ -4356,6 +4379,7 @@ def recommend_closet(
     styles: list[str] | None,
     profile: dict[str, Any] | None,
     include_ids: list[str] | None,
+    feedback: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """옷장 실물만 짝짓는다. GPT를 부르지 않는다 — 상품컷 이미지는 이미 있다."""
     if not items or max_combos < 1:
@@ -4374,9 +4398,32 @@ def recommend_closet(
         for ids in (exclude_item_ids or [])
         if ids
     }
+    candidate_count = min(40, max_combos * 4) if feedback else max_combos
     combos = fallback_combos(
-        items, anchor, max_combos, tone, exclude_keys, uniq, profile, include_ids,
+        items, anchor, candidate_count, tone, exclude_keys, uniq, profile, include_ids,
     )
+    if feedback:
+        def preference_score(combo: dict[str, Any]) -> float:
+            ids = set(combo.get("item_ids") or [])
+            score = 0.0
+            for index, entry in enumerate(feedback[:40]):
+                prior = set(entry.get("item_ids") or [])
+                if not prior:
+                    continue
+                weight = max(0.35, 1.0 - index * 0.02)
+                shared = len(ids & prior)
+                shared_pairs = shared * (shared - 1) / 2
+                same_combo = ids == prior
+                combo_styles = set(combo.get("styles") or [])
+                prior_styles = set(entry.get("styles") or [])
+                shared_style = bool(combo_styles & prior_styles)
+                score += int(entry.get("feedback") or 0) * weight * (
+                    shared * 0.45 + shared_pairs * 1.25 + (2.0 if same_combo else 0.0)
+                    + (0.4 if shared_style else 0.0)
+                )
+            return score
+
+        combos.sort(key=preference_score, reverse=True)
     # 상품컷 추천은 여기서 끝낸다. 후처리의 소품 덧붙이기·GPT 보정은 하지 않아야
     # 한 카드의 카테고리가 겹치지 않고, 즉시 옷장 사진을 보여줄 수 있다.
     return _diversify_combo_bases(combos, {item["id"]: item for item in items}, max_combos)
@@ -8991,6 +9038,30 @@ def _recent_daily_exclusions(user_id: str, for_date: str | None) -> list[list[st
     return out
 
 
+def _recent_daily_feedback(user_id: str) -> list[dict[str, Any]]:
+    """계정에 저장된 최근 추천 평가 40개를 다음 조합 후보의 취향 점수에 쓴다."""
+    try:
+        res = supabase_admin.auth.admin.get_user_by_id(user_id)
+        user = getattr(res, "user", None) or res
+        rows = list((getattr(user, "user_metadata", None) or {}).get("style_feedback") or [])
+    except Exception as exc:  # noqa: BLE001
+        print(f"[coordinate] feedback read skip: {exc}", flush=True)
+        return []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        vote = row.get("feedback")
+        ids = [str(item_id) for item_id in (row.get("item_ids") or []) if item_id]
+        if vote in (-1, 1) and ids:
+            out.append({
+                "feedback": vote,
+                "item_ids": ids,
+                "styles": [str(style) for style in (row.get("styles") or []) if style],
+            })
+        if len(out) >= 40:
+            break
+    return out
+
+
 def _recent_daily_wishes(user_id: str, for_date: str | None) -> list[dict[str, Any]]:
     """최근 데일리에서 제안한 외부 아이템을 다시 고르지 않게 한다."""
     today = (for_date or "")[:10]
@@ -9075,6 +9146,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
         recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
+        feedback = _recent_daily_feedback(user.id)
         recent_wishes = _recent_daily_wishes(user.id, body.for_date)
         exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
@@ -9148,7 +9220,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         combos = recommend_closet(
             pool, anchor, max_combos, body.style,
             exclusions, body.styles or None, profile,
-            body.include_item_ids or None,
+            body.include_item_ids or None, feedback,
         )
         wish_n = min(wish_combos, len(combos))
         used_wishes = {_wish_key(wish) for wish in recent_wishes if _wish_key(wish) != ("", "", "")}
@@ -9184,12 +9256,24 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             wish_item["thumb"] = thumb
             outfit["wish"] = wish
             try:
+                current = (
+                    supabase_admin.table("outfits")
+                    .select("metadata")
+                    .eq("id", outfit["id"])
+                    .eq("user_id", user.id)
+                    .limit(1)
+                    .execute()
+                    .data
+                    or []
+                )
+                metadata = dict(current[0].get("metadata") or {}) if current else {}
+                metadata.update({
+                    "styles": outfit["styles"],
+                    "for_date": body.for_date or None,
+                    "wish": wish,
+                })
                 supabase_admin.table("outfits").update({
-                    "metadata": {
-                        "styles": outfit["styles"],
-                        "for_date": body.for_date or None,
-                        "wish": wish,
-                    },
+                    "metadata": metadata,
                 }).eq("id", outfit["id"]).eq("user_id", user.id).execute()
             except Exception as exc:  # noqa: BLE001
                 print(f"[coordinate] wish persist skip: {exc}", flush=True)
@@ -9363,6 +9447,7 @@ def _outfit_row_payload(
         "label": r.get("label") or "코디",
         "mood": r.get("mood") or "",
         "styles": meta.get("styles") or [],
+        "feedback": meta.get("feedback") if meta.get("feedback") in (-1, 1) else 0,
         "itemIds": ids,
         "lookImg": r.get("look_image_url"),
         "wish": wish,
@@ -9418,6 +9503,7 @@ class LiveOutfitState(BaseModel):
     saved: bool | None = None
     worn: bool | None = None
     label: str | None = None
+    feedback: int | None = None
 
 
 @app.post("/api/live/outfits/{outfit_id}/state")
@@ -9435,6 +9521,30 @@ def live_outfit_state(
         name = str(body.label).strip()[:40]
         if name:
             patch["label"] = name
+    if body.feedback is not None:
+        if body.feedback not in (-1, 0, 1):
+            raise HTTPException(status_code=422, detail="코디 평가는 좋아요 또는 별로예요만 저장할 수 있어요.")
+        current = (
+            supabase_admin.table("outfits")
+            .select("metadata,item_ids,type")
+            .eq("id", outfit_id)
+            .eq("user_id", user.id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail="그 코디를 찾지 못했어요. 목록을 새로고침해 주세요.")
+        row = current[0]
+        if row.get("type") != "daily":
+            raise HTTPException(status_code=400, detail="추천 코디만 평가할 수 있어요.")
+        metadata = dict(row.get("metadata") or {})
+        if body.feedback:
+            metadata["feedback"] = body.feedback
+        else:
+            metadata.pop("feedback", None)
+        patch["metadata"] = metadata
     if not patch:
         return {"ok": True}
     updated = (
@@ -9448,6 +9558,18 @@ def live_outfit_state(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="그 코디를 찾지 못했어요. 목록을 새로고침해 주세요.")
+    if body.feedback is not None:
+        try:
+            _record_style_feedback(
+                user.id,
+                outfit_id,
+                body.feedback,
+                current[0].get("item_ids") or [],
+                metadata.get("styles") or [],
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[coordinate] feedback account history write failed: {exc}", flush=True)
+            raise HTTPException(status_code=500, detail="평가를 저장하지 못했어요. 다시 시도해 주세요.") from exc
     return {"ok": True}
 
 

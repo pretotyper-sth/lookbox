@@ -1370,7 +1370,7 @@ function DetailScreen({ ctx }) {
     back, detailLook, addedItemIds, addToWardrobe, detailIndex, detailTotal, gotoLook, wide,
     savedLooks, openDetail, requestUnsave, saveOutfit, openOutfitViewer,
     detailLooks, detailListLabel, detailFromLookbook,
-    applyModelLooks,
+    applyModelLooks, rateOutfit,
   } = ctx;
   const [showModelLook, setShowModelLook] = useSc(window.LOOK_IMAGE_MODES[LB_DATA.OUTFIT_BY_ID[detailLook.outfitId]?.id] !== false);
   const [confirmModelLook, setConfirmModelLook] = useSc(false);
@@ -1378,6 +1378,7 @@ function DetailScreen({ ctx }) {
   // 룩북에서 왔으면 룩북의 나머지를, 오늘 코디에서 왔으면 그날 코디를 옆에 깐다.
   const looks = (detailLooks && detailLooks.length ? detailLooks : savedLooks) || [];
   const outfit = LB_DATA.OUTFIT_BY_ID[detailLook.outfitId];
+  const feedback = outfit.feedback || 0;
   const items = (outfit.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const multi = detailTotal > 1;
   // 다른 코디로 넘기면 위부터 본다. 아래 목록을 보다 넘기면 새 코디의 사진이 화면 밖이다.
@@ -1533,6 +1534,16 @@ function DetailScreen({ ctx }) {
         }} aria-label={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} title={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 42, bottom: 8, zIndex: 3, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
           {outfit.lookImg ? <Icon name="swap" size={15} stroke={2.2} /> : <Icon name="sparkle" size={14} />}
         </button>
+        {!detailFromLookbook && !outfit.manual && (
+          <div role="group" aria-label="코디 평가" style={{ position: 'absolute', right: 76, bottom: 8, zIndex: 3, display: 'flex', alignItems: 'center', gap: 0, padding: 2, borderRadius: 999, background: 'color-mix(in srgb, var(--ink) 72%, transparent)', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+            {[1, -1].map((vote) => {
+              const active = feedback === vote;
+              return <button key={vote} type="button" onClick={(e) => { e.stopPropagation(); rateOutfit && rateOutfit(detailLook.outfitId, vote); }} aria-label={vote > 0 ? '좋아요' : '별로예요'} aria-pressed={active} title={vote > 0 ? '좋아요' : '별로예요'} style={{ width: 36, height: 36, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--ink)' : '#fff', cursor: 'pointer' }}>
+                <Icon name="thumb" size={18} stroke={1.9} fill={active ? 'currentColor' : 'none'} style={vote < 0 ? { transform: 'rotate(180deg)' } : undefined} />
+              </button>;
+            })}
+          </div>
+        )}
         <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420} centered>
           <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setShowModelLook(true); applyModelLooks && applyModelLooks([outfit]); }}>만들기</Btn></div></div>
         </BottomSheet>

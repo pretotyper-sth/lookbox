@@ -118,7 +118,7 @@ function applyLookbookCache(cache) {
     if (!o || !o.id) return;
     LB_DATA.OUTFIT_BY_ID[o.id] = {
       id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-      itemIds: o.itemIds || [], lookImg: o.lookImg, manual: !!o.manual, wish: o.wish,
+      itemIds: o.itemIds || [], lookImg: o.lookImg, manual: !!o.manual, wish: o.wish, feedback: o.feedback || 0,
     };
   });
   return Array.isArray(cache.looks) ? cache.looks : [];
@@ -149,6 +149,7 @@ function applyOutfitRecords(data) {
     LB_DATA.OUTFIT_BY_ID[o.id] = {
       id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
       itemIds: o.itemIds, lookImg: o.lookImg || prev.lookImg, manual: !!o.manual, wish: o.wish,
+      feedback: o.feedback || prev.feedback || 0,
     };
   });
   return list;
@@ -342,7 +343,7 @@ function hydrateDailyHistoryFromServer(data, ownedItems) {
     if (wipedDailyIds.has(o.id)) return;
     (byDate[o.forDate] = byDate[o.forDate] || []).push({
       id: o.id, label: o.label, mood: o.mood, styles: o.styles || [],
-      itemIds: o.itemIds, lookImg: o.lookImg, wish: o.wish,
+      itemIds: o.itemIds, lookImg: o.lookImg, wish: o.wish, feedback: o.feedback || 0,
     });
   });
   Object.entries(byDate).forEach(([day, outfits]) => {
@@ -2414,6 +2415,17 @@ function App() {
       method: 'POST', body: JSON.stringify(patch),
     }).catch(() => showToast('서버에 저장하지 못했어요'));
   };
+  const rateOutfit = (outfitId, vote) => {
+    const outfit = LB_DATA.OUTFIT_BY_ID[outfitId];
+    if (!outfit || ![-1, 1].includes(vote)) return;
+    const feedback = outfit.feedback === vote ? 0 : vote;
+    outfit.feedback = feedback;
+    (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === outfitId) o.feedback = feedback; });
+    (LB_DATA.OUTFITS || []).forEach((o) => { if (o && o.id === outfitId) o.feedback = feedback; });
+    setDetailLook((cur) => cur && cur.outfitId === outfitId ? { ...cur, feedback } : cur);
+    persistOutfitState(outfitId, { feedback });
+    showToast(feedback === 1 ? '다음 추천에 반영할게요' : feedback === -1 ? '다음 추천에서 줄일게요' : '평가를 취소했어요', feedback === 1 ? 'thumb' : undefined);
+  };
   const renameSavedLook = (outfitId, name) => {
     const label = String(name || '').trim().slice(0, 40);
     if (!outfitId || !label) return;
@@ -2875,6 +2887,7 @@ function App() {
     detailFromLookbook: detailList ? !!detailList.fromLookbook : true,
     detailIndex: ((detailList && detailList.looks) || savedLooks).findIndex((l) => l.id === (detailLook ? detailLook.id : '')),
     detailTotal: ((detailList && detailList.looks) || savedLooks).length, gotoLook,
+    rateOutfit,
     hasWardrobe: comboReady,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, wardrobeLoaded, lookbookLoading,
     detectCount: Math.max(1, parseInt(t.detectCount, 10) || 3),
