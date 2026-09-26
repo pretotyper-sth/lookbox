@@ -1038,3 +1038,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 본인 탭의 기존 위치까지 흔들리지 않도록 공용 안내 클래스 대신 프로필 패널 전용 컨테이너와 두 문구 클래스를 사용한다. 프사 아래에 주 안내, 그 아래에 `(모바일 전용)`을 flex 순서로 배치한다. `frontend/src/proto/proto.css`, `frontend/src/proto/04-screens-ab.jsx`.
 # 2026-09-26 — 바로 보기 안내를 기존 레이아웃으로 복귀
 프로필 전용 flex 레이아웃 변경을 되돌리고, 두 탭의 보조 문구를 제거했다. 안내 문구는 `모바일에서 옷을 바로 비춰볼 수 있어요`로 통일한다. `frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/proto.css`.
+# 2026-09-26 — 룩북 모바일 카드의 이미지 진입 크기 고정
+정사각 AI 착장 썸네일은 이미지 로드 후 캔버스 배경을 추가하던 흐름을 없애고, 같은 원본을 고정 cover 배경으로 사용해 진입 시 두 단계로 커지는 인상을 제거한다. 모바일 하단 메뉴의 구매 검토 항목 제거도 함께 원격에 반영한다. `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/04-screens-ab.jsx`.

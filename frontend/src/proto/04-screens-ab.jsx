@@ -69,7 +69,7 @@ function TopBar({ left, title, right, sticky = true, border = true }) {
 }
 
 function BottomNav({ tab, go }) {
-  const tabs = [{ id: 'decision', icon: 'sparkle', label: '구매 검토' }, { id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
+  const tabs = [{ id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
   return (
     <nav style={{
       display: 'flex', borderTop: '1px solid var(--line)',

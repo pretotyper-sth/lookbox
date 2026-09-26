@@ -408,7 +408,6 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 }
 
 const LOOK_FLAT_CACHE = {};
-const LOOK_SQUARE_BG_CACHE = {};
 window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
 function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false }) {
@@ -419,42 +418,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
   const lookImg = outfit && outfit.lookImg;
-  const [squareBg, setSquareBg] = useSc(lookImg ? LOOK_SQUARE_BG_CACHE[lookImg] || '' : '');
   const copyTimer = React.useRef(0);
-  useEc(() => {
-    if (ratio !== '1 / 1' || !lookImg) {
-      setSquareBg('');
-      return undefined;
-    }
-    setSquareBg('');
-    if (LOOK_SQUARE_BG_CACHE[lookImg]) {
-      setSquareBg(LOOK_SQUARE_BG_CACHE[lookImg]);
-      return undefined;
-    }
-    let dead = false;
-    loadLookImage(lookImg).then((im) => {
-      if (!im) return;
-      const size = 600;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const fit = Math.min(size / im.naturalWidth, size / im.naturalHeight);
-      const width = im.naturalWidth * fit;
-      const height = im.naturalHeight * fit;
-      const left = (size - width) / 2;
-      const top = (size - height) / 2;
-      ctx.drawImage(im, 0, 0, 1, im.naturalHeight, 0, top, left, height);
-      ctx.drawImage(im, im.naturalWidth - 1, 0, 1, im.naturalHeight, left + width, top, left, height);
-      ctx.drawImage(im, left, top, width, height);
-      try {
-        const url = canvas.toDataURL('image/jpeg', 0.92);
-        LOOK_SQUARE_BG_CACHE[lookImg] = url;
-        if (!dead) setSquareBg(url);
-      } catch (e) { /* keep the original background when canvas access is restricted */ }
-    });
-    return () => { dead = true; };
-  }, [lookImg, ratio]);
   useEc(() => {
     if ((outfit && outfit.lookImg) || !shown.length) {
       setFlat('');
@@ -518,9 +482,10 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}>
-        {squareBg ? <div aria-hidden="true" style={{
+        {ratio === '1 / 1' ? <div aria-hidden="true" style={{
           position: 'absolute', inset: 0,
-          backgroundImage: `url("${squareBg}")`, backgroundSize: '100% 100%', backgroundPosition: 'center',
+          backgroundImage: `url("${lookImg}")`, backgroundSize: 'cover', backgroundPosition: 'center',
+          filter: 'blur(14px) saturate(.85)', transform: 'scale(1.06)',
         }} /> : null}
         <img
           src={outfit.lookImg}
