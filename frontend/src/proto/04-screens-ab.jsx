@@ -2589,9 +2589,11 @@ function AddSheet({ ctx }) {
                 const tryOnProfilePanel = tab === 'tryon' && tryOnAvatar && !tryOnErr;
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnSubjectMaking || !canTryOn || (tryOnOtherSubjectMaking && !tryOnBodyReady) || (wide && tryOnBodyReady);
-                const tryOnGuide = tryOnSubject === 'other'
-                  ? '이 사진으로 옷을 바로 대볼 수 있어요.'
-                  : '프로필 사진으로 옷을 바로 대볼 수 있어요.';
+                const tryOnGuide = wide
+                  ? (tryOnSubject === 'other'
+                    ? '이 사진으로 옷을 바로 대볼 수 있어요.'
+                    : '프로필 사진으로 옷을 바로 대볼 수 있어요.')
+                  : '이 사진으로 옷을 바로 비춰 볼 수 있어요';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
@@ -2674,7 +2676,7 @@ function AddSheet({ ctx }) {
                               ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
                               : '프로필 사진 올리기'}
                           </span>
-                          {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady)) && (
+                          {(tryOnErr || !(tryOnAvatar && !tryOnBodyReady) || !wide) && (
                           <span className={tryOnProfilePanel && tryOnBodyReady ? 'lb-tryon-ready-note' : undefined} style={{
                             fontSize: tryOnErr ? 12.5 : 12,
                             fontWeight: tryOnErr ? 600 : 400,
