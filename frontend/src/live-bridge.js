@@ -98,6 +98,15 @@ const auth = {
     } catch { /* 오프라인 — 그냥 덮어쓴다 */ }
     try { await supabase.auth.updateUser({ data: { prefs: { ...current, ...prefs } } }) } catch { /* 오프라인 등 */ }
   },
+  async updatePassword(password) {
+    if (!supabase) return { error: '서버 설정이 없어요.' }
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      return error ? { error: authError(error) } : { error: '' }
+    } catch {
+      return { error: '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.' }
+    }
+  },
   // 가입은 Supabase의 signUp을 쓰지 않는다. 확인 메일이 필요한 가입은 기본 메일
   // 발송 한도(시간당 몇 통)에 걸려 'email rate limit'으로 막히고, 그 순간 계정이
   // 아예 만들어지지 않는다. 백엔드가 서비스 롤로 확인된 계정을 만들어 주고,

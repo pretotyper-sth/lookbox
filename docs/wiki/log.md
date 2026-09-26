@@ -1042,3 +1042,5 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 정사각 AI 착장 썸네일은 이미지 로드 후 캔버스 배경을 추가하던 흐름을 없애고, 같은 원본을 고정 cover 배경으로 사용해 진입 시 두 단계로 커지는 인상을 제거한다. 모바일 하단 메뉴의 구매 검토 항목 제거도 함께 원격에 반영한다. `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/04-screens-ab.jsx`.
 # 2026-09-26 — 오늘 코디·룩북 카드 구조 통일
 두 목록을 같은 흰색 카드 표면과 4:5 이미지 프레임으로 맞추고, AI 착장 썸네일의 보조 확대 배경을 제거해 원본 전체가 한 겹으로 보이게 했다. `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/06-today.jsx`, `frontend/src/proto/proto.css`.
+# 2026-09-26 — 계정 정보와 비밀번호 설정 분리
+마이페이지 개인 정보 모달에서는 비밀번호 입력을 제거하고 별도 비밀번호 변경 시트로 분리했다. 개인 정보 저장은 비밀번호와 무관하게 동작하고, 변경은 Supabase `updateUser`로 처리한다. `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`, `frontend/src/live-bridge.js`.

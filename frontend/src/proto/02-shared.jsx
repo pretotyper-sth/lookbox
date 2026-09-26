@@ -768,7 +768,7 @@ function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, d
    ItemDetailSheet — tap a garment → view large + add optional details
    (브랜드 / 사이즈 / 구매처 / 메모). All fields optional, saved optimistically.
 ---------------------------------------------------------------- */
-function LabeledField({ label, value, onChange, placeholder, multiline }) {
+function LabeledField({ label, value, onChange, placeholder, multiline, type = 'text', autoComplete }) {
   const common = {
     width: '100%', padding: multiline ? '11px 14px' : '12px 14px', borderRadius: 'var(--r-md)',
     fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
@@ -779,7 +779,7 @@ function LabeledField({ label, value, onChange, placeholder, multiline }) {
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       {multiline
         ? <textarea className="lb-input" rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />
-        : <input className="lb-input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />}
+        : <input className="lb-input" type={type} autoComplete={autoComplete} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />}
     </label>
   );
 }

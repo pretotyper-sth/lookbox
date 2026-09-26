@@ -726,21 +726,57 @@ function AccountChips({ options, value, onPick }) {
   );
 }
 
-function AccountEditSheet({ open, prefs, onClose, onSave }) {
-  const [d, setD] = useMp({ email: '', pw: '', pw2: '', gender: '', age: '', height: '', weight: '' });
+function PasswordChangeSheet({ open, onClose, onSave }) {
+  const [d, setD] = useMp({ pw: '', pw2: '' });
+  const [error, setError] = useMp('');
+  const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
+  const mismatch = d.pw2 && d.pw !== d.pw2;
+  const valid = d.pw.length >= 6 && d.pw === d.pw2;
+  useMe(() => {
+    if (open) { setD({ pw: '', pw2: '' }); setError(''); }
+  }, [open]);
+  const submit = async () => {
+    if (!valid) return;
+    const message = await onSave(d.pw);
+    if (message) { setError(message); return; }
+    onClose();
+  };
+  return (
+    <BottomSheet open={open} onClose={onClose}>
+      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>비밀번호 변경</div>
+          <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <LabeledField label="새 비밀번호" value={d.pw} onChange={set('pw')} type="password" placeholder="6자 이상" autoComplete="new-password" />
+          <div>
+            <LabeledField label="새 비밀번호 확인" value={d.pw2} onChange={set('pw2')} type="password" placeholder="한 번 더 입력" autoComplete="new-password" />
+            {mismatch && <div style={{ fontSize: 11.5, color: '#B0573C', marginTop: 6 }}>비밀번호가 일치하지 않아요.</div>}
+          </div>
+          {error && <div style={{ fontSize: 12, color: '#B0573C' }}>{error}</div>}
+        </div>
+        <div style={{ marginTop: 26 }}><Btn full size="lg" icon="check" disabled={!valid} onClick={submit}>비밀번호 변경</Btn></div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
+  const [passwordOpen, setPasswordOpen] = useMp(false);
+  const [d, setD] = useMp({ email: '', gender: '', age: '', height: '', weight: '' });
   useMe(() => {
     if (open) setD({
-      email: prefs.email || '', pw: '', pw2: '', gender: prefs.gender || '', age: prefs.age || '',
+      email: prefs.email || '', gender: prefs.gender || '', age: prefs.age || '',
       height: prefs.height || '', weight: prefs.weight || '',
     });
   }, [open]);
   const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
   const emailOk = /\S+@\S+\.\S+/.test(d.email);
-  const pwOk = !d.pw || (d.pw.length >= 6 && d.pw === d.pw2);
-  const pwMismatch = d.pw2 && d.pw !== d.pw2;
 
   return (
-    <BottomSheet open={open} onClose={onClose}>
+    <>
+      <BottomSheet open={open} onClose={onClose}>
       <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ fontSize: 18, fontWeight: 800 }}>개인 정보</div>
@@ -749,19 +785,9 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <LabeledField label="이메일" value={d.email} onChange={set('email')} placeholder="you@example.com" />
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>새 비밀번호</div>
-            <input className="lb-input" type="password" value={d.pw} placeholder="변경 시에만 입력 (6자 이상)" onChange={(e) => set('pw')(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)', outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-          {d.pw && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>새 비밀번호 확인</div>
-              <input className="lb-input" type="password" value={d.pw2} placeholder="한 번 더 입력" onChange={(e) => set('pw2')(e.target.value)}
-                style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14, background: 'var(--ivory)', border: '1px solid ' + (pwMismatch ? '#B0573C' : 'var(--line)'), color: 'var(--ink)', outline: 'none', boxSizing: 'border-box' }} />
-              {pwMismatch && <div style={{ fontSize: 11.5, color: '#B0573C', marginTop: 6 }}>비밀번호가 일치하지 않아요.</div>}
-            </div>
-          )}
+          <button type="button" onClick={() => setPasswordOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호 변경</span><Icon name="chevron-right" size={17} color="var(--ink-3)" />
+          </button>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>
             <AccountChips options={['여성', '남성', '선택 안 함']} value={d.gender} onPick={set('gender')} />
@@ -778,10 +804,12 @@ function AccountEditSheet({ open, prefs, onClose, onSave }) {
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Btn full size="lg" icon="check" disabled={!emailOk || !pwOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
+          <Btn full size="lg" icon="check" disabled={!emailOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
         </div>
-      </div>
-    </BottomSheet>
+        </div>
+      </BottomSheet>
+      <PasswordChangeSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} onSave={onChangePassword} />
+    </>
   );
 }
 

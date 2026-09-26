@@ -1176,6 +1176,13 @@ function App() {
   const saveEditedPrefs = (p) => { setPrefs(p); persistPrefs(p); setEditPrefs(false); showToast('선호 정보를 저장했어요', 'check'); };
   const openPrefs = () => setEditPrefs(true);
   const openAccount = () => setAccountSheet(true);
+  const changePassword = async (password) => {
+    if (!window.LB_AUTH || !window.LB_AUTH.updatePassword) return '서버 설정이 없어요.';
+    const result = await window.LB_AUTH.updatePassword(password);
+    if (result.error) return result.error;
+    showToast('비밀번호를 변경했어요', 'check');
+    return '';
+  };
   const emptyTryOnAssets = () => ({ body: '', top: '', bottom: '', full: '' });
   const emptyTryOnOther = () => ({
     avatar: '', gender: '', age: '', height: '', weight: '',
@@ -3068,7 +3075,7 @@ function App() {
           if (t && t.img) openImageViewer(t);
         }}
       />
-      <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} />
+      <AccountEditSheet open={accountSheet} prefs={prefs} onClose={() => setAccountSheet(false)} onSave={saveAccount} onChangePassword={changePassword} />
 
       <TryOnSetupOverlay
         open={tryOnSetup}
