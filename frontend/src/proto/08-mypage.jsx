@@ -726,50 +726,58 @@ function AccountChips({ options, value, onPick }) {
   );
 }
 
-function PasswordChangeSheet({ open, onClose, onSave }) {
+function PasswordChangePanel({ onBack, onClose, onSave }) {
   const [d, setD] = useMp({ pw: '', pw2: '' });
   const [error, setError] = useMp('');
+  const [saving, setSaving] = useMp(false);
   const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
   const mismatch = d.pw2 && d.pw !== d.pw2;
   const valid = d.pw.length >= 6 && d.pw === d.pw2;
-  useMe(() => {
-    if (open) { setD({ pw: '', pw2: '' }); setError(''); }
-  }, [open]);
   const submit = async () => {
-    if (!valid) return;
-    const message = await onSave(d.pw);
-    if (message) { setError(message); return; }
-    onClose();
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const message = await onSave(d.pw);
+      if (message) { setError(message); return; }
+      onBack();
+    } catch {
+      setError('비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
   };
   return (
-    <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>비밀번호 변경</div>
-          <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <LabeledField label="새 비밀번호" value={d.pw} onChange={set('pw')} type="password" placeholder="6자 이상" autoComplete="new-password" />
-          <div>
-            <LabeledField label="새 비밀번호 확인" value={d.pw2} onChange={set('pw2')} type="password" placeholder="한 번 더 입력" autoComplete="new-password" />
-            {mismatch && <div style={{ fontSize: 11.5, color: '#B0573C', marginTop: 6 }}>비밀번호가 일치하지 않아요.</div>}
-          </div>
-          {error && <div style={{ fontSize: 12, color: '#B0573C' }}>{error}</div>}
-        </div>
-        <div style={{ marginTop: 26 }}><Btn full size="lg" icon="check" disabled={!valid} onClick={submit}>비밀번호 변경</Btn></div>
+    <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <button onClick={onBack} aria-label="개인 정보로 돌아가기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginLeft: -8 }}><Icon name="chevL" size={20} /></button>
+        <div style={{ fontSize: 18, fontWeight: 800, flex: 1 }}>비밀번호 변경</div>
+        <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
       </div>
-    </BottomSheet>
+      <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6, marginBottom: 22 }}>새 비밀번호를 설정해 주세요. 개인정보 수정과는 별도로 저장돼요.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <LabeledField label="새 비밀번호" value={d.pw} onChange={set('pw')} type="password" placeholder="6자 이상" autoComplete="new-password" />
+        <div>
+          <LabeledField label="새 비밀번호 확인" value={d.pw2} onChange={set('pw2')} type="password" placeholder="한 번 더 입력" autoComplete="new-password" />
+          {mismatch && <div style={{ fontSize: 11.5, color: '#B0573C', marginTop: 6 }}>비밀번호가 일치하지 않아요.</div>}
+        </div>
+        {error && <div style={{ fontSize: 12, color: '#B0573C' }}>{error}</div>}
+      </div>
+      <div style={{ marginTop: 26 }}><Btn full size="lg" icon="check" disabled={!valid || saving} onClick={submit}>{saving ? '변경 중…' : '비밀번호 변경'}</Btn></div>
+    </div>
   );
 }
 
 function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
-  const [passwordOpen, setPasswordOpen] = useMp(false);
+  const [view, setView] = useMp('profile');
   const [d, setD] = useMp({ email: '', gender: '', age: '', height: '', weight: '' });
   useMe(() => {
-    if (open) setD({
-      email: prefs.email || '', gender: prefs.gender || '', age: prefs.age || '',
-      height: prefs.height || '', weight: prefs.weight || '',
-    });
+    if (open) {
+      setView('profile');
+      setD({
+        email: prefs.email || '', gender: prefs.gender || '', age: prefs.age || '',
+        height: prefs.height || '', weight: prefs.weight || '',
+      });
+    }
   }, [open]);
   const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
   const emailOk = /\S+@\S+\.\S+/.test(d.email);
@@ -777,7 +785,7 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
   return (
     <>
       <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
+      {view === 'password' ? <PasswordChangePanel onBack={() => setView('profile')} onClose={onClose} onSave={onChangePassword} /> : <div className="lb-sheet-body" style={{ padding: '8px 24px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ fontSize: 18, fontWeight: 800 }}>개인 정보</div>
           <button onClick={onClose} aria-label="닫기" className="lb-iconbtn" style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', marginRight: -8 }}><Icon name="x" size={20} /></button>
@@ -785,9 +793,6 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <LabeledField label="이메일" value={d.email} onChange={set('email')} placeholder="you@example.com" />
-          <button type="button" onClick={() => setPasswordOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호 변경</span><Icon name="chevR" size={17} style={{ color: 'var(--ink-3)' }} />
-          </button>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>
             <AccountChips options={['여성', '남성', '선택 안 함']} value={d.gender} onPick={set('gender')} />
@@ -801,14 +806,19 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
             <NumberSlider label="키" hint="선택 · 비워둬도 돼요" value={d.height} onChange={set('height')} min={140} max={200} unit="cm" defaultValue={165} />
             <NumberSlider label="몸무게" hint="선택 · 비워둬도 돼요" value={d.weight} onChange={set('weight')} min={30} max={150} unit="kg" defaultValue={60} />
           </div>
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 18 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>계정 보안</div>
+            <button type="button" onClick={() => setView('password')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호</span><span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>새 비밀번호로 변경</span></span><Icon name="chevR" size={17} style={{ color: 'var(--ink-3)' }} />
+            </button>
+          </div>
         </div>
 
         <div style={{ marginTop: 26 }}>
           <Btn full size="lg" icon="check" disabled={!emailOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
         </div>
-        </div>
+        </div>}
       </BottomSheet>
-      <PasswordChangeSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} onSave={onChangePassword} />
     </>
   );
 }

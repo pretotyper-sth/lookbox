@@ -1045,3 +1045,6 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 # 2026-09-26 — 계정 정보와 비밀번호 설정 분리
 마이페이지 개인 정보 모달에서는 비밀번호 입력을 제거하고 별도 비밀번호 변경 시트로 분리했다. 개인 정보 저장은 비밀번호와 무관하게 동작하고, 변경은 Supabase `updateUser`로 처리한다. `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`, `frontend/src/live-bridge.js`.
 - 2026-09-26 설정 화면 오류: 개인 정보 화면의 비밀번호 변경 행에서 존재하지 않는 아이콘 이름을 사용해 공통 아이콘 렌더러가 `undefined.split`으로 중단됐다. `frontend/src/proto/08-mypage.jsx`에서 등록된 `chevR` 아이콘으로 수정.
+
+# 2026-09-26 — 계정 설정 화면 전환
+비밀번호 변경을 중첩 바텀시트 대신 기존 개인정보 시트 내부의 별도 화면으로 구성했다. 뒤로 가기로 복귀하면 개인정보 입력값을 유지하고, 성공 후 프로필 화면으로 돌아온다. `frontend/src/proto/08-mypage.jsx`.
