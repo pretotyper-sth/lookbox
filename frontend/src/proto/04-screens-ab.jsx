@@ -69,7 +69,7 @@ function TopBar({ left, title, right, sticky = true, border = true }) {
 }
 
 function BottomNav({ tab, go }) {
-  const tabs = [{ id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
+  const tabs = [{ id: 'decision', icon: 'sparkle', label: '구매 검토' }, { id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
   return (
     <nav style={{
       display: 'flex', borderTop: '1px solid var(--line)',
@@ -2589,7 +2589,7 @@ function AddSheet({ ctx }) {
                 const tryOnProfilePanel = tab === 'tryon' && tryOnAvatar && !tryOnErr;
                 const tryOnActionLabel = tryOnBodyReady ? '바로 보기' : '전신 이미지 만들기';
                 const tryOnActionDisabled = tryOnSubjectMaking || !canTryOn || (tryOnOtherSubjectMaking && !tryOnBodyReady) || (wide && tryOnBodyReady);
-                const tryOnGuide = '이 사진으로 옷을 바로 비춰 볼 수 있어요';
+                const tryOnGuide = '모바일에서 옷을 바로 비춰볼 수 있어요';
                 // 잠긴 탭이 선택돼 있을 때는 그 탭의 업로드 UI를 띄우지 않는다 —
                 // 올려도 할 수 있는 게 없으니 아래 안내와 CTA만 남긴다.
                 const tabLocked = anchor && !comboReady && tab !== 'tryon';
@@ -2669,7 +2669,7 @@ function AddSheet({ ctx }) {
                             lineHeight: tryOnProfilePanel ? 1.5 : undefined,
                           }}>
                             {tryOnAvatar
-                              ? (tryOnNeedsBody ? tryOnGuide : '이 사진으로 옷을 바로 비춰 볼 수 있어요')
+                              ? tryOnGuide
                               : '프로필 사진 올리기'}
                           </span>
                           <span className={tryOnProfilePanel && tryOnBodyReady ? 'lb-tryon-ready-note' : undefined} style={{
@@ -2682,7 +2682,7 @@ function AddSheet({ ctx }) {
                           }}>
                             {tryOnErr
                               ? tryOnErr
-                              : tryOnAvatar ? '(모바일 전용)' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
+                              : tryOnAvatar ? '' : '얼굴이 나온 사진으로 옷을 바로 비춰 볼 수 있어요 (휴대폰 전용)'}
                           </span>
                         </div>
                       </div>
