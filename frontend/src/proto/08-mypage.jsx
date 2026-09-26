@@ -786,7 +786,7 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <LabeledField label="이메일" value={d.email} onChange={set('email')} placeholder="you@example.com" />
           <button type="button" onClick={() => setPasswordOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '14px 0', border: 0, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호 변경</span><Icon name="chevron-right" size={17} color="var(--ink-3)" />
+            <span style={{ fontSize: 13.5, fontWeight: 650 }}>비밀번호 변경</span><Icon name="chevR" size={17} style={{ color: 'var(--ink-3)' }} />
           </button>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>

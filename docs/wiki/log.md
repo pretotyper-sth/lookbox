@@ -1044,3 +1044,4 @@ Chrome 확장은 로그인 창을 브라우저 팝업으로 따로 열기 때문
 두 목록을 같은 흰색 카드 표면과 4:5 이미지 프레임으로 맞추고, AI 착장 썸네일의 보조 확대 배경을 제거해 원본 전체가 한 겹으로 보이게 했다. `frontend/src/proto/05-screens-cde.jsx`, `frontend/src/proto/06-today.jsx`, `frontend/src/proto/proto.css`.
 # 2026-09-26 — 계정 정보와 비밀번호 설정 분리
 마이페이지 개인 정보 모달에서는 비밀번호 입력을 제거하고 별도 비밀번호 변경 시트로 분리했다. 개인 정보 저장은 비밀번호와 무관하게 동작하고, 변경은 Supabase `updateUser`로 처리한다. `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/09-app.jsx`, `frontend/src/live-bridge.js`.
+- 2026-09-26 설정 화면 오류: 개인 정보 화면의 비밀번호 변경 행에서 존재하지 않는 아이콘 이름을 사용해 공통 아이콘 렌더러가 `undefined.split`으로 중단됐다. `frontend/src/proto/08-mypage.jsx`에서 등록된 `chevR` 아이콘으로 수정.
