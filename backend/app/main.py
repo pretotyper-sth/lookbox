@@ -3440,6 +3440,31 @@ def _garment_slot(item: dict[str, Any]) -> str:
     return slots.get(cat, cat or "other")
 
 
+def _validate_picked_outfit(ids: list[str], by_id: dict[str, Any]) -> None:
+    picked = list(dict.fromkeys(ids))
+    if not picked:
+        return
+    if any(item_id not in by_id for item_id in picked):
+        raise HTTPException(status_code=400, detail="옷장에 있는 아이템만 골라 주세요. 보관하거나 삭제한 옷은 선택 해제해 주세요.")
+    issues = []
+    if len(picked) > 6:
+        issues.append(f"한 코디에는 최대 6개까지 고를 수 있어요. {len(picked) - 6}개를 선택 해제해 주세요.")
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item_id in picked:
+        item = by_id[item_id]
+        groups.setdefault(_category_key(item.get("category")), []).append(item)
+    for category, rows in groups.items():
+        if len(rows) > 1:
+            names = " · ".join(row.get("name") or "아이템" for row in rows)
+            issues.append(f"{_category_display(category)} {len(rows)}개 중 1개만 남겨 주세요: {names}")
+    if "bottom" in groups and "skirt" in groups:
+        issues.append("하의와 스커트 중 하나를 선택 해제해 주세요.")
+    if "dress" in groups and any(category in groups for category in ("top", "bottom", "skirt")):
+        issues.append("원피스로 만들려면 상의·하의·스커트를 선택 해제해 주세요.")
+    if issues:
+        raise HTTPException(status_code=400, detail="\n\n".join(issues))
+
+
 def _combo_has_unique_garment_slots(
     ids: list[str], by_id: dict[str, Any], wish: dict[str, Any] | None = None,
 ) -> bool:
@@ -4526,10 +4551,10 @@ _LOOK_IDENTITY_DIR = Path(__file__).resolve().parent.parent / "assets" / "look-i
 
 
 def _look_gender_key(gender: str | None) -> str:
-    g = (gender or "").strip()
-    if g.startswith("남"):
+    g = (gender or "").strip().lower()
+    if g.startswith("남") or g in ("m", "male", "man"):
         return "m"
-    if g.startswith("여"):
+    if g.startswith("여") or g in ("f", "female", "woman"):
         return "f"
     return "x"
 
@@ -4545,7 +4570,7 @@ def _model_look_subject(gender: str | None) -> str:
 
 
 def _model_look_prompt(gender: str | None) -> str:
-    return _model_identity_prompt(gender) + " Use a pale warm ivory plaster wall and matching matte floor (#EEE9E0), with soft daylight from one side, no props and true garment colors."
+    return _model_identity_prompt(gender) + {"m": " The wearer must be an adult man.", "f": " The wearer must be an adult woman."}.get(_look_gender_key(gender), "") + " Use a pale warm ivory plaster wall and matching matte floor (#EEE9E0), with soft daylight from one side, no props and true garment colors."
 
 
 def _model_identity_prompt(gender: str | None) -> str:
@@ -4735,6 +4760,8 @@ def _model_look_prompt_with_reference(
         )
     return (
         f"{reference_lines} Images after that are the outfit pieces. "
+        + ({"m": "The wearer must be an adult man, matching the user gender setting. Never change the wearer to a woman. ", "f": "The wearer must be an adult woman, matching the user gender setting. Never change the wearer to a man. "}.get(_look_gender_key(gender), ""))
+        +
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
         "Keep the person's identity and full body. "
         f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; "
@@ -5320,9 +5347,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-ivory1-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-ivory-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
-        key = f"model-ivory1-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-ivory-gender2-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5826,6 +5853,7 @@ class LiveCoordinate(BaseModel):
     exclude_item_ids: list[list[str]] = []
     # 마이페이지 'AI 착장 이미지' 토글. 켜져 있으면 코디마다 전신 컷을 만든다(비용 큼).
     model_look: bool = False
+    personal_model_look: bool = False
     face_data_url: str | None = None
     # 오늘 코디의 날짜 선택 — 어느 날짜용으로 만든 코디인지 남긴다 (YYYY-MM-DD)
     for_date: str | None = None
@@ -9267,6 +9295,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         max_combos = min(max(body.max_combos, 1), 10)
         wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
+        _validate_picked_outfit(body.include_item_ids, by_id)
         recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
         feedback = _recent_daily_feedback(user.id)
         recent_wishes = _recent_daily_wishes(user.id, body.for_date)
@@ -9344,7 +9373,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             exclusions, body.styles or None, profile,
             body.include_item_ids or None, feedback,
         )
-        wish_n = min(wish_combos, len(combos))
+        wish_n = min(wish_combos, max(0, len(combos) - 1) if body.model_look else len(combos))
         used_wishes = {_wish_key(wish) for wish in recent_wishes if _wish_key(wish) != ("", "", "")}
         for offset in range(wish_n):
             combo = combos[len(combos) - wish_n + offset]
@@ -9352,6 +9381,9 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             used_wishes.add(_wish_key(wish))
             combo["wish"] = wish
             _apply_wish_slot(combo, by_id)
+            if not set(body.include_item_ids).issubset(combo.get("item_ids") or []):
+                combo.pop("wish", None)
+                combo["item_ids"] = list(dict.fromkeys([*(combo.get("item_ids") or []), *body.include_item_ids]))
         for i, combo in enumerate(combos):
             persist_combo(combo, i)
         print(
@@ -9360,9 +9392,24 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             flush=True,
         )
 
-        # 제안 아이템은 화면의 가장 오른쪽 카드부터 한 장씩 완료한다. 이 작업이
-        # 끝난 뒤에만 프론트가 AI 착장 생성을 시작한다.
-        for outfit, combo, wish, wish_item in reversed(wish_jobs):
+        if body.model_look:
+            reference = _face_image_bytes(body.face_data_url) if body.personal_model_look else None
+            if body.personal_model_look and not reference:
+                raise HTTPException(status_code=400, detail="프로필 사진을 먼저 등록해 주세요.")
+            ready = [outfit for outfit in outfits if not outfit.get("wish")]
+            try:
+                _apply_model_looks(
+                    user.id, ready, by_id, body.gender, report=report,
+                    reference_png=reference, personal=body.personal_model_look,
+                    height=body.height, weight=body.weight, explicit=bool(body.include_item_ids),
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[coordinate] model-look failed: {exc}", flush=True)
+                if ready:
+                    report({"_look": {"id": ready[0]["id"], "error": "AI 착장 이미지를 만들지 못했어요. 다시 시도해 주세요."}})
+
+        # 기본 착장을 먼저 만든 뒤 제안 상품컷을 왼쪽 슬롯부터 생성한다.
+        for outfit, combo, wish, wish_item in wish_jobs:
             report({"_wish": {"id": outfit["id"], "stage": "draw"}})
             mates = [by_id[i] for i in combo["item_ids"] if i in by_id]
             png = generate_wish_product_image(user.id, wish, mates, profile, None, "")

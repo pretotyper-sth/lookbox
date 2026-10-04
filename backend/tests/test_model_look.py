@@ -91,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-ivory1-", src)
+        self.assertIn("model-ivory-gender2-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -280,6 +280,16 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertEqual(self.ns['_look_gender_key']("남성"), "m")
         self.assertEqual(self.ns['_look_gender_key']("여성"), "f")
 
+    def test_gender_aliases_and_explicit_reference_prompt(self):
+        for value in ('남성', '남자', 'male', 'M'):
+            self.assertEqual(self.ns['_look_gender_key'](value), 'm')
+            prompt = self.ns['_model_look_prompt_with_reference'](value, [])
+            self.assertIn('must be an adult man', prompt)
+            self.assertIn('Never change the wearer to a woman', prompt)
+        for value in ('여성', '여자', 'female', 'F'):
+            self.assertEqual(self.ns['_look_gender_key'](value), 'f')
+            self.assertIn('must be an adult woman', self.ns['_model_look_prompt_with_reference'](value, []))
+
     def test_crop_look_keeps_person_inside_card(self):
         navy = (28, 42, 72)
         out = self.ns['_crop_look_to_card'](studio_look(40, 60, (12, 16, 28, 44)))
@@ -371,7 +381,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-ivory1-", src)
+        self.assertIn("model-ivory-gender2-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

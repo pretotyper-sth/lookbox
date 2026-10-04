@@ -524,10 +524,10 @@ function LookExpandBadge({ size = 28, inset = 8 }) {
    탭을 갈아타지 않고 모달로 얹어, 옷장에서 고르던 흐름을 끊지 않는다.
    ============================================================ */
 function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSave, onOpen, onMakeModelLook, wide, embedded = false }) {
-  const { ids = [], loading, outfits = [], error } = state || {};
+  const { ids = [], loading, outfits = [], error, targetCount = 4 } = state || {};
   const picked = ids.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const looks = outfits.map((o) => ({ id: 'pick-' + o.id, outfitId: o.id, label: o.label }));
-  const first = loading && !outfits.length;
+  const skeletonCount = loading ? Math.max(0, targetCount - outfits.length) : 0;
 
   React.useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -567,9 +567,9 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
               const Card = window.TodayCard;
               return <Card key={o.id} outfit={o} saved={savedOutfitIds.includes(o.id)} onSave={() => onSave && onSave(o.id)} onOpen={() => onOpen && onOpen(looks[i], looks)} onMakeModelLook={onMakeModelLook} aiMark="icon" />;
             })}
-            {(first || loading) && Array.from({ length: first ? 4 : 2 }).map((_, i) => (
+            {Array.from({ length: skeletonCount }).map((_, i) => (
               <div key={'sk' + i} style={{ background: 'var(--ivory)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-                <div style={{ borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '1 / 1' }}><Skeleton h="100%" radius="0" /></div>
+                <div style={{ borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: '4 / 5' }}><Skeleton h="100%" radius="0" /></div>
                 <div style={{ padding: '10px 4px 4px' }}><Skeleton w="70%" h={14} /><Skeleton w="45%" h={11} style={{ marginTop: 7 }} /></div>
               </div>
             ))}

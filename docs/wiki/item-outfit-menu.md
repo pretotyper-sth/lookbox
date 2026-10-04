@@ -1,9 +1,11 @@
 # 아이템 메뉴 안 코디 추천
 
-옷장 아이템 더보기의 `이 옷으로 코디 추천받기`는 sparkle 아이콘이다. 기존 `이미지만 변경`은 imageEdit 아이콘으로 분리한다. 보관한 옷은 추천 메뉴를 숨긴다. 메뉴는 520px/70dvh의 같은 프레임을 유지하고 내부만 추천 로딩·카드·저장 상태로 전환한다.
+옷장 아이템 더보기의 `이 옷으로 코디 추천받기`는 sparkle 아이콘이다. 기존 `이미지만 변경`은 imageEdit 아이콘으로 분리한다. 보관한 옷은 추천 메뉴를 숨긴다. 메뉴는 자연 높이(최대 70dvh)에 맞추고 추천 진입 시 측정한 메뉴 높이를 유지한다. 취소 아래는 기존 26px 패딩이며 고정 520px 빈 공간을 만들지 않는다. 내부만 추천 로딩·카드·저장 상태로 전환한다.
 
-추천 API는 기존 /api/live/coordinate를 그대로 사용하며 include_item_ids로 선택한 옷을 필수로 지정한다. 무드·날씨·성별·얼굴/키/몸무게·AI 착장 설정·새 아이템 설정은 공통 추천과 같다. _outfit SSE를 받으면 상품컷을 먼저 표시하고 최종 결과 뒤 설정에 따라 AI 착장을 생성한다. AI 생성 실패 시 상품컷은 남긴다. 계정+선택 아이템별 작업을 유지하며 모달 닫기는 요청을 취소하거나 완료 시 창을 다시 열지 않는다. 다시 추천 메뉴를 열면 진행/완료 결과를 복원하고 중복 요청하지 않는다. 브라우저 전체 종료 후 복귀를 위한 별도 클라이언트 작업 저장은 추가하지 않았다.
+추천 API는 기존 /api/live/coordinate를 그대로 사용하며 include_item_ids로 선택한 옷을 필수로 지정한다. 무드·날씨·성별·얼굴/키/몸무게·AI 착장 설정·새 아이템 설정은 공통 추천과 같다. _outfit SSE를 받으면 상품컷을 먼저 표시하고 서버가 AI 착장 설정을 확인해 첫 기본 코디 착장을 먼저 생성하고 이후 외부 제안 상품컷을 왼쪽부터 생성한다. 개인화 사진·키·몸무게와 성별은 착장 요청에 함께 전달한다. 첫 기본 코디를 확보하므로 전체를 제안 코디로 설정해도 최소 한 칸은 옷장 코디로 둔다. AI 생성 실패 시 상품컷은 남긴다. 계정+선택 아이템별 작업을 유지하며 모달 닫기는 요청을 취소하거나 완료 시 창을 다시 열지 않는다. 다시 추천 메뉴를 열면 진행/완료 결과를 복원하고 중복 요청하지 않는다. 브라우저 전체 종료 후 복귀를 위한 별도 클라이언트 작업 저장은 추가하지 않았다.
 
 카드는 기존 TodayCard와 공통 룩북 저장 동작을 사용한다. AI 이미지는 생성 전 확인 모달, 생성 후 sparkle↔product 아이콘으로 상품컷/AI 착장을 자유롭게 바꾼다. 태그/AI/확대는 우측 아래 동일한 크기, 2px 간격으로 배치한다. 작은 모달 카드의 생성 표시는 아이콘만 보인다. 새 아이템 상품컷/개별 썸네일에도 좌측 아래 AI 생성 표시를 적용한다. 모바일 제품 정보 라벨만 축소하며 PC 크기는 유지한다.
 
-근거: frontend/src/proto/09-app.jsx requestPickedOutfits, frontend/src/proto/02-shared.jsx ItemRemoveSheet/Thumb, frontend/src/proto/05-screens-cde.jsx PickedOutfitsModal/LookComposite, frontend/src/proto/06-today.jsx TodayCard. 회귀: frontend/tests/item-outfit-menu.test.mjs. Chrome에서 메뉴 전환 전후 420×540 유지·닫기 후 결과 복귀·중복 요청 없음·저장·스위칭·모바일 라벨 경계 확인.
+근거: frontend/src/proto/09-app.jsx requestPickedOutfits, frontend/src/proto/02-shared.jsx ItemRemoveSheet/Thumb, frontend/src/proto/05-screens-cde.jsx PickedOutfitsModal/LookComposite, frontend/src/proto/06-today.jsx TodayCard. 회귀: frontend/tests/item-outfit-menu.test.mjs. Chrome에서 메뉴 전환 전후 메뉴 자연 높이/추천 전환 높이 유지·닫기 후 결과 복귀·중복 요청 없음·저장·스위칭·모바일 라벨 경계 확인.
+
+2026-10-05: 선택 바의 더보기를 직접 코디 버튼으로 교체했다. 모바일 보관·삭제·코디는 아이콘 없이 한 줄에 놓는다. 최대 6개, 동일 카테고리 1개, 하의/스커트 중 하나, 원피스와 상·하의 동시 선택 금지 규칙을 기존 BottomSheet 안내로 표시하며 선택을 유지한다. 서버도 동일 규칙과 소유 아이템 여부를 확인해 요청 우회로 생성을 진행하지 않는다. 새 상품이 필수 선택 옷을 교체하려 하면 제안 대신 선택 옷을 유지한다. 스켈레톤은 요청 목표 수에서 실제 수를 뺀 수만 표시한다. AI/제안 이미지 작업 중에는 코디 수를 늘리지 않는다. 성별은 남/여 및 영문 값 정규화와 명시 프롬프트로 고정하며 남성 목록의 d2373fbb2f 레퍼런스는 제외했다. 새 생성 캐시 model-ivory-gender2로 기존 잘못 생성된 결과 재사용을 피한다. 기존 저장 이미지는 일괄 변경하지 않는다.

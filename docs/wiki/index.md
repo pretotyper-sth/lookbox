@@ -11,8 +11,8 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드·모바일 확대 화면은 ✦만, 데스크톱 상세는 생성 문구 유지
 
 ## Features
-- [item-outfit-menu](item-outfit-menu.md) — 아이템 메뉴 내부 추천·상품컷 우선·설정 반영·닫아도 생성·결과 재개·룩북 저장
-- [model-look-realism-2026-10](model-look-realism-2026-10.md) — 무신사 AI 코디 37장·남녀별 순환, GPT Image 2.5 Flare high, 전신 80%·위아래 여백, 실제 서비스 생성 확인·승인한 아이보리 B 배경·직접 4:5 생성
+- [item-outfit-menu](item-outfit-menu.md) — 아이템 메뉴 자연 높이·수량 맞는 스켈레톤·착장 우선 생성·성별 고정·직접 코디 버튼·불가능한 선택 안내·결과 재개·룩북 저장
+- [model-look-realism-2026-10](model-look-realism-2026-10.md) — 무신사 AI 코디 36장·남녀별 순환, GPT Image 2.5 Flare high, 전신 80%·위아래 여백, 실제 서비스 생성 확인·승인한 아이보리 B 배경·직접 4:5 생성
 - [tryon-mask-boundaries](tryon-mask-boundaries.md) — 승인 체크포인트 보호. 9/24 명시 요청으로 tryon22·캐시 PNG 재검증·부분 투명화 거부·정면 자세 강화; 영상 cover·PNG contain 유지
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다

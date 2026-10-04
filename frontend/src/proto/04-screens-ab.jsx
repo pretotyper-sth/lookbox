@@ -229,7 +229,7 @@ function WardrobeScreen({ ctx }) {
   const [bulkDelAsk, setBulkDelAsk] = useS(false);
   const [sortId, setSortId] = useS('recent');
   const [sortOpen, setSortOpen] = useS(false);
-  const [moreOpen, setMoreOpen] = useS(false);
+  const [coordGuide, setCoordGuide] = useS('');
   const [query, setQuery] = useS('');
   const cats = LB_DATA.CATEGORIES;
   const seasons = LB_DATA.SEASONS;
@@ -260,7 +260,7 @@ function WardrobeScreen({ ctx }) {
   const inSelectUx = wide ? selecting : (selectMode || selecting);
 
   const toggleSel = (id) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
-  const clearSel = () => { setSel([]); setBulkDelAsk(false); setMoreOpen(false); };
+  const clearSel = () => { setSel([]); setBulkDelAsk(false); };
   const exitSelectMode = () => { clearSel(); setSelectMode(false); };
   const runBulkArchive = () => { if (viewingArchive) bulkRestore(sel); else bulkArchive(sel); exitSelectMode(); };
   const runBulkDelete = () => { bulkDelete(sel); exitSelectMode(); };
@@ -384,38 +384,13 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
 
-  // 선택한 옷으로 할 수 있는 일. 지금은 '코디 추천' 하나지만, 여기 모아두면
-  // 플로팅 바가 길어지지 않고 나중에 늘리기도 쉽다.
   const runPickedCoord = () => {
-    setMoreOpen(false);
+    const guide = window.pickedOutfitGuide(sel.map(id => LB_DATA.ALL[id]).filter(Boolean));
+    if (guide) { setCoordGuide(guide); return; }
     const ids = sel.slice();
     exitSelectMode();
     if (requestPickedOutfits) requestPickedOutfits(ids);
   };
-  const moreOptions = (
-    <div role="none">
-      <button
-        type="button"
-        role="menuitem"
-        onClick={runPickedCoord}
-        disabled={viewingArchive}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          padding: wide ? '9px 12px' : '13px 4px', border: 'none', background: 'transparent',
-          textAlign: 'left', cursor: viewingArchive ? 'default' : 'pointer', borderRadius: 'var(--r-sm)',
-          opacity: viewingArchive ? 0.45 : 1,
-        }}
-      >
-        <Icon name="sparkle" size={18} stroke={1.9} style={{ flex: 'none' }} />
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>코디 추천</span>
-          <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
-            {viewingArchive ? '보관한 옷은 추천에 쓰이지 않아요' : `고른 ${selCount}개가 들어간 코디를 만들어요`}
-          </span>
-        </span>
-      </button>
-    </div>
-  );
 
   // 계절은 카테고리와 AND로 겹치는 부가 필터. 구분선 없이 '그리고' 라벨 + 살짝 옅은 글자색으로만 구분.
   const seasonChips = (
@@ -561,7 +536,7 @@ function WardrobeScreen({ ctx }) {
 
         {mobileSelect && !selecting && (
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-            옷을 눌러 여러 개를 선택한 뒤 보관·삭제할 수 있어요.
+            옷을 눌러 여러 개를 선택한 뒤 보관·삭제하거나 코디를 추천받을 수 있어요.
           </p>
         )}
 
@@ -717,53 +692,25 @@ function WardrobeScreen({ ctx }) {
               fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: '4px 2px',
               marginRight: wide ? 0 : 'auto', flex: 'none',
             }}>{wide ? '선택 해제' : '해제'}</button>
-            <Btn size="sm" variant="soft" icon={viewingArchive ? 'hanger' : 'archive'} onClick={runBulkArchive}
+            <Btn size="sm" variant="soft" icon={wide ? (viewingArchive ? 'hanger' : 'archive') : undefined} onClick={runBulkArchive}
               style={{ fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none' }}>
               {viewingArchive ? '옷장으로' : '보관'}
             </Btn>
-            <Btn size="sm" icon="trash" onClick={() => setBulkDelAsk(true)}
+            <Btn size="sm" icon={wide ? "trash" : undefined} onClick={() => setBulkDelAsk(true)}
               style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none' }}>삭제</Btn>
-            {/* 고른 옷으로 할 수 있는 일 — 바를 늘리지 않고 더보기 안에 둔다 */}
-            <div style={{ position: 'relative', flex: 'none' }}>
-              <button
-                type="button"
-                onClick={() => setMoreOpen((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                aria-label="더보기"
-                style={{
-                  width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                  background: 'var(--ivory)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1px var(--line-2)',
-                }}
-              >
-                <Icon name="more" size={16} stroke={2.2} />
-              </button>
-              {wide && moreOpen && (
-                <>
-                  <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                  <div role="menu" style={{
-                    position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, zIndex: 41,
-                    width: 234, padding: 6, background: 'var(--surface)',
-                    borderRadius: 'var(--r-md)', boxShadow: '0 12px 32px rgba(0,0,0,0.16)',
-                    border: '1px solid var(--line)',
-                  }}>
-                    {moreOptions}
-                  </div>
-                </>
-              )}
-            </div>
+            {!viewingArchive && <Btn size="sm" variant="soft" icon={wide ? 'sparkle' : undefined} onClick={runPickedCoord}
+              style={{ fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none', whiteSpace: 'nowrap' }}>코디</Btn>}
           </div>
         </div>
       )}
 
-      {!wide && (
-        <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)}>
-          <div className="lb-sheet-body" style={{ padding: '10px 24px 26px' }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>선택한 {selCount}개</h2>
-            <div style={{ marginTop: 'var(--s4)' }}>{moreOptions}</div>
-          </div>
-        </BottomSheet>
-      )}
+      <BottomSheet open={!!coordGuide} onClose={() => setCoordGuide('')}>
+        <div className="lb-sheet-body" style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>함께 입을 옷을 골라 주세요</h3>
+          <p style={{ margin: '10px 0 22px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6, whiteSpace: 'pre-line', maxHeight: '45dvh', overflowY: 'auto' }}>{coordGuide}</p>
+          <Btn full variant="soft" onClick={() => setCoordGuide('')}>선택 수정하기</Btn>
+        </div>
+      </BottomSheet>
 
       <BottomSheet open={bulkDelAsk} onClose={() => setBulkDelAsk(false)}>
         <div style={{ padding: '10px 24px 26px', textAlign: 'center' }}>

@@ -214,6 +214,30 @@ function coordProfile(prefs) {
     },
   };
 }
+function pickedOutfitGuide(picked) {
+  const labels = { top: '상의', outer: '아우터', bottom: '하의', skirt: '스커트', dress: '원피스', shoes: '신발', bag: '가방', hat: '모자', misc: '소품', accessory: '소품' };
+  const groups = new Map();
+  const issues = [];
+  if (picked.length > 6) issues.push(`한 코디에는 최대 6개까지 고를 수 있어요. ${picked.length - 6}개를 선택 해제해 주세요.`);
+  for (const item of picked) {
+    const category = labels[item.category] || item.category;
+    groups.set(category, [...(groups.get(category) || []), item]);
+  }
+  for (const [category, rows] of groups) {
+    if (rows.length > 1) issues.push(`${category} ${rows.length}개 중 1개만 남겨 주세요: ${rows.map(item => item.name).join(' · ')}`);
+  }
+  if (groups.has('하의') && groups.has('스커트')) issues.push('하의와 스커트 중 하나를 선택 해제해 주세요.');
+  if (groups.has('원피스') && ['상의', '하의', '스커트'].some(category => groups.has(category))) issues.push('원피스로 만들려면 상의·하의·스커트를 선택 해제해 주세요.');
+  return issues.join('\n\n');
+}
+window.pickedOutfitGuide = pickedOutfitGuide;
+function coordinateLookSettings(prefs) {
+  return prefs.modelLook ? {
+    model_look: true,
+    personal_model_look: !!prefs.personalModelLook,
+    face_data_url: prefs.personalModelLook ? (prefs.avatar || '') : '',
+  } : {};
+}
 function wardrobeSigOf(list) {
   return (list || []).map((it) => it && it.id).filter(Boolean).map(String).sort().join(',');
 }
@@ -2111,7 +2135,7 @@ function App() {
     const wardrobeGrew = dailyWardrobeGrewSinceCache(items);
     // AI 착장 이미지 — 토글이 켜져 있으면 성별만 맞춰 룩북 모델을 그린다.
     // 성별은 coordProfile에 이미 들어 있다.
-    const modelLook = prefs.modelLook ? { model_look: true } : {};
+    const modelLook = coordinateLookSettings(prefs);
     // 마이페이지에 저장한 취향은 계정(user_metadata)에만 있어서 서버가 모른다.
     // 코디는 퍼스널 컬러·선호 실루엣까지 봐야 감이 맞으므로 요청마다 같이 싣는다.
     const styleProfile = coordProfile(prefs);
@@ -2235,6 +2259,19 @@ function App() {
         stampOutfitStyle([row.outfit]);
         queueDailyOutfits({ outfits: [row.outfit], items: row.items || [] });
       };
+      const onLook = row => {
+        if (!row || !row.id) return;
+        if (row.lookImg) {
+          delete LB_DATA.LOOK_STAGE[row.id];
+          const outfit = LB_DATA.OUTFIT_BY_ID[row.id];
+          if (outfit) outfit.lookImg = row.lookImg;
+          dailyRevealQueue.forEach(payload => (payload.outfits || []).forEach(o => { if (o.id === row.id) o.lookImg = row.lookImg; }));
+          (LB_DATA.DAILY || []).forEach(o => { if (o.id === row.id) o.lookImg = row.lookImg; });
+          cacheDaily();
+        } else if (row.stage) LB_DATA.LOOK_STAGE[row.id] = row.stage;
+        else if (row.error) { delete LB_DATA.LOOK_STAGE[row.id]; showToast(row.error); }
+        bumpDaily();
+      };
       const onWish = (row) => {
         if (!row || !row.id) return;
         if (row.stage && !row.item) {
@@ -2257,9 +2294,10 @@ function App() {
         const maxCombos = need > 0 ? need : DAILY_APPEND_BATCH;
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
-          timeoutMs: 45000,
+          timeoutMs: 420000,
           onOutfit,
           onWish,
+          onLook,
           body: JSON.stringify({
             max_combos: maxCombos,
             style,
@@ -2290,9 +2328,10 @@ function App() {
       }
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
-          timeoutMs: 45000,
+          timeoutMs: 420000,
           onOutfit,
           onWish,
+          onLook,
           body: JSON.stringify({
             max_combos: baseCount,
           style,
@@ -2713,7 +2752,7 @@ function App() {
       return;
     }
     const prev = opts.append && previous ? previous.outfits : [];
-    const job = { jobKey, ids: picked, inlineItemId, loading: true, outfits: prev.slice(), error: '' };
+    const job = { jobKey, ids: picked, inlineItemId, loading: true, targetCount: prev.length + (opts.append ? 2 : dailyCount), outfits: prev.slice(), error: '' };
     pickJobs.current.set(jobKey, job);
     setPickSheet({ ...job });
     const publish = () => setPickSheet(cur => cur && cur.jobKey === jobKey ? { ...job, outfits: job.outfits.slice() } : cur);
@@ -2729,7 +2768,18 @@ function App() {
     try {
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
+        timeoutMs: 420000,
         onOutfit: accept,
+        onLook: row => {
+          if (!row || !row.id) return;
+          if (row.lookImg) {
+            delete LB_DATA.LOOK_STAGE[row.id];
+            const outfit = LB_DATA.OUTFIT_BY_ID[row.id];
+            if (outfit) outfit.lookImg = row.lookImg;
+          } else if (row.stage) LB_DATA.LOOK_STAGE[row.id] = row.stage;
+        else if (row.error) { delete LB_DATA.LOOK_STAGE[row.id]; showToast(row.error); }
+          publish();
+        },
         onWish: row => {
           if (!row || !row.id) return;
           if (row.stage && !row.item) LB_DATA.WISH_STAGE[row.id] = row.stage;
@@ -2748,7 +2798,7 @@ function App() {
           wish_combos: opts.append ? 0 : Math.min(wishCount, dailyCount),
           exclude_item_ids: prev.map(o => o.itemIds || []),
           ...coordProfile(prefs),
-          ...(prefs.modelLook ? { model_look: true } : {}),
+          ...coordinateLookSettings(prefs),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);
@@ -2761,11 +2811,6 @@ function App() {
       job.loading = false;
       publish();
       reloadBilling();
-      if (prefs.modelLook && fresh.some(o => !o.lookImg)) {
-        await applyModelLooks(fresh).catch(e => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
-        job.outfits = job.outfits.map(o => LB_DATA.OUTFIT_BY_ID[o.id] || o);
-        publish();
-      }
     } catch (e) {
       job.loading = false;
       job.error = e.message || '코디를 만들지 못했어요';

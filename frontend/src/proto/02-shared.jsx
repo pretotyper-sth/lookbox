@@ -1102,11 +1102,15 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
 ---------------------------------------------------------------- */
 function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, onExpand, onReextract, onRecommend, recommendation }) {
   const DANGER = '#B0573C';
+  const [menuHeight, setMenuHeight] = React.useState(0);
+  const measureMenu = React.useCallback(node => {
+    if (node && !recommendation) setMenuHeight(node.offsetHeight);
+  }, [!!recommendation, item && item.id]);
   if (!item) return null;
   const isArchived = item.status === 'archived';
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div className="lb-scrollable" style={{ padding: '10px 24px 26px', height: 'min(520px, 70dvh)', boxSizing: 'border-box', overflowY: 'auto' }}>
+      <div ref={measureMenu} className="lb-scrollable" style={{ padding: '10px 24px 26px', height: recommendation ? (menuHeight || 448) : undefined, maxHeight: '70dvh', boxSizing: 'border-box', overflowY: 'auto' }}>
         {recommendation || <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
           <div style={{ width: 56, flex: 'none' }}><Thumb item={item} radius="var(--r-md)" /></div>
