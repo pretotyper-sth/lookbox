@@ -335,7 +335,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 const LOOK_FLAT_CACHE = {};
 window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false, infoButton = false }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false, infoButton = false, infoRight = 8, infoSize = 28, infoBottom = 8 }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
@@ -469,8 +469,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         );
       })}
       {infoButton && shown.length > 0 && <>
-        <button type="button" className="lb-look-info-toggle" aria-label={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} title={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} aria-pressed={showInfo} onClick={event => { event.stopPropagation(); setShowInfo(value => !value); }} onKeyDown={event => event.stopPropagation()}>
-          <Icon name="tag" size={14} stroke={2} />
+        <button type="button" className="lb-look-info-toggle" style={{ right: infoRight, bottom: infoBottom, width: infoSize, height: infoSize }} aria-label={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} title={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} aria-pressed={showInfo} onClick={event => { event.stopPropagation(); setShowInfo(value => !value); }} onKeyDown={event => event.stopPropagation()}>
+          <Icon name="tag" size={Math.max(11, Math.round(infoSize * 0.46))} stroke={2.2} />
         </button>
         {showInfo && <div className="lb-look-info-labels" aria-live="polite">
           {shown.map(item => {
@@ -483,6 +483,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           })}
         </div>}
       </>}
+      {shown.some(item => item.wish) && <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 상품 포함"><span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI로 생성</span>}</span>}
       {pending ? <LookPendingMarks /> : null}
       {copyControl}
       {copyState ? (
@@ -506,7 +507,7 @@ function LookExpandBadge({ size = 28, inset = 8 }) {
       style={{
         position: 'absolute', right: inset, bottom: inset, width: size, height: size, borderRadius: '50%',
         background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff',
-        display: 'grid', placeItems: 'center', zIndex: 2, pointerEvents: 'none',
+        display: 'grid', placeItems: 'center', zIndex: 15, pointerEvents: 'none',
         boxShadow: '0 0 0 1px rgba(255,255,255,0.12)',
       }}
     >
@@ -522,7 +523,7 @@ function LookExpandBadge({ size = 28, inset = 8 }) {
    룩북 카드와 같은 레이아웃·같은 동작(탭하면 상세, 하트로 저장)을 쓴다.
    탭을 갈아타지 않고 모달로 얹어, 옷장에서 고르던 흐름을 끊지 않는다.
    ============================================================ */
-function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSave, onOpen, wide }) {
+function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSave, onOpen, onMakeModelLook, wide, embedded = false }) {
   const { ids = [], loading, outfits = [], error } = state || {};
   const picked = ids.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const looks = outfits.map((o) => ({ id: 'pick-' + o.id, outfitId: o.id, label: o.label }));
@@ -563,38 +564,8 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
             gap: wide ? 14 : 12,
           }}>
             {outfits.map((o, i) => {
-              const items = (o.itemIds || []).map((id) => LB_DATA.ALL[id]).filter(Boolean);
-              const saved = savedOutfitIds.includes(o.id);
-              return (
-                <div key={o.id} className="lb-anim-in" style={{ position: 'relative', minWidth: 0, background: 'var(--ivory)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-                  <button
-                    onClick={() => onOpen && onOpen(looks[i], looks)}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', padding: 0 }}
-                  >
-                    <LookComposite outfit={o} items={items} ratio="1 / 1" bg="var(--surface-2)" />
-                    <div style={{ padding: '10px 4px 4px' }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3, textWrap: 'pretty' }}>{o.label}</div>
-                      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 3 }}>
-                        {items.filter((it) => it.img).length}개 품목{items.some((it) => it.wish) ? ' · 새 아이템 포함' : ''}
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onSave && onSave(o.id); }}
-                    className="lb-save"
-                    aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'}
-                    style={{
-                      position: 'absolute', right: 12, top: 12, width: 30, height: 30, borderRadius: '50%',
-                      display: 'grid', placeItems: 'center', zIndex: 2,
-                      color: saved ? 'var(--accent-ink)' : 'var(--ink)',
-                      background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface) 88%, transparent)',
-                      boxShadow: saved ? 'none' : 'inset 0 0 0 1px var(--line-2)', backdropFilter: 'blur(4px)',
-                    }}
-                  >
-                    <Icon name="heart" size={14} fill={saved ? 'currentColor' : 'none'} stroke={saved ? 0 : 2} />
-                  </button>
-                </div>
-              );
+              const Card = window.TodayCard;
+              return <Card key={o.id} outfit={o} saved={savedOutfitIds.includes(o.id)} onSave={() => onSave && onSave(o.id)} onOpen={() => onOpen && onOpen(looks[i], looks)} onMakeModelLook={onMakeModelLook} aiMark="icon" />;
             })}
             {(first || loading) && Array.from({ length: first ? 4 : 2 }).map((_, i) => (
               <div key={'sk' + i} style={{ background: 'var(--ivory)', borderRadius: 'var(--r-lg)', padding: 10 }}>
@@ -616,6 +587,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
     </>
   );
 
+  if (embedded) return body;
   if (!wide) {
     return (
       <BottomSheet open onClose={onClose}>
@@ -1448,7 +1420,7 @@ function DetailScreen({ ctx }) {
             textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" infoButton />
+          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" infoButton infoRight={68} />
           {openOutfitViewer ? <LookExpandBadge /> : null}
         </div>
         {/* 오늘 코디에서 연 상세만 하트. 룩북은 카드 더보기·선택 빼기. */}
@@ -1470,12 +1442,12 @@ function DetailScreen({ ctx }) {
           const next = !showModelLook;
           window.LOOK_IMAGE_MODES[outfit.id] = next;
           setShowModelLook(next);
-        }} aria-label={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} title={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 42, bottom: 8, zIndex: 3, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
-          {outfit.lookImg ? <Icon name="swap" size={15} stroke={2.2} /> : <Icon name="sparkle" size={14} />}
+        }} aria-label={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} title={outfit.lookImg ? (showModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 38, bottom: 8, zIndex: 15, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+          {<Icon name={outfit.lookImg && showModelLook ? 'product' : 'sparkle'} size={13} stroke={2.2} />}
         </button>
         {!detailFromLookbook && !outfit.manual && [1, -1].map((vote, index) => {
           const active = feedback === vote;
-          return <button key={vote} type="button" onClick={(e) => { e.stopPropagation(); rateOutfit && rateOutfit(detailLook.outfitId, vote); }} aria-label={vote > 0 ? '좋아요' : '별로예요'} aria-pressed={active} title={vote > 0 ? '좋아요' : '별로예요'} style={{ position: 'absolute', right: index === 0 ? 110 : 76, bottom: 8, zIndex: 3, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: active ? 'var(--surface)' : 'color-mix(in srgb, var(--ink) 72%, transparent)', color: active ? 'var(--ink)' : '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+          return <button key={vote} type="button" onClick={(e) => { e.stopPropagation(); rateOutfit && rateOutfit(detailLook.outfitId, vote); }} aria-label={vote > 0 ? '좋아요' : '별로예요'} aria-pressed={active} title={vote > 0 ? '좋아요' : '별로예요'} style={{ position: 'absolute', right: index === 0 ? 128 : 98, bottom: 8, zIndex: 15, width: 28, height: 28, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: active ? 'var(--surface)' : 'color-mix(in srgb, var(--ink) 72%, transparent)', color: active ? 'var(--ink)' : '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
             <Icon name="thumb" size={15} stroke={2} fill={active ? 'currentColor' : 'none'} style={vote < 0 ? { transform: 'rotate(180deg)' } : undefined} />
           </button>;
         })}

@@ -1941,7 +1941,7 @@ function App() {
       delete LB_DATA.LOOK_STAGE[id];
       // hydrate가 DAILY를 새 객체로 갈아끼워도 id로 찾아 붙인다.
       (LB_DATA.DAILY || []).forEach((o) => { if (o && o.id === id) { o.lookImg = url; delete o.lookError; } });
-      (list || []).forEach((o) => { if (o && o.id === id) { o.lookImg = url; delete o.lookError; } });
+      candidates.forEach((o) => { if (o && o.id === id) { o.lookImg = url; delete o.lookError; } });
       if (LB_DATA.OUTFIT_BY_ID[id]) LB_DATA.OUTFIT_BY_ID[id].lookImg = url;
       writeDailyCache({
         style: dailyStyle,
@@ -2563,7 +2563,7 @@ function App() {
   // 옷 카드 우상단 X → 보관(archived) / 삭제(delete), 보관 탭에서는 꺼내기(owned) / 삭제
   const [removeSheet, setRemoveSheet] = useState({ open: false, item: null });
   const requestRemove = (item) => setRemoveSheet({ open: true, item });
-  const closeRemove = () => setRemoveSheet((s) => ({ ...s, open: false }));
+  const closeRemove = () => { setRemoveSheet(s => ({ ...s, open: false })); setPickSheet(cur => cur && cur.inlineItemId ? null : cur); };
   const setItemStatus = (ids, status) => {
     const list = Array.isArray(ids) ? ids : [ids];
     if (!list.length) return;
@@ -2699,49 +2699,77 @@ function App() {
 
   // 옷장에서 고른 옷으로 코디 추천 — 탭을 바꾸지 않고 모달로 보여준다. 옷장에서
   // 고르던 흐름을 끊지 않으려면 화면을 갈아타지 않는 편이 낫다.
-  const [pickSheet, setPickSheet] = useState(null); // { ids, loading, outfits, error }
+  const [pickSheet, setPickSheet] = useState(null);
+  const pickJobs = useRef(new Map());
   const requestPickedOutfits = async (ids, opts = {}) => {
-    const picked = (ids || []).map(String).filter(Boolean);
+    const picked = [...new Set((ids || []).map(String).filter(Boolean))];
     if (!picked.length) return;
-    const append = !!opts.append;
-    const prev = (append && pickSheet && pickSheet.outfits) || [];
-    setPickSheet({ ids: picked, loading: true, outfits: prev, error: '' });
+    const jobKey = String(authUid || '') + ':' + picked.slice().sort().join('|');
+    const previous = pickJobs.current.get(jobKey);
+    const inlineItemId = opts.inlineItemId || (opts.append && pickSheet && pickSheet.inlineItemId) || '';
+    if (previous && (previous.loading || (!opts.append && !previous.error))) {
+      previous.inlineItemId = inlineItemId;
+      setPickSheet({ ...previous });
+      return;
+    }
+    const prev = opts.append && previous ? previous.outfits : [];
+    const job = { jobKey, ids: picked, inlineItemId, loading: true, outfits: prev.slice(), error: '' };
+    pickJobs.current.set(jobKey, job);
+    setPickSheet({ ...job });
+    const publish = () => setPickSheet(cur => cur && cur.jobKey === jobKey ? { ...job, outfits: job.outfits.slice() } : cur);
+    const accept = row => {
+      if (!row || !row.outfit) return;
+      (row.items || []).forEach(liveRememberItem);
+      const outfit = row.outfit;
+      stampOutfitStyle([outfit]);
+      LB_DATA.OUTFIT_BY_ID[outfit.id] = outfit;
+      if (!job.outfits.some(o => o.id === outfit.id)) job.outfits.push(outfit);
+      publish();
+    };
     try {
       const payload = await liveJSON('/api/live/coordinate', {
         method: 'POST',
+        onOutfit: accept,
+        onWish: row => {
+          if (!row || !row.id) return;
+          if (row.stage && !row.item) LB_DATA.WISH_STAGE[row.id] = row.stage;
+          else {
+            delete LB_DATA.WISH_STAGE[row.id];
+            if (row.item) liveRememberItem(row.item);
+            if (row.wish && LB_DATA.OUTFIT_BY_ID[row.id]) LB_DATA.OUTFIT_BY_ID[row.id].wish = row.wish;
+          }
+          publish();
+        },
         body: JSON.stringify({
           include_item_ids: picked,
-          max_combos: append ? 2 : dailyCount,
+          max_combos: opts.append ? 2 : dailyCount,
           style: preferredDailyStyle,
           styles: preferredStyles,
-          wish_combos: append ? 0 : Math.min(wishCount, dailyCount),
-          exclude_item_ids: prev.map((o) => o.itemIds || []),
+          wish_combos: opts.append ? 0 : Math.min(wishCount, dailyCount),
+          exclude_item_ids: prev.map(o => o.itemIds || []),
           ...coordProfile(prefs),
           ...(prefs.modelLook ? { model_look: true } : {}),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);
-      const fresh = (payload.outfits || []).filter((o) => o && (o.itemIds || []).length >= 2);
-      fresh.forEach((o) => { LB_DATA.OUTFIT_BY_ID[o.id] = o; });
-      const merged = [...prev, ...fresh.filter((o) => !prev.some((p) => p.id === o.id))];
-      setPickSheet({ ids: picked, loading: false, outfits: merged, error: '' });
+      const fresh = (payload.outfits || []).filter(o => o && (o.itemIds || []).length >= 2);
+      fresh.forEach(outfit => {
+        stampOutfitStyle([outfit]);
+        LB_DATA.OUTFIT_BY_ID[outfit.id] = outfit;
+      });
+      job.outfits = [...prev, ...fresh.filter(o => !prev.some(p => p.id === o.id))];
+      job.loading = false;
+      publish();
       reloadBilling();
-      if (append && !fresh.length) showToast('더 만들 조합이 없어요');
-      if (prefs.modelLook && fresh.some((o) => !o.lookImg)) {
-        applyModelLooks(fresh).then(() => {
-          setPickSheet((cur) => {
-            if (!cur || cur.ids !== picked) return cur;
-            return { ...cur, outfits: cur.outfits.map((o) => LB_DATA.OUTFIT_BY_ID[o.id] || o) };
-          });
-        });
+      if (prefs.modelLook && fresh.some(o => !o.lookImg)) {
+        await applyModelLooks(fresh).catch(e => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
+        job.outfits = job.outfits.map(o => LB_DATA.OUTFIT_BY_ID[o.id] || o);
+        publish();
       }
     } catch (e) {
-      if (append) {
-        setPickSheet({ ids: picked, loading: false, outfits: prev, error: '' });
-        showToast(e.message || '더 만들지 못했어요');
-      } else {
-        setPickSheet({ ids: picked, loading: false, outfits: [], error: e.message || '코디를 만들지 못했어요' });
-      }
+      job.loading = false;
+      job.error = e.message || '코디를 만들지 못했어요';
+      publish();
     }
   };
   const closePickSheet = () => setPickSheet(null);
@@ -3078,6 +3106,8 @@ function App() {
         onRestore={restoreItem}
         onDelete={deleteItem}
         onReextract={requestReextract}
+        onRecommend={item => requestPickedOutfits([item.id], { inlineItemId: item.id })}
+        recommendation={pickSheet && pickSheet.inlineItemId === (removeSheet.item && removeSheet.item.id) ? <PickedOutfitsModal embedded state={pickSheet} wide={false} onClose={closePickSheet} onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })} savedOutfitIds={savedOutfitIds} onSave={toggleSaveOutfit} onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))} onOpen={look => { const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId]; if (outfit) openOutfitViewer(window.LOOK_IMAGE_MODES[outfit.id] === false ? { ...outfit, lookImg: null } : outfit, (outfit.itemIds || []).map(id => LB_DATA.ALL[id]).filter(Boolean)); }} /> : null}
         onExpand={() => {
           const t = removeSheet.item;
           closeRemove();
@@ -3167,13 +3197,14 @@ function App() {
         </div>
       )}
 
-      {pickSheet && (
+      {pickSheet && !pickSheet.inlineItemId && (
         <PickedOutfitsModal
           state={pickSheet}
           onClose={closePickSheet}
           onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })}
           savedOutfitIds={savedOutfitIds}
           onSave={toggleSaveOutfit}
+          onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))}
           onOpen={(look, looks) => { closePickSheet(); openDetail(look, looks, '이 옷으로 만든 다른 코디'); }}
           wide={wide}
         />

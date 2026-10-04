@@ -1071,3 +1071,5 @@ GPT Image 2.5 공식 발표와 현 착장 코드의 동일 인물·스튜디오 
 키 대비 몸무게로 시각적 체형 4단계를 선택하고 얼굴은 사용자 사진·스냅은 포즈/구도만 참조하도록 수정했다. 체형 과장 금지·수치 검증·개인화 캐시 personal-body1, 개인화 off와 바로 보기 유지. 48개 테스트 통과. [[personal-model-look]]
 
 - 2026-10-04: 날씨 고정 실패값/위치 확인 정체 수정(조회 제한·직접 관측 복구·재시도·30분 캐시); 상품컷 flat19 겹침 배치와 태그 정보 토글 구현. [location-weather](location-weather.md), [look-flatlay-overlap](look-flatlay-overlap.md).
+
+- 2026-10-04: 모바일 정보 축소·태그/AI/확대 3개 정렬·전환 아이콘·생성 상품 표기·아이템 메뉴 내 코디 추천과 저장/진행 복귀 구현. 승인 B 아이보리 배경과 4:5 직접 생성, 측면광 배경 여백 연결 적용. [item-outfit-menu](item-outfit-menu.md), [model-look-realism-2026-10](model-look-realism-2026-10.md).

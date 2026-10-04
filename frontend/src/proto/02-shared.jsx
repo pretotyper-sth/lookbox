@@ -67,6 +67,8 @@ const ICONS = {
   copy:     'M8 8h11v11H8zM5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1',
   search:   'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
   refresh:  'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+  product:  'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  imageEdit: 'M4 4h12v6M4 4v16h8M6 16l4-5 3 3M15 20l5-5-3-3-5 5v3z',
   swap:     'M7 7h13m0 0-3-3m3 3-3 3M17 17H4m0 0 3 3m-3-3 3-3',
   minus:    'M5 12h14',
   more:     'M5 12h.01M12 12h.01M19 12h.01',
@@ -218,6 +220,7 @@ function Thumb({ item, radius = 'var(--r-md)', ratio = '1 / 1', fit = 'contain',
             fallback={<Silhouette category={item ? item.category : '상의'} />}
           />
         : <Silhouette category={item ? item.category : '상의'} />}
+      {item && item.wish && src && <span className="lb-look-ai-mark icon" aria-label="AI 생성 상품 이미지"><span>✦</span></span>}
     </div>
   );
 }
@@ -1097,13 +1100,14 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
 /* ----------------------------------------------------------------
    ItemRemoveSheet — 카드 ··· 더보기 → 확대 / 보관 / 삭제
 ---------------------------------------------------------------- */
-function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, onExpand, onReextract }) {
+function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, onExpand, onReextract, onRecommend, recommendation }) {
   const DANGER = '#B0573C';
   if (!item) return null;
   const isArchived = item.status === 'archived';
   return (
     <BottomSheet open={open} onClose={onClose}>
-      <div style={{ padding: '10px 24px 26px' }}>
+      <div className="lb-scrollable" style={{ padding: '10px 24px 26px', height: 'min(520px, 70dvh)', boxSizing: 'border-box', overflowY: 'auto' }}>
+        {recommendation || <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
           <div style={{ width: 56, flex: 'none' }}><Thumb item={item} radius="var(--r-md)" /></div>
           <div style={{ minWidth: 0 }}>
@@ -1115,8 +1119,9 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
           {item.img && onExpand && (
             <Btn full size="lg" variant="soft" icon="search" onClick={onExpand}>이미지 크게 보기</Btn>
           )}
+          {!isArchived && onRecommend && <Btn full size="lg" variant="soft" icon="sparkle" onClick={() => onRecommend(item)}>이 옷으로 코디 추천받기</Btn>}
           {onReextract && (
-            <Btn full size="lg" variant="soft" icon="sparkle" onClick={() => onReextract(item)}>이미지만 변경</Btn>
+            <Btn full size="lg" variant="soft" icon="imageEdit" onClick={() => onReextract(item)}>이미지만 변경</Btn>
           )}
           {isArchived
             ? <Btn full size="lg" variant="soft" icon="hanger" onClick={onRestore}>옷장으로 꺼내기</Btn>
@@ -1124,6 +1129,7 @@ function ItemRemoveSheet({ open, item, onClose, onArchive, onRestore, onDelete, 
           <Btn full size="lg" icon="trash" onClick={onDelete} style={{ background: DANGER, color: '#fff' }}>삭제하기</Btn>
           <Btn full variant="ghost" onClick={onClose}>취소</Btn>
         </div>
+        </>}
       </div>
     </BottomSheet>
   );

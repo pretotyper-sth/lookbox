@@ -54,7 +54,7 @@ class StudioLookPipelineTest(unittest.TestCase):
         request = ns['openai_client'].with_options.return_value.images.edit.call_args.kwargs
         self.assertEqual(request['model'], 'gpt-image-2.5-flare')
         self.assertEqual(request['quality'], 'high')
-        self.assertEqual(request['size'], '1024x1536')
+        self.assertEqual(request['size'], '1024x1280')
         self.assertEqual(len(request['image']), 2)
         self.assertEqual(request['image'][0][0], '01-default-reference.png')
         self.assertIn('78 to 80%', request['prompt'])

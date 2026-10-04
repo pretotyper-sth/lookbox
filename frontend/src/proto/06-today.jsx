@@ -92,7 +92,7 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
    TodayCard — 옷장 옷만으로 구성한 하루치 코디 (2꾭 그리드용 컴팩트)
    ============================================================ */
 // itemsById: 지난 날짜를 볼 때 그날의 아이템 스냅샷으로 그린다(옷장에서 지운 옷이어도 기록은 남게).
-function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true, onMakeModelLook }) {
+function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel, onOpen, itemsById, looking, showModelLook = true, onMakeModelLook, aiMark = 'full' }) {
   const [useModelLook, setUseModelLook] = useTd(window.LOOK_IMAGE_MODES[outfit.id] !== false);
   const [confirmModelLook, setConfirmModelLook] = useTd(false);
   const items = (outfit.itemIds || []).map((id) => (itemsById && itemsById[id]) || LB_DATA.ALL[id]).filter(Boolean);
@@ -116,10 +116,10 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} infoButton />
+          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} aiMark={aiMark} infoButton infoRight={59} infoSize={24} infoBottom={7} />
         </div>
         {onOpen && LookExpandBadge ? <LookExpandBadge size={24} inset={7} /> : null}
-        <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{
+        <button onClick={onSave} className="lb-save" aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'} style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
           background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
@@ -133,8 +133,8 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
           const next = !useModelLook;
           window.LOOK_IMAGE_MODES[outfit.id] = next;
           setUseModelLook(next);
-        }} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 37, bottom: 7, zIndex: 3, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
-          {outfit.lookImg ? <Icon name="swap" size={12} stroke={2.2} /> : <Icon name="sparkle" size={13} />}
+        }} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 33, bottom: 7, zIndex: 15, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+          <Icon name={outfit.lookImg && useModelLook ? "product" : "sparkle"} size={12} stroke={2.2} />
         </button>
         <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420} centered>
           <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setUseModelLook(true); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
@@ -153,7 +153,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         ) : null}
       </div>
 
-      <div style={{ marginTop: 'var(--s3)' }}>
+      {onWear && <div style={{ marginTop: 'var(--s3)' }}>
         <Btn
           full
           size="sm"
@@ -175,7 +175,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
         >
           {wearLocked && worn ? '당일 입었음' : worn ? '오늘 입음' : '오늘 입기'}
         </Btn>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -272,7 +272,7 @@ function HistoryLook({ outfit, worn, saved, onSave, onView }) {
             <Icon name="check" size={11} stroke={3} /> 입음
           </span>
         )}
-        <button onClick={onSave} aria-label="룩북에 저장" style={{
+        <button onClick={onSave} aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'} style={{
           position: 'absolute', right: 7, top: 7, width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 2,
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
           background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 86%, transparent)',

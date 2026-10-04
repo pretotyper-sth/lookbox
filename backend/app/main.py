@@ -4545,7 +4545,7 @@ def _model_look_subject(gender: str | None) -> str:
 
 
 def _model_look_prompt(gender: str | None) -> str:
-    return _model_identity_prompt(gender)
+    return _model_identity_prompt(gender) + " Use a pale warm ivory plaster wall and matching matte floor (#EEE9E0), with soft daylight from one side, no props and true garment colors."
 
 
 def _model_identity_prompt(gender: str | None) -> str:
@@ -4739,8 +4739,12 @@ def _model_look_prompt_with_reference(
         "Keep the person's identity and full body. "
         f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; "
         "do not reset every outfit to a straight-on neutral standing pose. "
-        "Use a cool pale-gray seamless studio backdrop, soft diffuse light, a subtle contact shadow "
-        "and crisp photographic separation between the clothes and the background. "
+        "Replace the reference background with a pale warm ivory plaster wall and matching matte floor "
+        "in the #EEE9E0 color family, with barely visible natural plaster texture. "
+        "Let broad, gentle daylight enter from one side, making a soft luminous falloff on the wall "
+        "and a subtle contact shadow under the shoes; keep any wall-floor junction unobtrusive. "
+        "Keep soft neutral light on the person, true garment colors, fabric detail and crisp separation. "
+        "Do not copy the reference studio background, use a blue-gray cast, add props or cast hard stripes across clothes. "
         "Show natural skin texture, tactile knit fibers, washed denim and believable fabric folds, "
         "without plastic skin, beauty-filter smoothing or CGI surfaces. "
         "Frame the person slightly smaller: head-to-sole height around 78 to 80% of the image, "
@@ -4964,10 +4968,15 @@ def _look_content_box(img: Image.Image) -> tuple[int, int, int, int] | None:
     step = 2
     y0, y1, x0, x1 = h, -1, w, -1
     for y in range(0, h, step):
-        br, bg, bb = _look_row_backdrop(px, w, y)
+        left = tuple(sum(px[ix, y][c] for ix in range(6)) / 6 for c in range(3))
+        right = tuple(sum(px[w - 1 - ix, y][c] for ix in range(6)) / 6 for c in range(3))
+        # Warm plaster and side light vary more than the former uniform studio plate.
+        tolerance = max(_LOOK_BACKDROP_TOL, 90) if left[0] - left[2] > 4 and right[0] - right[2] > 4 else _LOOK_BACKDROP_TOL
         for x in range(0, w, step):
+            t = x / max(1, w - 1)
+            br, bg, bb = (left[c] * (1 - t) + right[c] * t for c in range(3))
             r, g, b = px[x, y]
-            if abs(r - br) + abs(g - bg) + abs(b - bb) <= _LOOK_BACKDROP_TOL:
+            if abs(r - br) + abs(g - bg) + abs(b - bb) <= tolerance:
                 continue
             if y < y0:
                 y0 = y
@@ -5086,24 +5095,54 @@ def _fit_look_to_card(
     return buf.getvalue()
 
 
-def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int) -> None:
+def _pad_look_edges(canvas: Image.Image, x0: int, y0: int, x1: int, y1: int, feather: int = 0) -> None:
     """원본에 4:5 창이 없을 때만. 결을 늘리지 않고 맞닿은 색을 흐려 메운다."""
     cw, ch = canvas.size
 
-    def _wash(box: tuple[int, int, int, int], size: tuple[int, int]) -> Image.Image:
-        src = canvas.crop(box).resize(size, Image.Resampling.LANCZOS)
-        return src.filter(ImageFilter.GaussianBlur(24))
+    span = max(2, feather * 2)
+    def _wash(box: tuple[int, int, int, int], size: tuple[int, int], direction) -> Image.Image:
+        src = canvas.crop(box)
+        if feather:
+            src = src.transpose(direction)
+        src = src.resize(size, Image.Resampling.LANCZOS)
+        return src.filter(ImageFilter.GaussianBlur(2 if feather else 24))
 
     if y0 > 0:
-        canvas.paste(_wash((x0, y0, x1, min(y1, y0 + 2)), (x1 - x0, y0)), (x0, 0))
+        canvas.paste(_wash((x0, y0, x1, min(y1, y0 + span)), (x1 - x0, y0), Image.Transpose.FLIP_TOP_BOTTOM), (x0, 0))
     below = ch - y1
     if below > 0:
-        canvas.paste(_wash((x0, max(y0, y1 - 2), x1, y1), (x1 - x0, below)), (x0, y1))
+        canvas.paste(_wash((x0, max(y0, y1 - span), x1, y1), (x1 - x0, below), Image.Transpose.FLIP_TOP_BOTTOM), (x0, y1))
     if x0 > 0:
-        canvas.paste(_wash((x0, 0, min(x1, x0 + 2), ch), (x0, ch)), (0, 0))
+        canvas.paste(_wash((x0, 0, min(x1, x0 + span), ch), (x0, ch), Image.Transpose.FLIP_LEFT_RIGHT), (0, 0))
     right = cw - x1
     if right > 0:
-        canvas.paste(_wash((max(x0, x1 - 2), 0, x1, ch), (right, ch)), (x1, 0))
+        canvas.paste(_wash((max(x0, x1 - span), 0, x1, ch), (right, ch), Image.Transpose.FLIP_LEFT_RIGHT), (x1, 0))
+
+    if feather > 0:
+        pixels = canvas.load()
+        def blend(x, y, reference, weight):
+            current = pixels[x, y]
+            pixels[x, y] = tuple(round(reference[c] * (1 - weight) + current[c] * weight) for c in range(3))
+        if x0 > 0:
+            for y in range(y0, y1):
+                edge = pixels[x0 - 1, y]
+                for dx in range(min(feather, x1 - x0)):
+                    blend(x0 + dx, y, edge, (dx + 1) / (feather + 1))
+        if x1 < cw:
+            for y in range(y0, y1):
+                edge = pixels[x1, y]
+                for dx in range(min(feather, x1 - x0)):
+                    blend(x1 - 1 - dx, y, edge, (dx + 1) / (feather + 1))
+        if y0 > 0:
+            for x in range(x0, x1):
+                edge = pixels[x, y0 - 1]
+                for dy in range(min(feather, y1 - y0)):
+                    blend(x, y0 + dy, edge, (dy + 1) / (feather + 1))
+        if y1 < ch:
+            for x in range(x0, x1):
+                edge = pixels[x, y1]
+                for dy in range(min(feather, y1 - y0)):
+                    blend(x, y1 - 1 - dy, edge, (dy + 1) / (feather + 1))
 
 
 def _crop_look_to_card(png_bytes: bytes) -> bytes:
@@ -5217,6 +5256,9 @@ def _frame_studio_look(png_bytes: bytes) -> bytes:
     x0, y0, x1, y1 = box
     w, h = img.size
     scale = min(1.0, h * 0.80 / max(1, y1 - y0), w * 0.86 / max(1, x1 - x0))
+    if scale >= 0.999 and y0 >= h * 0.09 and y1 <= h * 0.92:
+        return png_bytes
+    feather = max(0, min(24, int(min(x0, y0, w - x1, h - y1) * scale / 2)))
     scaled = img.resize(
         (max(1, round(w * scale)), max(1, round(h * scale))), Image.Resampling.LANCZOS,
     )
@@ -5226,7 +5268,7 @@ def _frame_studio_look(png_bytes: bytes) -> bytes:
     canvas.paste(scaled, (left, top))
     _pad_look_edges(
         canvas, max(0, left), max(0, top),
-        min(w, left + scaled.width), min(h, top + scaled.height),
+        min(w, left + scaled.width), min(h, top + scaled.height), feather=feather,
     )
     buf = io.BytesIO()
     canvas.save(buf, format="PNG")
@@ -5278,9 +5320,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-ivory1-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
-        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-ivory1-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5329,7 +5371,7 @@ def generate_model_look_image(
                 "model": look_model,
                 "image": images,
                 "prompt": prompt,
-                "size": "1024x1536",
+                "size": "1024x1280",
                 "quality": quality,
             }
             if "gpt-image-2" not in look_model:
@@ -5344,7 +5386,7 @@ def generate_model_look_image(
                 image=_png_named(board, "clothes.png"),
                 prompt=_model_look_prompt(gender) + "\n" + _model_look_outfit_rules(items)
                 + "Use natural adult proportions, 7 to 7.5 head-heights tall, without elongated fashion-model legs.",
-                size="1024x1536",
+                size="1024x1280",
                 quality=quality,
             )
             out = base64.b64decode(result.data[0].b64_json)

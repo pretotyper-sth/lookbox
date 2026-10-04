@@ -80,7 +80,8 @@ class ModelLookPromptTest(unittest.TestCase):
 
     def test_fallback_prompt_is_minimal(self):
         prompt = self.ns['_model_look_prompt']("남성")
-        self.assertEqual(prompt, "Return one photorealistic full-body lookbook image.")
+        self.assertTrue(prompt.startswith("Return one photorealistic full-body lookbook image."))
+        self.assertIn("#EEE9E0", prompt)
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
@@ -90,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-studio1-", src)
+        self.assertIn("model-ivory1-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -190,6 +191,16 @@ class ModelLookPromptTest(unittest.TestCase):
         ])
         self.assertIn("블랙 벨트", prompt)
         self.assertIn("Wear only these listed items", prompt)
+
+    def test_approved_ivory_background_applies_to_normal_and_personal_looks(self):
+        for personal in (False, True):
+            prompt = self.ns['_model_look_prompt_with_reference']("남성", [], personal=personal)
+            self.assertIn("#EEE9E0", prompt)
+            self.assertIn("daylight enter from one side", prompt)
+            self.assertIn("true garment colors", prompt)
+            self.assertIn("Do not copy the reference studio background", prompt)
+            self.assertNotIn("cool pale-gray seamless studio backdrop", prompt)
+            self.assertIn("78 to 80%", prompt)
 
     def test_background_seam_is_removed_without_touching_person(self):
         image = Image.open(io.BytesIO(studio_look(80, 120, (32, 30, 48, 106)))).convert("RGB")
@@ -360,7 +371,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-studio1-", src)
+        self.assertIn("model-ivory1-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
@@ -400,6 +411,34 @@ class StudioLookFramingTest(unittest.TestCase):
             (before[2] - before[0]) / (before[3] - before[1]),
             (after[2] - after[0]) / (after[3] - after[1]), delta=0.025,
         )
+
+    def test_side_lit_ivory_wall_is_not_mistaken_for_person(self):
+        image = Image.new("RGB", (160, 200))
+        pixels = image.load()
+        for y in range(200):
+            for x in range(160):
+                shade = round(242 - x * 18 / 159 - y * 10 / 199)
+                pixels[x, y] = (shade, shade - 5, shade - 14)
+        for y in range(30, 174):
+            for x in range(56, 106):
+                pixels[x, y] = (28, 27, 26)
+        self.assertEqual(self.ns['_look_content_box'](image), (56, 30, 106, 174))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        self.assertEqual(self.ns['_frame_studio_look'](buffer.getvalue()), buffer.getvalue())
+
+    def test_background_padding_feather_does_not_change_person_pixels(self):
+        canvas = Image.new("RGB", (160, 200), (225, 220, 211))
+        for y in range(20, 180):
+            for x in range(20, 140):
+                canvas.putpixel((x, y), (236, 231, 220))
+        for y in range(45, 160):
+            for x in range(60, 100):
+                canvas.putpixel((x, y), (25, 26, 27))
+        self.ns['_pad_look_edges'](canvas, 20, 20, 140, 180, feather=12)
+        for y in range(45, 160):
+            for x in range(60, 100):
+                self.assertEqual(canvas.getpixel((x, y)), (25, 26, 27))
 
     def test_small_person_is_not_enlarged(self):
         image = studio_look(160, 200, (56, 36, 104, 164))
