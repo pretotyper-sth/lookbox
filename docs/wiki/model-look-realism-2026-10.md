@@ -29,3 +29,7 @@ Chrome 무신사 공식 AI 코디 프로필에서 37장을 확보했다(남성 1
 실제 gpt-image-2.5-flare high 서비스 경로의 1024×1280 생성 성공을 확인했다. 처음의 2:3→4:5 변환과 단색 가장자리 연장은 측면광 배경에 사각 띠를 만들었다. 착장 생성은 4:5를 직접 요청하고, 인물 판별은 좌우 조도 변화를 보간하며 따뜻한 질감 배경을 인물로 오인하지 않는다. 필요한 축소 여백은 인물 밖 배경 패치만 반사·연결하고 경계를 부드럽게 잇는다. 적정 여백이 이미 있는 원본은 그대로 보존한다.
 
 근거: backend/app/main.py의 _model_look_prompt_with_reference, _look_content_box, _pad_look_edges, _frame_studio_look, generate_model_look_image. 회귀: backend/tests/test_model_look.py 및 test_look_reference_pipeline.py. 바로 보기 코드는 변경하지 않았다.
+
+## A 배경으로 변경 (2026-10-05)
+
+사용자가 측면광/그림자 때문에 B 대신 왼쪽 A를 선택했다. 새 기본·개인화 착장은 #D8D2C9 웜 그레이지의 단순한 무광 배경/바닥, 고른 정면 확산광으로 생성한다. 측면 일광·창문 무늬·광선·벽/옷에 드리워지는 그림자·거친 벽 질감은 금지하고 신발 바로 아래 아주 옅은 접지 그림자만 허용한다. 성별 고정·포즈 순환·78~80% 전신 여백·AI 생성 표시·바로 보기는 유지한다. 새 캐시 model-greige-gender2로 B 결과의 재사용을 막으며 저장된 이미지 URL을 일괄 변경하지 않는다. 근거: backend/app/main.py `_model_look_prompt_with_reference`, `_model_look_prompt`, `generate_model_look_image`.

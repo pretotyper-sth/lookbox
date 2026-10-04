@@ -81,7 +81,7 @@ class ModelLookPromptTest(unittest.TestCase):
     def test_fallback_prompt_is_minimal(self):
         prompt = self.ns['_model_look_prompt']("남성")
         self.assertTrue(prompt.startswith("Return one photorealistic full-body lookbook image."))
-        self.assertIn("#EEE9E0", prompt)
+        self.assertIn("#D8D2C9", prompt)
 
     def test_look_prompt_single_image_swap(self):
         src = MAIN_PATH.read_text()
@@ -91,7 +91,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-ivory-gender2-", src)
+        self.assertIn("model-greige-gender2-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -192,11 +192,14 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("블랙 벨트", prompt)
         self.assertIn("Wear only these listed items", prompt)
 
-    def test_approved_ivory_background_applies_to_normal_and_personal_looks(self):
+    def test_approved_greige_background_applies_to_normal_and_personal_looks(self):
         for personal in (False, True):
             prompt = self.ns['_model_look_prompt_with_reference']("남성", [], personal=personal)
-            self.assertIn("#EEE9E0", prompt)
-            self.assertIn("daylight enter from one side", prompt)
+            self.assertIn("#D8D2C9", prompt)
+            self.assertIn("broad even diffuse frontal lighting", prompt)
+            self.assertIn("no directional sunlight", prompt)
+            self.assertIn("cast shadows on the wall or clothes", prompt)
+            self.assertNotIn("daylight enter from one side", prompt)
             self.assertIn("true garment colors", prompt)
             self.assertIn("Do not copy the reference studio background", prompt)
             self.assertNotIn("cool pale-gray seamless studio backdrop", prompt)
@@ -381,7 +384,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-ivory-gender2-", src)
+        self.assertIn("model-greige-gender2-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)

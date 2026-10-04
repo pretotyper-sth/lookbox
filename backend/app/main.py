@@ -4570,7 +4570,7 @@ def _model_look_subject(gender: str | None) -> str:
 
 
 def _model_look_prompt(gender: str | None) -> str:
-    return _model_identity_prompt(gender) + {"m": " The wearer must be an adult man.", "f": " The wearer must be an adult woman."}.get(_look_gender_key(gender), "") + " Use a pale warm ivory plaster wall and matching matte floor (#EEE9E0), with soft daylight from one side, no props and true garment colors."
+    return _model_identity_prompt(gender) + {"m": " The wearer must be an adult man.", "f": " The wearer must be an adult woman."}.get(_look_gender_key(gender), "") + " Use a simple seamless warm greige studio backdrop and matching matte floor (#D8D2C9), with broad even diffuse frontal light, no directional sunlight, no window patterns or wall shadows, no props, true garment colors and only a faint soft contact shadow directly under the shoes."
 
 
 def _model_identity_prompt(gender: str | None) -> str:
@@ -4766,10 +4766,11 @@ def _model_look_prompt_with_reference(
         "Keep the person's identity and full body. "
         f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; "
         "do not reset every outfit to a straight-on neutral standing pose. "
-        "Replace the reference background with a pale warm ivory plaster wall and matching matte floor "
-        "in the #EEE9E0 color family, with barely visible natural plaster texture. "
-        "Let broad, gentle daylight enter from one side, making a soft luminous falloff on the wall "
-        "and a subtle contact shadow under the shoes; keep any wall-floor junction unobtrusive. "
+        "Replace the reference background with a simple seamless warm greige studio backdrop "
+        "and matching matte floor in the #D8D2C9 color family, smooth and visually quiet. "
+        "Use broad even diffuse frontal lighting, with no directional sunlight, window patterns, "
+        "light beams, mottled plaster texture or cast shadows on the wall or clothes. "
+        "Keep only a faint soft contact shadow directly under the shoes and no visible wall-floor seam. "
         "Keep soft neutral light on the person, true garment colors, fabric detail and crisp separation. "
         "Do not copy the reference studio background, use a blue-gray cast, add props or cast hard stripes across clothes. "
         "Show natural skin texture, tactile knit fibers, washed denim and believable fabric folds, "
@@ -5347,9 +5348,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-ivory-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
-        key = f"model-ivory-gender2-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
