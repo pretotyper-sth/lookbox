@@ -22,6 +22,7 @@ FNS = (
     '_model_look_outfit_block',
     '_model_look_outfit_rules',
     '_look_styling_block',
+    '_personal_look_body_note',
     '_model_look_prompt_with_reference',
     '_look_row_backdrop',
     '_look_content_box',
@@ -129,10 +130,48 @@ class ModelLookPromptTest(unittest.TestCase):
             "여성", [{"category": "top", "name": "니트"}], personal=True, height="165", weight="52",
         )
         self.assertIn("Image 1 is the person. Image 2 is the look framing", prompt)
-        self.assertNotIn("165 cm", prompt)
-        self.assertNotIn("52 kg", prompt)
+        self.assertIn("165 cm", prompt)
+        self.assertIn("52 kg", prompt)
         self.assertIn("Images after that are the outfit pieces", prompt)
-        self.assertIn("Use Image 2 as the body-proportion baseline", prompt)
+        self.assertIn("slim build", prompt)
+        self.assertIn("not body shape", prompt)
+        self.assertNotIn("Use Image 2 as the body-proportion baseline", prompt)
+
+    def test_personal_body_has_four_restrained_visual_presets(self):
+        note = self.ns['_personal_look_body_note']
+        for weight, expected in [('70', 'slim build'), ('88', 'average build'),
+                                 ('104', 'slightly fuller build'), ('120', 'fuller build with a moderately')]:
+            with self.subTest(weight=weight):
+                result = note('200', weight)
+                self.assertIn(expected, result)
+                self.assertIn('200 cm', result)
+                self.assertIn('restrained, believable', result)
+                self.assertIn('not an exact body scan', result)
+
+    def test_personal_body_thresholds_use_height_relative_to_weight(self):
+        note = self.ns['_personal_look_body_note']
+        self.assertIn('slim build', note('200', '70'))
+        self.assertIn('slightly fuller build', note('170', '70'))
+        self.assertIn('average build', note('200', '80'))
+        self.assertIn('slightly fuller build', note('200', '96'))
+        self.assertIn('fuller build with a moderately', note('200', '112'))
+
+    def test_invalid_measurements_do_not_invent_a_body_preset(self):
+        note = self.ns['_personal_look_body_note']
+        for height, weight in [(None, None), ('175', ''), ('invalid', '70'),
+                               ('nan', '70'), ('175', 'inf'), ('0', '70'), ('175', '999')]:
+            with self.subTest(height=height, weight=weight):
+                result = note(height, weight)
+                self.assertIn('Measurements are unavailable', result)
+                self.assertNotIn('body-build preset', result)
+
+    def test_personal_off_keeps_reference_proportions_and_ignores_measurements(self):
+        prompt = self.ns['_model_look_prompt_with_reference'](
+            '남성', [], personal=False, height='175', weight='70',
+        )
+        self.assertIn('Use Image 1 as the body-proportion baseline', prompt)
+        self.assertNotIn('175 cm', prompt)
+        self.assertNotIn('body-build preset', prompt)
 
     def test_outfit_inventory_excludes_reference_accessories(self):
         prompt = self.ns['_model_look_prompt_with_reference']("남성", [

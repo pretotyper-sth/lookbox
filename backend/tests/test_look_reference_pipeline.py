@@ -70,7 +70,13 @@ class StudioLookPipelineTest(unittest.TestCase):
         self.assertEqual(request['image'][1][0], '02-default-look-reference.png')
         self.assertEqual(len(request['image']), 3)
         self.assertIn('Image 1 is the person. Image 2 is the look framing.', request['prompt'])
+        self.assertIn('175 cm', request['prompt'])
+        self.assertIn('70 kg', request['prompt'])
+        self.assertIn('average build', request['prompt'])
+        self.assertIn('not body shape', request['prompt'])
         self.assertEqual(ns['_garment_edit_images'].call_args.kwargs['start_at'], 3)
+        cache_key = ns['supabase_admin'].table.return_value.select.return_value.eq.return_value.eq.call_args.args[1]
+        self.assertIn('-personal-body1-', cache_key)
 
     def test_cache_hit_does_not_rotate_reference_charge_or_generate(self):
         ns = pipeline_namespace([{'image_url': 'https://example.test/cached.png'}])

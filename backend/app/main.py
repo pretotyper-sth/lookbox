@@ -4675,6 +4675,38 @@ def _model_look_outfit_rules(items: list[dict[str, Any]]) -> str:
     )
 
 
+def _personal_look_body_note(height: str | None, weight: str | None) -> str:
+    identity = (
+        "Image 1 supplies the user's face, hair and identity; preserve them faithfully. "
+        "Ignore its clothes, background and portrait crop when building the body. "
+        "Image 2 supplies only pose, expression, gaze, lighting and framing, not body shape. "
+    )
+    try:
+        h, w = float(height or ""), float(weight or "")
+    except (TypeError, ValueError):
+        return identity + "Measurements are unavailable; use a natural moderate adult build without guessing them. "
+    if not (120 <= h <= 230 and 30 <= w <= 220):
+        return identity + "Measurements are unavailable; use a natural moderate adult build without guessing them. "
+    ratio = w / (h / 100) ** 2
+    if ratio < 20:
+        build = "slim build with a gently narrower torso and limbs, without an extremely thin silhouette"
+    elif ratio < 24:
+        build = "average build with balanced torso, waist and limb fullness"
+    elif ratio < 28:
+        build = "slightly fuller build with modest fullness at the waist, upper arms and thighs"
+    else:
+        build = "fuller build with a moderately broader torso and softer waist, arms and thighs, without exaggeration"
+    return (
+        identity + f"The user's recorded height is {h:g} cm and weight is {w:g} kg. "
+        f"Use this approximate visual body-build preset: {build}. "
+        "Apply restrained, believable differences in body volume and clothing drape. "
+        "Keep natural proportions appropriate to the recorded height. "
+        "Do not copy the reference model's thin waist or long legs, exaggerate body size, "
+        "invent muscular definition or change the user's facial identity. "
+        "These measurements guide an approximate appearance, not an exact body scan or fit prediction. "
+    )
+
+
 def _model_look_prompt_with_reference(
     gender: str | None,
     items: list[dict[str, Any]],
@@ -4691,9 +4723,16 @@ def _model_look_prompt_with_reference(
     if personal:
         reference_lines = "Image 1 is the person. Image 2 is the look framing."
         anatomy_reference = "Image 2"
+        body_lines = _personal_look_body_note(height, weight)
     else:
         reference_lines = "Image 1 is the person and look framing."
         anatomy_reference = "Image 1"
+        body_lines = (
+            f"Use {anatomy_reference} as the body-proportion baseline, with one deliberate adjustment: "
+            "shorten the anatomical crotch-to-floor length by about 2% of the reference person's full height "
+            "(roughly 4% of leg length), keeping the head, torso width, and natural joints believable. "
+            "This is a body-proportion correction, not cropped trousers or shorter hems. "
+        )
     return (
         f"{reference_lines} Images after that are the outfit pieces. "
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
@@ -4708,10 +4747,7 @@ def _model_look_prompt_with_reference(
         "with about 11% clear space above the hair and 9% below the shoes. "
         "Do not add captions, watermarks, AI badges or reference-image branding. "
         "Preserve logos and lettering that actually belong to the supplied outfit pieces. "
-        f"Use {anatomy_reference} as the body-proportion baseline, with one deliberate adjustment: "
-        "shorten the anatomical crotch-to-floor length by about 2% of the reference person's full height "
-        "(roughly 4% of leg length), keeping the head, torso width, and natural joints believable. "
-        "This is a body-proportion correction, not cropped trousers or shorter hems. "
+        + body_lines +
         "Do not raise the waist or shrink the head to simulate longer legs; do not lengthen the legs, narrow the torso, or make a fashion-model silhouette. "
         "Keep a natural 7 to 7.5 head-height body, with the whole person at a relaxed scale and clear studio space above the hair and below the shoes. "
         "Do not zoom in or crop the shoes.\n"
@@ -5242,7 +5278,7 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
         key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
