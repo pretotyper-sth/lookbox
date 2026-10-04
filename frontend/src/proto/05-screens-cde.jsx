@@ -475,7 +475,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         {showInfo && <div className="lb-look-info-labels" aria-live="polite">
           {shown.map(item => {
             const slot = layerSafeCells(shown)[item.id];
-            return <div key={item.id} className="lb-look-info-label" style={{ left: slot.labelX + '%', top: slot.labelY + '%' }} title={`${item.brand || '브랜드 미등록'} · ${item.name} · ${outfitPrice(item.price)}`}>
+            return <div key={item.id} className="lb-look-info-label" style={{ left: slot.labelX + '%', top: `clamp(26px, ${slot.labelY}%, calc(100% - 26px))` }} title={`${item.brand || '브랜드 미등록'} · ${item.name} · ${outfitPrice(item.price)}`}>
               <strong>{item.brand || '브랜드 미등록'}</strong>
               <span>{item.name}</span>
               <b>{outfitPrice(item.price)}</b>
