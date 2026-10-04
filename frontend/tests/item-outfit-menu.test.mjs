@@ -35,6 +35,7 @@ test('recommendation remains inside the item menu and supports the existing save
 
 test('skeletons only fill missing requested cards and additions retain the previous count', async()=>{
  const h=harness(false); const task=h.requestPickedOutfits(['shirt']);assert.equal(h.state().targetCount,4);
+ h.options().onProgress({key:'outfits_ready',count:3});assert.equal(h.state().targetCount,3);h.options().onProgress({key:'outfits_ready',count:4});
  const rows=Array.from({length:4},(_,i)=>({id:'look'+i,itemIds:['shirt','pants'+i]}));
  rows.forEach(outfit=>h.options().onOutfit({outfit}));assert.equal(Math.max(0,h.state().targetCount-h.state().outfits.length),0);
  h.finish({outfits:rows});await task;const extra=h.requestPickedOutfits(['shirt'],{append:true});assert.equal(h.state().targetCount,6);h.finish({outfits:[]});await extra;

@@ -9392,6 +9392,8 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             flush=True,
         )
 
+        report({"_step": {"key": "outfits_ready", "count": len(outfits)}})
+
         if body.model_look:
             reference = _face_image_bytes(body.face_data_url) if body.personal_model_look else None
             if body.personal_model_look and not reference:

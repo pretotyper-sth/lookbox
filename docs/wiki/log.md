@@ -1075,3 +1075,5 @@ GPT Image 2.5 공식 발표와 현 착장 코드의 동일 인물·스튜디오 
 - 2026-10-04: 모바일 정보 축소·태그/AI/확대 3개 정렬·전환 아이콘·생성 상품 표기·아이템 메뉴 내 코디 추천과 저장/진행 복귀 구현. 승인 B 아이보리 배경과 4:5 직접 생성, 측면광 배경 여백 연결 적용. [item-outfit-menu](item-outfit-menu.md), [model-look-realism-2026-10](model-look-realism-2026-10.md).
 
 - 2026-10-05: 아이템 코디 메뉴 고정 빈 여백 제거·스켈레톤 목표 수 반영·서버 착장→제안 생성 순서·성별 명시/남성 레퍼런스 정리·직접 코디 선택 버튼·6개/중복/원피스 충돌 안내와 서버 검증. [item-outfit-menu](item-outfit-menu.md).
+
+- 2026-10-05: 선택 코디 후보가 요청 수보다 적을 때도 outfits_ready 확정 개수로 스켈레톤 목표를 보정. [item-outfit-menu](item-outfit-menu.md).

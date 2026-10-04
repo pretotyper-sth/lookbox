@@ -2770,6 +2770,12 @@ function App() {
         method: 'POST',
         timeoutMs: 420000,
         onOutfit: accept,
+        onProgress: step => {
+          if (step && step.key === 'outfits_ready') {
+            job.targetCount = prev.length + Math.max(0, Number(step.count) || 0);
+            publish();
+          }
+        },
         onLook: row => {
           if (!row || !row.id) return;
           if (row.lookImg) {
