@@ -438,7 +438,9 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
             userSelect: 'none',
           }}
         />
-        <span className="lb-look-ai-mark">✦ AI로 생성</span>
+        <span className="lb-look-ai-mark" aria-label="AI 생성 이미지">
+          <span>✦</span><span className="lb-look-ai-mark-label"> AI로 생성</span>
+        </span>
       </div>
     ) : (Composite ? (
       <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>

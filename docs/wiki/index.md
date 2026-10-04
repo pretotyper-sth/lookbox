@@ -8,7 +8,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 ## Architecture
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 - [mobile-bottom-nav](mobile-bottom-nav.md) — 모바일 하단 메뉴에는 옷장·오늘 코디·룩북·마이만 표시하고 구매 검토는 두지 않는다
-- [mobile-ai-mark](mobile-ai-mark.md) — 모바일 AI 착장 카드에서는 생성 문구 없이 ✦ 메타포만 표시한다
+- [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드·모바일 확대 화면은 ✦만, 데스크톱 상세는 생성 문구 유지
 
 ## Features
 - [model-look-realism-2026-10](model-look-realism-2026-10.md) — 무신사 AI 코디 37장·남녀별 순환, GPT Image 2.5 Flare high, 전신 80%·위아래 여백, 실제 서비스 생성 확인
