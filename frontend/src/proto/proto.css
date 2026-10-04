@@ -1032,3 +1032,21 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
 @media (prefers-reduced-motion: reduce) {
   .lb-order-pair { transition: none; }
 }
+
+.lb-look-info-toggle {
+  position: absolute; left: 8px; bottom: 8px; z-index: 12;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: rgba(30,30,29,.78); cursor: pointer;
+}
+.lb-look-info-toggle[aria-pressed="true"] { background: #1a1a1a; }
+.lb-look-info-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.lb-look-info-labels { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.lb-look-info-label {
+  position: absolute; transform: translate(-50%,-50%); width: 28%; max-width: 140px;
+  box-sizing: border-box; padding: clamp(4px,1.6cqw,8px); background: rgba(255,255,255,.95);
+  color: #171717; box-shadow: 0 1px 5px rgba(0,0,0,.08);
+  font-size: clamp(8px,2.8cqw,12px); line-height: 1.25; letter-spacing: -.02em;
+}
+.lb-look-info-label strong, .lb-look-info-label b { display: block; font-size: inherit; }
+.lb-look-info-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-look-info-label span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 3px 0; }

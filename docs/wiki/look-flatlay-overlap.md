@@ -32,3 +32,11 @@
 의류를 가릴 일이 없다. 제안 아이템으로 가방·소품이 한 개 들어올 때도 가방 크기는
 24%, 이미지 확대는 최대 1.15배로 제한한다. 근거:
 `frontend/src/proto/05-screens-cde.jsx` `LOOK_SIZE`, `lookImageZoom`.
+
+## 2026-10-04: 유튜브형 겹침 상품컷과 정보 토글
+
+앞선 flat18 독립 격자를 대체한다. 상의는 좌측 뒤, 하의는 우측 뒤, 아우터는 좌측 앞, 신발은 우측 아래, 소품은 좌측 아래로 배치한다. PNG의 실제 알파 영역을 각 슬롯에 맞춰 전체 실루엣과 여백을 유지하며 겹침 순서는 하의→상의→아우터→소품→신발이다. 캐시 `flat19`는 이미지 비율도 키에 포함한다.
+
+오늘의 코디·상세·확대 상품컷 좌측 아래 태그 버튼은 등록된 브랜드·이름·가격을 각 제품 위 작은 흰 라벨로 토글한다. 할인율은 표시하지 않는다. 긴 이름은 2줄로 제한하고 없는 가격은 `가격 미등록`으로 표시한다. 버튼 클릭/키보드는 부모 카드 열기 이벤트로 전파하지 않는다. 목록의 버튼 안 작은 썸네일은 중첩 버튼을 만들지 않으며 상세에서 정보를 볼 수 있다. AI 착장 이미지의 좌측 아래 생성 표시와 작은 화면의 아이콘 규칙은 유지한다.
+
+근거: `frontend/src/look-layout.js` `editorialSlots`, `outfitPrice`; `frontend/src/proto/05-screens-cde.jsx` `LookComposite`, `flattenLookBoard`; `frontend/src/proto/02-shared.jsx` `ImageViewer`; `frontend/src/proto/06-today.jsx` `TodayCard`; `frontend/tests/look-flatlay.test.mjs`. Chrome 390×844 및 데스크톱에서 정보 표시·숨김, 카드 열림 전파 없음, 관측 날씨 복구 확인.

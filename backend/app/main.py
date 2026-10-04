@@ -5422,7 +5422,8 @@ def _weather_observation(latitude: float, longitude: float) -> tuple[dict[str, A
         "&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min"
         "&timezone=Asia%2FSeoul&forecast_days=1"
     )
-    with urlopen(url, timeout=10) as response:  # noqa: S310 - fixed public weather URL
+    request = UrlRequest(url, headers={"User-Agent": "RealCloset weather/1.0 (+https://realcloset.vercel.app)"})
+    with urlopen(request, timeout=8) as response:  # noqa: S310 - fixed public weather URL
         raw = json.load(response)
     return raw.get("current") or {}, raw.get("daily") or {}
 
@@ -5468,7 +5469,7 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
     fallback = {
         "city": city,
         "cityResolved": city_resolved,
-        "temp": 24, "feels": 24, "cond": "날씨 정보", "hi": 27, "lo": 18,
+        "status": "error", "temp": None, "feels": None, "cond": "날씨 정보", "hi": None, "lo": None,
         "source": "device" if has_device_location else "fallback",
     }
     try:
@@ -5477,11 +5478,12 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
         weather = {
             "city": city,
             "cityResolved": city_resolved,
+            "status": "ready",
             "temp": round(float(current.get("temperature_2m"))),
-            "feels": round(float(current.get("apparent_temperature") or current.get("temperature_2m"))),
+            "feels": round(float(current.get("apparent_temperature") if current.get("apparent_temperature") is not None else current.get("temperature_2m"))),
             "cond": _weather_condition(current.get("weather_code")),
-            "hi": round(float((daily.get("temperature_2m_max") or [fallback["hi"]])[0])),
-            "lo": round(float((daily.get("temperature_2m_min") or [fallback["lo"]])[0])),
+            "hi": round(float((daily.get("temperature_2m_max") or [None])[0])),
+            "lo": round(float((daily.get("temperature_2m_min") or [None])[0])),
             "source": "device" if has_device_location else "fallback",
         }
     except Exception as exc:  # noqa: BLE001

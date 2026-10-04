@@ -14,10 +14,12 @@ test('daily recommendations do not wait for a fresh location lookup', () => {
 });
 
 test('device weather is cached for the local day', () => {
-  assert.match(source, /const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v5'/);
+  assert.match(source, /const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v7'/);
   assert.match(source, /cached\.date === localYmd\(\)/);
-  assert.match(source, /cached\.weather\.cityResolved !== false/);
-  assert.match(source, /maximumAge: 24 \* 60 \* 60 \* 1000/);
+  assert.match(source, /validWeather\(cached\.weather\)/);
+  assert.match(source, /Date\.now\(\) - cached\.savedAt < 30 \* 60 \* 1000/);
+  const weatherModule = readFileSync(new URL('../src/weather.js', import.meta.url), 'utf8');
+  assert.match(weatherModule, /maximumAge: 24 \* 60 \* 60 \* 1000/);
 });
 
 test('hosted pages do not request a local-only order cancellation endpoint', () => {
@@ -27,9 +29,9 @@ test('hosted pages do not request a local-only order cancellation endpoint', () 
   assert.match(chunk, /return Promise\.resolve\(null\)/);
 });
 
-test('mobile daily cards use the product composition and omit the image copy control', () => {
-  assert.match(todaySource, /const displayOutfit = !showModelLook/);
-  assert.match(todaySource, /showModelLook=\{wide\}/);
+test('daily cards can switch to product composition and omit the image copy control', () => {
+  assert.match(todaySource, /const displayOutfit = \(!showModelLook \|\| !useModelLook\)/);
+  assert.match(todaySource, /showModelLook = true/);
   assert.doesNotMatch(todaySource, /<LookComposite outfit=\{outfit\} items=\{items\} ratio="4 \/ 5" looking=\{looking\} copyButton/);
 });
 

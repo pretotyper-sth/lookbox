@@ -17,7 +17,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다
 - [lookbook-card](lookbook-card.md) — 룩북은 캐시 먼저. `saved=1`은 착장 URL만 있으면 옷장 join 없음. 목록은 GPT 아님
 - [lookbook-model-look-switch](lookbook-model-look-switch.md) — 정사각 썸네일은 AI 원본을 배경으로 펼치고 전신 원본을 contain으로 표시. 보기 모드 기억, 이미지 카드 진입은 transform 없이 opacity만 변경
-- [look-flatlay-overlap](look-flatlay-overlap.md) — 추천 상품컷은 의류 코어 슬롯만 배치하고, 제안 가방·소품은 작게 한 자리만 둔다
+- [look-flatlay-overlap](look-flatlay-overlap.md) — 겹침 상품컷과 태그 버튼으로 등록된 브랜드·이름·가격 표시
 - [plan-sheet-free-ads](plan-sheet-free-ads.md) — 요금제 시트는 무료 박스만. 항목에 광고 포함. 아래에 작업별 크레딧
 - [mypage-usage-in-account](mypage-usage-in-account.md) — 사용량: PC는 계정 카드 안, 모바일은 제 카드. 무료 50크레딧. 캐시 먼저 그림. 어드민 메일만 0이면 50 재지급. 버전은 날짜만
 - [account-settings-flow](account-settings-flow.md) — 개인정보와 비밀번호는 하나의 시트 안에서 화면 전환; 중첩 시트 없이 뒤로 복귀
@@ -25,7 +25,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [model-look-toggle](model-look-toggle.md) — AI 착장은 왼쪽 첫 카드 요청부터 작업 표시. model-id33은 목록 밖 액세서리 금지·레퍼런스 대비 다리 길이 소폭 축소
 - [model-look-confirm-modal](model-look-confirm-modal.md) — AI 착장 생성 확인은 모바일에서도 가운데 표시하고 작은 화면에서 내부 스크롤
 - [look-latency](look-latency.md) — 상품컷을 먼저 보내고, 오른쪽 제안 아이템과 왼쪽 AI 착장을 병렬 생성한다
-- [location-weather](location-weather.md) — 브라우저 현재 위치의 기온·체감·최고/최저·강수를 데일리 추천 점수에 반영하며 좌표는 저장하지 않는다
+- [location-weather](location-weather.md) — 날씨 조회 3/10초 제한·병렬 복구·30분 캐시·재시도, 실패 시 임의 기온 없음
 - [coord-clash](coord-clash.md) — 추천 상품컷은 상의·하의·신발 코어 슬롯을 각 한 개만 쓴다
 - [look-plate-shadow](look-plate-shadow.md) — 신발 옆 깨짐은 판 평탄화가 원인. 맞추기 창은 원본 4:5. 가장자리 늘림 없음
 - [detail-wide-layout](detail-wide-layout.md) — PC 코디 상세는 항상 왼쪽 사진·오른쪽 레일. 룩북도 오늘과 같다

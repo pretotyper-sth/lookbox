@@ -223,6 +223,7 @@ function installFetchBridge() {
       if (token) headers.set('Authorization', `Bearer ${token}`)
       return original(`${API_BASE}${url}`, { ...init, headers })
     }
+    if (url.split('?')[0] === '/api/live/weather') return send(null)
     const token = await ensureToken()
     const res = await send(token)
     // 401은 대부분 토큰이 죽은 것이다. 그냥 두면 탭을 열어둔 사이 세션이 만료됐을 때

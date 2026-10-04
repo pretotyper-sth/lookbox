@@ -88,7 +88,7 @@ const DAILY = [
 ];
 
 // 오늘의 날씨 컨텍스트. 로그인 뒤 브라우저의 현재 위치 좌표로 덮어쓴다.
-const WEATHER = { city: '위치 확인 중', temp: null, feels: null, cond: '날씨 정보', hi: null, lo: null };
+const WEATHER = { status: 'loading', city: '', temp: null, feels: null, cond: '', hi: null, lo: null };
 
 // 조합 id → outfit 통합 룩업 (구매 전 조합 + 데일리 모두 포함)
 const OUTFIT_BY_ID = {};

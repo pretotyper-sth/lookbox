@@ -1,3 +1,4 @@
+import { loadCurrentWeather, validWeather } from '../weather.js';
 /* @prototype-ported */
 const React = window.React;
 const ReactDOM = window.ReactDOM;
@@ -173,18 +174,16 @@ function localYmd() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v6';
+const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v7';
 function readDeviceWeatherCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd()) || 'null');
-    return cached && cached.date === localYmd() && cached.weather
-      && cached.weather.city && cached.weather.cityResolved !== false
-      && Number.isFinite(Number(cached.weather.temp))
-      && cached.weather.cond && cached.weather.cond !== '날씨 정보' ? cached.weather : null;
+    return cached && cached.date === localYmd() && Date.now() - cached.savedAt < 30 * 60 * 1000
+      && validWeather(cached.weather) ? cached.weather : null;
   } catch (e) { return null; }
 }
 function writeDeviceWeatherCache(weather) {
-  try { localStorage.setItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd(), JSON.stringify({ date: localYmd(), weather })); } catch (e) { /* noop */ }
+  try { localStorage.setItem(DEVICE_WEATHER_CACHE_BASE + ':' + localYmd(), JSON.stringify({ date: localYmd(), savedAt: Date.now(), weather })); } catch (e) { /* noop */ }
 }
 function relativeSavedAt(iso) {
   if (!iso) return '';
@@ -1040,42 +1039,26 @@ function App() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const refreshDeviceWeather = useCallback(() => {
-    const cached = readDeviceWeatherCache();
+  const refreshDeviceWeather = useCallback((force = false) => {
+    const cached = !force && readDeviceWeatherCache();
     if (cached) {
-      Object.assign(LB_DATA.WEATHER, cached);
+      Object.assign(LB_DATA.WEATHER, cached, { status: 'ready' });
       setWeatherRev((n) => n + 1);
       return Promise.resolve(cached);
     }
     if (weatherRequestRef.current) return weatherRequestRef.current;
-    const request = (async () => {
-      const position = await new Promise((resolve) => {
-        if (!navigator.geolocation) { resolve(null); return; }
-        navigator.geolocation.getCurrentPosition(
-          (value) => resolve(value && value.coords),
-          () => resolve(null),
-          { enableHighAccuracy: false, timeout: 2500, maximumAge: 24 * 60 * 60 * 1000 },
-        );
-      });
-      const coords = position && Number.isFinite(position.latitude) && Number.isFinite(position.longitude)
-        ? `?lat=${position.latitude.toFixed(4)}&lon=${position.longitude.toFixed(4)}`
-        : '';
-      try {
-        const weather = await liveJSON('/api/live/weather' + coords);
-        if (!weather || !Number.isFinite(Number(weather.temp)) || !weather.cond || weather.cond === '날씨 정보') return null;
-        const resolvedWeather = {
-          ...weather,
-          city: weather.cityResolved === false || !weather.city || weather.city === '지역 확인 중' ? '현재 위치' : weather.city,
-          cityResolved: true,
-        };
-        Object.assign(LB_DATA.WEATHER, resolvedWeather);
-        writeDeviceWeatherCache(resolvedWeather);
-        setWeatherRev((n) => n + 1);
-        return resolvedWeather;
-      } catch (e) {
-        return null;
-      }
-    })();
+    Object.assign(LB_DATA.WEATHER, { status: 'loading' });
+    setWeatherRev((n) => n + 1);
+    const request = loadCurrentWeather({ geolocation: navigator.geolocation }).then(weather => {
+      Object.assign(LB_DATA.WEATHER, weather);
+      writeDeviceWeatherCache(weather);
+      setWeatherRev((n) => n + 1);
+      return weather;
+    }).catch(() => {
+      Object.assign(LB_DATA.WEATHER, { status: 'error', city: '', temp: null, feels: null, hi: null, lo: null, cond: '', source: '' });
+      setWeatherRev((n) => n + 1);
+      return null;
+    });
     weatherRequestRef.current = request;
     request.finally(() => {
       if (weatherRequestRef.current === request) weatherRequestRef.current = null;
@@ -1085,11 +1068,24 @@ function App() {
 
   useEffect(() => {
     if (!authUid || isShowcase) return undefined;
-    let alive = true;
-    refreshDeviceWeather().then((weather) => {
-      if (!alive || !weather) return;
+    let alive = true, retries = 0, retryTimer;
+    const refresh = () => refreshDeviceWeather().then(weather => {
+      if (alive && !weather && retries < 2) {
+        retries += 1;
+        retryTimer = setTimeout(refresh, retries * 15000);
+      }
     });
-    return () => { alive = false; };
+    LB_DATA.refreshWeather = () => refreshDeviceWeather(true);
+    void refresh();
+    window.addEventListener('online', refresh);
+    window.addEventListener('focus', refresh);
+    const interval = setInterval(refresh, 30 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearTimeout(retryTimer); clearInterval(interval);
+      window.removeEventListener('online', refresh); window.removeEventListener('focus', refresh);
+      delete LB_DATA.refreshWeather;
+    };
   }, [authUid, isShowcase, refreshDeviceWeather]);
   const persistPrefs = (p, opts) => {
     try { localStorage.setItem('lb_prefs', JSON.stringify(p)); localStorage.setItem('lb_onboarded', '1'); } catch (e) { /* noop */ }

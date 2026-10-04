@@ -38,6 +38,7 @@ const ICONS = {
   check:    'M20 6 9 17l-5-5',
   x:        'M18 6 6 18M6 6l12 12',
   heart:    'M20.8 5.6a5.5 5.5 0 0 0-7.8 0L12 6.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 22l8.8-8.6a5.5 5.5 0 0 0 0-7.8z',
+  tag: 'M20 13l-7 7a2 2 0 0 1-3 0L3 13V3h10l7 7a2 2 0 0 1 0 3zM7.5 7.5h.01',
   bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
   camera:   'M14.5 4l1.5 2h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   link:     'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5',
@@ -444,7 +445,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       </div>
     ) : (Composite ? (
       <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
-        <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" />
+        <Composite outfit={outfit} items={outfitItems} ratio="4 / 5" infoButton />
       </div>
     ) : null)
   ) : (

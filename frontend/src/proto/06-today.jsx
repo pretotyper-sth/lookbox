@@ -61,11 +61,11 @@ function ContextStrip({ selected, today, calOpen, setCalOpen, view, setView, onS
         overflowX: 'auto', WebkitOverflowScrolling: 'touch',
         marginLeft: -2, paddingLeft: 2, paddingRight: 2,
       }}>
-        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>
+        <button type="button" onClick={() => LB_DATA.refreshWeather && LB_DATA.refreshWeather()} disabled={w.status === 'loading'} aria-label={w.status === 'error' ? '날씨 다시 불러오기' : '날씨 새로고침'} style={{ ...pill, border: 0, flex: 'none', whiteSpace: 'nowrap', cursor: w.status === 'loading' ? 'default' : 'pointer' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
-          {w.city} {w.temp == null ? '—' : w.temp + '°'} {w.cond}
-        </span>
-        <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi == null ? '—' : w.hi + '°'} · 최저 {w.lo == null ? '—' : w.lo + '°'}</span>
+          {w.status === 'error' ? '날씨를 불러오지 못했어요 · 재시도' : w.temp == null ? '날씨 불러오는 중' : `${w.city} ${w.temp}° ${w.cond}`}
+        </button>
+        {w.temp != null && <span style={{ ...pill, flex: 'none', whiteSpace: 'nowrap' }}>최고 {w.hi}° · 최저 {w.lo}°</span>}
       </div>
       {action}
       {calOpen && calPos && (
@@ -116,7 +116,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} />
+          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} infoButton />
         </div>
         {onOpen && LookExpandBadge ? <LookExpandBadge size={24} inset={7} /> : null}
         <button onClick={onSave} className="lb-save" aria-label="룩북에 저장" style={{

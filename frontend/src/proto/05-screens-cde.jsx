@@ -1,3 +1,4 @@
+import { editorialSlots, outfitPrice } from '../look-layout.js';
 /* @prototype-ported */
 const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, Chip, EmptyState, Eyebrow, Icon, IconBtn, LB_DATA, OUTFITS, PullRefresh, Silhouette, Skeleton, Thumb, TopBar } = window;
@@ -28,16 +29,8 @@ const LOOK_SIZE = {
   '신발': 36, '가방': 24, '모자': 18, '소품': 14,
   '액세서리': 16, // 구버전 데이터 호환
 };
-/* 아이템이 카드에서 너무 작게 보여 배율을 올렸다. 너무 키우면 소품이 오른쪽
-   벽에 붙고 잘린다. 1.16이면 상의·하의가 겹치면서도 가장자리 여백이 남는다.
-   개수마다 덩어리 크기가 달라져 3장은 작고 4장은 커 보인다. 오늘 코디는
-   그린 뒤 LOOK_PACK으로 한 덩어리를 맞춘다. 1.03은 0.86의 1.2배,
-   패킹 전 4개짜리 2번 카드의 약 95%다. 룩북은 pack=false. */
 const LOOK_SCALE = 1.16;
 const LOOK_PAD = 12;
-const LOOK_PACK = 1.03;
-/* 상의가 커서 기하 가운데가 위로 보인다. 카드 높이의 이만큼만 내린다. */
-const LOOK_NUDGE_Y = 0.024;
 
 /* 원본 캔버스 여백을 포함한 기존 배치를 유지하는 기본 보정값. 소품은 아래에서 실제
    알파 실루엣으로 양방향 정규화해, 유난히 큰 원본도 의류 크기로 커지지 않게 한다. */
@@ -134,44 +127,10 @@ function drawLookCutout(ctx, im, x, y, dw, dh) {
 }
 
 function layerSafeCells(items) {
-  const owned = (items || []).filter(Boolean);
-  const outer = owned.filter((it) => LOOK_ROLE[it.category] === 'outer');
-  const top = owned.filter((it) => LOOK_ROLE[it.category] === 'top');
-  if (owned.length < 2) return null;
-  const used = new Set();
-  const take = (list) => list.filter((it) => {
-    if (used.has(it.id)) return false;
-    used.add(it.id);
-    return true;
-  });
-  const ordered = [
-    ...take(outer), ...take(top),
-    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'bottom')),
-    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'shoes')),
-    ...take(owned.filter((it) => LOOK_ROLE[it.category] === 'acc')),
-  ];
-  const cells = ordered.length === 2
-    ? [{ x0: 5, y0: 6, x1: 46, y1: 94 }, { x0: 54, y0: 6, x1: 95, y1: 94 }]
-    : ordered.length === 3
-      ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }]
-      : ordered.length === 4
-        ? [{ x0: 5, y0: 5, x1: 46, y1: 47 }, { x0: 54, y0: 5, x1: 95, y1: 47 }, { x0: 5, y0: 53, x1: 46, y1: 95 }, { x0: 54, y0: 58, x1: 95, y1: 89 }]
-        : ordered.length === 5
-          ? [{ x0: 5, y0: 4, x1: 46, y1: 30 }, { x0: 54, y0: 4, x1: 95, y1: 30 }, { x0: 5, y0: 37, x1: 46, y1: 63 }, { x0: 54, y0: 37, x1: 95, y1: 63 }, { x0: 28, y0: 70, x1: 72, y1: 96 }]
-        : ordered.map((_, i) => {
-          const cols = ordered.length <= 6 ? 2 : 3;
-          const rows = Math.ceil(ordered.length / cols);
-          const col = i % cols;
-          const row = Math.floor(i / cols);
-          const gap = 5;
-          const cw = (100 - gap * (cols + 1)) / cols;
-          const ch = (100 - gap * (rows + 1)) / rows;
-          return { x0: gap + col * (cw + gap), y0: gap + row * (ch + gap), x1: gap + col * (cw + gap) + cw, y1: gap + row * (ch + gap) + ch };
-        });
-  return Object.fromEntries(ordered.map((it, i) => [it.id, cells[i]]));
+  return editorialSlots(items);
 }
 
-/** 여러 상품컷을 항상 독립 셀에 배치해 카드마다 읽기 쉽게 정렬한다. */
+/** 상의·아우터·하의·신발을 겹침 순서와 슬롯 중심에 배치한다. */
 function lookPlacement(items) {
   const owned = (items || []).filter(Boolean);
   const safeCells = layerSafeCells(owned);
@@ -179,7 +138,7 @@ function lookPlacement(items) {
     return Object.fromEntries(owned.map((it, i) => {
       const cell = safeCells[it.id];
       if (!cell) return [it.id, { ...LOOK_SPOT.acc, z: 8 + i }];
-      return [it.id, { cx: (cell.x0 + cell.x1) / 2, cy: (cell.y0 + cell.y1) / 2, z: i + 1 }];
+      return [it.id, { cx: (cell.x0 + cell.x1) / 2, cy: (cell.y0 + cell.y1) / 2, z: cell.z }];
     }));
   }
   const hasOuter = owned.some((it) => LOOK_ROLE[it.category] === 'outer');
@@ -316,45 +275,14 @@ async function copyCompositePng(src) {
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }
 
-function packLookRects(rects, w, h) {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  rects.forEach((r) => {
-    minX = Math.min(minX, r.x);
-    minY = Math.min(minY, r.y);
-    maxX = Math.max(maxX, r.x + r.dw);
-    maxY = Math.max(maxY, r.y + r.dh);
-  });
-  const bw = Math.max(1, maxX - minX);
-  const bh = Math.max(1, maxY - minY);
-  const s = Math.min((w * LOOK_PACK) / bw, (h * LOOK_PACK) / bh);
-  const ox = w / 2 - ((minX + maxX) / 2) * s;
-  const oy = h / 2 - ((minY + maxY) / 2) * s;
-  return rects.map((r) => ({
-    ...r,
-    x: r.x * s + ox,
-    y: r.y * s + oy,
-    dw: r.dw * s,
-    dh: r.dh * s,
-  }));
-}
-
-function nudgeLookRects(rects, h) {
-  const dy = h * LOOK_NUDGE_Y;
-  return rects.map((r) => ({ ...r, y: r.y + dy }));
-}
-
 function lookRectInCell(it, im, cell, w, h, scale) {
   const visible = lookVisibleBox(im);
   const vw = Math.max(1, visible.x1 - visible.x0);
   const vh = Math.max(1, visible.y1 - visible.y0);
   const cellW = ((cell.x1 - cell.x0) / 100) * w;
   const cellH = ((cell.y1 - cell.y0) / 100) * h;
-  const preferred = (lookItemSize(it, scale) / 100) * Math.min(w, h) * lookImageZoom(it.category);
   const fit = Math.min((cellW * 0.9) / vw, (cellH * 0.9) / vh);
-  const s = Math.min(preferred / Math.max(vw, vh), fit);
+  const s = fit;
   const cx = ((cell.x0 + cell.x1) / 200) * w;
   const cy = ((cell.y0 + cell.y1) / 200) * h;
   const visibleCx = (visible.x0 + visible.x1) / 2;
@@ -392,10 +320,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
       const y = cy - dh / 2;
       return { im, x, y, dw, dh };
     });
-    // 세 칸은 2×2의 마지막 칸을 비운 레이아웃이다. 이 경우 bbox를 다시 카드 끝까지
-    // 확대하면 좌상단의 넓은 니트처럼 실루엣이 가장자리로 밀리므로, 셀 여백을 유지한다.
-    const keepGridMargins = safeCells && items.length === 3;
-    const drawn = nudgeLookRects(pack && !keepGridMargins ? packLookRects(rects, w, h) : rects, h);
+    const drawn = rects;
     drawn.forEach((r) => {
       drawLookCutout(ctx, r.im, r.x, r.y, r.dw, r.dh);
     });
@@ -410,13 +335,14 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 const LOOK_FLAT_CACHE = {};
 window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false, infoButton = false }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
-  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + (pack ? '|flat18' : '|flat1');
+  const key = shown.map((it) => String(it.id) + ':' + (it.thumb || it.img || '')).join('|') + '|flat19|' + ratio;
   const [flat, setFlat] = useSc(LOOK_FLAT_CACHE[key] || '');
   const [copyState, setCopyState] = useSc('');
+  const [showInfo, setShowInfo] = useSc(false);
   const lookImg = outfit && outfit.lookImg;
   const copyTimer = React.useRef(0);
   useEc(() => {
@@ -513,7 +439,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
       aria-busy={pending ? 'true' : undefined}
       aria-label={pending ? '코디 이미지를 만드는 중' : undefined}
       style={{
-        position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
+        containerType: 'inline-size', position: 'relative', width: '100%', background: bg, borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
       }}
     >
@@ -529,21 +455,34 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
         />
       ) : shown.map((it) => {
         const at = place[it.id] || LOOK_SPOT.top;
-        const size = lookItemSize(it, scale);
+        const cell = layerSafeCells(shown)[it.id];
         const frame = {
-          position: 'absolute', left: at.cx + '%', top: at.cy + '%', width: size + '%', aspectRatio: '1',
-          transform: 'translate(-50%,-50%)', zIndex: at.z,
+          position: 'absolute', left: cell.x0 + '%', top: cell.y0 + '%', width: (cell.x1 - cell.x0) + '%', height: (cell.y1 - cell.y0) + '%', zIndex: at.z,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         };
         return (
           <div key={it.id} style={frame}>
             <img src={it.thumb || it.img} alt={it.name} loading="lazy" decoding="async" style={{
               width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-              transform: `scale(${lookImageZoom(it.category) * (LOOK_ACCENT_BASE_SCALE[it.category] || 1)})`,
             }} />
           </div>
         );
       })}
+      {infoButton && shown.length > 0 && <>
+        <button type="button" className="lb-look-info-toggle" aria-label={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} title={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} aria-pressed={showInfo} onClick={event => { event.stopPropagation(); setShowInfo(value => !value); }} onKeyDown={event => event.stopPropagation()}>
+          <Icon name="tag" size={14} stroke={2} />
+        </button>
+        {showInfo && <div className="lb-look-info-labels" aria-live="polite">
+          {shown.map(item => {
+            const slot = layerSafeCells(shown)[item.id];
+            return <div key={item.id} className="lb-look-info-label" style={{ left: slot.labelX + '%', top: slot.labelY + '%' }} title={`${item.brand || '브랜드 미등록'} · ${item.name} · ${outfitPrice(item.price)}`}>
+              <strong>{item.brand || '브랜드 미등록'}</strong>
+              <span>{item.name}</span>
+              <b>{outfitPrice(item.price)}</b>
+            </div>;
+          })}
+        </div>}
+      </>}
       {pending ? <LookPendingMarks /> : null}
       {copyControl}
       {copyState ? (
@@ -1509,7 +1448,7 @@ function DetailScreen({ ctx }) {
             textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" />
+          <LookComposite outfit={showModelLook ? outfit : { ...outfit, lookImg: null }} items={items} ratio="4 / 5" infoButton />
           {openOutfitViewer ? <LookExpandBadge /> : null}
         </div>
         {/* 오늘 코디에서 연 상세만 하트. 룩북은 카드 더보기·선택 빼기. */}

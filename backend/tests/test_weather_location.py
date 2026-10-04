@@ -52,10 +52,49 @@ class WeatherLocationTest(unittest.TestCase):
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<weather>", "exec"), ns)
         self.assertEqual(ns["_weather_condition"](0), "맑음")
 
+    def run_observation(self, observation):
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+        functions = [node for node in self.tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name in ("_weather_for_location", "_weather_condition")]
+        cache = {}
+        ns = {"Any": object, "time": time, "ThreadPoolExecutor": ThreadPoolExecutor,
+              "_WEATHER_CACHE": cache, "_weather_observation": observation}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), "<weather>", "exec"), ns)
+        return ns["_weather_for_location"](), cache
+
+    def test_failure_has_no_invented_temperature_and_is_not_cached(self):
+        def unavailable(*args):
+            raise TimeoutError("provider timed out")
+        weather, cache = self.run_observation(unavailable)
+        self.assertEqual(weather["status"], "error")
+        for key in ("temp", "feels", "hi", "lo"):
+            self.assertIsNone(weather[key])
+        self.assertFalse(cache)
+
+    def test_zero_apparent_temperature_is_preserved_and_success_is_cached(self):
+        weather, cache = self.run_observation(lambda *args: (
+            {"temperature_2m": 5, "apparent_temperature": 0, "weather_code": 0},
+            {"temperature_2m_max": [8], "temperature_2m_min": [0]},
+        ))
+        self.assertEqual(weather["status"], "ready")
+        self.assertEqual(weather["feels"], 0)
+        self.assertEqual(weather["lo"], 0)
+        self.assertEqual(weather["cond"], "맑음")
+        self.assertEqual(len(cache), 1)
+
+    def test_missing_daily_observation_is_not_replaced_with_fake_values(self):
+        weather, cache = self.run_observation(lambda *args: (
+            {"temperature_2m": 5, "weather_code": 0}, {},
+        ))
+        self.assertEqual(weather["status"], "error")
+        self.assertIsNone(weather["hi"])
+        self.assertFalse(cache)
+
     def test_unresolved_city_is_not_reused_from_the_device_cache(self):
         text = FRONTEND_PATH.read_text()
-        self.assertIn("const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v5'", text)
-        self.assertIn("cached.weather.cityResolved !== false", text)
+        self.assertIn("const DEVICE_WEATHER_CACHE_BASE = 'lb_device_weather_v7'", text)
+        self.assertIn("validWeather(cached.weather)", text)
 
 
 if __name__ == "__main__":
