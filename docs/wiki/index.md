@@ -11,6 +11,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mobile-ai-mark](mobile-ai-mark.md) — 모바일 AI 착장 카드에서는 생성 문구 없이 ✦ 메타포만 표시한다
 
 ## Features
+- [model-look-realism-2026-10](model-look-realism-2026-10.md) — 무신사 AI 코디 37장·남녀별 순환, GPT Image 2.5 Flare high, 전신 80%·위아래 여백, 실제 서비스 생성 확인
 - [tryon-mask-boundaries](tryon-mask-boundaries.md) — 승인 체크포인트 보호. 9/24 명시 요청으로 tryon22·캐시 PNG 재검증·부분 투명화 거부·정면 자세 강화; 영상 cover·PNG contain 유지
 - [image-viewer-gestures](image-viewer-gestures.md) — 이미지 크게 보기는 핀치·더블탭·휠. lookImg는 4:5 스테이지에 cover
 - [look-img-flex-min](look-img-flex-min.md) — 착장 img는 절대배치. 4:5 cover, 머리 쪽(center top). 좌우를 키워 자르지 않는다

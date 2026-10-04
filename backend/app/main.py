@@ -38,6 +38,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from pydantic import BaseModel
 from supabase import Client, create_client
 
+from .look_references import REFERENCE_REV, choose_studio_reference
+
 load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -57,10 +59,8 @@ OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 # 상품컷이면 애초에 다시 그리지 않고 배경만 지우니(studio cutout) 이 경로는 재생성이
 # 꼭 필요한 사진에만 쓰인다.
 OPENAI_IMAGE_MODEL_TEXT = os.environ.get("OPENAI_IMAGE_MODEL_TEXT", "gpt-image-2")
-# 착장·기준 인물 전용. canonical 인물에 옷만 갈아입히려면 gpt-image-2 + 단일 edit.
-OPENAI_IMAGE_MODEL_LOOK = (
-    os.environ.get("OPENAI_IMAGE_MODEL_LOOK") or OPENAI_IMAGE_MODEL_TEXT or "gpt-image-2"
-)
+# 추천 착장 전용. 상품컷·바로 보기 모델 설정과 독립적으로 선택한다.
+OPENAI_IMAGE_MODEL_LOOK = os.environ.get("OPENAI_IMAGE_MODEL_LOOK") or "gpt-image-2.5-flare"
 # 바로 보기 전신은 한 장만 만들므로 최고 품질. gpt-image-2는 input_fidelity를 받지 않는다.
 OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")
 # 투명 배경을 지원하지 않는 모델. 이 모델을 쓰면 불투명 결과를 받아 우리 컷아웃을 돌린다.
@@ -77,9 +77,8 @@ OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "medium"
 OPENAI_IMAGE_QUALITY_RETRY = os.environ.get("OPENAI_IMAGE_QUALITY_RETRY", "high")
 # 착용컷·스크린샷처럼 배경이 지저분한 소스는 medium이면 질감이 뭉개져 재시도만 유발 → 처음부터 high
 OPENAI_IMAGE_QUALITY_HARD = os.environ.get("OPENAI_IMAGE_QUALITY_HARD", "high")
-# 착장 4장을 high로 한꺼번에 돌리면 첫 장이 40~90초×대기라 컷아웃이 너무 길다.
-# medium이면 장당 ~40초이고 글자·얼굴은 룩북용으로 충분하다. 환경으로 high를 올릴 수 있다.
-OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "medium"
+# 스냅 착장은 피부·니트·데님 질감을 보존하는 high를 기본으로 쓴다.
+OPENAI_IMAGE_QUALITY_LOOK = os.environ.get("OPENAI_IMAGE_QUALITY_LOOK") or "high"
 OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")
 OPENAI_IMAGE_QUALITY_WISH = os.environ.get("OPENAI_IMAGE_QUALITY_WISH", "low")
 # UX/UI 테스트용 저비용 모드: 켜면 이미지 생성·추천 등 비싼 OpenAI 호출은 폴백.
@@ -4698,7 +4697,17 @@ def _model_look_prompt_with_reference(
     return (
         f"{reference_lines} Images after that are the outfit pieces. "
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
-        "Keep the person's identity, full body, and studio framing. "
+        "Keep the person's identity and full body. "
+        f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; "
+        "do not reset every outfit to a straight-on neutral standing pose. "
+        "Use a cool pale-gray seamless studio backdrop, soft diffuse light, a subtle contact shadow "
+        "and crisp photographic separation between the clothes and the background. "
+        "Show natural skin texture, tactile knit fibers, washed denim and believable fabric folds, "
+        "without plastic skin, beauty-filter smoothing or CGI surfaces. "
+        "Frame the person slightly smaller: head-to-sole height around 78 to 80% of the image, "
+        "with about 11% clear space above the hair and 9% below the shoes. "
+        "Do not add captions, watermarks, AI badges or reference-image branding. "
+        "Preserve logos and lettering that actually belong to the supplied outfit pieces. "
         f"Use {anatomy_reference} as the body-proportion baseline, with one deliberate adjustment: "
         "shorten the anatomical crotch-to-floor length by about 2% of the reference person's full height "
         "(roughly 4% of leg length), keeping the head, torso width, and natural joints believable. "
@@ -5164,6 +5173,30 @@ def _garment_edit_images(items: list[dict[str, Any]], start_at: int = 2) -> list
     return [f for f in got if f is not None]
 
 
+def _frame_studio_look(png_bytes: bytes) -> bytes:
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    box = _look_content_box(img)
+    if not box:
+        return png_bytes
+    x0, y0, x1, y1 = box
+    w, h = img.size
+    scale = min(1.0, h * 0.80 / max(1, y1 - y0), w * 0.86 / max(1, x1 - x0))
+    scaled = img.resize(
+        (max(1, round(w * scale)), max(1, round(h * scale))), Image.Resampling.LANCZOS,
+    )
+    left = round(w * 0.5 - (x0 + x1) * 0.5 * scale)
+    top = round(h * 0.51 - (y0 + y1) * 0.5 * scale)
+    canvas = Image.new("RGB", (w, h))
+    canvas.paste(scaled, (left, top))
+    _pad_look_edges(
+        canvas, max(0, left), max(0, top),
+        min(w, left + scaled.width), min(h, top + scaled.height),
+    )
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def generate_model_look_image(
     user_id: str, item_ids: list[str], items: list[dict[str, Any]], gender: str | None = None,
     reference_png: bytes | None = None,
@@ -5178,9 +5211,9 @@ def generate_model_look_image(
     height: str | None = None,
     weight: str | None = None,
 ) -> str | None:
-    """canonical 캐릭터에 옷장 실물을 입힌 전신 컷. 프로필 얼굴은 쓰지 않는다.
+    """성별별 스냅 레퍼런스에 옷장 실물을 입힌 전신 컷.
 
-    원본 canonical + 옷장 실물 컷을 한 번에 edit한다. 이전 착장 결과는 쓰지 않는다.
+    개인화는 얼굴 사진 + 스냅 구도 + 상품컷을 사용한다. 이전 착장 결과는 쓰지 않는다.
 
     stage(key)를 주면 실제 단계가 바뀔 때마다 부른다 — 화면 문구가 진짜 진행을
     따라가게. 단계 경계마다 걸린 시간도 로그에 남겨 어디가 느린지 재고 있다.
@@ -5209,9 +5242,9 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-id33-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}"
+        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-personal-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
-        key = f"model-id33-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}"
+        key = f"model-studio1-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
     cached = (
         supabase_admin.table("generated_images")
@@ -5233,7 +5266,14 @@ def generate_model_look_image(
         return None
     try:
         mark("prep")
-        identity = reference_png or _ensure_model_identity_png(user_id, gender)
+        studio_reference = None
+        composition = composition_reference_png
+        if composition is None and not (reference_png and not personal):
+            studio_reference = choose_studio_reference(_look_gender_key(gender), user_id)
+            if studio_reference:
+                composition = _image_bytes_to_png(studio_reference["path"].read_bytes())
+        composition = composition or reference_png or _ensure_model_identity_png(user_id, gender)
+        identity = reference_png or composition
         prompt = _model_look_prompt_with_reference(
             gender, items, wish, hem_seed,
             mood=mood, occasion=occasion, styles=styles, user_request=user_request,
@@ -5245,8 +5285,8 @@ def generate_model_look_image(
             out = identity or _model_look_board(items)
         elif identity:
             images = [_png_named(identity, "01-profile.png" if personal else "01-default-reference.png")]
-            if personal and composition_reference_png:
-                images.append(_png_named(composition_reference_png, "02-default-look-reference.png"))
+            if personal and composition:
+                images.append(_png_named(composition, "02-default-look-reference.png"))
             images.extend(_garment_edit_images(items, start_at=len(images) + 1))
             mark("dress")
             kwargs: dict[str, Any] = {
@@ -5276,6 +5316,7 @@ def generate_model_look_image(
         try:
             out = _remove_look_background_seams(out)
             out = _crop_look_to_card(out)
+            out = _frame_studio_look(out)
         except Exception as crop_exc:  # noqa: BLE001
             print(f"[model-look] crop skip: {crop_exc}", flush=True)
         mark("save")
@@ -5286,7 +5327,11 @@ def generate_model_look_image(
         ).execute()
         ms = int((time.perf_counter() - t0) * 1000)
         if not AI_TEST_MODE:
-            log_ai_usage(user_id, "model_look", look_model, {"quality": quality})
+            log_ai_usage(user_id, "model_look", look_model, {
+                "quality": quality,
+                "reference_id": studio_reference["id"] if studio_reference else None,
+                "reference_rev": REFERENCE_REV,
+            })
         print(
             f"[timing] model-look cache=0 quality={quality} identity={bool(identity)} "
             f"inputs={len(items)} duration_ms={ms} ({ms / 1000:.1f}s) {phases()}",
@@ -8817,7 +8862,7 @@ def _apply_model_looks(
     weight: str | None = None,
     explicit: bool = False,
 ) -> None:
-    """코디 목록에 착장 이미지를 채운다. 기준 인물을 먼저 고정한 뒤 옷을 입힌다.
+    """코디 목록에 성별별 스냅 구도로 착장 이미지를 채운다.
 
     한 장씩 만들고 끝나는 즉시 persist·report 한다. 4장 병렬은 레이트리밋에
     걸려 첫 장이 더 늦었다. 전부 끝날 때까지 응답을 붙잡으면 Render가 ~100초에
@@ -8873,7 +8918,7 @@ def _apply_model_looks(
         if report:
             report({"_look": {"id": oid, "lookImg": url}})
 
-    def one(outfit: dict[str, Any], identity: bytes | None) -> tuple[dict[str, Any], str | None]:
+    def one(outfit: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
         members = [by_id[i] for i in outfit["itemIds"] if i in by_id]
         wish_raw = outfit.get("wish")
         wish = _clean_wish(wish_raw) if wish_raw else None
@@ -8897,8 +8942,7 @@ def _apply_model_looks(
 
         return outfit, generate_model_look_image(
             user_id, outfit["itemIds"], members, gender,
-            reference_png=reference_png or identity, wish=_clean_wish(outfit.get("wish")),
-            composition_reference_png=identity if personal else None,
+            reference_png=reference_png, wish=_clean_wish(outfit.get("wish")),
             mood=outfit.get("mood") or "",
             occasion="daily outfit",
             styles=outfit.get("styles") or [],
@@ -8908,14 +8952,12 @@ def _apply_model_looks(
         )
 
     t0 = time.perf_counter()
-    identity = None
     try:
-        identity = _ensure_model_identity_png(user_id, gender)
         for outfit in targets:
             try:
                 if report:
                     report({"_look": {"id": outfit.get("id"), "stage": "queued"}})
-                outfit, url = one(outfit, identity)
+                outfit, url = one(outfit)
                 if url:
                     persist(outfit, url)
                 elif explicit:
@@ -8933,7 +8975,7 @@ def _apply_model_looks(
     ms = int((time.perf_counter() - t0) * 1000)
     done = sum(1 for o in targets if o.get("lookImg"))
     print(
-        f"[timing] model-looks n={len(targets)} filled={done} identity={bool(identity)} duration_ms={ms} ({ms / 1000:.1f}s)",
+        f"[timing] model-looks n={len(targets)} filled={done} duration_ms={ms} ({ms / 1000:.1f}s)",
         flush=True,
     )
 

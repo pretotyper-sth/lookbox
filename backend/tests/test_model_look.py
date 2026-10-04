@@ -1,4 +1,4 @@
-"""AI 착장은 canonical 인물 + 옷장 실물. 배경은 레퍼런스 스튜디오를 그대로 쓴다."""
+"""AI 착장은 스냅 구도 + 옷장 실물이며 전신 여백을 확보한다."""
 
 import ast
 import io
@@ -30,6 +30,7 @@ FNS = (
     '_fit_look_to_card',
     '_pad_look_edges',
     '_crop_look_to_card',
+    '_frame_studio_look',
     '_bottom_hem_note',
 )
 CONSTS = (
@@ -88,7 +89,7 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("남자 코디 레퍼런스.png", src)
         self.assertIn("여자 코디 레퍼런스.png", src)
         self.assertIn("model-id-v11-", src)
-        self.assertIn("model-id33-", src)
+        self.assertIn("model-studio1-", src)
         self.assertIn("look-identity", src)
         self.assertIn("01-default-reference.png", src)
         self.assertIn("02-default-look-reference.png", src)
@@ -320,13 +321,14 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertNotIn("face_bytes", src)
         self.assertIn('_look_gender_key', src)
         self.assertIn("OPENAI_IMAGE_QUALITY_LOOK", src)
-        self.assertIn("model-id33-", src)
+        self.assertIn("model-studio1-", src)
         self.assertNotIn("_smooth_look_backdrop", src)
         self.assertIn("OPENAI_IMAGE_MODEL_LOOK", src)
         self.assertNotIn("_flatten_look_plate", src)
         self.assertNotIn("_normalize_look_background", src)
         self.assertIn("_remove_look_background_seams(out)", src)
         self.assertIn("_crop_look_to_card(out)", src)
+        self.assertIn("_frame_studio_look(out)", src)
         looks_src = MAIN_PATH.read_text()
         start = looks_src.index("def live_coordinate_looks")
         end = looks_src.index("\ndef ", start + 1)
@@ -339,6 +341,33 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("LOOK_TEST_LIMIT", apply_src)
         self.assertIn("sequential skip", apply_src)
         self.assertNotIn("ThreadPoolExecutor", apply_src)
+
+
+class StudioLookFramingTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ns = load()
+
+    def test_large_person_gets_head_and_foot_room_without_stretching(self):
+        image = Image.open(io.BytesIO(studio_look(160, 200, (52, 4, 108, 196)))).convert("RGB")
+        before = self.ns['_look_content_box'](image)
+        output = self.ns['_frame_studio_look'](studio_look(160, 200, (52, 4, 108, 196)))
+        framed = Image.open(io.BytesIO(output)).convert("RGB")
+        after = self.ns['_look_content_box'](framed)
+        self.assertEqual(framed.size, image.size)
+        self.assertGreaterEqual(after[1], 20)
+        self.assertLessEqual(after[3], 184)
+        self.assertAlmostEqual(
+            (before[2] - before[0]) / (before[3] - before[1]),
+            (after[2] - after[0]) / (after[3] - after[1]), delta=0.025,
+        )
+
+    def test_small_person_is_not_enlarged(self):
+        image = studio_look(160, 200, (56, 36, 104, 164))
+        before = self.ns['_look_content_box'](Image.open(io.BytesIO(image)).convert("RGB"))
+        output = self.ns['_frame_studio_look'](image)
+        after = self.ns['_look_content_box'](Image.open(io.BytesIO(output)).convert("RGB"))
+        self.assertEqual(after[3] - after[1], before[3] - before[1])
 
 
 if __name__ == "__main__":
