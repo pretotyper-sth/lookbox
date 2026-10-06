@@ -56,6 +56,8 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [chrome-extension-publish](chrome-extension-publish.md) — 웹스토어 게시자명·연락처는 공개. RealCloset 전용 Google 계정, 등록비·2FA·Privacy practices 필요
 - [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
 
+- [stale-vite-chunk](stale-vite-chunk.md) — 배포 후 열린 탭의 이전 해시 청크가 404면 Vite preload 오류에서 탭당 한 번 새로고침
+
 ## Gotchas
 - [recent-tag-field-scroll](recent-tag-field-scroll.md) — 구매처 칩 토글이 입력칸을 붙였다 떼며 시트 높이를 바꾼다; scrollTop/gap을 잡아 `useLayoutEffect`에서 되돌림
 - [chiprow-sheet-scroll](chiprow-sheet-scroll.md) — `.lb-chiprow`의 pan-x가 상세 시트 세로 스크롤을 가로챘다. pan-x pan-y + 시트 fixed

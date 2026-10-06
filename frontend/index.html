@@ -12,6 +12,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.addEventListener('vite:preloadError', (event) => {
+        event.preventDefault()
+        try {
+          const key = 'lb-vite-preload-reload'
+          const lastReload = Number(sessionStorage.getItem(key) || 0)
+          if (Date.now() - lastReload > 30000) {
+            sessionStorage.setItem(key, String(Date.now()))
+            location.reload()
+          }
+        } catch {}
+      })
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
