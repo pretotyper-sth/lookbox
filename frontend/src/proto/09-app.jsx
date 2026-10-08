@@ -3,7 +3,7 @@ import { loadCurrentWeather, validWeather } from '../weather.js';
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, ClosetJobStatus, DecisionScreen, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, FeedScreen, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -36,7 +36,7 @@ function param(name) {
   try { return new URLSearchParams(location.search).get(name); } catch (e) { return null; }
 }
 
-const APP_TABS = ['wardrobe', 'lookbook', 'today', 'mypage'];
+const APP_TABS = ['decision', 'wardrobe', 'lookbook', 'today', 'mypage', ...(FeedScreen ? ['feed'] : [])];
 function readTabFromUrl() {
   const t = param('tab');
   return APP_TABS.includes(t) ? t : null;
@@ -231,6 +231,10 @@ function pickedOutfitGuide(picked) {
   return issues.join('\n\n');
 }
 window.pickedOutfitGuide = pickedOutfitGuide;
+function readPickedLookSettings(owner) {
+  try { return JSON.parse(localStorage.getItem(`lb_picked_model_look_${owner || 'guest'}`)) || { enabled: false, confirmed: false }; }
+  catch { return { enabled: false, confirmed: false }; }
+}
 function coordinateLookSettings(prefs) {
   return prefs.modelLook ? {
     model_look: true,
@@ -907,7 +911,7 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   // ---- initial state (URL params let the canvas open a specific state) ----
-  const pScreen = param('screen');          // wardrobe|lookbook|results|detail|add
+  const pScreen = param('screen');          // decision|wardrobe|lookbook|results|detail|add
   const pWs = param('ws');                  // empty|partial|full
   const pSaved = param('saved');            // empty|filled
   const pLoading = param('loading') === '1';
@@ -915,17 +919,22 @@ function App() {
   const isShowcase = !!pScreen;             // URL drives state → ignore tweak reseeds
 
   const initialTab = (
-    pScreen === 'lookbook' || pScreen === 'detail' ? 'lookbook'
+    pScreen === 'decision' ? 'decision'
+    : pScreen === 'wardrobe' ? 'wardrobe'
+    : pScreen === 'lookbook' || pScreen === 'detail' ? 'lookbook'
+    : pScreen === 'feed' && FeedScreen ? 'feed'
     : pScreen === 'mypage' ? 'mypage'
     : pScreen === 'today' ? 'today'
-    : pScreen ? 'wardrobe'   // 그 외 쇼케이스(wardrobe/results/add)
+    : pScreen ? 'decision'   // 그 외 쇼케이스(results/add)
     : (readTabFromUrl() || 'wardrobe')  // 실서비스: URL ?tab= 유지
   );
   const [tab, setTab] = useState(initialTab);
   // 탭 전환 시 언마운트하면 이미지가 다시 디코드되며 깜빡임 → 한 번 연 탭은 유지
   const [mountedTabs, setMountedTabs] = useState(() => ({
+    decision: initialTab === 'decision',
     wardrobe: initialTab === 'wardrobe',
     lookbook: initialTab === 'lookbook',
+    feed: initialTab === 'feed',
     today: initialTab === 'today',
     mypage: initialTab === 'mypage',
   }));
@@ -934,13 +943,19 @@ function App() {
   }, [tab]);
   const [view, setView] = useState(pScreen === 'results' ? 'results' : pScreen === 'detail' ? 'detail' : null);
   const [items, setItems] = useState(() => {
+    if(Array.isArray(window.LB_DEV_WARDROBE_ITEMS))return window.LB_DEV_WARDROBE_ITEMS.map(liveRememberItem);
     if (!isShowcase) { const c = readWardrobeCache(); if (c) return c.owned.map(liveRememberItem); }
     return seedItems(pWs || TWEAK_DEFAULTS.wardrobeState);
   });
+  useEffect(() => {
+    window.LB_DEV_ITEM_COUNT=items.length;
+    window.dispatchEvent(new Event('lb-wardrobe-count'));
+  }, [items.length]);
   const [archived, setArchived] = useState(() => {
     if (!isShowcase) { const c = readWardrobeCache(); if (c) return c.archived.map(liveRememberItem); }
     return [];
   });
+  const [considering, setConsidering] = useState([]);
   // true only until the first live wardrobe fetch settles AND there was no cache
   // to paint — lets us show a skeleton instead of flashing the empty state.
   const [wardrobeLoading, setWardrobeLoading] = useState(() => !isShowcase && !readWardrobeCache());
@@ -981,12 +996,6 @@ function App() {
       DAILY_CACHE_LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch (e) { /* noop */ }
   }, []);
-  // 처음 안내 팝업은 계정에 한 번만 뜬다. 기기 플래그만 쓰면 다른 기기에서 로그인할 때
-  // 옷장이 이미 가득한데도 '옷을 먼저 추가해 주세요'가 다시 뜬다.
-  const [tutorialSeen, setTutorialSeen] = useState(() => {
-    if (isShowcase) return true;
-    try { return localStorage.getItem('lb_tutorial_done') === '1'; } catch (e) { return false; }
-  });
   const [toast, setToast] = useState(null);
   const toastT = useRef(0);
 
@@ -1389,13 +1398,19 @@ function App() {
     if (wide) { setTryOnDesktopHint(true); return; }
     setTryOnCamera(true);
   };
-  const saveAccount = (draft) => { const np = { ...prefs, ...draft }; setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
+  const saveAccount = (draft) => { const np = { ...prefs, ...draft };
+    if (prefs.personalModelLook && ['avatar', 'height', 'weight'].some(key => np[key] !== prefs[key])) {
+      (LB_DATA.DAILY || []).forEach(o => { if (o) delete o.lookImg; });
+      writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
+      bumpDaily();
+    }
+    setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => {
     prefsSynced.current = false;   // 다음 로그인에서 계정 설정을 읽기 전까지 계정에 쓰지 않는다
     if (window.LB_AUTH) window.LB_AUTH.signOut();
     try { localStorage.setItem('lb_onboarded', '0'); } catch (e) { /* noop */ }
     setAuthUid(null);
-    setItems([]); setArchived([]);
+    setItems([]); setArchived([]); setConsidering([]);
     setBilling(null);
     setOnboarded(false); setPhase('landing'); setTab('wardrobe');
   };
@@ -1574,8 +1589,9 @@ function App() {
       (prepend ? [...normalized, ...arr] : [...arr, ...normalized]).forEach((it) => { byId[it.id] = it; });
       return Object.values(byId);
     });
+    if (prepend && window.RC_SYNC_CLOSET_ITEMS) window.RC_SYNC_CLOSET_ITEMS(normalized,prefs).catch(e=>showToast(e.message));
     return normalized;
-  }, []);
+  }, [showToast,prefs]);
 
   // 저장·해제를 누른 뒤에 뒤늦게 도착한 응답이 화면을 되돌리지 않게 하는 카운터.
   const outfitMutRef = useRef(0);
@@ -1654,14 +1670,17 @@ function App() {
     reloadBilling();
 
     const wardrobeP = (async () => {
-      const [ownedData, archData] = await Promise.all([
+      const [ownedData, archData, consideringData] = await Promise.all([
         liveJSON('/api/live/wardrobe'),
         liveJSON('/api/live/wardrobe?status=archived').catch(() => ({ items: [] })),
+        liveJSON('/api/live/wardrobe?status=considering').catch(() => ({ items: [] })),
       ]);
       const liveItems = (ownedData.items || []).map(liveRememberItem);
       const archItems = (archData.items || []).map(liveRememberItem);
+      const consideringItems = (consideringData.items || []).map(liveRememberItem);
       setItems(liveItems);
       setArchived(archItems);
+      setConsidering(consideringItems);
       syncAllFromWardrobe(liveItems, archItems);
       const removed = pruneDailyAgainstOwned(liveItems);
       if (LB_DATA.DAILY.length) setDailyAllowed(true);
@@ -1839,7 +1858,7 @@ function App() {
   const goHome = () => {
     try {
       const u = new URL(location.href);
-      u.searchParams.set('tab', 'wardrobe');
+      u.searchParams.set('tab', 'decision');
       u.hash = '';
       location.replace(u.pathname + u.search);
     } catch (e) { location.reload(); }
@@ -1859,21 +1878,6 @@ function App() {
   const comboProgress = Math.min(comboTops, 2) + Math.min(comboBottoms, 2);
   const comboNeed = [comboTopsNeed ? `상의 ${comboTopsNeed}개` : '', comboBottomsNeed ? `하의 ${comboBottomsNeed}개` : ''].filter(Boolean).join(', ');
   const comboGate = () => startCombo(); // 옷 부족해도 시트 오픈 — '바로 보기'는 옷장 없이도 가능
-  // 계정 설정에 남긴다(다른 기기에서도 안 뜨게). 로컬은 계정 응답을 기다리는 동안의 폴백.
-  const finishTutorial = () => {
-    try { localStorage.setItem('lb_tutorial_done', '1'); } catch (e) { /* noop */ }
-    setTutorialSeen(true);
-    if (!prefs.tutorialDone) {
-      const np = { ...prefs, tutorialDone: true };
-      setPrefs(np);
-      persistPrefs(np);
-    }
-  };
-  // 계정에 이미 봤다고 남아 있거나, 옷장에 옷이 있으면 보여줄 이유가 없다.
-  const tutorialDone = tutorialSeen || !!prefs.tutorialDone || items.length > 0 || !wardrobeLoaded;
-  const tutorialAddWardrobe = () => { finishTutorial(); go('wardrobe'); openAdd('wardrobe'); };
-  const tutorialTryCombo = () => { finishTutorial(); openAdd('anchor'); };
-
   const preferredDailyStyle = (prefs.styles && prefs.styles[0]) || 'dandy';
   const preferredDailyStyleName = ((LB_DATA.STYLES || []).find((s) => s.id === preferredDailyStyle) || {}).name || preferredDailyStyle;
   const preferredStyles = (prefs.styles && prefs.styles.length)
@@ -1991,7 +1995,7 @@ function App() {
           face_data_url: prefs.personalModelLook ? (prefs.avatar || '') : '',
           height: prefs.personalModelLook ? (prefs.height || '') : '',
           weight: prefs.personalModelLook ? (prefs.weight || '') : '',
-          explicit: force,
+          explicit: force || !!prefs.personalModelLook,
           outfits: targets.map((o) => ({
             id: o.id,
             item_ids: o.itemIds || [],
@@ -2043,6 +2047,15 @@ function App() {
     applyModelLooks(pending).catch((e) => showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'));
   }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
+  const [pickedLookSettings, setPickedLookSettings] = useState(() => readPickedLookSettings(authUid));
+  useEffect(() => { if (import.meta.env.DEV) setPickedLookSettings(readPickedLookSettings(authUid)); }, [authUid]);
+  const setPickedModelLook = (on, confirmed = false) => {
+    if (!import.meta.env.DEV) return;
+    const next = { enabled: !!on, confirmed: pickedLookSettings.confirmed || confirmed };
+    if (next.enabled && !next.confirmed) return;
+    localStorage.setItem(`lb_picked_model_look_${authUid || 'guest'}`, JSON.stringify(next));
+    setPickedLookSettings(next);
+  };
   const setModelLook = (on) => {
     const np = { ...prefs, modelLook: !!on, ...(on ? { modelLookRevision: '31' } : {}) };
     setPrefs(np);
@@ -2066,10 +2079,11 @@ function App() {
   };
 
   useEffect(() => {
-    if (!prefs.modelLook || prefs.modelLookRevision === '31') return;
+    const revision = prefs.personalModelLook ? 'personal-body2' : '31';
+    if (!prefs.modelLook || prefs.modelLookRevision === revision) return;
     (LB_DATA.DAILY || []).forEach((outfit) => { if (outfit) delete outfit.lookImg; });
     writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-    const np = { ...prefs, modelLookRevision: '31' };
+    const np = { ...prefs, modelLookRevision: revision };
     setPrefs(np); persistPrefs(np); bumpDaily();
   }, [prefs, dailyStyle, items, bumpDaily]);
 
@@ -2221,13 +2235,6 @@ function App() {
           revealedAddedCount += added.length;
           cacheDaily();
           bumpDaily();
-          // 첫 일반 상품컷이 보이면 착장 요청을 즉시 시작해, 오른쪽 제안 아이템 생성과 겹친다.
-          if (prefs.modelLook) {
-            const firstReady = (LB_DATA.DAILY || []).find((outfit) => (
-              outfit && !outfit.lookImg && !outfitWishPending(outfit)
-            ));
-            if (firstReady) applyModelLooks([firstReady]).catch(() => {});
-          }
         }
         if (dailyRevealQueue.length) {
           dailyRevealTimer = setTimeout(revealNextDaily, DAILY_REVEAL_INTERVAL_MS);
@@ -2371,7 +2378,7 @@ function App() {
   const confirmAdd = async (mode, details) => {
     closeAdd();
     if (mode === 'anchor') {
-      setTab('wardrobe'); if (!isShowcase) persistTab('wardrobe'); setView('results'); setLoading(true);
+      setTab('decision'); if (!isShowcase) persistTab('decision'); setView('results'); setLoading(true);
       try {
         let anchorItem = details?.anchorItem || null;
         if (!anchorItem?.serverId) {
@@ -2381,6 +2388,7 @@ function App() {
         if (!anchorItem) throw new Error('고민 중인 옷을 인식하지 못했어요');
         Object.assign(LB_DATA.ANCHOR, anchorItem, { inWardrobe: false, isAnchor: true });
         liveRememberItem(LB_DATA.ANCHOR);
+        setConsidering((list) => [{ ...LB_DATA.ANCHOR, status: 'considering' }, ...list.filter((it) => it.id !== LB_DATA.ANCHOR.id)]);
         const payload = await liveJSON('/api/live/coordinate', {
           method: 'POST',
           body: JSON.stringify({
@@ -2595,7 +2603,6 @@ function App() {
     return data && data.item ? data.item : null;
   };
 
-  useEscapeClose(!tutorialDone && onboarded, finishTutorial);
   useEscapeClose(!!unsaveTarget, () => setUnsaveTarget(null));
   useEscapeClose(editPrefs, () => setEditPrefs(false));
 
@@ -2607,6 +2614,54 @@ function App() {
     const list = Array.isArray(ids) ? ids : [ids];
     if (!list.length) return;
     liveJSON('/api/live/items/status', { method: 'POST', body: JSON.stringify({ ids: list, status }) }).catch(() => {});
+    if(status==='delete'&&window.RC_SYNC_CLOSET_ITEMS)window.RC_SYNC_CLOSET_ITEMS(list.map(id=>({id,public:false})),prefs).catch(e=>showToast(e.message));
+  };
+  const reviewConsideration = async (item) => {
+    if (!item || loading) return;
+    setTab('decision'); if (!isShowcase) persistTab('decision'); setView('results'); setLoading(true);
+    Object.assign(LB_DATA.ANCHOR, item, { inWardrobe: false, isAnchor: true });
+    try {
+      const payload = await liveJSON('/api/live/coordinate', {
+        method: 'POST',
+        body: JSON.stringify({
+          anchor_id: item.serverId || item.id,
+          max_combos: 4,
+          style: preferredDailyStyle,
+          styles: preferredStyles,
+          ...coordProfile(prefs),
+        }),
+      });
+      stampOutfitStyle(payload.outfits);
+      liveApplyPayload({ ...payload, anchor: LB_DATA.ANCHOR }, 'outfits');
+      setComboRev((n) => n + 1);
+    } catch (e) {
+      showToast(e.message || '검토를 다시 열지 못했어요');
+    } finally {
+      setLoading(false);
+    }
+  };
+  const decidePurchase = (decision) => {
+    const anchor = LB_DATA.ANCHOR;
+    if (!anchor || !anchor.id) return;
+    const id = anchor.serverId || anchor.id;
+    if (decision === 'buy') {
+      const purchased = { ...anchor, status: 'owned', isAnchor: false };
+      const nextOwned = [purchased, ...items.filter((it) => it.id !== purchased.id)];
+      setItems(nextOwned);
+      setConsidering((list) => list.filter((it) => it.id !== anchor.id));
+      syncDailyAfterWardrobeChange(nextOwned);
+      setItemStatus(id, 'owned');
+      showToast('옷장에 담고 구매로 기록했어요', 'check');
+    } else if (decision === 'hold') {
+      setConsidering((list) => [{ ...anchor, status: 'considering' }, ...list.filter((it) => it.id !== anchor.id)]);
+      setItemStatus(id, 'considering');
+      showToast('보류함에 남겨 뒀어요', 'bookmark');
+    } else {
+      setConsidering((list) => list.filter((it) => it.id !== anchor.id));
+      setItemStatus(id, 'delete');
+      showToast('이번 구매 후보에서 뺐어요');
+    }
+    go('decision');
   };
   const syncDailyAfterWardrobeChange = (nextOwned, nextArchived) => {
     syncAllFromWardrobe(nextOwned, nextArchived != null ? nextArchived : archived);
@@ -2718,11 +2773,13 @@ function App() {
       seasons: draft.seasons || [],
       price: draft.price || '',
       material: draft.material || '',
+      ...(typeof draft.public==='boolean'?{public:draft.public}:{}),
     };
     setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
     setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...patch } : it));
     closeItem();
     showToast('상세 정보를 저장했어요', 'check');
+    const item=items.find(x=>x.id===itemId)||archived.find(x=>x.id===itemId);
     try {
       const res = await liveJSON('/api/live/items/' + itemId, {
         method: 'PATCH',
@@ -2730,20 +2787,34 @@ function App() {
       });
       if (res && res.item) {
         liveRememberItem(res.item);
+        if(item&&window.RC_SYNC_CLOSET_ITEMS)await window.RC_SYNC_CLOSET_ITEMS([{...item,...res.item}],prefs);
         setItems((arr) => arr.map((it) => it.id === itemId ? { ...it, ...res.item } : it));
         setArchived((arr) => arr.map((it) => it.id === itemId ? { ...it, ...res.item } : it));
       }
-    } catch (e) { /* optimistic local save kept */ }
+    } catch (e) { if(typeof draft.public==='boolean'){setItems(list=>list.map(x=>x.id===itemId?{...x,public:item?.public===true}:x));showToast('공개 범위를 저장하지 못했어요. 다시 시도해 주세요.');} }
   };
 
   // 옷장에서 고른 옷으로 코디 추천 — 탭을 바꾸지 않고 모달로 보여준다. 옷장에서
   // 고르던 흐름을 끊지 않으려면 화면을 갈아타지 않는 편이 낫다.
   const [pickSheet, setPickSheet] = useState(null);
+  const [pickedConfirm, setPickedConfirm] = useState(null);
+  const [skipPickedConfirm, setSkipPickedConfirm] = useState(false);
+  const startPickedOutfits = (ids, opts = {}) => {
+    if (import.meta.env.DEV && localStorage.getItem(`lb_picked_coord_confirm_${authUid || 'guest'}`) !== 'skip') {
+      setSkipPickedConfirm(false);
+      setPickedConfirm({ ids: ids.slice(), opts });
+      return;
+    }
+    requestPickedOutfits(ids, opts);
+  };
+
   const pickJobs = useRef(new Map());
   const requestPickedOutfits = async (ids, opts = {}) => {
     const picked = [...new Set((ids || []).map(String).filter(Boolean))];
     if (!picked.length) return;
-    const jobKey = String(authUid || '') + ':' + picked.slice().sort().join('|');
+    const requestedCount = import.meta.env.DEV ? dailyCount : (opts.append ? 2 : dailyCount);
+    const settingsKey = import.meta.env.DEV ? JSON.stringify({ revision: prefs.personalModelLook ? 'personal-body2' : 'gender-reviewed-v2', count: dailyCount, profile: coordProfile(prefs), styles: preferredStyles, style: preferredDailyStyle, ai: !!prefs.modelLook && pickedLookSettings.enabled, personal: !!prefs.personalModelLook, avatar: prefs.personalModelLook ? prefs.avatar : '', wardrobe: wardrobeSigOf(items) }) : prefs.personalModelLook ? JSON.stringify({ revision: 'personal-body2', profile: coordProfile(prefs), avatar: prefs.avatar || '' }) : '';
+    const jobKey = String(authUid || '') + ':' + picked.slice().sort().join('|') + settingsKey;
     const previous = pickJobs.current.get(jobKey);
     const inlineItemId = opts.inlineItemId || (opts.append && pickSheet && pickSheet.inlineItemId) || '';
     if (previous && (previous.loading || (!opts.append && !previous.error))) {
@@ -2752,7 +2823,7 @@ function App() {
       return;
     }
     const prev = opts.append && previous ? previous.outfits : [];
-    const job = { jobKey, ids: picked, inlineItemId, loading: true, targetCount: prev.length + (opts.append ? 2 : dailyCount), outfits: prev.slice(), error: '' };
+    const job = { jobKey, ids: picked, inlineItemId, loading: true, targetCount: prev.length + requestedCount, requestedCount, outfits: prev.slice(), error: '' };
     pickJobs.current.set(jobKey, job);
     setPickSheet({ ...job });
     const publish = () => setPickSheet(cur => cur && cur.jobKey === jobKey ? { ...job, outfits: job.outfits.slice() } : cur);
@@ -2798,13 +2869,13 @@ function App() {
         },
         body: JSON.stringify({
           include_item_ids: picked,
-          max_combos: opts.append ? 2 : dailyCount,
+          max_combos: requestedCount,
           style: preferredDailyStyle,
           styles: preferredStyles,
           wish_combos: opts.append ? 0 : Math.min(wishCount, dailyCount),
           exclude_item_ids: prev.map(o => o.itemIds || []),
           ...coordProfile(prefs),
-          ...coordinateLookSettings(prefs),
+          ...coordinateLookSettings(import.meta.env.DEV ? { ...prefs, modelLook: !!prefs.modelLook && pickedLookSettings.enabled } : prefs),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);
@@ -2845,7 +2916,7 @@ function App() {
     }
   };
 
-  const importOrders = async (list, onProgress) => {
+  const importOrders = async (list, onProgress, publicVisibility=true) => {
     const queue = (list || []).filter((it) => it && it.url);
     const done = [];
     const failed = [];
@@ -2861,7 +2932,7 @@ function App() {
           if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'dup', reason: res.reason });
           continue;
         }
-        const got = (res.items || []).map(liveRememberItem);
+        const got=await Promise.all((res.items||[]).map(async item=>{const saved=await liveJSON('/api/live/items/'+item.id,{method:'PATCH',body:JSON.stringify({public:publicVisibility})});return liveRememberItem({...item,...saved.item,public:publicVisibility});}));
         if (got.length) putLiveItems(got, true);
         done.push(...got);
         if (onProgress) onProgress({ index: i, total: queue.length, item: it, state: 'ok', items: got });
@@ -2939,6 +3010,7 @@ function App() {
         seasons: it.seasons || [],
         price: it.price || '',
         material: it.material || '',
+        public: it.public!==false,
       };
       try {
         const res = await liveJSON('/api/live/items/' + id, {
@@ -2953,8 +3025,29 @@ function App() {
     showToast(finalList.length + '개 담았어요', 'check');
   };
 
+  const setItemVisibility=async(item,published)=>{
+    const data=await liveJSON('/api/live/items/'+(item.serverId||item.id),{method:'PATCH',body:JSON.stringify({public:published})});
+    const next={...item,...data.item,public:published};
+    setItems(list=>list.map(x=>x.id===item.id?next:x));
+    liveRememberItem(next);
+    if(window.RC_SYNC_CLOSET_ITEMS)await window.RC_SYNC_CLOSET_ITEMS([next],prefs);
+  };
+  const refreshStudioLookbook = async () => {
+    const data=await liveJSON('/api/live/outfits?saved=1');
+    applyOutfitRecords(data);
+    paintSavedLooks(data.outfits||[],outfitMutRef.current);
+    setLookbookLoading(false);
+  };
+  const reloadImportedWardrobe = async () => {
+    const data = await liveJSON('/api/live/wardrobe');
+    const owned = (data.items || []).map(liveRememberItem);
+    setItems(owned);
+    syncAllFromWardrobe(owned, archived);
+    writeWardrobeCache(authUid, owned, archived);
+  };
   const ctx = {
-    wide, items, archived, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
+    authUid,
+    wide, items, archived, considering, savedLooks, saved: savedLooks, savedOutfitIds, anchor: LB_DATA.ANCHOR, loading,
     moreLoading, loadMoreCombos, comboRev,
     addSheet, detailLook: detailLook || LB_DATA.SAVED[0], addedItemIds, tab,
     detailLooks: (detailList && detailList.looks) || savedLooks,
@@ -2971,6 +3064,7 @@ function App() {
     dailyAllowed, dailyLoading, dailyStyle, setDailyStyle, requestDailyOutfits,
     dailyEnabled, setDailyEnabled,
     modelLook: !!prefs.modelLook, setModelLook,
+    pickedModelLook: pickedLookSettings.enabled, pickedModelLookConfirmed: pickedLookSettings.confirmed, setPickedModelLook,
     applyModelLooks: (list) => applyModelLooks(list, true).catch((e) => { showToast(e.message || 'AI 착장 이미지를 만들지 못했어요'); return 0; }),
     personalModelLook: !!prefs.personalModelLook, onTogglePersonalModelLook, personalSetupOpen,
     closePersonalSetup: () => setPersonalSetupOpen(false), savePersonalModelLook,
@@ -2978,14 +3072,14 @@ function App() {
     dailyTick,
     preferredDailyStyle, preferredDailyStyleName, preferredStyleLabel,
     wornToday, wearToday, getDayRecord: readDailyRecord,
-    addItemsBatch, discardLiveItems, liveImportSource, showToast,
-    billing, reloadBilling, refreshLive,
-    requestPickedOutfits, importOrders, checkDuplicates, liveCollectOrders, liveOrderInput, liveOrderCancel,
+    addItemsBatch, discardLiveItems, liveImportSource, showToast, setItemVisibility,
+    billing, reloadBilling, refreshLive, reloadImportedWardrobe, refreshStudioLookbook,
+    requestPickedOutfits: startPickedOutfits, importOrders, checkDuplicates, liveCollectOrders, liveOrderInput, liveOrderCancel,
     knownSourceUrls: [...items, ...archived]
       .map((it) => normalizeProductUrl(it && it.sourceUrl))
       .filter(Boolean),
-    openAdd, closeAdd, confirmAdd, startCombo, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
-    openItem, openImageViewer, openOutfitViewer, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
+    openAdd, closeAdd, confirmAdd, startCombo, reviewConsideration, decidePurchase, saveOutfit, toggleSaveOutfit, requestUnsave, bulkUnsave, renameSavedLook, createManualLook, openDetail, addToWardrobe, back,
+    openItem, openImageViewer, openOutfitViewer, applyModelLooks, requestRemove, bulkArchive, bulkRestore, bulkDelete, openPrefs, openAccount, setAvatar, logout, prefs, go, goHome,
     openTryOn, openTryOnSetup, openTryOnTab, startTryOn, setTryOnFrame, makeTryOnBody, formatTryOnErr, tryOnMaking, tryOnMakingSubject, tryOnProgress, tryOnErrors,
     setTryOnActive, saveTryOnOther,
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
@@ -3037,9 +3131,12 @@ function App() {
 
   const mainTabs = (
     <>
+      {ClosetJobStatus && <ClosetJobStatus ctx={ctx} />}
+      {tabPane('decision', <DecisionScreen ctx={ctx} />)}
       {tabPane('wardrobe', <WardrobeScreen ctx={ctx} />)}
       {tabPane('today', <TodayScreen ctx={ctx} />)}
       {tabPane('lookbook', <LookbookScreen ctx={ctx} />)}
+      {FeedScreen && tabPane('feed', <FeedScreen ctx={ctx} />)}
       {tabPane('mypage', <MyPageScreen ctx={ctx} />)}
     </>
   );
@@ -3056,6 +3153,7 @@ function App() {
             <button className={'lb-navitem' + (tab === 'today' && !focused ? ' on' : '')} onClick={() => go('today')}>
               <Icon name="sparkle" size={20} fill={tab === 'today' && !focused ? 'currentColor' : 'none'} stroke={tab === 'today' && !focused ? 0 : 1.7} /> 오늘의 추천 코디
             </button>
+            {FeedScreen && <button className={'lb-navitem' + (tab === 'feed' && !focused ? ' on' : '')} onClick={() => go('feed')}><Icon name="feed" size={20} fill={tab === 'feed' && !focused ? 'currentColor' : 'none'} stroke={tab === 'feed' && !focused ? 0 : 1.7} /> 피드</button>}
             <button className={'lb-navitem' + (tab === 'lookbook' && !focused ? ' on' : '')} onClick={() => go('lookbook')}>
               <Icon name="bookmark" size={20} fill={tab === 'lookbook' && !focused ? 'currentColor' : 'none'} stroke={tab === 'lookbook' && !focused ? 0 : 1.7} /> 룩북
             </button>
@@ -3064,7 +3162,7 @@ function App() {
             </button>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Btn full icon="sparkle" variant={comboReady ? 'primary' : 'soft'} onClick={comboGate}>구매 전 도움받기</Btn>
+              <Btn full icon="sparkle" variant="primary" onClick={() => openAdd('anchor', { initialSourceTab: 'url' })}>구매 전 도움받기</Btn>
               <Btn full variant="soft" icon="plus" onClick={() => openAdd('wardrobe')}>아이템 추가</Btn>
             </div>
           </aside>
@@ -3089,38 +3187,6 @@ function App() {
           </div>
           {!focused && <BottomNav tab={tab} go={go} />}
         </>
-      )}
-
-      {!tutorialDone && onboarded && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, background: 'rgba(30,27,21,0.42)' }}>
-          <div style={{ width: '100%', maxWidth: 420, background: 'var(--surface)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--pop-shadow)', padding: '24px 22px 22px' }}>
-            <Eyebrow>처음 시작하기</Eyebrow>
-            <h2 style={{ margin: '9px 0 0', fontSize: 22, lineHeight: 1.25, fontWeight: 800, letterSpacing: '-0.04em' }}>옷을 먼저 추가해 주세요</h2>
-            {/* JSX는 소스의 줄바꿈을 공백으로 합쳐서 한 문단으로 흘린다 — 두 줄로
-                보이게 하려면 br로 고정해야 한다. */}
-            <p style={{ margin: '9px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)' }}>
-              옷장에 있는 옷으로만 조합을 만들어요.<br />
-              몇 개 모이면 추천이 정확해져요.
-            </p>
-            <div style={{ display: 'grid', gap: 0, marginTop: 18 }}>
-              {[
-                ['1', '사진으로 아이템 추가', '사진을 올리면 상의·하의·신발로 나눠 담아요'],
-                ['2', '옷장 확인', '카테고리, 색상 등 필요한 정보만 고쳐요'],
-                ['3', '추천 사용', '옷이 모이면 구매 전 조합과 오늘 코디가 열려요'],
-              ].map(([n, title, desc]) => (
-                <div key={n} style={{ display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 12, alignItems: 'start', padding: '10px 0', borderTop: n === '1' ? 'none' : '1px solid color-mix(in srgb, var(--line) 72%, transparent)' }}>
-                  <span className="tnum" style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', fontSize: 11.5, fontWeight: 800, marginTop: 1 }}>{n}</span>
-                  <span style={{ minWidth: 0 }}><b style={{ display: 'block', fontSize: 14.5, lineHeight: 1.25 }}>{title}</b><span style={{ display: 'block', marginTop: 4, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.38 }}>{desc}</span></span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'grid', gap: 8, marginTop: 20 }}>
-              <Btn full size="lg" icon="plus" onClick={tutorialAddWardrobe}>아이템 추가하기</Btn>
-              {comboReady && <Btn full variant="soft" icon="sparkle" onClick={tutorialTryCombo}>구매 전 조합 보기</Btn>}
-              <Btn full variant="ghost" onClick={finishTutorial}>나중에 할게요</Btn>
-            </div>
-          </div>
-        </div>
       )}
 
       <AddSheet ctx={ctx} />
@@ -3157,7 +3223,7 @@ function App() {
         onRestore={restoreItem}
         onDelete={deleteItem}
         onReextract={requestReextract}
-        onRecommend={item => requestPickedOutfits([item.id], { inlineItemId: item.id })}
+        onRecommend={item => startPickedOutfits([item.id], { inlineItemId: item.id })}
         recommendation={pickSheet && pickSheet.inlineItemId === (removeSheet.item && removeSheet.item.id) ? <PickedOutfitsModal embedded state={pickSheet} wide={false} onClose={closePickSheet} onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })} savedOutfitIds={savedOutfitIds} onSave={toggleSaveOutfit} onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))} onOpen={look => { const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId]; if (outfit) openOutfitViewer(window.LOOK_IMAGE_MODES[outfit.id] === false ? { ...outfit, lookImg: null } : outfit, (outfit.itemIds || []).map(id => LB_DATA.ALL[id]).filter(Boolean)); }} /> : null}
         onExpand={() => {
           const t = removeSheet.item;
@@ -3248,6 +3314,24 @@ function App() {
         </div>
       )}
 
+      {import.meta.env.DEV && <BottomSheet open={!!pickedConfirm} centered desktopMaxW={420} onClose={() => setPickedConfirm(null)}>
+        <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
+          <h2 style={{ margin: '0 0 16px', fontSize: 18, whiteSpace: 'nowrap' }}>코디 {dailyCount}개를 만들까요?</h2>
+          <p style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>새 추천은 크레딧이 차감돼요.</p>
+          {prefs.modelLook && pickedLookSettings.enabled && <p style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>AI 착장 생성은 추가 차감돼요.</p>}
+          <button aria-pressed={skipPickedConfirm} onClick={() => setSkipPickedConfirm(v => !v)} style={{ border: 0, background: 'none', color: 'var(--ink-2)', fontSize: 12, padding: '10px 0 20px', cursor: 'pointer' }}>{skipPickedConfirm ? '✓ ' : ''}다시 보지 않기</button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn full variant="soft" onClick={() => setPickedConfirm(null)}>취소</Btn>
+            <Btn full onClick={() => {
+              const pending = pickedConfirm;
+              if (!pending) return;
+              if (skipPickedConfirm) localStorage.setItem(`lb_picked_coord_confirm_${authUid || 'guest'}`, 'skip');
+              setPickedConfirm(null);
+              requestPickedOutfits(pending.ids, pending.opts);
+            }}>만들기</Btn>
+          </div>
+        </div>
+      </BottomSheet>}
       {pickSheet && !pickSheet.inlineItemId && (
         <PickedOutfitsModal
           state={pickSheet}

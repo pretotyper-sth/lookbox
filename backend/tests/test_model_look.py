@@ -23,6 +23,7 @@ FNS = (
     '_model_look_outfit_rules',
     '_look_styling_block',
     '_personal_look_body_note',
+    '_personal_look_framing_reference',
     '_model_look_prompt_with_reference',
     '_look_row_backdrop',
     '_look_content_box',
@@ -156,6 +157,25 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn('average build', note('200', '80'))
         self.assertIn('slightly fuller build', note('200', '96'))
         self.assertIn('fuller build with a moderately', note('200', '112'))
+
+    def test_measured_body_reference_removes_torso_and_legs(self):
+        full = studio_look(160, 200, (48, 12, 112, 192))
+        cropped = self.ns['_personal_look_framing_reference'](full)
+        with Image.open(io.BytesIO(cropped)) as image:
+            self.assertLess(image.height, 60)
+            self.assertLess(image.width, 80)
+
+    def test_174cm_86kg_overrides_slim_reference_body(self):
+        prompt = self.ns['_model_look_prompt_with_reference'](
+            '남성', [], personal=True, height='174', weight='86',
+        )
+        self.assertIn('174 cm and weight is 86 kg', prompt)
+        self.assertIn('fuller build', prompt)
+        self.assertIn('visibly thicker waist, soft abdomen', prompt)
+        self.assertIn('takes priority over both reference images', prompt)
+        self.assertIn('Rebuild the body below the neck', prompt)
+        self.assertIn('not zoom or crop', prompt)
+        self.assertNotIn('body-proportion baseline', prompt)
 
     def test_invalid_measurements_do_not_invent_a_body_preset(self):
         note = self.ns['_personal_look_body_note']

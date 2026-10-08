@@ -144,6 +144,9 @@ def _vision_client():
     return openai_client.with_options(timeout=OPENAI_VISION_TIMEOUT)
 
 app = FastAPI(title="RealCloset API")
+if os.environ.get("STYLE_STUDIO_LOCAL") == "1":
+    from .style_studio import router as style_studio_router
+    app.include_router(style_studio_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
@@ -2988,6 +2991,9 @@ _COORD_RULES = """감각 규칙(이걸 지켜야 '그냥 되는 조합'이 아�
   첼시 부츠·로퍼·구두·더비는 슬랙스·치노·데님·스커트에만.
   옷장에 신발이 여러 켤레면 코디마다 같은 신발을 반복하지 말고 번갈아 쓴다.
 - 셔츠·옥스퍼드·블라우스에는 슬랙스·치노·데님. 카고·조거·트레이닝과 붙이지 말 것.
+- 니트·스웨터·가디건에는 데님·치노·슬랙스를 우선한다. 카고·조거·트레이닝 하의와 섞지 않는다.
+- 이름보다 실제 소재·핏·포켓·격식을 우선하고, 검은색이라는 이유만으로 하의를 슬랙스로 취급하지 않는다.
+- 옷장에 자연스러운 조합이 부족하면 요청 개수보다 적게 반환한다. 다양성을 위해 충돌하는 옷을 섞지 않는다.
 - '기술적으론 입는다'가 아니라 이 사람이 실제로 입고 나갈 법한지만 본다.
   패션 테러리스트 조합(셔츠+카고+첼시 같은)은 점수를 채워도 내지 말 것.
 - 패턴: 패턴 아이템은 코디당 1개. 나머지는 solid로 받친다. 로고/그래픽도 패턴으로 센다.
@@ -3343,7 +3349,7 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
                 continue
             if must and not all(keep in ids for keep in must):
                 continue
-            if not _combo_has_top_and_bottom(ids, valid, wish) or not _combo_has_unique_garment_slots(ids, valid, wish):
+            if not _combo_has_top_and_bottom(ids, valid, wish) or not _combo_has_unique_garment_slots(ids, valid, wish) or not _combo_style_compatible(ids, valid, wish):
                 continue
             key = tuple(sorted(ids) + ([f"wish:{wish['category']}:{wish['name']}"] if wish else []))
             core = _combo_core_key(ids, valid)
@@ -3517,6 +3523,7 @@ def _combo_is_wearable(
         _combo_has_top_and_bottom(ids, by_id, wish)
         and _combo_has_shoes(ids, by_id, wish)
         and _combo_has_unique_garment_slots(ids, by_id, wish)
+        and _combo_style_compatible(ids, by_id, wish)
     )
 
 
@@ -3570,9 +3577,20 @@ def _gap_wish(
     ranked = primary[:]
     # 모든 자리가 찬 경우에도 최근 제안과 겹치지 않는 완성도용 아이템을 고른다.
     ranked.extend(x for x in _WISH_GAP_ITEMS if x not in ranked)
-    available_primary = [item for item in primary if _wish_key(item) not in (avoid_wishes or set())]
-    available = [item for item in ranked if _wish_key(item) not in (avoid_wishes or set())]
-    choices = available_primary or available or primary or ranked
+    recent = avoid_wishes or set()
+    recent_styles = {
+        (key[0], key[2]) for key in recent if key and len(key) >= 3
+    }
+    def is_recent(item: dict[str, Any]) -> bool:
+        key = _wish_key(item)
+        return key in recent or (key[0], key[2]) in recent_styles
+    fresh_primary = [item for item in primary if not is_recent(item)]
+    available_primary = [item for item in primary if _wish_key(item) not in recent]
+    fresh = [item for item in ranked if not is_recent(item)]
+    available = [item for item in ranked if _wish_key(item) not in recent]
+    # 같은 역할의 새 아이템을 최우선으로 고르고, 없을 때만 같은 역할의
+    # 이름이 다른 후보, 다른 역할의 새 후보, 마지막으로 기존 후보 순서로 완화한다.
+    choices = fresh_primary or available_primary or fresh or available or primary or ranked
     seed = sum(ord(ch) for item_id in sorted(map(str, ids)) for ch in item_id)
     pick = choices[(seed + slot) % len(choices)]
     return dict(pick)
@@ -3699,7 +3717,12 @@ def _pick_rotating_shoe(
     if not shoes:
         return None
     used_counts = used_counts or {}
-    ranked = [(sh, _shoe_pair_score(sh, top, bottom, profile)) for sh in shoes]
+    ranked = [
+        (sh, _shoe_pair_score(sh, top, bottom, profile)) for sh in shoes
+        if not any(_pair_is_forbidden(piece, sh) for piece in (top, bottom) if piece)
+    ]
+    if not ranked:
+        return None
     best = max(score for _sh, score in ranked)
     pool = [(sh, score) for sh, score in ranked if score >= best - _SHOE_ROTATE_SLACK]
     in_season = [(sh, score) for sh, score in pool if not _offseason_shoe(sh)]
@@ -3995,6 +4018,9 @@ def _pair_score(a: dict[str, Any], b: dict[str, Any], profile: dict[str, Any] | 
     if isinstance(fa, int) and isinstance(fb, int):
         gap = abs(fa - fb)
         score += 2.0 if gap <= 1 else (-1.0 if gap == 2 else -4.0)
+    styles_a, styles_b = set(sa.get("styles") or []), set(sb.get("styles") or [])
+    if styles_a and styles_b:
+        score += 1.0 if styles_a & styles_b else -1.5
     ta, tb = sa.get("tone"), sb.get("tone")
     if ta and tb:
         score += 1.0 if (ta == tb or "neutral" in (ta, tb)) else -1.5
@@ -4055,7 +4081,7 @@ def _item_clue(item: dict[str, Any]) -> str:
     return " ".join(
         str(x) for x in (
             item.get("name"), item.get("category"), item.get("brand"),
-            st.get("subtype"), *details,
+            st.get("subtype"), st.get("material"), *details,
         ) if x
     ).lower()
 
@@ -4064,6 +4090,8 @@ def _accent_fit_score(
     accent: dict[str, Any], top: dict[str, Any], bottom: dict[str, Any],
 ) -> float:
     """소품을 채우지 않고, 해당 골격에 자연스러운지 판단한다."""
+    if _pair_is_forbidden(accent, top) or _pair_is_forbidden(accent, bottom):
+        return -8.0
     clue = _item_clue(accent)
     base = f"{_item_clue(top)} {_item_clue(bottom)}"
     if _clue_has(clue, ("모자", "캡", "버킷", "비니", "hat")):
@@ -4094,7 +4122,7 @@ def _pick_styling_accent(
 
 _CLASH_DRESS_SHOE = ("첼시", "로퍼", "더비", "구두", "힐", "펌프스", "옥스퍼드화", "워커")
 _CLASH_SPORT_SHOE = ("스니커", "운동화", "러닝", "조던", "삼바", "가젤", "슬립온", "캔버스")
-_CLASH_ATH_BOTTOM = ("카고", "조거", "추리닝", "스웻", "스웨트", "트레이닝", "스웻팬츠")
+_CLASH_ATH_BOTTOM = ("카고", "조거", "추리닝", "스웻", "스웨트", "트레이닝", "트랙 팬츠", "트랙팬츠", "스웻팬츠", "cargo", "jogger", "sweatpants", "track pants")
 _CLASH_TAILOR_BOTTOM = ("슬랙스", "수트", "정장", "핀턱", "치노")
 _CLASH_DRESS_TOP = ("셔츠", "옥스퍼드", "블라우스", "드레스셔츠")
 _CLASH_DRESS_OUTER = ("코트", "트렌치", "블레이저", "재킷", "자켓")
@@ -4106,11 +4134,42 @@ def _clue_has(clue: str, keys: tuple[str, ...]) -> bool:
 
 
 def _pair_is_forbidden(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """점수 차이가 아니라 조합 자체가 성립하지 않는 충돌."""
     ca, cb = _item_clue(a), _item_clue(b)
-    ath_bottom = _clue_has(ca, _CLASH_ATH_BOTTOM) or _clue_has(cb, _CLASH_ATH_BOTTOM)
-    tailored_outer = _clue_has(ca, _CLASH_DRESS_OUTER) or _clue_has(cb, _CLASH_DRESS_OUTER)
-    return ath_bottom and tailored_outer
+    sa, sb = _row_style(a), _row_style(b)
+    fa, fb = sa.get("formality"), sb.get("formality")
+    if isinstance(fa, (int, float)) and isinstance(fb, (int, float)) and abs(fa - fb) > 2:
+        return True
+    for piece, bottom, clue, bottom_clue in ((a, b, ca, cb), (b, a, cb, ca)):
+        bottom_style = _row_style(bottom)
+        athletic = _clue_has(bottom_clue, _CLASH_ATH_BOTTOM) or (
+            bottom_style.get("formality") == 1
+            and "sporty" in (bottom_style.get("styles") or [])
+        )
+        if _item_bucket(bottom) != "bottom" or not athletic:
+            continue
+        bucket = _item_bucket(piece)
+        if bucket == "shoes" and _clue_has(clue, _CLASH_DRESS_SHOE):
+            return True
+        if bucket != "top":
+            continue
+        knit = _clue_has(clue, ("니트", "스웨터", "가디건", "터틀넥", "knit", "sweater", "cardigan"))
+        smart_shirt = _clue_has(clue, _CLASH_DRESS_TOP) and not _clue_has(clue, ("티셔츠", "티 셔츠", "t-shirt", "tshirt"))
+        if knit or smart_shirt or _clue_has(clue, _CLASH_DRESS_OUTER):
+            return True
+    return False
+
+
+def _combo_style_compatible(
+    ids: list[str], by_id: dict[str, Any], wish: dict[str, Any] | None = None,
+) -> bool:
+    pieces = [by_id[i] for i in ids if i in by_id]
+    if wish:
+        pieces.append(wish)
+    return not any(
+        _pair_is_forbidden(a, b)
+        for index, a in enumerate(pieces)
+        for b in pieces[index + 1:]
+    )
 
 
 def _pair_clash(a: dict[str, Any], b: dict[str, Any]) -> float:
@@ -4170,7 +4229,7 @@ def fallback_combos(
         for keep in reversed(must):
             if keep not in ids:
                 ids = [keep, *ids]
-        if not _combo_has_top_and_bottom(ids, by_id) or not _combo_has_unique_garment_slots(ids, by_id):
+        if not _combo_has_top_and_bottom(ids, by_id) or not _combo_has_unique_garment_slots(ids, by_id) or not _combo_style_compatible(ids, by_id):
             return
         key = tuple(sorted(ids[:5]))
         if key in seen:
@@ -4194,7 +4253,7 @@ def fallback_combos(
     ]
     pairs.sort(key=lambda x: -x[2])
     decent = [p for p in pairs if p[2] >= -1.5]
-    walk = decent if len(decent) >= max_combos else pairs
+    walk = decent
     excluded_cores = {
         _combo_core_key(list(ids), by_id)
         for ids in (exclude_keys or ())
@@ -4709,23 +4768,28 @@ def _personal_look_body_note(height: str | None, weight: str | None) -> str:
     try:
         h, w = float(height or ""), float(weight or "")
     except (TypeError, ValueError):
-        return identity + "Measurements are unavailable; use a natural moderate adult build without guessing them. "
+        return identity + "Measurements are unavailable; preserve the reference body build without guessing measurements. "
     if not (120 <= h <= 230 and 30 <= w <= 220):
-        return identity + "Measurements are unavailable; use a natural moderate adult build without guessing them. "
+        return identity + "Measurements are unavailable; preserve the reference body build without guessing measurements. "
     ratio = w / (h / 100) ** 2
     if ratio < 20:
         build = "slim build with a gently narrower torso and limbs, without an extremely thin silhouette"
     elif ratio < 24:
         build = "average build with balanced torso, waist and limb fullness"
     elif ratio < 28:
-        build = "slightly fuller build with modest fullness at the waist, upper arms and thighs"
+        build = "slightly fuller build with visible fullness at the waist, upper arms and thighs"
     else:
-        build = "fuller build with a moderately broader torso and softer waist, arms and thighs, without exaggeration"
+        build = "fuller build with a moderately broader torso, visibly thicker waist, soft abdomen, fuller upper arms and thighs, without exaggeration"
     return (
         identity + f"The user's recorded height is {h:g} cm and weight is {w:g} kg. "
         f"Use this approximate visual body-build preset: {build}. "
-        "Apply restrained, believable differences in body volume and clothing drape. "
-        "Keep natural proportions appropriate to the recorded height. "
+        "The measured body build takes priority over both reference images and their slim fashion-model silhouette. "
+        "Rebuild the body below the neck rather than copying the reference body and only changing its face. "
+        "Apply restrained, believable but clearly visible differences in torso width, waist, abdomen, upper arms and thighs. "
+        "Show the resulting volume through the supplied clothes: realistic waistline, sleeve fullness and trouser drape; "
+        "do not conceal the body adjustment by making all clothes oversized or slimming the wearer. "
+        "Keep natural proportions appropriate to the recorded height, including ordinary leg-to-torso proportions. "
+        "Use the same framing scale regardless of height; represent stature through anatomy, not zoom or crop. "
         "Do not copy the reference model's thin waist or long legs, exaggerate body size, "
         "invent muscular definition or change the user's facial identity. "
         "These measurements guide an approximate appearance, not an exact body scan or fit prediction. "
@@ -4763,9 +4827,11 @@ def _model_look_prompt_with_reference(
         + ({"m": "The wearer must be an adult man, matching the user gender setting. Never change the wearer to a woman. ", "f": "The wearer must be an adult woman, matching the user gender setting. Never change the wearer to a man. "}.get(_look_gender_key(gender), ""))
         +
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
-        "Keep the person's identity and full body. "
-        f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; "
-        "do not reset every outfit to a straight-on neutral standing pose. "
+        + ("Preserve facial identity only; construct a new full body from the recorded measurements. " if personal and height and weight else "Keep the person's identity and full body. ")
+        + ("The references are cropped to head and shoulders so their body silhouette cannot override measurements. "
+           "Use their expression, gaze and lighting; build a relaxed natural full-body pose from scratch. "
+           if personal and height and weight else
+           f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; do not reset every outfit to a straight-on neutral standing pose. ") +
         "Replace the reference background with a simple seamless warm greige studio backdrop "
         "and matching matte floor in the #D8D2C9 color family, smooth and visually quiet. "
         "Use broad even diffuse frontal lighting, with no directional sunlight, window patterns, "
@@ -4784,6 +4850,7 @@ def _model_look_prompt_with_reference(
         "Keep a natural 7 to 7.5 head-height body, with the whole person at a relaxed scale and clear studio space above the hair and below the shoes. "
         "Do not zoom in or crop the shoes.\n"
         + _model_look_outfit_rules(items)
+        + ("\nRequested pose and personalization: " + user_request if personal and user_request else "")
     )
 
 
@@ -5303,6 +5370,21 @@ def _frame_studio_look(png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _personal_look_framing_reference(png_bytes: bytes) -> bytes:
+    image = Image.open(io.BytesIO(png_bytes)).convert('RGB')
+    box = _look_content_box(image)
+    if not box:
+        return png_bytes
+    x0, y0, x1, y1 = box
+    person_h = y1 - y0
+    cx = (x0 + x1) / 2
+    crop = image.crop((max(0, int(cx - person_h * .15)), max(0, int(y0 - person_h * .02)),
+                       min(image.width, int(cx + person_h * .15)), min(image.height, int(y0 + person_h * .23))))
+    buf = io.BytesIO()
+    crop.save(buf, format='PNG')
+    return buf.getvalue()
+
+
 def generate_model_look_image(
     user_id: str, item_ids: list[str], items: list[dict[str, Any]], gender: str | None = None,
     reference_png: bytes | None = None,
@@ -5348,7 +5430,7 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body2-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
         key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
@@ -5380,6 +5462,11 @@ def generate_model_look_image(
                 composition = _image_bytes_to_png(studio_reference["path"].read_bytes())
         composition = composition or reference_png or _ensure_model_identity_png(user_id, gender)
         identity = reference_png or composition
+        if personal and height and weight and composition:
+            framing = _personal_look_framing_reference(composition)
+            if identity == composition:
+                identity = framing
+            composition = framing
         prompt = _model_look_prompt_with_reference(
             gender, items, wish, hem_seed,
             mood=mood, occasion=occasion, styles=styles, user_request=user_request,
@@ -6186,6 +6273,7 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
         # 목록용 작은 이미지. 없으면 원본을 쓴다(예전에 담은 아이템).
         "thumb": meta.get("thumb_url") or row.get("image_url"),
         "status": row.get("status"),
+        "public": bool(meta.get("public", False)),
         "brand": meta.get("brand") or "",
         "size": meta.get("size") or "",
         "store": meta.get("store") or "",
@@ -6209,6 +6297,7 @@ class LiveItemUpdate(BaseModel):
     note: str | None = None
     price: str | None = None
     material: str | None = None
+    public: bool | None = None
     category: str | None = None  # KO('상의') 또는 EN('top')
     seasons: list[str] | None = None  # ["spring","autumn"] 등, 다중 선택
 
@@ -7434,6 +7523,8 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         meta["price"] = body.price
     if body.material is not None:
         meta["material"] = body.material
+    if body.public is not None:
+        meta["public"] = body.public
     if body.seasons is not None:
         meta["seasons"] = _clean_seasons(body.seasons)
     if (
@@ -7443,6 +7534,7 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         or body.seasons is not None
         or body.price is not None
         or body.material is not None
+        or body.public is not None
     ):
         patch["metadata"] = meta
     if not patch:
@@ -9559,7 +9651,7 @@ def live_reset_daily(body: LiveDailyReset, user: UserContext = Depends(current_u
 def _wardrobe_rows_by_ids(user_id: str, item_ids: list[str]) -> list[dict[str, Any]]:
     """IN 목록이 길면 PostgREST가 끊긴다. 80개씩 나눠 읽는다."""
     out: list[dict[str, Any]] = []
-    cols = "id,name,category,color,image_url,status,note,created_at,updated_at,metadata"
+    cols = "id,name,category,color,image_url,storage_path,status,note,created_at,updated_at,metadata"
     for i in range(0, len(item_ids), 80):
         chunk = item_ids[i:i + 80]
         out.extend(
@@ -9668,7 +9760,8 @@ def _lookbook_list_payload(user_id: str, rows: list[dict[str, Any]]) -> dict[str
     extra = _outfits_with_items(pending, _wardrobe_rows_by_ids(user_id, sorted(set(need_ids))) if need_ids else [])
     out = [_outfit_row_payload(r, ids, wish) for r, ids, wish in ready]
     out.extend(extra["outfits"])
-    return {"outfits": out, "items": extra["items"]}
+    studio_items = [it for row in rows for it in (row.get("metadata") or {}).get("studio_items", []) if isinstance(it, dict) and it.get("id")]
+    return {"outfits": out, "items": extra["items"] + studio_items}
 
 
 class LiveOutfitState(BaseModel):
@@ -9860,3 +9953,9 @@ def dev_clear_wardrobe(user: UserContext = Depends(current_user)) -> dict[str, A
     _dev_seed_source(user)
     removed = supabase_admin.table("wardrobe_items").delete().eq("user_id", user.id).execute().data or []
     return {"cleared": len(removed)}
+
+
+if os.environ.get('STYLE_STUDIO_LOCAL') == '1':
+    import sys
+    from .closet_jobs import install as install_closet_jobs
+    closet_job_store = install_closet_jobs(app, sys.modules[__name__])

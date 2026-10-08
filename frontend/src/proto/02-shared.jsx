@@ -77,6 +77,13 @@ const ICONS = {
 };
 
 function Icon({ name, size = 22, stroke = 1.7, fill = 'none', style }) {
+  if (name === 'feed') {
+    const active = fill !== 'none';
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display:'block', flex:'none', ...style }}>
+      {active ? <path fill="currentColor" fillRule="evenodd" d="M6 2.5a2.5 2.5 0 0 0-2.5 2.5v11A2.5 2.5 0 0 0 6 18.5h12a2.5 2.5 0 0 0 2.5-2.5V5A2.5 2.5 0 0 0 18 2.5H6Zm1 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5H7Zm0 4a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1H7Z"/> : <g stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="2.5" width="17" height="16" rx="2.5"/><path d="M7 6.25h5"/><rect x="6" y="9.5" width="12" height="6" rx="1"/></g>}
+      <path d="M6 21.5h12" stroke="currentColor" strokeWidth={active?2:stroke} strokeLinecap="round"/>
+    </svg>;
+  }
   const d = ICONS[name];
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
@@ -443,7 +450,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
           }}
         />
         <span className="lb-look-ai-mark" aria-label="AI 생성 이미지">
-          <span>✦</span><span className="lb-look-ai-mark-label"> AI로 생성</span>
+          <span>✦</span><span className="lb-look-ai-mark-label"> AI 생성</span>
         </span>
       </div>
     ) : (Composite ? (
@@ -998,6 +1005,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   useEffect(() => {
     if (open && item) {
       setDraft({
+        public: item.public===true,
         name: item.name || '',
         brand: item.brand || '',
         size: item.size || '',
@@ -1166,7 +1174,7 @@ function WardrobeMilestoneBanner({ progress = 0, total = 4, need = '', itemCount
         <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.4, wordBreak: 'keep-all' }}>
           {done
             ? (typeof itemCount === 'number' ? `옷장 ${itemCount}개로 조합·오늘 코디를 만들어 보세요.` : '조합 추천과 오늘 코디가 열렸어요.')
-            : (need ? `${need} 더 담으면 열려요.` : '상의·하의를 조금 더 담아 주세요.')}
+            : <><span className="lb-milestone-copy-desktop">{need ? `${need} 더 담으면 열려요.` : '상의·하의를 조금 더 담아 주세요.'}</span><span className="lb-milestone-copy-mobile">{need ? `${need.replaceAll('개', '').replace(/,\s*/g, ' · ')} 필요` : '상의·하의 더 담기'}</span></>}
         </div>
         <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
           {Array.from({ length: total }).map((_, i) => (

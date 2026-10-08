@@ -54,3 +54,5 @@
 교체한다. 근거: `backend/app/main.py` `_pick_rotating_shoe`,
 `_rebalance_combo_shoes`, `_diversify_combo_bases`; `backend/tests/test_coord_sense.py`
 `ShoeRotateTest`.
+
+2026-10-08 로컬: AI 응답과 소품·wish를 포함한 최종 결과에 `_combo_style_compatible`을 적용한다. 니트/셔츠/테일러드와 카고·조거·트레이닝, 구두와 운동용 하의, 격식 차이 3 이상을 제외한다. 이름 외에 소재·subtype·details·sporty/formality 속성도 사용하고 티셔츠는 드레스셔츠에서 제외한다. fallback은 낮은 점수로 수량을 채우지 않고 공통 스타일을 우선하며 부적합한 신발·소품도 제외한다. 근거: `backend/app/main.py` `_pair_is_forbidden`, `_combo_style_compatible`, `_pair_score`, `fallback_combos`, `_pick_rotating_shoe`, `_accent_fit_score`。

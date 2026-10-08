@@ -32,6 +32,7 @@ def pipeline_namespace(cached=None):
         'charge_credit': MagicMock(return_value=True),
         'choose_studio_reference': MagicMock(return_value={'id': 'pose-a', 'path': reference_path}),
         '_image_bytes_to_png': lambda raw: raw,
+        '_personal_look_framing_reference': MagicMock(return_value=b'head-crop'),
         '_ensure_model_identity_png': MagicMock(side_effect=AssertionError('canonical fallback was used')),
         '_png_named': lambda raw, name: (name, raw),
         '_garment_edit_images': MagicMock(return_value=[('garment.png', png)]),
@@ -76,7 +77,22 @@ class StudioLookPipelineTest(unittest.TestCase):
         self.assertIn('not body shape', request['prompt'])
         self.assertEqual(ns['_garment_edit_images'].call_args.kwargs['start_at'], 3)
         cache_key = ns['supabase_admin'].table.return_value.select.return_value.eq.return_value.eq.call_args.args[1]
-        self.assertIn('-personal-body1-', cache_key)
+        self.assertIn('-personal-body2-', cache_key)
+
+    def test_body_only_personalization_uses_measurements_and_separate_cache(self):
+        keys = []
+        for weight in ['60', '86']:
+            ns = pipeline_namespace()
+            self.generate(ns, personal=True, reference_png=b'default-character',
+                          composition_reference_png=b'default-character', height='174', weight=weight)
+            request = ns['openai_client'].with_options.return_value.images.edit.call_args.kwargs
+            self.assertEqual(request['image'][0][1], b'head-crop')
+            self.assertEqual(request['image'][1][1], b'head-crop')
+            self.assertIn(f'174 cm and weight is {weight} kg', request['prompt'])
+            self.assertIn('takes priority over both reference images', request['prompt'])
+            ns['_personal_look_framing_reference'].assert_called_once_with(b'default-character')
+            keys.append(ns['supabase_admin'].table.return_value.select.return_value.eq.return_value.eq.call_args.args[1])
+        self.assertNotEqual(*keys)
 
     def test_cache_hit_does_not_rotate_reference_charge_or_generate(self):
         ns = pipeline_namespace([{'image_url': 'https://example.test/cached.png'}])

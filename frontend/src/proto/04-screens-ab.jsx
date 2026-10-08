@@ -2,7 +2,7 @@
 import { ORDER_PLATFORMS, orderPlatformById } from './order-platforms.js';
 import { OrderImportSession } from './order-import-session.jsx';
 const React = window.React;
-const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
+const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, WardrobeMilestoneBanner, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
 // RealCloset — screens A–E + layout chrome. Exported to window.
@@ -69,7 +69,7 @@ function TopBar({ left, title, right, sticky = true, border = true }) {
 }
 
 function BottomNav({ tab, go }) {
-  const tabs = [{ id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
+  const tabs = [{ id: 'wardrobe', icon: 'hanger', label: '옷장' }, { id: 'today', icon: 'sparkle', label: '오늘 코디' }, ...(window.FeedScreen ? [{ id: 'feed', icon: 'feed', label: '피드' }] : []), { id: 'lookbook', icon: 'bookmark', label: '룩북' }, { id: 'mypage', icon: 'user', label: '마이' }];
   return (
     <nav style={{
       display: 'flex', borderTop: '1px solid var(--line)',
@@ -269,7 +269,7 @@ function WardrobeScreen({ ctx }) {
   if (count === 0 && archived.length === 0 && !wardrobeLoading) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!wide && <TopBar left={null} right={<IconBtn name="plus" label="아이템 추가" onClick={() => openAdd('wardrobe')} />} />}
+        <div style={{padding:wide?'28px 32px 0':'calc(env(safe-area-inset-top, 0px) + 18px) 18px 0',width:'100%',maxWidth:1080,margin:'0 auto',boxSizing:'border-box'}}><WardrobeMilestoneBanner progress={comboProgress} need={comboNeed} itemCount={count}/></div>
         <EmptyState
           icon="hanger"
           iconSize={40}
@@ -513,19 +513,7 @@ function WardrobeScreen({ ctx }) {
         )}
         {wide && seasonChips}
         {!viewingArchive && !ready && (!wardrobeLoading || wardrobeLoaded) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s4)', background: 'var(--surface)', borderRadius: 'var(--r-md)', marginBottom: 'var(--s4)' }}>
-            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--ivory)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', flex: 'none' }}>
-              <Icon name="lock" size={18} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{comboNeed}를 추가로 담으면 코디 조합을 추천받을 수 있어요</div>
-              <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i < comboProgress ? 'var(--accent)' : 'var(--line-2)' }} />
-                ))}
-              </div>
-            </div>
-          </div>
+          <WardrobeMilestoneBanner progress={comboProgress} need={comboNeed} itemCount={count} />
         )}
 
         {viewingArchive && archived.length > 0 && (
@@ -1255,6 +1243,7 @@ function AddSheet({ ctx }) {
     tryOnMaking, tryOnMakingSubject, tryOnProgress, tryOnErrors, makeTryOnBody, formatTryOnErr, setAvatar, setTryOnActive, saveTryOnOther,
   } = ctx;
   const ProfileAvatar = window.ProfileAvatar;
+  const ClosetVisibility=window.RCClosetVisibility;
   const mode = addSheet.mode; // 'wardrobe' | 'anchor' | 'reextract'
   const anchor = mode === 'anchor';
   const reextract = mode === 'reextract';
@@ -1273,6 +1262,9 @@ function AddSheet({ ctx }) {
   const [bulkRun, setBulkRun] = useS(null); // {index,total,label} 진행 상황
   const [bulkResult, setBulkResult] = useS(null); // {ok, dup, fail, failed[], skipped[]}
   const [bulkChecking, setBulkChecking] = useS(false);
+  const [registrationPublic,setRegistrationPublic]=useS(true);
+  useE(()=>{if(addSheet.open)setRegistrationPublic(true);},[addSheet.open]);
+  const bulkRequestId = useR(crypto.randomUUID());
   const [bulkAuto, setBulkAuto] = useS(false); // 확인 없이 바로 담기 (기본 off)
   const [file, setFile] = useS(null);
   const [previewUrl, setPreviewUrl] = useS('');
@@ -1466,7 +1458,7 @@ function AddSheet({ ctx }) {
       }
       setStage(() => {
         if (list.length === 1) {
-          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
+          setSteps(list.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d), public: registrationPublic })));
           setStepIdx(0);
           return 'register';
         }
@@ -1866,6 +1858,7 @@ function AddSheet({ ctx }) {
   };
   const filledUrls = urls.map((u) => toHttpsUrl(u)).filter(Boolean);
   const bulkPicked = (bulk || []).filter((b) => b.pick);
+  useE(()=>{bulkRequestId.current=crypto.randomUUID();},[JSON.stringify(bulkPicked.map(x=>[x.url,x.name,x.thumb])),registrationPublic]);
   const absorbPastedUrls = (text) => {
     const parts = splitProductUrls(text).map(toHttpsUrl).filter(Boolean);
     if (!parts.length) return false;
@@ -1883,6 +1876,36 @@ function AddSheet({ ctx }) {
   };
   // 확인 없이 바로 owned로 담기 (자동 등록 체크 시)
   const runBulkAuto = async () => {
+    if (tab === 'orders' && window.LB_SUBMIT_ORDER_JOB) {
+      if (!bulkPicked.length || bulkRun) return;
+      if (bulkPicked.length > 100) { setErr('한 번에 100개까지 접수할 수 있어요. 나눠서 담아 주세요.'); return; }
+      setErr('');
+      const targets = bulkPicked.slice();
+      setBulkRun({index:0,total:targets.length,label:'서버에 사진을 보내는 중'});
+      try {
+        const files = Array(targets.length);
+        let cursor=0, prepared=0;
+        const transfers=await Promise.allSettled(Array.from({length:Math.min(4,targets.length)},async()=>{
+          while(cursor<targets.length) {
+            const i=cursor++, it=targets[i];
+            const file=it.demo
+              ? await fetch(it.thumb).then(async response=>{if(!response.ok)throw new Error('상품 사진을 가져오지 못했어요.');const blob=await response.blob();return new File([blob],'order.jpg',{type:blob.type});})
+              : await extensionImageFile(it);
+            if (!file) throw new Error('상품 사진이 없는 아이템을 제외해 주세요.');
+            files[i]=file;
+            setBulkRun({index:++prepared,total:targets.length,label:'서버 접수 준비 중 · 아직 화면을 닫지 마세요'});
+          }
+        }));
+        const failed=transfers.find(x=>x.status==='rejected');
+        if(failed)throw failed.reason;
+        const job=await window.LB_SUBMIT_ORDER_JOB(targets.map(it=>({...it,public:registrationPublic})),files,bulkRequestId.current);
+        bulkRequestId.current=crypto.randomUUID();
+        setBulkRun(null);
+        showToast(`${job.total}개 접수 완료 · 앱을 닫아도 자동으로 담아요`);
+        closeAdd();
+      } catch(e) {setBulkRun(null);setErr(e.message || '접수하지 못했어요. 다시 시도해 주세요.');}
+      return;
+    }
     if (!importOrders || !bulkPicked.length) return;
     setErr('');
     const targets = bulkPicked.slice();
@@ -1896,7 +1919,7 @@ function AddSheet({ ctx }) {
       if (p.state === 'ok') mark(p.item.url, { state: 'ok', pick: false });
       if (p.state === 'dup') mark(p.item.url, { state: 'dup', pick: false, dup: true, dupReason: p.reason || '이미 옷장에 있어요' });
       if (p.state === 'fail') mark(p.item.url, { state: 'fail', error: p.error || '실패' });
-    });
+    },registrationPublic);
     setBulkRun(null);
     setBulkResult({
       ok: done.length,
@@ -2215,7 +2238,7 @@ function AddSheet({ ctx }) {
   const allOn = detected.length > 0 && sel.length === detected.length;
   const startRegister = () => {
     const q = detected.filter((d) => sel.includes(d.id));
-    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
+    setSteps(q.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d), public:registrationPublic })));
     setStepIdx(0);
     setStage('register');
   };
@@ -2824,10 +2847,10 @@ function AddSheet({ ctx }) {
                             />
                             <span style={{ minWidth: 0 }}>
                               <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', lineHeight: 1.35 }}>
-                                확인 없이 바로 담기
+                                {tab === 'orders' && window.LB_SUBMIT_ORDER_JOB ? '추출 후 옷장에 자동으로 담기' : '확인 없이 바로 담기'}
                               </span>
                               <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.4 }}>
-                                기본은 사진처럼 하나씩 확인한 뒤 담아요.
+                                {tab === 'orders' && window.LB_SUBMIT_ORDER_JOB ? '접수 완료 후 앱을 닫아도 계속 담아요. 담긴 옷은 나중에 수정하거나 삭제할 수 있어요.' : '기본은 사진처럼 하나씩 확인한 뒤 담아요.'}
                               </span>
                             </span>
                           </label>
@@ -3464,6 +3487,7 @@ function AddSheet({ ctx }) {
               </div>
             </div>
 
+            {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
             {/* 상세 정보 — 아이템 상세 시트와 같은 구성·같은 순서로 둔다.
                 접지 않는 것도 상세 시트와 같다: 계절이 여기 들어가 있고, 접히면
                 AI가 넣은 값을 고칠 방법이 없어진다. */}

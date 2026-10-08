@@ -1,4 +1,4 @@
-# 키·몸무게는 행을 나누고, 바로 보기 전신에만 자연스럽게 쓴다
+# 키·몸무게 표시와 개인화 체형 적용
 
 개인 정보 **표시**는 `InfoRow`로 키 / 몸무게 각 한 줄 (`08-mypage.jsx` `personalBody`).
 **입력**은 계정 수정 시트와 온보딩에서 `NumberSlider` 두 개. 한 줄에 cm·kg를 나란히
@@ -12,3 +12,5 @@
 
 근거: `08-mypage.jsx` `personalBody`·`AccountEditSheet`, `generate_model_look_image`,
 `live_tryon_body`.
+
+2026-10-08 변경: 위의 착장 수치 미사용 기록은 이전 정책이다. 현재 개인화 착장은 [[personal-model-look]]에 따라 키·몸무게를 시각적 체형에 반영한다. 조합 추천의 `_profile_block`에는 여전히 수치를 넣지 않는다. 보호된 바로 보기 전신 생성 비율은 이번 작업에서 변경하지 않았다.

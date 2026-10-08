@@ -357,7 +357,7 @@ const calNavStyle = {
 /* ============================================================
    TodayScreen — 오늘의 코디 (홈)
    ============================================================ */
-function TodayScreen({ ctx }) {
+function TodayRecommendationScreen({ ctx }) {
   const {
     items, wide, savedOutfitIds, toggleSaveOutfit, wornToday, wearToday,
     dailyCount, startComboOrWardrobe, openAdd, go,
@@ -483,13 +483,11 @@ function TodayScreen({ ctx }) {
   if (!ready) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ padding: wide ? '28px 32px 0' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 0', maxWidth: wide ? 1080 : undefined, margin: wide ? '0 auto' : undefined, width: wide ? '100%' : undefined, boxSizing: 'border-box' }}>
+        <div style={{ padding: wide ? '28px 32px 0' : 'calc(env(safe-area-inset-top, 0px) + 18px) 18px 0', maxWidth: 1080, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
           <WardrobeMilestoneBanner
             progress={comboProgress}
             need={comboNeed}
             itemCount={items.length}
-            onAdd={() => (openAdd ? openAdd('wardrobe') : startComboOrWardrobe())}
-            style={{ marginBottom: 0 }}
           />
         </div>
         <EmptyState
@@ -672,7 +670,7 @@ function TodayScreen({ ctx }) {
         disabled={wide || !refreshLive}
         style={{
         flex: 1,  
-        padding: wide ? '28px 0 36px' : 'calc(env(safe-area-inset-top, 0px) + 22px) 18px 28px',
+        padding: wide ? `28px 0 ${window.ClosetStudio && items.length ? 92 : 36}px` : `calc(env(safe-area-inset-top, 0px) + 22px) 18px ${window.ClosetStudio && items.length ? 80 : 28}px`,
       }}>
         <div className={wide ? 'lb-wide-inner' : undefined}>
           {header}
@@ -716,6 +714,14 @@ function TodayScreen({ ctx }) {
       </BottomSheet>
     </div>
   );
+}
+
+function TodayScreen({ctx}) {
+  const [studioOpen,setStudioOpen]=useTd(false);
+  const ClosetStudio=window.ClosetStudio;
+  const closeStudio=React.useCallback(()=>setStudioOpen(false),[]);
+  if(studioOpen && ClosetStudio)return <ClosetStudio ctx={ctx} onClose={closeStudio}/>;
+  return <div style={{position:'relative',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}><TodayRecommendationScreen ctx={ctx}/>{ClosetStudio && ctx.items.length>0 && <div className="cs-studio-float"><Btn variant="secondary" icon="hanger" onClick={()=>setStudioOpen(true)} style={{borderRadius:'var(--r-pill)',background:'color-mix(in srgb, var(--surface) 94%, transparent)',boxShadow:'0 10px 32px -10px color-mix(in srgb, var(--ink) 28%, transparent), inset 0 0 0 1px var(--line)',backdropFilter:'blur(10px)'}}>직접 입혀보기</Btn></div>}</div>;
 }
 
 Object.assign(window, { TodayScreen, TodayCard });

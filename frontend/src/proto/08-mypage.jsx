@@ -274,7 +274,7 @@ function readAvatarFile(file) {
   });
 }
 
-function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
+function ProfileAvatar({ src, size = 60, onChange, onInvalid, requireFace = true, disabled = false }) {
   const inputRef = React.useRef(null);
   const [checking, setChecking] = useMp(false);
   const onPick = async (e) => {
@@ -284,13 +284,13 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
     setChecking(true);
     try {
       const dataUrl = await readAvatarFile(file);
-      const faces = window.countFacesInImage
+      const faces = requireFace && window.countFacesInImage
         ? await window.countFacesInImage(dataUrl)
         : -1;
       const message = window.faceCountError
         ? window.faceCountError(faces)
         : (faces === 1 ? '' : '얼굴을 확인하지 못했어요. 잠시 후 다시 시도해주세요.');
-      if (message) {
+      if (requireFace && message) {
         if (onInvalid) onInvalid(message);
         return;
       }
@@ -305,7 +305,7 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
     <button
       type="button"
       onClick={() => inputRef.current && inputRef.current.click()}
-      disabled={checking}
+      disabled={checking || disabled}
       aria-label="프로필 사진 변경"
       style={{
         position: 'relative', width: size, height: size, borderRadius: '50%', flex: 'none',
@@ -333,7 +333,7 @@ function ProfileAvatar({ src, size = 60, onChange, onInvalid }) {
 
 /* ---- action row ---- */
 // hint — 켜기 전에 알아야 할 게 있는 항목(비용·조건)에만 한 줄 덧붙인다.
-function ActionRow({ icon, label, onClick, danger, last, right, hint, nested }) {
+function ActionRow({ icon, label, onClick, danger, last, right, hint, nested, singleLine = false }) {
   // 스위치는 자체 버튼이므로 바깥을 또 button으로 감싸지 않는다.
   const Row = right ? 'div' : 'button';
   return (
@@ -351,7 +351,7 @@ function ActionRow({ icon, label, onClick, danger, last, right, hint, nested }) 
       ) : (
         <Icon name={icon} size={19} stroke={1.8} style={{ flex: 'none' }} />
       )}
-      <span style={{ flex: 1, minWidth: 0, paddingTop: nested && hint ? 1 : 0 }}>
+      <span style={{ flex: 1, minWidth: 0, paddingTop: nested && hint ? 1 : 0, whiteSpace: singleLine ? 'nowrap' : undefined, fontSize: singleLine ? 13 : undefined }}>
         {label}
         {hint && <span style={{ display: 'block', marginTop: 3, fontSize: 12, fontWeight: 500, color: 'var(--ink-3)', lineHeight: 1.45 }}>{hint}</span>}
       </span>
@@ -443,8 +443,12 @@ function PersonalLookSetupSheet({ open, prefs, onClose, onSave, onInvalid }) {
    MyPage
    ============================================================ */
 function MyPageScreen({ ctx }) {
+  const SocialStats=window.RCSocialStats;
+  const ConnectionsPage=window.RCConnectionsPage;
+  const [peopleTab,setPeopleTab]=useMp(null);
   const {
     prefs, wide, openPrefs, openAccount, setAvatar, logout, dailyEnabled, setDailyEnabled,
+    pickedModelLook, pickedModelLookConfirmed, setPickedModelLook,
     modelLook, setModelLook, personalModelLook, onTogglePersonalModelLook, personalSetupOpen, closePersonalSetup, savePersonalModelLook, showToast,
     dailyCount, wishCount, setDailyCount, setWishCount,
     billing,
@@ -452,6 +456,7 @@ function MyPageScreen({ ctx }) {
   const [planSheet, setPlanSheet] = useMp(false);
   const [confirmDel, setConfirmDel] = useMp(false);
   const [confirmOut, setConfirmOut] = useMp(false);
+  const [pickedLookConfirm, setPickedLookConfirm] = useMp(false);
 
   const styleNames = (prefs.styles || []).map((id) => (LB_DATA.STYLES.find((s) => s.id === id) || {}).name).filter(Boolean);
   const pc = LB_DATA.PERSONAL_COLORS.find((p) => p.id === prefs.personalColor);
@@ -499,6 +504,15 @@ function MyPageScreen({ ctx }) {
     />
   );
 
+  const pickedModelLookRow = import.meta.env.DEV && modelLook ? (
+    <ActionRow nested label="개별 아이템 코디 요청도 AI 착장 생성" hint="옷장에서 직접 고른 옷도 AI 착장으로 보여줘요" singleLine
+      right={<Switch on={!!pickedModelLook} onToggle={() => {
+        if (!pickedModelLook && !pickedModelLookConfirmed) setPickedLookConfirm(true);
+        else setPickedModelLook && setPickedModelLook(!pickedModelLook);
+      }} />}
+    />
+  ) : null;
+
   const personalModelLookRow = modelLook ? (
     <ActionRow nested label="내 얼굴·체형에 맞춰 보기" hint="프로필 사진과 키·몸무게를 사용해요" right={<Switch on={!!personalModelLook} onToggle={() => onTogglePersonalModelLook && onTogglePersonalModelLook(!personalModelLook)} />} />
   ) : null;
@@ -536,6 +550,7 @@ function MyPageScreen({ ctx }) {
       <div style={{ padding: '10px 12px 4px', fontSize: 14.5, fontWeight: 800 }}>설정</div>
       {dailySettingsRows}
       {modelLookRow}
+      {pickedModelLookRow}
       {personalModelLookRow}
     </div>
   );
@@ -558,12 +573,25 @@ function MyPageScreen({ ctx }) {
 
   const sheets = (
     <>
+      {import.meta.env.DEV && <BottomSheet open={pickedLookConfirm} centered desktopMaxW={420} onClose={() => setPickedLookConfirm(false)}>
+        <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
+          <h2 style={{ margin: '0 0 16px', fontSize: 18, whiteSpace: 'nowrap' }}>선택 코디도 AI 착장으로</h2>
+          <p style={{ fontSize: 13, whiteSpace: 'nowrap', margin: '0 0 8px', color: 'var(--ink-2)' }}>새 착장마다 크레딧이 차감돼요.</p>
+          <p style={{ fontSize: 13, whiteSpace: 'nowrap', margin: '0 0 20px', color: 'var(--ink-2)' }}>끄면 상품컷으로만 보여요.</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn full variant="soft" onClick={() => setPickedLookConfirm(false)}>취소</Btn>
+            <Btn full onClick={() => { setPickedModelLook && setPickedModelLook(true, true); setPickedLookConfirm(false); }}>켜기</Btn>
+          </div>
+        </div>
+      </BottomSheet>}
       <PlanSheet open={planSheet} onClose={() => setPlanSheet(false)} billing={billing} />
       <DeleteAccountSheet open={confirmDel} email={prefs.email} onClose={() => setConfirmDel(false)} onConfirm={() => { setConfirmDel(false); logout(); }} />
       <LogoutSheet open={confirmOut} email={prefs.email} onClose={() => setConfirmOut(false)} onConfirm={() => { setConfirmOut(false); logout(); }} />
       <PersonalLookSetupSheet open={!!personalSetupOpen} prefs={prefs} onClose={closePersonalSetup} onSave={savePersonalModelLook} onInvalid={(msg) => showToast(msg, 'camera')} />
     </>
   );
+
+  if (peopleTab && ConnectionsPage) return <ConnectionsPage ctx={ctx} initialTab={peopleTab} onClose={()=>setPeopleTab(null)}/>;
 
   /* PC: 옷장과 같은 타이틀 프레임 + 풀폭 대시보드 */
   if (wide) {
@@ -589,6 +617,7 @@ function MyPageScreen({ ctx }) {
                   {metaBits.length ? metaBits.join(' · ') : '계정 정보를 완성해 주세요'}
                 </div>
               </div>
+              {SocialStats && <SocialStats ctx={ctx} onPeople={setPeopleTab}/>}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
@@ -621,12 +650,14 @@ function MyPageScreen({ ctx }) {
             <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prefs.email || '게스트'}</div>
           </div>
         </div>
+        {SocialStats && <SocialStats ctx={ctx} onPeople={setPeopleTab}/>}
         <Section title="개인 정보" action={<EditLink onClick={openAccount} />}>{personalBody}</Section>
         <Section title="내 스타일" action={<EditLink onClick={openPrefs} />}>{styleBody}</Section>
         <div style={{ marginBottom: 14 }}>{usageCardEl}</div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 14 }}>
           {dailySettingsRows}
           {modelLookRow}
+      {pickedModelLookRow}
           {personalModelLookRow}
         </div>
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 6, marginBottom: 20 }}>

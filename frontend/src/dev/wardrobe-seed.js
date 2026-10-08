@@ -38,8 +38,23 @@ async function api(path, init) {
       + '`uvicorn app.main:app --host 127.0.0.1 --port 8123` 를 켠 뒤 다시 눌러주세요.',
     );
   }
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  let payload;
+  try {
+    if ((res.headers.get('Content-Type') || '').includes('text/event-stream')) {
+      const results = text.split('\n').filter(line => line.startsWith('data:'))
+        .map(line => JSON.parse(line.slice(5).trim()))
+        .filter(row => !Object.keys(row).some(key => key.startsWith('_')));
+      payload = results.at(-1);
+      if (!payload) throw new Error('missing_result');
+    } else {
+      payload = JSON.parse(text);
+    }
+  } catch {
+    throw new Error('서버 응답을 읽지 못했어요. 다시 시도해 주세요.');
+  }
+  if (!res.ok || payload.error) throw new Error(payload.error || payload.detail || `${path} → ${res.status}`);
+  return payload;
 }
 
 /** 룩북에 넣을 코디를 한 번 만들어 저장해 둔다. 이후 부팅은 이 캐시를 재사용. */
@@ -83,7 +98,11 @@ async function seed() {
   await api('/api/live/dev/wardrobe/seed', { method: 'POST' });
   dropAppCaches();
   write(FLAG, 'seeded');
-  await buildContent();   // 룩북에 쓸 코디를 지금 만들어 둔다. 화면에 꽂는 건 리로드 후 부팅에서.
+  try {
+    await buildContent();
+  } catch (e) {
+    console.warn('[dev-seed] 옷장은 채웠지만 룩북 코디를 만들지 못했어요.', e.message);
+  }
 }
 
 async function clear() {
@@ -109,11 +128,12 @@ async function bypassLogin() {
 const isOnboarded = () => {
   try { return localStorage.getItem('lb_onboarded') === '1'; } catch (e) { return false; }
 };
-const isSeeded = () => read(FLAG) === 'seeded';
+const isSeeded = () => typeof window.LB_DEV_ITEM_COUNT==='number' ? window.LB_DEV_ITEM_COUNT>0 : read(FLAG)==='seeded';
 
 function mountButton() {
   const btn = document.createElement('button');
   btn.type = 'button';
+  btn.className = 'lb-dev-seed-toggle';
   Object.assign(btn.style, {
     // 하단 탭바 + 플로팅 CTA 위로 띄운다.
     // 팝업·시트(z-index 60+)를 가리지 않되 일반 화면 위에는 남는다.
@@ -131,6 +151,7 @@ function mountButton() {
     : isSeeded() ? 'DEV · 데이터 비우기' : 'DEV · 데이터 채우기');
   const paint = () => { btn.textContent = label(); };
   paint();
+  window.addEventListener('lb-wardrobe-count',paint);
 
   btn.onclick = async () => {
     btn.disabled = true;
@@ -139,7 +160,9 @@ function mountButton() {
       if (!isOnboarded()) await bypassLogin();
       else if (isSeeded()) await clear();
       else await seed();
-      location.reload();
+      const nextUrl=new URL(location.href);
+      if(isOnboarded())nextUrl.searchParams.set('devWardrobe','1');
+      location.href=nextUrl.href;
     } catch (e) {
       console.error('[dev-seed] 실패:', e.message);
       btn.textContent = e.message && e.message.indexOf('8123') >= 0
@@ -158,10 +181,15 @@ function mountButton() {
 // 함께 걷어내므로, 다른 로컬 탭·브라우저에서 한 번 채우면 이쪽 옷장은 비고 플래그만
 // 'seeded'로 남는다. 그대로 룩북을 꽂으면 옷 없는 빈 카드가 뜨니, 비었으면 안 채운
 // 상태로 되돌려 라이브와 같은 빈 화면을 보여준다.
-if (isSeeded()) {
+const useDevWardrobe=new URLSearchParams(location.search).get('devWardrobe')==='1';
+if (isSeeded()||useDevWardrobe) {
   try {
     const { items } = await api('/api/live/wardrobe');
-    if (items && items.length) applyContent(await buildContent());
+    if(useDevWardrobe)window.LB_DEV_WARDROBE_ITEMS=(items||[]).filter(x=>x.status==='owned');
+    if (items && items.length) {
+      try { applyContent(await buildContent()); }
+      catch (e) { console.warn('[dev-seed] 룩북 코디를 불러오지 못했어요.', e.message); }
+    }
     else { dropAppCaches(); write(FLAG, 'empty'); }
   } catch (e) {
     console.warn('[dev-seed] 옷장 확인 실패 — 데이터를 다시 채워주세요.', e.message);

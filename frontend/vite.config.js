@@ -7,6 +7,7 @@ const _built = new Date()
 const BUILD_DATE = `${_built.getFullYear()}년 ${_built.getMonth() + 1}월 ${_built.getDate()}일`
 
 export default defineConfig({
+  server: { proxy: { '/api/studio': { target: 'http://127.0.0.1:8123', changeOrigin: true } } },
   define: { __BUILD_DATE__: JSON.stringify(BUILD_DATE) },
   // 프로토 모듈은 classic React(React.createElement)용으로 작성됐고 각 파일이
   // const React = window.React 를 갖는다. classic 런타임을 쓰면 automatic 런타임이

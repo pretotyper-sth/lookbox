@@ -419,7 +419,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           }}
         />
         <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 이미지">
-          <span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI로 생성</span>}
+          <span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI 생성</span>}
         </span>
         {copyControl}
         {copyState ? (
@@ -483,7 +483,7 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           })}
         </div>}
       </>}
-      {shown.some(item => item.wish) && <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 상품 포함"><span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI로 생성</span>}</span>}
+      {shown.some(item => item.wish) && <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 상품 포함"><span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI 생성</span>}</span>}
       {pending ? <LookPendingMarks /> : null}
       {copyControl}
       {copyState ? (
@@ -524,7 +524,7 @@ function LookExpandBadge({ size = 28, inset = 8 }) {
    탭을 갈아타지 않고 모달로 얹어, 옷장에서 고르던 흐름을 끊지 않는다.
    ============================================================ */
 function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSave, onOpen, onMakeModelLook, wide, embedded = false }) {
-  const { ids = [], loading, outfits = [], error, targetCount = 4 } = state || {};
+  const { ids = [], loading, outfits = [], error, targetCount = 4, requestedCount = 2 } = state || {};
   const picked = ids.map((id) => LB_DATA.ALL[id]).filter(Boolean);
   const looks = outfits.map((o) => ({ id: 'pick-' + o.id, outfitId: o.id, label: o.label }));
   const skeletonCount = loading ? Math.max(0, targetCount - outfits.length) : 0;
@@ -577,10 +577,11 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
         )}
       </div>
 
+      {import.meta.env.DEV && !loading && !error && outfits.length < targetCount && <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '14px 0 0' }}>가능한 조합이 부족해 {outfits.length}개만 보여드려요.</p>}
       {!error && !!outfits.length && (
         <div style={{ marginTop: 'var(--s4)' }}>
           <Btn full variant="soft" icon="sparkle" onClick={onMore} disabled={loading}>
-            {loading ? '만드는 중…' : '코디 2개 더 받기'}
+            {loading ? '만드는 중…' : `코디 ${requestedCount}개 더 받기`}
           </Btn>
         </div>
       )}
@@ -682,13 +683,78 @@ function OutfitSkeleton() {
 /* ============================================================
    C · Combo results (AI)
    ============================================================ */
+function DecisionScreen({ ctx }) {
+  const { wide, considering, items, openAdd, reviewConsideration } = ctx;
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <TopBar title="구매 검토" />
+      <div className="lb-scrollable" style={{ flex: 1, padding: wide ? 'var(--gap-header) 0 36px' : 'var(--gap-header) 18px 32px' }}>
+        <div className={wide ? 'lb-wide-inner' : undefined}>
+          <div style={{ padding: wide ? '30px 32px' : '24px 20px', background: 'var(--surface-2)', borderRadius: 'var(--r-lg)' }}>
+            <Eyebrow>BUY WITH PROOF</Eyebrow>
+            <h1 style={{ margin: '8px 0 0', fontSize: wide ? 28 : 24, lineHeight: 1.2, letterSpacing: '-0.045em', fontWeight: 800 }}>
+              이 옷, 내 옷장이<br />잘 입게 해줄까요?
+            </h1>
+            <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+              상품을 올리면 내 옷과의 조합을 보고 구매, 보류, 패스로 정리해요.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr', gap: 9, marginTop: 20 }}>
+              <Btn full size="lg" icon="plus" onClick={() => openAdd('anchor', { initialSourceTab: 'url' })}>상품 링크 붙여넣기</Btn>
+              <Btn full size="lg" variant="soft" icon="camera" onClick={() => openAdd('anchor', { initialSourceTab: 'photo' })}>사진으로 검토하기</Btn>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginTop: 'var(--s7)', marginBottom: 'var(--s3)' }}>
+            <div>
+              <Eyebrow>ON HOLD</Eyebrow>
+              <h2 style={{ margin: '5px 0 0', fontSize: 18, letterSpacing: '-0.03em' }}>다시 볼 상품</h2>
+            </div>
+            <span style={{ color: 'var(--ink-3)', fontSize: 12.5 }}>{considering.length}개</span>
+          </div>
+
+          {considering.length ? (
+            <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: 10 }}>
+              {considering.map((item) => (
+                <button key={item.id} type="button" onClick={() => reviewConsideration(item)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 10, textAlign: 'left', background: 'var(--surface)', borderRadius: 'var(--r-md)', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
+                  <div style={{ width: 58, flex: 'none' }}><Thumb item={item} radius="var(--r-sm)" /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--ink-3)' }}>{[item.category, item.color].filter(Boolean).join(' · ') || '다시 검토하기'}</div>
+                  </div>
+                  <Icon name="chevR" size={18} color="var(--ink-3)" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(3, minmax(0, 1fr))' : '1fr', gap: 10 }}>
+              {[
+                ['1', '상품 올리기', '링크나 사진으로 시작'],
+                ['2', '내 옷과 검토', `${items.length}벌의 옷장으로 조합`],
+                ['3', '결정 남기기', '구매 · 보류 · 패스'],
+              ].map(([number, title, detail]) => (
+                <div key={number} style={{ padding: '15px 0', borderTop: '1px solid var(--line)' }}>
+                  <span style={{ display: 'block', color: 'var(--ink-3)', fontSize: 12, fontWeight: 700 }}>{number}</span>
+                  <strong style={{ display: 'block', marginTop: 6, fontSize: 14 }}>{title}</strong>
+                  <span style={{ display: 'block', marginTop: 4, color: 'var(--ink-3)', fontSize: 12.5 }}>{detail}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultsScreen({ ctx }) {
   const {
     back, anchor, loading, savedOutfitIds, saveOutfit, wide,
     loadMoreCombos, moreLoading, comboRev, preferredStyleLabel,
-    openOutfitViewer,
+    openOutfitViewer, items, decidePurchase,
   } = ctx;
   const outfits = LB_DATA.OUTFITS;
+  const usedOwned = new Set(outfits.flatMap((outfit) => (outfit.itemIds || []).filter((id) => id !== anchor.id))).size;
+  const sameCategory = items.filter((item) => item.category && item.category === anchor.category).length;
   void comboRev;
   const busy = !!loading;
   const moreBusy = !!moreLoading;
@@ -736,9 +802,31 @@ function ResultsScreen({ ctx }) {
 
           {!busy && (
             <div style={{ marginTop: 'var(--s5)' }}>
-              <Btn full variant="soft" icon="sparkle" onClick={loadMoreCombos} disabled={moreBusy}>
-                {moreBusy ? '추천 만드는 중…' : '2개 더 추천받기'}
-              </Btn>
+              <div style={{ padding: 'var(--s4)', background: 'var(--surface-2)', borderRadius: 'var(--r-lg)' }}>
+                <Eyebrow>DECISION EVIDENCE</Eyebrow>
+                <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(3, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))', gap: 8, marginTop: 11 }}>
+                  {[
+                    ['추천 조합', `${outfits.length}개`],
+                    ['함께 쓰는 내 옷', `${usedOwned}벌`],
+                    ['같은 카테고리', `${sameCategory}벌`],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ minWidth: 0 }}>
+                      <div style={{ color: 'var(--ink-3)', fontSize: 11.5, lineHeight: 1.25 }}>{label}</div>
+                      <div className="tnum" style={{ marginTop: 4, fontSize: 17, fontWeight: 800 }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(3, minmax(0, 1fr))' : '1fr', gap: 8, marginTop: 16 }}>
+                  <Btn full size="lg" icon="check" onClick={() => decidePurchase('buy')}>구매</Btn>
+                  <Btn full size="lg" variant="soft" icon="bookmark" onClick={() => decidePurchase('hold')}>보류</Btn>
+                  <Btn full size="lg" variant="ghost" onClick={() => decidePurchase('pass')}>패스</Btn>
+                </div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <Btn full variant="soft" icon="sparkle" onClick={loadMoreCombos} disabled={moreBusy}>
+                  {moreBusy ? '추천 만드는 중…' : '2개 더 추천받기'}
+                </Btn>
+              </div>
             </div>
           )}
         </div>
@@ -1465,6 +1553,7 @@ function DetailScreen({ ctx }) {
 
   const itemsBlock = (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {window.StyleCustomizeButton && <div style={{ marginBottom: 16 }}><window.StyleCustomizeButton outfit={outfit} items={items} ctx={ctx} /></div>}
         {items.map((it, i) => {
           const justAdded = it.isAnchor && addedItemIds.includes(it.id);
           return (
@@ -1602,4 +1691,4 @@ function DetailScreen({ ctx }) {
   );
 }
 
-Object.assign(window, { LookComposite, LookExpandBadge, PickedOutfitsModal, OutfitCard, OutfitSkeleton, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });
+Object.assign(window, { LookComposite, LookExpandBadge, PickedOutfitsModal, OutfitCard, OutfitSkeleton, DecisionScreen, ResultsScreen, LookbookScreen, DetailScreen, SavedCard, MetaChips });

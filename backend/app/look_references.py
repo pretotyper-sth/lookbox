@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 REFERENCE_DIR = Path(__file__).resolve().parents[1] / "assets" / "look-references"
-REFERENCE_REV = "studio-snap-v1"
+REFERENCE_REV = "studio-snap-gender-reviewed-v2"
 _DECKS: OrderedDict = OrderedDict()
 _DECK_LOCK = threading.Lock()
 _RANDOM = random.SystemRandom()

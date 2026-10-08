@@ -1,0 +1,130 @@
+{
+  "stripe": {
+    "photo": "/studio-assets/feed-samples/stripe.png",
+    "items": [
+      {
+        "id": "feed-cac4c44a-029a-40f1-8687-b24283764ad2",
+        "name": "오가닉 코튼 컴포트 셔츠",
+        "category": "상의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/0cc78e79d6da4b7fbe74691e5a2abf5d.webp",
+        "brand": "POTTERY",
+        "price": "",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-d09a8a3f-514a-453d-bd05-0fbfa32dd522",
+        "name": "원워시드 스트레이트 데님",
+        "category": "하의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/6e89c48e0a7e4e36a207fc4522051014.webp",
+        "brand": "POTTERY",
+        "price": "195,000",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-91246851-31a5-4ed8-aba9-78e27ab4dda2",
+        "name": "(W) 뉴발란스 993 메이드 인 USA 그레이 - B 스탠다드",
+        "category": "신발",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/7bf7e31dd84a46a2ad27ecffc4015c5a.webp",
+        "brand": "뉴발란스",
+        "price": "",
+        "kind": "sample"
+      }
+    ]
+  },
+  "black": {
+    "photo": "/studio-assets/feed-samples/black.png",
+    "items": [
+      {
+        "id": "feed-0740e7a6-e8b5-417c-9e68-a51026025b65",
+        "name": "슬림 니트 실크 폴로 셔츠",
+        "category": "상의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/eaaf87d863024754819a76945dcc04c1.webp",
+        "brand": "COS",
+        "price": "",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-e8836745-965f-420b-9e6e-043f690a72bc",
+        "name": "와이드 데님 팬츠",
+        "category": "하의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/f2166aa2f0574793ab388d89c2af858f.webp",
+        "brand": "",
+        "price": "",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-b6801416-ff2e-4b9c-8257-053ddc6abf8d",
+        "name": "OVATE 로퍼",
+        "category": "신발",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/2e695f2abfad4904b2b699c6c19a5a9a.webp",
+        "brand": "킨치",
+        "price": "",
+        "kind": "sample"
+      }
+    ]
+  },
+  "weekend": {
+    "photo": "/studio-assets/feed-samples/weekend.png",
+    "items": [
+      {
+        "id": "feed-9ea16f4c-8c55-42ee-867d-cc57c9604a48",
+        "name": "스윙탑 블루종",
+        "category": "아우터",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/f223ff344c7c424e8cd70dd9e1538672.webp",
+        "brand": "POTTERY",
+        "price": "389,000",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-3f2497ee-5b19-4c98-aedf-05d356976e1f",
+        "name": "코튼 오피서 치노 팬츠",
+        "category": "하의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/07c3324a5d22421c88efa41fe85f8265.webp",
+        "brand": "POTTERY",
+        "price": "209,000",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-b6801416-ff2e-4b9c-8257-053ddc6abf8d",
+        "name": "OVATE 로퍼",
+        "category": "신발",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/2e695f2abfad4904b2b699c6c19a5a9a.webp",
+        "brand": "킨치",
+        "price": "",
+        "kind": "sample"
+      }
+    ]
+  },
+  "stripe-woman": {
+    "photo": "/studio-assets/feed-samples/stripe-woman.png",
+    "items": [
+      {
+        "id": "feed-cac4c44a-029a-40f1-8687-b24283764ad2",
+        "name": "오가닉 코튼 컴포트 셔츠",
+        "category": "상의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/0cc78e79d6da4b7fbe74691e5a2abf5d.webp",
+        "brand": "POTTERY",
+        "price": "",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-d09a8a3f-514a-453d-bd05-0fbfa32dd522",
+        "name": "원워시드 스트레이트 데님",
+        "category": "하의",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/6e89c48e0a7e4e36a207fc4522051014.webp",
+        "brand": "POTTERY",
+        "price": "195,000",
+        "kind": "sample"
+      },
+      {
+        "id": "feed-91246851-31a5-4ed8-aba9-78e27ab4dda2",
+        "name": "(W) 뉴발란스 993 메이드 인 USA 그레이 - B 스탠다드",
+        "category": "신발",
+        "img": "https://xxaghgxyppkceobvtcyl.supabase.co/storage/v1/object/public/wardrobe/8462b6a5-1fc9-4e02-9646-adb96e0c19a4/items/7bf7e31dd84a46a2ad27ecffc4015c5a.webp",
+        "brand": "뉴발란스",
+        "price": "",
+        "kind": "sample"
+      }
+    ]
+  }
+}

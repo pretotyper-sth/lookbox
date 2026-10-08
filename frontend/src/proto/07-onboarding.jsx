@@ -188,11 +188,11 @@ function Landing({ onStart, onLogin }) {
               margin: '0 0 6px', fontSize: 'clamp(22px, 6.2vw, 28px)', fontWeight: 800,
               lineHeight: 1.25, letterSpacing: '-0.03em', textWrap: 'balance', ...KEEP,
             }}>
-              내 옷들이랑 어울릴까?
+              {import.meta.env.DEV ? '내 옷으로, 나만의 취향을.' : '내 옷들이랑 어울릴까?'}
             </h1>
             <p style={{ margin: 0, fontSize: 'clamp(14px, 3.9vw, 16px)', color: 'var(--ink-2)', lineHeight: 1.45, ...KEEP }}>
-              <span style={{ display: 'block' }}>고민 중인 옷을 올리면,</span>
-              <span style={{ display: 'block' }}>이미 갖고 있는 옷들로 코디를 만들어 보여드려요.</span>
+              <span style={{ display: 'block' }}>{import.meta.env.DEV ? '좋아하는 스타일을 만들고,' : '고민 중인 옷을 올리면,'}</span>
+              <span style={{ display: 'block' }}>{import.meta.env.DEV ? '내 옷으로 바꾸고, 친구와 취향을 나눠보세요.' : '이미 갖고 있는 옷들로 코디를 만들어 보여드려요.'}</span>
             </p>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -262,7 +262,8 @@ function Landing({ onStart, onLogin }) {
 
         {/* CTA와 로그인은 탭 영역이 겹치지 않게 확실히 띄운다. */}
         <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-          <Btn full size="lg" icon="sparkle" onClick={onStart}>시작하기</Btn>
+          <Btn full size="lg" icon="sparkle" onClick={onStart}>내 옷장 시작하기</Btn>
+          {import.meta.env.DEV && <button className="lb-btn" style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', color: 'var(--ink-2)', fontSize: 13 }} onClick={onStart}>옷장부터 시작하기</button>}
           <div style={{
             marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 2, fontSize: 13, color: 'var(--ink-2)', ...KEEP,

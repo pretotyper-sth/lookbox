@@ -9,3 +9,5 @@ uploads/
 tools/order-collector/node_modules/
 tools/order-collector/orders.json
 desktop/node_modules/
+
+backend/.local/
