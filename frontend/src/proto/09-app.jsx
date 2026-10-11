@@ -2988,10 +2988,10 @@ function App() {
       return true;
     }
     try {
-      const ids = list.map((it) => String(it.serverId || it.id));
-      const patches = await Promise.all(list.map(async (it) => {
+      const finalList = await Promise.all(list.map(async (it) => {
         const id = it.serverId || it.id;
         const patch = {
+          status: 'owned',
           name: (it.name || '').trim() || '옷',
           category: it.category || it.cat || '',
           color: it.color || '',
@@ -3009,18 +3009,16 @@ function App() {
           body: JSON.stringify(patch),
         });
         if (!res || !res.item) throw new Error('상품 정보를 저장하지 못했어요. 다시 눌러 주세요.');
-        return { ...it, ...patch, ...res.item };
+        let saved = res.item;
+        if (saved.status !== 'owned') {
+          const status = await liveJSON('/api/live/items/status', {
+            method: 'POST', body: JSON.stringify({ ids: [String(id)], status: 'owned' }),
+          });
+          saved = (status.items || []).find((item) => String(item.id) === String(id));
+        }
+        if (!saved || saved.status !== 'owned' || String(saved.id) !== String(id)) throw new Error('옷장 저장을 확인하지 못했어요. 다시 눌러 주세요.');
+        return liveRememberItem({ ...it, ...patch, ...saved });
       }));
-      const status = await liveJSON('/api/live/items/status', {
-        method: 'POST',
-        body: JSON.stringify({ ids, status: 'owned' }),
-      });
-      const savedById = new Map((status.items || []).map((item) => [String(item.id), item]));
-      const finalList = patches.map((item) => {
-        const saved = savedById.get(String(item.serverId || item.id));
-        if (!saved || saved.status !== 'owned') throw new Error('옷장 저장을 확인하지 못했어요. 다시 눌러 주세요.');
-        return liveRememberItem({ ...item, ...saved });
-      });
       if (skippedIds && skippedIds.length) discardLiveItems(skippedIds);
       putLiveItems(finalList, true);
       closeAdd();

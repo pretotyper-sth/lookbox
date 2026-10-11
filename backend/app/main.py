@@ -16,7 +16,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Literal
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import Request as UrlRequest, urlopen
 
@@ -6338,6 +6338,7 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class LiveItemUpdate(BaseModel):
+    status: Literal["owned"] | None = None
     name: str | None = None
     color: str | None = None
     brand: str | None = None
@@ -7550,6 +7551,8 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
     row = rows[0]
     meta = dict(row.get("metadata") or {})
     patch: dict[str, Any] = {}
+    if body.status is not None:
+        patch["status"] = body.status
     if body.name is not None:
         patch["name"] = body.name
     if body.color is not None:
@@ -7597,6 +7600,8 @@ def live_update_item(item_id: str, body: LiveItemUpdate, user: UserContext = Dep
         .data
         or []
     )
+    if body.status is not None and not updated:
+        raise HTTPException(status_code=409, detail="옷장 저장을 확인하지 못했어요. 다시 눌러 주세요.")
     return {"item": live_item_payload(updated[0] if updated else {**row, **patch})}
 
 
