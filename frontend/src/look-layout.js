@@ -31,3 +31,11 @@ export function outfitPrice(value) {
   const numeric = text.replace(/[₩원,\s]/g, '');
   return /^\d+(\.\d+)?$/.test(numeric) ? `${Number(numeric).toLocaleString('ko-KR')}원` : text;
 }
+
+export function formatPriceInput(value) {
+  const text = String(value ?? '');
+  const numeric = text.replace(/,/g, '');
+  if (!/^\d+(?:\.\d*)?$/.test(numeric)) return text;
+  const [integer, fraction] = numeric.split('.');
+  return integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (fraction === undefined ? '' : '.' + fraction);
+}

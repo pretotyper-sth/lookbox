@@ -1,4 +1,5 @@
 /* @prototype-ported */
+import { formatPriceInput } from '../look-layout.js';
 import { ORDER_PLATFORMS, orderPlatformById } from './order-platforms.js';
 import { OrderImportSession } from './order-import-session.jsx';
 const React = window.React;
@@ -992,7 +993,7 @@ function orderMetaBits(item) {
   const bits = [];
   if (item.brand && !/^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test(item.brand.trim())) bits.push(item.brand);
   if (item.size) bits.push(`사이즈 ${item.size}`);
-  if (item.price) bits.push(item.price);
+  if (item.price) bits.push(formatPriceInput(item.price));
   if (item.purchasedAt) bits.push(`구매일 ${item.purchasedAt}`);
   return bits;
 }
@@ -1007,7 +1008,7 @@ function bulkRowMeta(b) {
   if (!fromOrderHistory && b.store && b.store !== host && b.store !== b.name) bits.push(b.store);
   if (fromOrderHistory) bits.push(...orderMetaBits(b));
   else {
-    if (b.price) bits.push(b.price);
+    if (b.price) bits.push(formatPriceInput(b.price));
     if (b.purchasedAt) bits.push(`구매일 ${b.purchasedAt}`);
   }
   return { title, subtitle: bits.join(' · ') };
@@ -3536,7 +3537,7 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
-                <LabeledField label="가격" value={cur.draft.price} onChange={setStepDraft('price')} placeholder="예) 89,000" />
+                <LabeledField label="가격" formatValue={formatPriceInput} inputMode="decimal" value={cur.draft.price} onChange={setStepDraft('price')} placeholder="예) 89,000" />
                 <LabeledField label="재질" value={cur.draft.material} onChange={setStepDraft('material')} placeholder="예) 코튼 100%" />
                 <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />

@@ -1,4 +1,5 @@
 /* @prototype-ported */
+import { formatPriceInput } from '../look-layout.js';
 const React = window.React;
 
 /* global React */
@@ -783,18 +784,34 @@ function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, d
    ItemDetailSheet — tap a garment → view large + add optional details
    (브랜드 / 사이즈 / 구매처 / 메모). All fields optional, saved optimistically.
 ---------------------------------------------------------------- */
-function LabeledField({ label, value, onChange, placeholder, multiline, type = 'text', autoComplete }) {
+function LabeledField({ label, value, onChange, placeholder, multiline, type = 'text', autoComplete, formatValue, inputMode }) {
   const common = {
     width: '100%', padding: multiline ? '11px 14px' : '12px 14px', borderRadius: 'var(--r-md)',
     fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
     outline: 'none', resize: 'none', lineHeight: 1.5, boxSizing: 'border-box',
+  };
+  const changeInput = (event) => {
+    const input = event.target;
+    const raw = input.value;
+    const next = formatValue ? formatValue(raw) : raw;
+    const position = raw.slice(0, input.selectionStart ?? raw.length).replace(/,/g, '').length;
+    onChange(next);
+    if (formatValue && next !== raw) requestAnimationFrame(() => {
+      if (document.activeElement !== input || input.value !== next) return;
+      let index = 0, count = 0;
+      while (index < next.length && count < position) {
+        if (next[index] !== ',') count += 1;
+        index += 1;
+      }
+      input.setSelectionRange(index, index);
+    });
   };
   return (
     <label style={{ display: 'block' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
       {multiline
         ? <textarea className="lb-input" rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />
-        : <input className="lb-input" type={type} autoComplete={autoComplete} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />}
+        : <input className="lb-input" type={type} inputMode={inputMode} autoComplete={autoComplete} value={formatValue ? formatValue(value) : value} placeholder={placeholder} onChange={changeInput} style={common} />}
     </label>
   );
 }
@@ -1087,7 +1104,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
-          <LabeledField label="가격" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
+          <LabeledField label="가격" formatValue={formatPriceInput} inputMode="decimal" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
           <LabeledField label="재질" value={draft.material} onChange={set('material')} placeholder="예) 코튼 100%" />
           <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />

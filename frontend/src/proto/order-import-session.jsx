@@ -1,3 +1,4 @@
+import { formatPriceInput } from '../look-layout.js';
 /* 구매내역 세션. 몰은 시트에서 고르고, 여기서는 웹뷰로 로그인한 뒤 옷을 하나씩 담는다.
    비밀번호는 받지 않는다. 쇼핑몰 창(네이티브 웹뷰·확장 탭·로컬 크롬)에서만 로그인한다. */
 const React = window.React;
@@ -12,7 +13,7 @@ function orderItemMeta(item) {
   const bits = [];
   if (item.brand && !/^(?:스냅\s*보기|자세히\s*보기|상세\s*보기|주문\s*상세(?:\s*보기)?|상품\s*상세(?:\s*보기)?|배송\s*조회|재구매|후기\s*작성|스타일\s*올리기)$/.test(item.brand.trim())) bits.push(item.brand);
   if (item.size) bits.push(`사이즈 ${item.size}`);
-  if (item.price) bits.push(item.price);
+  if (item.price) bits.push(formatPriceInput(item.price));
   if (item.purchasedAt) bits.push(`구매일 ${item.purchasedAt}`);
   return bits.join(' · ');
 }
