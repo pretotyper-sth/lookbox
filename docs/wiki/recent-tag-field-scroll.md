@@ -22,3 +22,5 @@
 관련: [[large-display-layout]]
 
 2026-10-11 라이브 후속 수정: 직접 입력 유지 판정에서 manualValue(원문)와 current(trim)를 비교하면 `무신사 ` 입력 시 공백 때문에 불일치해 입력창이 닫혔다. 입력 모드는 공백을 포함한 value 원문으로 비교하고, current는 기존 중복 태그 강조에만 사용한다. 목록에 없는 외부 draft는 자동으로 입력창을 표시한다. PC1440px/모바일390px에서 `무신사` 중복 태그 강조→스페이스바→`온라인/오프라인` 연속 입력·포커스 유지·blur 유지, 명시적 최근 태그 선택으로만 접힘 확인. 근거: `frontend/src/proto/02-shared.jsx` RecentTagField typing.
+
+2026-10-11 후속: 직접 입력 중에는 최근 태그와 동일한 값이어도 칩 강조·앞자리 이동을 하지 않는다. 목록은 저장된 최근 구매처 순서를 유지하고, 칩을 명시적으로 선택했을 때만 강조한다. 새 구매처는 담기/상세 저장 시 `rememberStore`로 기록되어 다음 아이템의 앞단에 표시된다. 기존 구매처의 재저장은 순서를 바꾸지 않는다. 근거: `frontend/src/proto/02-shared.jsx` `RecentTagField`, `rememberRecent`; `frontend/src/proto/04-screens-ab.jsx` `advance`.
