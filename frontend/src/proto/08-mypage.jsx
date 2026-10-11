@@ -504,7 +504,7 @@ function MyPageScreen({ ctx }) {
     />
   );
 
-  const pickedModelLookRow = import.meta.env.DEV && modelLook ? (
+  const pickedModelLookRow = modelLook ? (
     <ActionRow nested label="개별 아이템 코디 요청도 AI 착장 생성" hint="옷장에서 개별 아이템으로 요청할 때도 적용돼요" singleLine
       right={<Switch on={!!pickedModelLook} onToggle={() => {
         if (!pickedModelLook && !pickedModelLookConfirmed) setPickedLookConfirm(true);
@@ -573,7 +573,7 @@ function MyPageScreen({ ctx }) {
 
   const sheets = (
     <>
-      {import.meta.env.DEV && <BottomSheet open={pickedLookConfirm} centered desktopMaxW={420} onClose={() => setPickedLookConfirm(false)}>
+      {<BottomSheet open={pickedLookConfirm} centered desktopMaxW={420} onClose={() => setPickedLookConfirm(false)}>
         <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
           <h2 style={{ margin: '0 0 16px', fontSize: 18, whiteSpace: 'nowrap' }}>선택 코디도 AI 착장으로</h2>
           <p style={{ fontSize: 13, whiteSpace: 'nowrap', margin: '0 0 8px', color: 'var(--ink-2)' }}>새 착장마다 크레딧이 차감돼요.</p>

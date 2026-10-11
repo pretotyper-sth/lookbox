@@ -1563,7 +1563,6 @@ function DetailScreen({ ctx }) {
 
   const itemsBlock = (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {window.StyleCustomizeButton && <div style={{ marginBottom: 16 }}><window.StyleCustomizeButton outfit={outfit} items={items} ctx={ctx} /></div>}
         {items.map((it, i) => {
           const justAdded = it.isAnchor && addedItemIds.includes(it.id);
           return (
@@ -1595,6 +1594,8 @@ function DetailScreen({ ctx }) {
       </div>
   );
 
+  const customizeCTA = window.StyleCustomizeButton ? <div style={{ marginTop: 16 }}><window.StyleCustomizeButton outfit={outfit} items={items} ctx={ctx} /></div> : null;
+
   const surface = (children, extra) => (
     <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: 'var(--s4)', ...extra }}>
       {children}
@@ -1605,6 +1606,7 @@ function DetailScreen({ ctx }) {
     <>
       {photoBlock}
       <div style={{ marginTop: 'var(--s3)' }}>{itemsBlock}</div>
+      {customizeCTA}
     </>,
   );
 
@@ -1629,7 +1631,7 @@ function DetailScreen({ ctx }) {
             justifyContent: 'start',
           }}>
             <div key={detailLook.id}>
-              {surface(photoBlock)}
+              {surface(<>{photoBlock}{customizeCTA}</>)}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>

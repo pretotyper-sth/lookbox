@@ -117,7 +117,7 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} aiMark={aiMark} infoButton infoRight={59} infoSize={24} infoBottom={7} aiMarkSize={24} aiMarkInset={7} />
+          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} aiMark="icon" infoButton infoRight={59} infoSize={24} infoBottom={7} aiMarkSize={24} aiMarkInset={7} />
         </div>
         {onOpen && LookExpandBadge ? <button type="button" aria-label="크게 보기" title="크게 보기" onClick={() => onOpen(outfit)} style={{ position: 'absolute', right: 7, bottom: 7, width: 24, height: 24, padding: 0, border: 0, background: 'transparent', cursor: 'pointer', zIndex: 15 }}><LookExpandBadge size={24} inset={0} /></button> : null}
         <button onClick={onSave} className="lb-save" title={saved ? '저장 취소' : '룩북에 저장'} aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'} style={{

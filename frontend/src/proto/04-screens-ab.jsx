@@ -533,7 +533,7 @@ function WardrobeScreen({ ctx }) {
 
         {mobileSelect && !selecting && (
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-            옷을 눌러 여러 개를 선택한 뒤 보관·삭제하거나 코디를 추천받을 수 있어요.
+            옷 선택 후 보관·삭제·코디 추천
           </p>
         )}
 
@@ -3544,6 +3544,7 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
+                {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
                 <LabeledField label="가격" formatValue={formatNumericPriceInput} inputMode="numeric" value={cur.draft.price} onChange={setStepDraft('price')} placeholder="예) 89,000" />
                 <LabeledField label="재질" value={cur.draft.material} onChange={setStepDraft('material')} placeholder="예) 코튼 100%" />
                 <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
@@ -3551,7 +3552,6 @@ function AddSheet({ ctx }) {
               </div>
             </div>
 
-            {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
 
             <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
               <Btn variant="ghost" disabled={savingItems} onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>

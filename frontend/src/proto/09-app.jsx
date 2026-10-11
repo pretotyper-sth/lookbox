@@ -2048,9 +2048,8 @@ function App() {
   }, [isShowcase, authUid, wardrobeLoaded, prefs.modelLook, prefs.dailyEnabled, dailyTick, applyModelLooks, showToast]);
 
   const [pickedLookSettings, setPickedLookSettings] = useState(() => readPickedLookSettings(authUid));
-  useEffect(() => { if (import.meta.env.DEV) setPickedLookSettings(readPickedLookSettings(authUid)); }, [authUid]);
+  useEffect(() => { setPickedLookSettings(readPickedLookSettings(authUid)); }, [authUid]);
   const setPickedModelLook = (on, confirmed = false) => {
-    if (!import.meta.env.DEV) return;
     const next = { enabled: !!on, confirmed: pickedLookSettings.confirmed || confirmed };
     if (next.enabled && !next.confirmed) return;
     localStorage.setItem(`lb_picked_model_look_${authUid || 'guest'}`, JSON.stringify(next));
@@ -2800,7 +2799,7 @@ function App() {
   const [pickedConfirm, setPickedConfirm] = useState(null);
   const [skipPickedConfirm, setSkipPickedConfirm] = useState(false);
   const startPickedOutfits = (ids, opts = {}) => {
-    if (import.meta.env.DEV && localStorage.getItem(`lb_picked_coord_confirm_${authUid || 'guest'}`) !== 'skip') {
+    if (localStorage.getItem(`lb_picked_coord_confirm_${authUid || 'guest'}`) !== 'skip') {
       setSkipPickedConfirm(false);
       setPickedConfirm({ ids: ids.slice(), opts });
       return;
@@ -2875,7 +2874,7 @@ function App() {
           wish_combos: opts.append ? 0 : Math.min(wishCount, dailyCount),
           exclude_item_ids: prev.map(o => o.itemIds || []),
           ...coordProfile(prefs),
-          ...coordinateLookSettings(import.meta.env.DEV ? { ...prefs, modelLook: !!prefs.modelLook && pickedLookSettings.enabled } : prefs),
+          ...coordinateLookSettings({ ...prefs, modelLook: !!prefs.modelLook && pickedLookSettings.enabled }),
         }),
       });
       (payload.items || []).forEach(liveRememberItem);
@@ -3319,7 +3318,7 @@ function App() {
         </div>
       )}
 
-      {import.meta.env.DEV && <BottomSheet open={!!pickedConfirm} centered desktopMaxW={420} onClose={() => setPickedConfirm(null)}>
+      {<BottomSheet open={!!pickedConfirm} centered desktopMaxW={420} onClose={() => setPickedConfirm(null)}>
         <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
           <h2 style={{ margin: '0 0 16px', fontSize: 18, whiteSpace: 'nowrap' }}>코디 {dailyCount}개를 만들까요?</h2>
           <p style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>새 추천은 크레딧이 차감돼요.</p>

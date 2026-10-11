@@ -186,6 +186,12 @@ function addPreconnect(url) {
 // 제한만 더 깎는다. 부팅 직후엔 요청이 한꺼번에 나가므로 겹치는 갱신은 하나로 묶는다.
 let renewInFlight = null
 let renewBlocked = false
+let refreshInFlight = null
+async function refreshAccountToken() {
+  if (!supabase) return null
+  if (!refreshInFlight) refreshInFlight = supabase.auth.refreshSession().then(({ data, error }) => error ? null : data.session?.access_token || null).finally(() => { refreshInFlight = null })
+  return refreshInFlight
+}
 async function renewAnonymousSession() {
   // 로그인 계정 세션은 여기서 익명으로 갈아치우면 안 된다 — 그러면 남의 옷장(빈
   // 옷장)으로 조용히 넘어간다. 익명으로 쓰던 경우에만 새로 판다.
@@ -230,7 +236,7 @@ function installFetchBridge() {
     // 모든 요청이 계속 401로 떨어지고 화면이 빈 채로 남는다. 한 번만 다시 인증해 본다.
     if (res.status !== 401) return res
     const current = await ensureToken()
-    const fresh = current && current !== token ? current : await renewAnonymousSession()
+    const fresh = current && current !== token ? current : await refreshAccountToken() || await renewAnonymousSession()
     return fresh ? send(fresh) : res
   }
 }

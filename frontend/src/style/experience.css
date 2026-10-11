@@ -106,3 +106,6 @@ body:has([aria-hidden="false"] > .rc-feed) .lb-dev-seed-toggle{display:none}
 .rc-shared-remix{width:100%;max-width:620px;margin:24px auto 0}.rc-shared-remix>.lb-btn{min-height:44px;font-size:13px}.rc-shared-remix>.rc-muted{margin:0;text-align:center}
 
 .rc-post-follow:disabled{opacity:.55;cursor:wait}
+
+.rc-feed-error{box-sizing:border-box;width:100%;padding:16px;border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:20px}.rc-feed-error .rc-error{margin:0 0 12px}.rc-feed-error>button{width:100%;min-height:44px;border:1px solid var(--line);border-radius:var(--r-pill)}
+@media(max-width:759px){.rc-feed .rc-feed-main{min-width:0;width:100%;box-sizing:border-box}.rc-feed-error{width:auto;margin:0 16px 20px}}

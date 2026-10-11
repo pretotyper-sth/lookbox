@@ -103,3 +103,5 @@
 }
 
 .rc-following-toggle[aria-pressed=true]{background:#fff;color:#1b1b1b;border-color:var(--line)}
+
+.rc-closet-visibility{flex-direction:column;align-items:flex-start;gap:9px;margin:0}.rc-closet-visibility-copy label{font-size:12px;font-weight:600;color:var(--ink-2)}.rc-closet-visibility>div:last-child{background:none;padding:0;gap:6px}.rc-closet-visibility button{border:1px solid var(--line);border-radius:var(--r-pill);font-size:12.5px;padding:7px 13px}.rc-closet-visibility button[aria-pressed=true]{border-color:var(--ink)}

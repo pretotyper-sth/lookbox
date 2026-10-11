@@ -65,6 +65,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 
 ## Operations
+- [mobile-editing-audit-2026-10](mobile-editing-audit-2026-10.md) — 모바일 문구/공개 설정/AI 배지/CTA/피드 오류/편집기 수정·DEV 라이브 누락 점검·직접 입혀보기 영구 작업 서버 필요·사용자 푸시 승인
 - [ai-usage-cost](ai-usage-cost.md) — 원가는 `ai_usage_logs.metadata.cost_usd`. 착장·기준인물은 usage 미기록. 관리자 `/api/live/admin/ai-cost`
 - [chrome-extension-publish](chrome-extension-publish.md) — 웹스토어 게시자명·연락처는 공개. RealCloset 전용 Google 계정, 등록비·2FA·Privacy practices 필요
 - [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
