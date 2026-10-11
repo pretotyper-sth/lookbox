@@ -1334,6 +1334,7 @@ function AddSheet({ ctx }) {
   const [sel, setSel] = useS([]); // selected detected ids
   const [steps, setSteps] = useS([]); // ordered queue for sequential register
   const [stepIdx, setStepIdx] = useS(0);
+  const [savingItems, setSavingItems] = useS(false);
   const [pendingReplace, setPendingReplace] = useS(null); // { item, pending } — 이미지 변경 미리보기 (아직 DB 미반영)
   const progress = useImportProgress(stage === 'analyzing');
   const tryOnSubject = prefs && prefs.tryOnActive === 'other' ? 'other' : 'self';
@@ -2286,7 +2287,8 @@ function AddSheet({ ctx }) {
       material: clean.material || s.material || '',
     };
   };
-  const advance = (keep) => {
+  const advance = async (keep) => {
+    if (savingItems) return;
     if (keep) rememberStore(cur?.draft?.store);
     const updated = steps.map((x, i) => (i === stepIdx ? { ...x, added: keep } : x));
     setSteps(updated);
@@ -2299,7 +2301,12 @@ function AddSheet({ ctx }) {
       }
       const skipped = detected.filter((d) => !updated.some((s) => s.id === d.id && s.added)).map((d) => d.id);
       draftIdsRef.current = [];
-      addItemsBatch(kept, skipped);
+      if (!kept.length) {
+        await addItemsBatch(kept, skipped);
+        return;
+      }
+      setSavingItems(true);
+      try { await addItemsBatch(kept, skipped); } finally { setSavingItems(false); }
     } else setStepIdx(stepIdx + 1);
   };
   const doneCount = steps.filter((s) => s.added).length;
@@ -3537,11 +3544,11 @@ function AddSheet({ ctx }) {
             </div>
 
             <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
-              <Btn variant="ghost" onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
+              <Btn variant="ghost" disabled={savingItems} onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>
                 {steps.length <= 1 ? '취소' : '건너뛰기'}
               </Btn>
-              <Btn full size="lg" icon={stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
-                {stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
+              <Btn full size="lg" disabled={savingItems} icon={savingItems ? undefined : stepIdx >= steps.length - 1 ? 'check' : 'plus'} onClick={() => advance(true)}>
+                {savingItems ? <><span className="lb-spin" style={{ width: 17, height: 17, borderColor: 'rgba(255,255,255,.35)', borderTopColor: '#fff' }} />옷장에 담는 중…</> : stepIdx >= steps.length - 1 ? '담고 완료' : '담고 다음 옷'}
               </Btn>
             </div>
           </div>

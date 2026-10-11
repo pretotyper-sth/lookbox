@@ -2985,7 +2985,7 @@ function App() {
     if (!list || !list.length) {
       if (skippedIds && skippedIds.length) discardLiveItems(skippedIds);
       closeAdd();
-      return;
+      return true;
     }
     try {
       const ids = list.map((it) => String(it.serverId || it.id));
@@ -3025,8 +3025,10 @@ function App() {
       putLiveItems(finalList, true);
       closeAdd();
       showToast(finalList.length + '개 담았어요', 'check');
+      return true;
     } catch (e) {
       showToast(e.message || '옷장에 저장하지 못했어요. 다시 눌러 주세요.');
+      return false;
     }
   };
 

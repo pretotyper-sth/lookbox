@@ -44,6 +44,8 @@
 
 2026-10-07 추천 화면 진입 플로팅 액션: 전체 폭 설명 카드를 제거하고 옷장 선택 메뉴와 동일한 하단 중앙 위치·pill·surface 반투명·그림자·blur를 사용한다. 공통 Btn secondary/hanger 한 개로 직접 입혀보기만 표시하며 모바일 GNB 위 콘텐츠 영역에 뜬다. 추천 스크롤 하단에 80px(모바일)/92px(PC)을 확보해 마지막 카드 동작을 가리지 않는다. 빈 옷장에서는 계속 숨긴다. 근거: frontend/src/proto/06-today.jsx TodayScreen/TodayRecommendationScreen, closet-studio.css cs-studio-float.
 
+2026-10-11 옷장에서 고른 코디의 PC 결과 모달을 최대 1180px로 넓히고 카드 최소 폭을 220px로 맞춘다. PC 확대 뷰어는 82vh까지 키우고, 확대·이동으로 이미지 바깥이 보일 때 플랫 코디와 같은 `#E5E3DE` 배경을 유지한다. 모자가 상의·원피스·단독 아우터와 함께 선택되면 해당 상의를 아래로 옮겨 겹쳐 보이지 않게 한다. 근거: `frontend/src/proto/05-screens-cde.jsx` PickedOutfitsModal, `frontend/src/proto/02-shared.jsx` ImageViewer, `frontend/src/look-layout.js` editorialSlots.
+
 2026-10-08 신체 설정 복원/진입 크기: 개인화 생성 버전을 personal-body2로 변경하고 현재 키·몸무게·얼굴 사용·퍼스널 컬러와 일치하는 결과만 복원한다. 설정/수치 변경 시 화면의 이전 캐릭터를 비운다. 하단 직접 입혀보기는 기존 surface pill/그림자/blur를 유지하며 PC 최소224×60px·16px 글자·22px 아이콘, 모바일 최소200×54px·15px 글자·20px 아이콘으로 키웠다. 모바일 하단 메뉴 위14px, PC 하단22px 간격. 브라우저1440×1000/393×852에서 실제 크기와 하단 메뉴 비겹침을 확인했다. 근거: frontend/src/style/closet-studio.css:13, frontend/src/proto/06-today.jsx TodayScreen, [[personal-model-look]].
 
 2026-10-08 로컬: PC 직접 입혀보기 플로팅 버튼 폭을 공통 EmptyState 추천 버튼과 동일한 280px로 맞춤. 모바일도 공통 EmptyState와 동일한 좌우 40px 여백·최대 폭 280px를 적용한다. 근거: `frontend/src/style/closet-studio.css` `.cs-studio-float>button`.

@@ -5,11 +5,12 @@ export function editorialSlots(items) {
   if (!owned.length) return null;
   const hasOuter = owned.some(item => roles[item.category] === 'outer');
   const hasTop = owned.some(item => roles[item.category] === 'top');
+  const hasHat = owned.some(item => roles[item.category] === 'hat');
   const slots = {
-    top: { x0: 6, y0: 7, x1: 62, y1: hasOuter ? 58 : 83, z: 2, labelX: 26, labelY: hasOuter ? 27 : 42 },
-    outer: { x0: 6, y0: hasTop ? 38 : 8, x1: 64, y1: 89, z: 4, labelX: 27, labelY: hasTop ? 67 : 43 },
+    top: { x0: 6, y0: hasHat ? 24 : 7, x1: 62, y1: hasOuter ? 58 : 83, z: 2, labelX: 26, labelY: hasOuter ? 41 : hasHat ? 53 : 42 },
+    outer: { x0: 6, y0: hasHat && !hasTop ? 24 : hasTop ? 38 : 8, x1: 64, y1: 89, z: 4, labelX: 27, labelY: hasTop ? 67 : hasHat ? 56 : 43 },
     bottom: { x0: 51, y0: 7, x1: 95, y1: 91, z: 1, labelX: 73, labelY: 44 },
-    dress: { x0: 7, y0: 7, x1: 66, y1: 91, z: 2, labelX: 28, labelY: 43 },
+    dress: { x0: 7, y0: hasHat ? 24 : 7, x1: 66, y1: 91, z: 2, labelX: 28, labelY: hasHat ? 57 : 43 },
     shoes: { x0: 46, y0: 76, x1: 95, y1: 97, z: 7, labelX: 72, labelY: 86 },
     bag: { x0: 7, y0: 71, x1: 38, y1: 96, z: 5, labelX: 22, labelY: 81 },
     hat: { x0: 7, y0: 3, x1: 35, y1: 22, z: 5, labelX: 22, labelY: 13 },

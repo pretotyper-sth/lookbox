@@ -400,6 +400,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
   const subtitle = isOutfit
     ? [outfit.styleLabel || outfit.mood, outfitItems.length ? `${outfitItems.length}개 조합` : ''].filter(Boolean).join(' · ')
     : [item.category, item.color].filter(Boolean).join(' · ');
+  const desktopViewer = typeof window !== 'undefined' && window.innerWidth >= 760;
 
   const applyZoom = (next) => commitZoom(next);
   const zoomIn = () => applyZoom(zoomRef.current + VIEWER_ZOOM_STEP);
@@ -492,7 +493,7 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          flex: 'none', width: '100%', maxWidth: 440,
+          flex: 'none', width: '100%', maxWidth: desktopViewer ? 900 : 440,
           display: 'flex', alignItems: 'flex-start', gap: 10,
         }}
       >
@@ -530,13 +531,13 @@ function ImageViewer({ open, item, outfit, items, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative',
-          width: lookFill ? 'min(100%, calc(min(72vh, 640px) * 0.8))' : '100%',
-          maxWidth: 440,
+          width: lookFill ? (desktopViewer ? 'min(86vw, calc(min(82vh, 1000px) * 0.8))' : 'min(100%, calc(min(72vh, 640px) * 0.8))') : '100%',
+          maxWidth: desktopViewer ? 'min(900px, 86vw)' : 440,
           flex: lookFill ? 'none' : '1 1 auto',
           aspectRatio: lookFill ? '4 / 5' : undefined,
           height: lookFill ? 'auto' : undefined,
-          minHeight: 0, maxHeight: 'min(72vh, 640px)',
-          background: 'var(--thumb-bg)', borderRadius: 'var(--r-lg)',
+          minHeight: 0, maxHeight: desktopViewer ? 'min(82vh, 1000px)' : 'min(72vh, 640px)',
+          background: '#E5E3DE', borderRadius: 'var(--r-lg)',
           boxShadow: '0 20px 48px rgba(0,0,0,0.35)',
           overflow: 'hidden',
           touchAction: 'none',
@@ -861,6 +862,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   const inputRef = useRef(null);
   const rootRef = useRef(null);
   const anchor = useRef(null);
+  const [manualValue, setManualValue] = useState(null);
   // 시트 컴포넌트는 아이템마다 새로 마운트되지 않는다. mount 때 한 번만 읽으면 다른
   // 아이템을 열어도 그때의 목록이 그대로 남아, 방금 저장한 구매처가 칩에 안 뜬다.
   // value가 바뀔 때(= 다른 아이템의 draft가 들어올 때)마다 다시 읽는다.
@@ -870,7 +872,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
   // 입력칸 노출은 상태로 들고 있지 않고 값에서 파생시킨다. 상태로 두면 시트가 열릴 때
   // 값이 한 박자 늦게 도착해(draft를 effect에서 채운다) 칩과 어긋난 채 굳는다.
   // 최근 목록에 없는 값 = 직접 입력한 값 → 입력칸을 연다.
-  const typing = !current || recents.indexOf(current) === -1;
+  const typing = manualValue !== null ? manualValue === current : (!current || recents.indexOf(current) === -1);
   // 표시 순서: 직접 입력 → 지금 선택된 값 → 나머지 최신순. 저장 순서는 건드리지 않는다.
   // 선택된 값을 이력 순서 그대로 두면 새 구매처가 쌓일수록 계속 뒤로 밀려서,
   // 수정 화면을 열 때마다 지금 값이 어디 있는지 찾아야 한다.
@@ -900,12 +902,13 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
     a.el.scrollTop = a.gap <= 2 ? a.el.scrollHeight - a.el.clientHeight : a.top;
   });
 
-  const pickChip = (v) => { keepScroll(); onChange(v); };
+  const pickChip = (v) => { keepScroll(); setManualValue(null); onChange(v); };
   // 칩으로 고른 값을 비우면 typing이 자동으로 true가 되어 입력칸이 열린다.
   // focus는 preventScroll — 브라우저가 입력칸을 보이게 하려고 스크롤을 또 움직이면
   // 방금 되돌린 위치가 다시 깨진다.
   const openTyping = () => {
     keepScroll();
+    setManualValue('');
     if (current) onChange('');
     setTimeout(() => inputRef.current && inputRef.current.focus({ preventScroll: true }), 0);
   };
@@ -940,7 +943,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
                   padding: '7px 0', background: 'transparent', color: 'inherit',
                   fontSize: 12.5, fontWeight: on ? 600 : 500, whiteSpace: 'nowrap',
                 }}>{v}</button>
-              <button type="button" onClick={() => { keepScroll(); forgetRecent(storeKey, v); if (on) onChange(''); setPurge((n) => n + 1); }}
+              <button type="button" onClick={() => { keepScroll(); forgetRecent(storeKey, v); if (on) { setManualValue(null); onChange(''); } setPurge((n) => n + 1); }}
                 aria-label={`${v} 최근 목록에서 지우기`}
                 style={{
                   display: 'grid', placeItems: 'center', width: 20, height: 20, borderRadius: '50%',
@@ -958,7 +961,7 @@ function RecentTagField({ label, value, onChange, placeholder, storeKey }) {
           className="lb-input"
           value={value || ''}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { setManualValue(e.target.value); onChange(e.target.value); }}
           style={{
             width: '100%', marginTop: 10, padding: '12px 14px', borderRadius: 'var(--r-md)',
             fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)',

@@ -560,7 +560,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: wide ? 'repeat(auto-fill, minmax(178px, 1fr))' : 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: wide ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'repeat(2, minmax(0, 1fr))',
             gap: wide ? 14 : 12,
           }}>
             {outfits.map((o, i) => {
@@ -606,7 +606,7 @@ function PickedOutfitsModal({ state, onClose, onMore, savedOutfitIds = [], onSav
         onClick={(e) => e.stopPropagation()}
         className="lb-anim-in lb-scrollable"
         style={{
-          width: 'min(860px, 100%)', maxHeight: '84vh', background: 'var(--surface)',
+          width: 'min(1180px, 94vw)', maxHeight: '88vh', background: 'var(--surface)',
           borderRadius: 'var(--r-lg)', padding: '22px 24px 24px', boxSizing: 'border-box',
           boxShadow: '0 24px 60px -20px rgba(0,0,0,0.4)',
         }}

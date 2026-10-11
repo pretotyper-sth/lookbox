@@ -11,7 +11,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드·모바일 확대 화면은 ✦만, 데스크톱 상세는 생성 문구 유지
 
 ## Features
-- [closet-background-studio](closet-background-studio.md) — 로컬 구매내역 자동 추출·옷장 저장/앱 종료 후 지속·재시작 복귀, 오늘 코디의 캐릭터 착장 탐색·룩북 저장·피드 편집 연결·공통 앱 레이아웃/버튼·묶음 드롭 생성/남녀 기본 캐릭터·선택 개인화·4:5 단일 배경·공통 닫기 버튼·기본 캐릭터 유지 피드백·PC 묶음 이미지 끌기·모바일 선택 드래그/스크롤 분리·만들기 재료/옷장 혼합 착장·캐릭터 공통 확대 보기·추천 화면 하단 pill 플로팅 진입
+- [closet-background-studio](closet-background-studio.md) — 로컬 구매내역 자동 추출·옷장 저장/앱 종료 후 지속·재시작 복귀, 오늘 코디의 캐릭터 착장 탐색·룩북 저장·피드 편집 연결·공통 앱 레이아웃/버튼·묶음 드롭 생성/남녀 기본 캐릭터·선택 개인화·4:5 단일 배경·공통 닫기 버튼·기본 캐릭터 유지 피드백·PC 묶음 이미지 끌기·모바일 선택 드래그/스크롤 분리·만들기 재료/옷장 혼합 착장·캐릭터 공통 확대 보기·추천 화면 하단 pill 플로팅 진입·고른 코디 PC 모달/확대 뷰어 크기·배경 일치·모자 포함 플랫레이 여백
 - [item-outfit-menu](item-outfit-menu.md) — 아이템 메뉴 자연 높이·서버 실제 수량에 맞는 스켈레톤·착장 우선 생성·성별 고정·직접 코디 버튼·불가능한 선택 안내·결과 재개·룩북 저장·DEV 추천 개수 통일/프로필별 선택 캐시/다시 보지 않기 생성 안내
 - [model-look-realism-2026-10](model-look-realism-2026-10.md) — 무신사 AI 코디 35장·남녀별 순환·남성 목록 오분류 제거, GPT Image 2.5 Flare high, 전신 80%·위아래 여백, 실제 서비스 생성 확인·승인한 웜 그레이지 A 배경·고른 확산광·직접 4:5 생성
 - [tryon-mask-boundaries](tryon-mask-boundaries.md) — 승인 체크포인트 보호. 9/24 명시 요청으로 tryon22·캐시 PNG 재검증·부분 투명화 거부·정면 자세 강화; 영상 cover·PNG contain 유지
