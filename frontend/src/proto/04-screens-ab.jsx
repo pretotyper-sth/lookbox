@@ -533,7 +533,7 @@ function WardrobeScreen({ ctx }) {
 
         {mobileSelect && !selecting && (
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-            옷 선택 후 보관·삭제·코디 추천
+            옷을 골라 정리하거나 코디를 추천받아요.
           </p>
         )}
 

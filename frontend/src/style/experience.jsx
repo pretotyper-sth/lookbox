@@ -114,7 +114,7 @@ export function StyleExperience({ ctx }) {
     </>}
     {(section==='발견')&&<>
 
-      <nav className="rc-gallery-nav" aria-label="피드 탐색"><div>{[['all','전체'],['following','팔로잉']].map(([id,label])=><button key={id} aria-pressed={feedFilter===id} onClick={()=>setFeedFilter(id)}>{label}</button>)}</div><p>저장하고, 내 옷으로 리스타일</p></nav>
+      <nav className="rc-gallery-nav" aria-label="피드 탐색"><div>{[['all','전체'],['following','팔로잉']].map(([id,label])=><button key={id} aria-pressed={feedFilter===id} onClick={()=>setFeedFilter(id)}>{label}</button>)}</div><p>저장하고 내 옷으로 리스타일해 보세요.</p></nav>
       <div className="rc-stream">{visibleFeed.map(look=><article className="rc-post" key={look.id}>
         <FeedPostHeader look={look} onProfile={post=>setProfile({author:post.author,avatar:post.avatar,sample:post.sample,creatorId:post.creatorId,own:isOwnPost(post)})} onFollow={follow} followed={state.follows.includes(followId(look))} own={isOwnPost(look)} followDisabled={followBusy||!social?.creatorId}/>
         <div className="rc-post-art" onDoubleClick={()=>likePost(look)}><StyleCanvas look={look} showCredits={false}/><button className="rc-post-expand" aria-label={`${look.title} 이미지 크게 보기`} title="이미지 크게 보기" onClick={()=>openLook(look)}><Icon name="expand" size={18}/><span>크게 보기</span></button></div>
