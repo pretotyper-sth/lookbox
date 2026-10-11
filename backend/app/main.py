@@ -2867,7 +2867,14 @@ def resolve_product_image(
     if product:
         if report:
             report("polish")
-        return normalize_product_canvas(product, meta.get("category"))
+        category = meta.get("category")
+        studio_garment = meta.get("_extract_mode") == "studio_cutout" and category in _ALPHA_SMOOTH_STRONG
+        if studio_garment:
+            product = _polish_cutout_alpha(product, category)
+        normalized = normalize_product_canvas(product, category)
+        if studio_garment:
+            normalized = _polish_cutout_alpha(normalized, category)
+        return normalized
     fail = meta.get("_extract_fail") or "edit_failed"
     msg = _EXTRACT_FAIL_MSG.get(fail, _EXTRACT_FAIL_MSG["edit_failed"])
     info = meta.get("_extract_fail_info") or {}

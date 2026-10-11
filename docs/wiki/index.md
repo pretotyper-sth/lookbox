@@ -45,7 +45,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [add-item-bulk](add-item-bulk.md) — URL은 최대 20개(추가 시 아래로 스크롤·초과 붙여넣기 안내). +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 여러 URL의 같은 호스트 브랜드 자동 채움·구매처 즉시 최근 태그·서버 저장 확인 후 완료. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. URL이면 가격·재질도 HTML에서 채움
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷·브랜드·가격·재질을 페이지에서 읽는다. robots 메타를 차단으로 오인하지 않음
-- [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼
+- [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 스튜디오 의류는 확대 전후 경계 보정으로 저해상도 계단 감소. 상품컷은 side여도 누끼
 - [stacked-product-hero](stacked-product-hero.md) — 세로·가로로 붙은 상세컷은 대표 정면 상품컷 한 칸만 선택, 소매 틈·신발 한 쌍 보호
 
 ## Decisions
