@@ -46,7 +46,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. URL이면 가격·재질도 HTML에서 채움
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷·브랜드·가격·재질을 페이지에서 읽는다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼
-- [stacked-product-hero](stacked-product-hero.md) — 세로로 붙은 상세컷은 정면 전신 한 칸만 잘라 등록한다
+- [stacked-product-hero](stacked-product-hero.md) — 세로·가로로 붙은 상세컷은 대표 정면 상품컷 한 칸만 선택, 소매 틈·신발 한 쌍 보호
 
 ## Decisions
 - [feed-desktop-gallery-2026-10](feed-desktop-gallery-2026-10.md) — PC 피드 2·3·4열 갤러리/추천 레일 제거·전체/팔로잉·룩 확대, 기본 첫 화면 옷장·랜딩 가입 경로 통일·상세 제목/겹침/출처/아이템 목록 정리·팔로잉 최신 상태 반영·PC 작성자 이미지 위 배치·중앙 끝 안내/맨 위로·목록 출처 공통 하단 중앙/사용된 제공자만 표시·이미지 꾸미기→글/공개 범위→게시·리스타일 원문 미복사·아이템 목록/상세 고정 높이·GIF 정지 프레임 공유 이미지 포함·텍스트 탭 재편집 유지/드래그 분리·모바일 옵션 기본40dvh/손잡이 확장/전체 캔버스 표시·밝은 게시 화면/우상단 주황 게시 버튼·투표 카드 목록/7일 만료 시각·기존 글 수정 완료/변경 취소 확인·모바일 서식 하단/재료 화살표 정렬·선택 패널 48px 축소·재료 검색 상단 스크롤 가림

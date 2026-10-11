@@ -500,15 +500,15 @@ def save_product_image_set(user_id: str, product_bytes: bytes) -> tuple[str, str
 
 
 def _pick_hero_panel(img: Image.Image) -> Image.Image:
-    """카페24식 세로 상세컷에서 정면 전신 한 장만 남긴다.
+    """상품 상세 이미지의 세로·가로 배열에서 대표 상품컷 한 장만 남긴다.
 
     앞·뒤·넥·프린트·원단·스펙이 흰 간격으로 이어진 한 장으로 들어오는 경우가 많다.
     통째로 누끼하면 카드에 영수증처럼 길쭉한 조각이 올라간다. 밝은(또는 검은)
-    가로 거터로 칸을 나누고, 전신 실루엣에 가깝고 가슴 쪽 정보가 많은 칸을 고른다.
+    가로·세로 거터로 칸을 나누고, 전신 실루엣에 가깝고 가슴 쪽 정보가 많은 칸을 고른다.
     거터가 없거나 칸이 하나면 원본을 그대로 둔다.
     """
     w, h = img.size
-    if w < 40 or h < 80 or h < w * 1.85:
+    if w < 40 or h < 80:
         return img
     rgb = img.convert("RGB")
     px = rgb.load()
@@ -549,24 +549,68 @@ def _pick_hero_panel(img: Image.Image) -> Image.Image:
             y += 1
         if y - start >= max(24, int(w * 0.4)):
             panels.append((start, y))
-    if len(panels) < 2:
+    cells: list[tuple[int, int, int, int]] = []
+    for y0, y1 in panels:
+        columns = []
+        for x in range(w):
+            values = [(sum(px[x, yy]) / 3) for yy in range(y0, y1, max(1, (y1 - y0) // 80))]
+            mean = sum(values) / len(values)
+            std = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
+            columns.append(std < 5.5 and (mean > 250 or mean < 14))
+        x = 0
+        while x < w:
+            if not columns[x]:
+                x += 1
+                continue
+            end = x
+            while end < w and columns[end]:
+                end += 1
+            if end - x < max(3, int(w * 0.004)):
+                columns[x:end] = [False] * (end - x)
+            x = end
+        spans = []
+        x = 0
+        while x < w:
+            if columns[x]:
+                x += 1
+                continue
+            start = x
+            while x < w and not columns[x]:
+                x += 1
+            if x - start >= max(24, int(w * 0.15)):
+                spans.append((start, x))
+        # 흰 배경 위 신발 한 쌍·소매 사이의 빈 공간을 별도 사진으로 자르지 않는다.
+        framed = len(spans) > 1
+        for x0, x1 in spans:
+            inset = max(1, min(x1 - x0, y1 - y0) // 40)
+            corners = [px[x, yy] for x in (x0 + inset, x1 - 1 - inset)
+                       for yy in (y0 + inset, y1 - 1 - inset)]
+            if sum(14 < sum(c) / 3 < 250 for c in corners) < 3:
+                framed = False
+                break
+        if framed:
+            cells.extend((x0, y0, x1, y1) for x0, x1 in spans)
+        else:
+            cells.append((0, y0, w, y1))
+    if len(cells) < 2:
         return img
 
-    def score(bounds: tuple[int, int], index: int) -> float:
-        y0, y1 = bounds
-        ph = y1 - y0
-        crop = rgb.crop((0, y0, w, y1))
+    def score(bounds: tuple[int, int, int, int], index: int) -> float:
+        x0, y0, x1, y1 = bounds
+        w, ph = x1 - x0, y1 - y0
+        crop = rgb.crop(bounds)
         cp = crop.load()
         border: list[tuple[int, int, int]] = []
+        inset = max(1, min(w, ph) // 40)
         for x in range(0, w, max(1, w // 40)):
-            border.append(cp[x, 0])
-            border.append(cp[x, ph - 1])
+            border.append(cp[x, inset])
+            border.append(cp[x, ph - 1 - inset])
         for yy in range(0, ph, max(1, ph // 40)):
-            border.append(cp[0, yy])
-            border.append(cp[w - 1, yy])
-        br = sum(c[0] for c in border) / len(border)
-        bg = sum(c[1] for c in border) / len(border)
-        bb = sum(c[2] for c in border) / len(border)
+            border.append(cp[inset, yy])
+            border.append(cp[w - 1 - inset, yy])
+        br = sorted(c[0] for c in border)[len(border) // 2]
+        bg = sorted(c[1] for c in border)[len(border) // 2]
+        bb = sorted(c[2] for c in border)[len(border) // 2]
         samp = max(1, w // 36)
         fg = tot = ink = 0
         luma_sum = luma_sq = inner_n = 0
@@ -603,15 +647,13 @@ def _pick_hero_panel(img: Image.Image) -> Image.Image:
         early = 1.0 / (1.0 + index * 0.12)
         return (3.0 * fill_s + 2.2 * struct_s + aspect_s) * early
 
-    ranked = sorted(((score(p, i), p) for i, p in enumerate(panels)), reverse=True)
-    _best, (y0, y1) = ranked[0]
-    if (y1 - y0) >= h * 0.88:
+    best = max(range(len(cells)), key=lambda i: score(cells[i], i))
+    x0, y0, x1, y1 = cells[best]
+    if (x1 - x0) * (y1 - y0) >= w * h * 0.88:
         return img
-    pad = max(2, w // 80)
-    y0 = max(0, y0 - pad)
-    y1 = min(h, y1 + pad)
-    print(f"[hero] stacked detail → panel y={y0}:{y1} of {h} ({len(panels)} cells)", flush=True)
-    return img.crop((0, y0, w, y1))
+    box = (x0, y0, x1, y1)
+    print(f"[hero] detail grid → panel {box} of {w}x{h} ({len(cells)} cells)", flush=True)
+    return img.crop(box)
 
 
 def read_image_as_png_bytes(path: str, max_side: int = 1024) -> bytes:
