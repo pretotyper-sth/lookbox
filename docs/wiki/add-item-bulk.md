@@ -8,6 +8,8 @@
 
 URL·사진 추출 뒤 `register`의 「담고 완료」는 상세 입력(메모) 아래, 시트 본문 안에 둔다. 상세 시트의 「저장」과 같다. 스크롤 밖 고정·sticky를 쓰지 않는다. (`frontend/src/proto/04-screens-ab.jsx` `advance`)
 
+URL은 한 번에 최대 20개까지 입력할 수 있다. 「주소 추가」를 누르면 목록을 아래로 스크롤하고 새 입력칸에 포커스해 버튼을 계속 보이게 한다. 다중 URL 붙여넣기가 20개 한도를 넘으면 초과 안내를 표시한다. (`frontend/src/proto/04-screens-ab.jsx` `URL_ROW_MAX`, `addUrlRow`, 2026-10-11)
+
 여러 URL을 순차 확인할 때 같은 호스트에서 추출한 브랜드가 다른 상품에 비어 있으면 해당 브랜드를 미리 채운다(편집 가능). 각 상품에서 「담고 다음 옷」을 누르면 구매처를 즉시 최근 태그에 기록한다. 마지막 「담고 완료」는 상세 PATCH와 owned 상태 응답을 모두 확인한 뒤에만 시트를 닫고 성공 표시한다. 저장 실패 시 시트를 유지해 재시도할 수 있다. (`frontend/src/proto/04-screens-ab.jsx` `runBulkReview`/`advance`, `frontend/src/proto/09-app.jsx` `addItemsBatch`, 2026-10-11)
 
 구매내역 탭은 옷장 추가 시트에 있다(사진·URL 옆). 몰 칩으로 고른 뒤 「주문 내역 가져오기」로 세션을 연다.

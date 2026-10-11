@@ -42,7 +42,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [mood-groups](mood-groups.md) — 승인한 무드 18개 로컬·라이브 적용(`efd5831`)·최적화 유지, 스포티 기존 의상에 새 톤·클래식 트위드 조합. 생성 레퍼런스 별도 사용
 - [order-import-webview](order-import-webview.md) — 구매내역: 실제 확장은 Chrome 팝업, 샘플은 추가 시트 2열 가상 Chrome. 썸네일 직접 등록·탭 이동 후 유지·선택 후 공용 상세입력. 모바일은 PC 안내
 - [store-request-survey](store-request-survey.md) — 지원하지 않는 쇼핑몰은 추가 요청 칩 → 이름·주소 입력 → 단일 CTA로 저장하고, 사용자별 중복을 막아 관리자 API가 집계한다
-- [add-item-bulk](add-item-bulk.md) — URL은 +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 여러 URL의 같은 호스트 브랜드 자동 채움·구매처 즉시 최근 태그·서버 저장 확인 후 완료. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
+- [add-item-bulk](add-item-bulk.md) — URL은 최대 20개(추가 시 아래로 스크롤·초과 붙여넣기 안내). +로 칸을 늘림(박스 안 스크롤). 바로 보기·구매내역 박스는 힌트 칸까지(212px)라 탭 높이가 같다. 「담고 완료」는 상세 입력 아래. 여러 URL의 같은 호스트 브랜드 자동 채움·구매처 즉시 최근 태그·서버 저장 확인 후 완료. 구매내역은 칩 선택 후 CTA([[order-import-webview]])
 - [item-optional-fields](item-optional-fields.md) — 추가·상세 선택 입력 순서: 계절 → 가격 → 재질 → 구매처 → 메모. URL이면 가격·재질도 HTML에서 채움
 - [url-import-fetch](url-import-fetch.md) — URL 등록은 상품컷·브랜드·가격·재질을 페이지에서 읽는다. robots 메타를 차단으로 오인하지 않음
 - [studio-cutout-fringe](studio-cutout-fringe.md) — 어두운 상품컷 JPEG 링잉은 흰 테두리가 된다. 고대비만 혼합대를 흡수. 상품컷은 side여도 누끼

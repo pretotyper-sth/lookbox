@@ -1261,6 +1261,7 @@ function AddSheet({ ctx }) {
   const [picked, setPicked] = useS(false);
   const [urls, setUrls] = useS(['']);
   const urlFieldRefs = useR([]);
+  const urlPanelRef = useR(null);
   const [orderSession, setOrderSession] = useS(null);
   // 구매내역에서 가져온 후보 목록. URL 탭은 여러 주소를 이 목록으로 넘길 수 있다.
   const [bulk, setBulk] = useS(null);       // [{url,name,store,price,purchasedAt,pick,state,error}]
@@ -1842,7 +1843,9 @@ function AddSheet({ ctx }) {
     setErr('');
     requestAnimationFrame(() => {
       const el = urlFieldRefs.current[urls.length];
-      if (el) el.focus();
+      if (el) el.focus({ preventScroll: true });
+      const panel = urlPanelRef.current;
+      if (panel) panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' });
     });
   };
   const removeUrlRow = (idx) => {
@@ -1851,6 +1854,7 @@ function AddSheet({ ctx }) {
   const pasteUrlsAt = (idx, text) => {
     const parts = splitProductUrls(text);
     if (parts.length <= 1) return false;
+    const truncated = parts.length > 1 + URL_ROW_MAX - urls.length;
     setUrls((prev) => {
       const next = prev.slice();
       next[idx] = parts[0];
@@ -1858,7 +1862,7 @@ function AddSheet({ ctx }) {
       const merged = next.concat(extra).slice(0, URL_ROW_MAX);
       return merged.length ? merged : [''];
     });
-    setErr('');
+    setErr(truncated ? `한 번에 최대 ${URL_ROW_MAX}개까지 추가할 수 있어요.` : '');
     return true;
   };
   const filledUrls = urls.map((u) => toHttpsUrl(u)).filter(Boolean);
@@ -1867,6 +1871,8 @@ function AddSheet({ ctx }) {
   const absorbPastedUrls = (text) => {
     const parts = splitProductUrls(text).map(toHttpsUrl).filter(Boolean);
     if (!parts.length) return false;
+    const available = urls.filter((u) => !String(u || '').trim()).length + URL_ROW_MAX - urls.length;
+    const truncated = parts.length > available;
     setUrls((prev) => {
       const next = prev.slice();
       let pi = 0;
@@ -1876,7 +1882,7 @@ function AddSheet({ ctx }) {
       while (pi < parts.length && next.length < URL_ROW_MAX) next.push(parts[pi++]);
       return next.length ? next : [''];
     });
-    setErr('');
+    setErr(truncated ? `한 번에 최대 ${URL_ROW_MAX}개까지 추가할 수 있어요.` : '');
     return true;
   };
   // 확인 없이 바로 owned로 담기 (자동 등록 체크 시)
@@ -3033,7 +3039,7 @@ function AddSheet({ ctx }) {
                         )}
                       </div>
                     ) : (
-                      <div className="lb-scrollable" style={{
+                      <div ref={urlPanelRef} className="lb-scrollable" style={{
                         ...stagePanel, display: 'flex', flexDirection: 'column', gap: 8,
                         overflow: 'auto', paddingRight: 2,
                       }}>
@@ -3316,7 +3322,9 @@ function AddSheet({ ctx }) {
                     ? <>PC에서 주문내역 옷을 골라 담아요</>
                     : <><Icon name="bag" size={15} /> 주문내역에서 옷을 골라 담아요</>
                 ) : (
-                  <><Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발까지 따로따로 찾아드려요</>
+                  tab === 'url'
+                    ? <>한 번에 최대 {URL_ROW_MAX}개까지 추가할 수 있어요</>
+                    : <><Icon name="sparkle" size={15} /> 사진 속 상의·하의·신발·소품까지 각각 찾아드려요</>
                 )}
               </div>
             ) : null}
