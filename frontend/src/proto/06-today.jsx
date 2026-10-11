@@ -1,4 +1,5 @@
 /* @prototype-ported */
+import { createPortal } from 'react-dom';
 const React = window.React;
 const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
@@ -116,10 +117,10 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
             display: 'block', width: '100%', cursor: onOpen ? 'pointer' : 'default', textAlign: 'left', position: 'relative',
           }}
         >
-          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} aiMark={aiMark} infoButton infoRight={59} infoSize={24} infoBottom={7} />
+          <LookComposite outfit={displayOutfit} items={items} ratio="4 / 5" looking={looking} aiMark={aiMark} infoButton infoRight={59} infoSize={24} infoBottom={7} aiMarkSize={24} aiMarkInset={7} />
         </div>
-        {onOpen && LookExpandBadge ? <LookExpandBadge size={24} inset={7} /> : null}
-        <button onClick={onSave} className="lb-save" aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'} style={{
+        {onOpen && LookExpandBadge ? <button type="button" aria-label="크게 보기" title="크게 보기" onClick={() => onOpen(outfit)} style={{ position: 'absolute', right: 7, bottom: 7, width: 24, height: 24, padding: 0, border: 0, background: 'transparent', cursor: 'pointer', zIndex: 15 }}><LookExpandBadge size={24} inset={0} /></button> : null}
+        <button onClick={onSave} className="lb-save" title={saved ? '저장 취소' : '룩북에 저장'} aria-label={saved ? '룩북에서 빼기' : '룩북에 저장'} style={{
           position: 'absolute', right: 8, top: 8, width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center',
           color: saved ? 'var(--accent-ink)' : 'var(--ink)',
           background: saved ? 'var(--accent)' : 'color-mix(in srgb, var(--surface-2) 88%, transparent)',
@@ -133,12 +134,12 @@ function TodayCard({ outfit, saved, onSave, worn, onWear, wearLocked, styleLabel
           const next = !useModelLook;
           window.LOOK_IMAGE_MODES[outfit.id] = next;
           setUseModelLook(next);
-        }} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 33, bottom: 7, zIndex: 15, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
+        }} title={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 만들기'} aria-label={outfit.lookImg ? (useModelLook ? '상품컷 보기' : 'AI 착장 보기') : 'AI 착장 이미지 만들기'} style={{ position: 'absolute', right: 33, bottom: 7, zIndex: 15, width: 24, height: 24, border: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--ink) 72%, transparent)', color: '#fff', cursor: 'pointer', boxShadow: '0 0 0 1px rgba(255,255,255,0.12)' }}>
           <Icon name={outfit.lookImg && useModelLook ? "product" : "sparkle"} size={12} stroke={2.2} />
         </button>
-        <BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420} centered>
+        {createPortal(<BottomSheet open={confirmModelLook} onClose={() => setConfirmModelLook(false)} maxW={420} zIndex={120} centered>
           <div style={{ padding: 22 }}><div style={{ fontSize: 17, fontWeight: 700 }}>AI 착장 이미지를 만들까요?</div><div style={{ marginTop: 8, color: 'var(--ink-3)', fontSize: 13 }}>이미지 생성에 10크레딧을 사용해요.</div><div style={{ display: 'flex', gap: 8, marginTop: 20 }}><Btn full variant="secondary" onClick={() => setConfirmModelLook(false)}>취소</Btn><Btn full onClick={() => { setConfirmModelLook(false); window.LOOK_IMAGE_MODES[outfit.id] = true; setUseModelLook(true); onMakeModelLook && onMakeModelLook(outfit); }}>만들기</Btn></div></div>
-        </BottomSheet>
+        </BottomSheet>, document.body)}
       </div>
 
       <div style={{ padding: '11px 3px 0', flex: 1, minWidth: 0 }}>

@@ -8,7 +8,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 ## Architecture
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 - [mobile-bottom-nav](mobile-bottom-nav.md) — 모바일 하단 메뉴에는 옷장·오늘 코디·룩북·마이만 표시하고 구매 검토는 두지 않는다
-- [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드·모바일 확대 화면은 ✦만, 데스크톱 상세는 생성 문구 유지
+- [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드의 ✦ 크기·정렬 통일, AI 착장 옷 정보·아이콘 hover 설명
 
 ## Features
 - [closet-background-studio](closet-background-studio.md) — 로컬 구매내역 자동 추출·옷장 저장/앱 종료 후 지속·재시작 복귀, 오늘 코디의 캐릭터 착장 탐색·룩북 저장·피드 편집 연결·공통 앱 레이아웃/버튼·묶음 드롭 생성/남녀 기본 캐릭터·선택 개인화·4:5 단일 배경·공통 닫기 버튼·기본 캐릭터 유지 피드백·PC 묶음 이미지 끌기·모바일 선택 드래그/스크롤 분리·만들기 재료/옷장 혼합 착장·캐릭터 공통 확대 보기·추천 화면 하단 pill 플로팅 진입·고른 코디 PC 모달/확대 뷰어 크기·배경 일치·모자 포함 플랫레이 여백
@@ -25,7 +25,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [account-settings-flow](account-settings-flow.md) — 개인정보와 비밀번호는 하나의 시트 안에서 화면 전환; 중첩 시트 없이 뒤로 복귀
 - [outfit-feedback](outfit-feedback.md) — 코디 상세의 엄지 평가를 계정에 저장하고 다음 조합의 아이템·스타일 점수에 반영
 - [model-look-toggle](model-look-toggle.md) — AI 착장은 왼쪽 첫 카드 요청부터 작업 표시. model-id33은 목록 밖 액세서리 금지·레퍼런스 대비 다리 길이 소폭 축소
-- [model-look-confirm-modal](model-look-confirm-modal.md) — AI 착장 생성 확인은 모바일에서도 가운데 표시하고 작은 화면에서 내부 스크롤·DEV 마이 선택 코디 자동 생성 옵션/첫 활성화 비용 안내
+- [model-look-confirm-modal](model-look-confirm-modal.md) — AI 착장 생성 확인은 카드 밖 최상위 레이어·화면 가운데 표시하고 작은 화면에서 내부 스크롤·DEV 마이 선택 코디 자동 생성 옵션/첫 활성화 비용 안내
 - [look-latency](look-latency.md) — 상품컷을 먼저 보내고, 오른쪽 제안 아이템과 왼쪽 AI 착장을 병렬 생성한다
 - [location-weather](location-weather.md) — 날씨 조회 3/10초 제한·병렬 복구·30분 캐시·재시도, 실패 시 임의 기온 없음
 - [coord-clash](coord-clash.md) — 추천 상품컷 코어 슬롯 중복 방지·AI/보충/최종 결과 스타일 충돌 검사·니트/운동용 하의 제외·수량보다 적합성 우선

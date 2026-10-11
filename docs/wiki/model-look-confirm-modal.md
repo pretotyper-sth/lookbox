@@ -15,3 +15,5 @@ AI 착장 이미지 생성 확인창은 `BottomSheet`의 `centered` 옵션으로
 2026-10-08: 개별 아이템 AI 착장 토글 하단 설명을 “고른 옷의 코디도 AI 착장으로 보여줘요”로 변경. 기존 한 줄 표시 및 최초 활성화 비용 안내 모달 유지. 근거: `frontend/src/proto/08-mypage.jsx` pickedModelLookRow.
 
 2026-10-08 설명 보정: “옷장에서 직접 고른 옷도 AI 착장으로 보여줘요”로 변경해 옷장에서 직접 선택한 코디 요청에 적용됨을 명시. singleLine 유지. 근거: `frontend/src/proto/08-mypage.jsx` pickedModelLookRow.
+
+2026-10-11: TodayCard 생성 확인창은 `createPortal`로 `document.body`에 렌더링하고 z-index 120을 사용한다. 고른 코디 모달(z-index 90)과 카드의 애니메이션 stacking context 밖에 띄워 선택한 카드가 확인창을 덮지 않게 한다. 근거: `frontend/src/proto/06-today.jsx` TodayCard.

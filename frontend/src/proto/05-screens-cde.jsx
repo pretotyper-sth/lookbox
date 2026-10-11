@@ -335,7 +335,7 @@ function flattenLookBoard(items, place, scale, ratio, pack) {
 const LOOK_FLAT_CACHE = {};
 window.LOOK_IMAGE_MODES = window.LOOK_IMAGE_MODES || {};
 
-function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false, infoButton = false, infoRight = 8, infoSize = 28, infoBottom = 8 }) {
+function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)', scale = LOOK_SCALE, looking, lined, pack = true, aiMark = 'full', copyButton = false, infoButton = false, infoRight = 8, infoSize = 28, infoBottom = 8, aiMarkSize, aiMarkInset = 8 }) {
   const cleanItems = (items || []).filter(Boolean);
   const shown = cleanItems.filter((it) => it.img);
   const place = lookPlacement(shown);
@@ -397,13 +397,36 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
     </button>
   ) : null;
 
+  const infoItems = lookImg ? cleanItems : shown;
+  const aiMarkStyle = aiMark === 'icon' && aiMarkSize ? {
+    left: aiMarkInset, bottom: aiMarkInset, width: aiMarkSize, height: aiMarkSize,
+    padding: 0, boxSizing: 'border-box', display: 'grid', placeItems: 'center', pointerEvents: 'auto',
+  } : undefined;
+  const infoControl = infoButton && infoItems.length > 0 ? <>
+    <button type="button" className="lb-look-info-toggle" style={{ right: infoRight, bottom: infoBottom, width: infoSize, height: infoSize }} aria-label={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} title={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} aria-pressed={showInfo} onClick={event => { event.stopPropagation(); setShowInfo(value => !value); }} onKeyDown={event => event.stopPropagation()}>
+      <Icon name="tag" size={Math.max(11, Math.round(infoSize * 0.46))} stroke={2.2} />
+    </button>
+    {showInfo && <div className="lb-look-info-labels" aria-live="polite">
+      {infoItems.map((item, index) => {
+        const slot = lookImg
+          ? { labelX: index % 2 === 0 ? 22 : 78, labelY: 20 + Math.floor(index / 2) * (60 / Math.max(1, Math.ceil(infoItems.length / 2) - 1)) }
+          : layerSafeCells(shown)[item.id];
+        return <div key={item.id} className="lb-look-info-label" style={{ left: slot.labelX + '%', top: `clamp(26px, ${slot.labelY}%, calc(100% - 26px))` }} title={`${item.brand || '브랜드 미등록'} · ${item.name} · ${outfitPrice(item.price)}`}>
+          <strong>{item.brand || '브랜드 미등록'}</strong>
+          <span>{item.name}</span>
+          <b>{outfitPrice(item.price)}</b>
+        </div>;
+      })}
+    </div>}
+  </> : null;
+
   // 착장 원본은 4:5 전체 전신이다. 레일도 같은 비율로 보여 잘라내지 않는다.
   // flex 자식 img는 min-width:auto가 원본(1024px)이라 칸이 줄어들어도 비트맵이 그대로다.
   // 옷 컷아웃은 % 배치라 줌에 따라 작아지는데 착장만 남던 이유. 박스를 절대배치로 채운다.
   if (outfit && outfit.lookImg) {
     return (
       <div style={{
-        position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
+        containerType: 'inline-size', position: 'relative', width: '100%', minWidth: 0, minHeight: 0,
         background: bg,
         borderRadius: 'var(--r-md)', overflow: 'hidden', aspectRatio: ratio,
         boxShadow: lined ? 'inset 0 0 0 1px var(--line)' : undefined,
@@ -418,9 +441,10 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
             boxSizing: 'border-box',
           }}
         />
-        <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 이미지">
+        <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 이미지" title="AI 생성 이미지" style={aiMarkStyle}>
           <span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI 생성</span>}
         </span>
+        {infoControl}
         {copyControl}
         {copyState ? (
           <span style={{
@@ -468,22 +492,8 @@ function LookComposite({ outfit, items, ratio = '4 / 5', bg = 'var(--thumb-bg)',
           </div>
         );
       })}
-      {infoButton && shown.length > 0 && <>
-        <button type="button" className="lb-look-info-toggle" style={{ right: infoRight, bottom: infoBottom, width: infoSize, height: infoSize }} aria-label={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} title={showInfo ? '옷 정보 숨기기' : '옷 정보 보기'} aria-pressed={showInfo} onClick={event => { event.stopPropagation(); setShowInfo(value => !value); }} onKeyDown={event => event.stopPropagation()}>
-          <Icon name="tag" size={Math.max(11, Math.round(infoSize * 0.46))} stroke={2.2} />
-        </button>
-        {showInfo && <div className="lb-look-info-labels" aria-live="polite">
-          {shown.map(item => {
-            const slot = layerSafeCells(shown)[item.id];
-            return <div key={item.id} className="lb-look-info-label" style={{ left: slot.labelX + '%', top: `clamp(26px, ${slot.labelY}%, calc(100% - 26px))` }} title={`${item.brand || '브랜드 미등록'} · ${item.name} · ${outfitPrice(item.price)}`}>
-              <strong>{item.brand || '브랜드 미등록'}</strong>
-              <span>{item.name}</span>
-              <b>{outfitPrice(item.price)}</b>
-            </div>;
-          })}
-        </div>}
-      </>}
-      {shown.some(item => item.wish) && <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 상품 포함"><span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI 생성</span>}</span>}
+      {infoControl}
+      {shown.some(item => item.wish) && <span className={'lb-look-ai-mark' + (aiMark === 'icon' ? ' icon' : '')} aria-label="AI 생성 상품 포함" title="AI 생성 상품 포함" style={aiMarkStyle}><span>✦</span>{aiMark === 'icon' ? null : <span className="lb-look-ai-mark-label"> AI 생성</span>}</span>}
       {pending ? <LookPendingMarks /> : null}
       {copyControl}
       {copyState ? (
