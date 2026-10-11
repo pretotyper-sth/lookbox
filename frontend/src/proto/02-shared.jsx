@@ -1036,6 +1036,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
   }, [open, item && item.id]);
   if (!item) return null;
   const set = (k) => (v) => setDraft((d) => ({ ...d, [k]: v }));
+  const ClosetVisibility = window.RCClosetVisibility;
   const canZoom = !!(item.img && onViewImage);
   return (
     <BottomSheet open={open} onClose={onClose}>
@@ -1108,6 +1109,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
               생성 {formatDotDate(item.createdAt)} · 수정 {formatDotDate(item.updatedAt) || formatDotDate(item.createdAt)}
             </div>
           )}
+          {ClosetVisibility && <ClosetVisibility value={draft.public === true} onChange={set('public')} />}
         </div>
 
         <div style={{ marginTop: 26 }}>

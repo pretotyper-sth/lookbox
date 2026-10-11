@@ -20,7 +20,7 @@ export function arrange(items) {
   return items.map((it, i) => { const [x, y, scale] = spots[i % spots.length]; return { ...it, x: it.x ?? x, y: it.y ?? y, scale: it.scale ?? scale, rotation: it.rotation ?? 0, z: it.z ?? i }; });
 }
 export function newLook(items = SAMPLE_ITEMS.slice(0, 4)) {
-  return { id: uid(), title: '나의 피드', note: '', author: '나', mood: '캐주얼', occasion: '일상', background: 'ivory', items: arrange(items), decorations: [], privacy: 'public', photo: '', includePhoto: false, allowRemix: true, origin: null, comparison: null, createdAt: new Date().toISOString() };
+  return { id: uid(), title: '나의 피드', note: '', hashtags: [], author: '나', mood: '캐주얼', occasion: '일상', background: 'ivory', items: arrange(items), decorations: [], privacy: 'public', photo: '', includePhoto: false, allowRemix: true, origin: null, comparison: null, createdAt: new Date().toISOString() };
 }
 const editorial = [
  {title:'금요일은 좀 늦게 들어감',author:'off.duty',set:'stripe',bg:'paper'},
@@ -79,7 +79,7 @@ export const SAMPLE_LOOKS = editorial.map((e,n)=>{
   {items:[itemAt(0,30,36,51,true,-5),itemAt(1,74,42,43,true,5),itemAt(2,48,78,43,true,-4)],decorations:[text('THE REGULARS',50,9,30),text('new clothes? maybe next month.',50,89,13,'hand')]},
   {items:[itemAt(0,20,84,24),itemAt(1,50,84,24),itemAt(2,80,84,24)],decorations:[image('a',photo,27,45,43,-3),image('b',FEED_SOURCES['stripe-woman'].photo,73,45,43,3),text('SAME CLOSET',50,9,30,'mono'),text('different mood.',50,15,17,'hand')]},
  ];
- return {...newLook(),id:`editorial-v4-${n}`,title:e.title,author:e.author,avatar:photo,sample:true,createdAt:new Date(Date.parse('2026-10-01T12:00:00+09:00')-n*86400000).toISOString(),background:e.bg,note:'',...layouts[n]};
+ return {...newLook(),id:`editorial-v4-${n}`,hashtags:[['데일리룩','남자코디','셔츠코디'],['올블랙','미니멀룩','남자코디'],['가을코디','데일리룩','옷장기록'],['여자코디','셔츠코디','주말룩'],['데님코디','남자코디','데일리룩'],['주말룩','캐주얼룩','남자코디'],['미니멀룩','올블랙','데일리룩'],['셔츠코디','남자코디','리스타일']][n],title:e.title,author:e.author,avatar:photo,sample:true,createdAt:new Date(Date.parse('2026-10-01T12:00:00+09:00')-n*86400000).toISOString(),background:e.bg,note:'',...layouts[n]};
 });
 export function outfitLook(outfit, items) {
  const look=newLook(items),photo=outfit.lookImg;
@@ -101,7 +101,7 @@ export function remix(look, owned = []) {
 export const canRemix = look => look.sample || look.allowRemix;
 export const safeDraft = look => ({ ...look, privacy: 'private', share: null, includePhoto: false });
 export function publicSummary(look) {
-  return { title: look.title, note: look.note, author: look.author, mood: look.mood, occasion: look.occasion, background: look.background, items: look.items, decorations: look.decorations, origin: look.origin, comparison: look.comparison, allowRemix: look.allowRemix, photo: look.includePhoto ? look.photo : '' };
+  return { title: look.title, note: look.note, hashtags: look.hashtags || [], author: look.author, mood: look.mood, occasion: look.occasion, background: look.background, items: look.items, decorations: look.decorations, origin: look.origin, comparison: look.comparison, allowRemix: look.allowRemix, photo: look.includePhoto ? look.photo : '' };
 }
 export function readDraft() { try { return JSON.parse(localStorage.getItem('rc_style_draft') || 'null'); } catch { return null; } }
 export function writeDraft(look) { localStorage.setItem('rc_style_draft', JSON.stringify(look)); }
@@ -111,7 +111,7 @@ export async function api(path, init = {}) {
   if (!key) { key = uid() + uid(); localStorage.setItem('rc_studio_owner', key); }
   let res;
   try { res = await fetch(`/api/studio${path}`, { ...init, headers: { 'Content-Type': 'application/json', 'X-Studio-Owner': key, ...(init.headers || {}) } }); }
-  catch { throw new Error('로컬 저장 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+  catch { throw new Error('저장 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || data.error || '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
   return data;
@@ -171,3 +171,7 @@ export async function styleImageBlob(look) {
 export async function exportImage(look) {
   const blob=await styleImageBlob(look),url=URL.createObjectURL(blob),a=document.createElement('a');a.download=`${look.title}.png`;a.href=url;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
+
+export const hashtagKey = value => String(value).normalize('NFKC').trim().replace(/^[#@]+/, '').toLowerCase();
+export const cleanHashtag = value => {const tag=hashtagKey(value);return /^[\p{L}\p{N}_]{1,24}$/u.test(tag)?tag:'';};
+export const lookHashtags = look => [...new Set((look.hashtags||[]).map(cleanHashtag).filter(Boolean))];

@@ -7,3 +7,4 @@ supabase
 python-dotenv
 requests
 truststore
+psycopg[binary]>=3.2,<4

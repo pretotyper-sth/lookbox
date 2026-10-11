@@ -14,3 +14,5 @@
 `live_tryon_body`.
 
 2026-10-08 변경: 위의 착장 수치 미사용 기록은 이전 정책이다. 현재 개인화 착장은 [[personal-model-look]]에 따라 키·몸무게를 시각적 체형에 반영한다. 조합 추천의 `_profile_block`에는 여전히 수치를 넣지 않는다. 보호된 바로 보기 전신 생성 비율은 이번 작업에서 변경하지 않았다.
+
+성별은 가입 기본 정보 단계와 계정 설정에서 필수로 고른다. 명시적 ‘선택 안 함’은 허용한다. 남성일 때 옷장 필터와 아이템 등록의 카테고리 선택에서 여성 전용 원피스·스커트를 숨긴다. (`frontend/src/proto/07-onboarding.jsx`, `frontend/src/proto/08-mypage.jsx`, `frontend/src/proto/04-screens-ab.jsx`)

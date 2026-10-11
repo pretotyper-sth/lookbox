@@ -237,3 +237,16 @@ model.js sampleProductNotes에서 게시물별 입력 예시를 적용한다. po
 CreatorProfile 본인 게시글 썸네일의 기본 클릭은 확대를 유지한다. 본인 카드/확대 화면 우측 하단의 별도 연필 버튼은 onEdit로 연결해 프로필을 닫고 기존 본인 looks의 같은 ID 원본을 만들기에 넘긴다. 타인 게시글에는 편집 버튼을 표시하지 않는다. 중첩 버튼 없이 article 안 확대/편집 버튼을 분리한다.
 
 내가 만든 스타일 없음은 저장한 룩과 같은 공통 EmptyState(아이콘·제목·짧은 설명·스타일 만들기 CTA)로 교체하고 남은 공간 중앙에 배치한다. 공개 피드 없음도 같은 컴포넌트를 사용하고 추천 사이드바를 숨긴다. 팔로워·팔로잉 목록 없음/검색 결과 없음 단독 페이지도 공통 EmptyState로 통일한다. 프로필 모달 탭 안 빈 안내/재료 서랍/오류·로딩 문구는 이 단독 페이지 변경 범위에서 제외한다. 근거: creator-profile.jsx onEdit/rc-profile-post-edit, experience.jsx rc-saved-empty, social.jsx rc-connections-empty 및 대응 CSS. JSX lint 오류 없음(기존 export 경고). 로컬 실제 계정 스타일 0개 상태에서 공통 빈 화면 표시 확인. 현재 공개 게시글 0개라 실제 게시글의 편집 진입 클릭은 미확인; 확인용 사용자 게시글을 생성하지 않았다.
+
+## 공개 프로필 팔로우 — 2026-10-08
+
+`frontend/src/style/creator-profile.jsx`: 프로필 소개 아래에 공통 피드 버튼 디자인의 팔로우/팔로잉 토글을 표시한다. 검색·피드·팔로워 목록 등 모든 진입점에서 `/state.follows`를 읽고 저장하며 `rc-social-update`로 피드와 마이 목록을 갱신한다. 다른 진입점에서 본인 프로필을 열어도 `/profile.creatorId` 확인 후 자기 팔로우를 차단한다. 저장 중 중복 클릭 차단, 실패 안내, 성공 토스트와 팔로워 수 반영. 추가 DB 테이블 없이 기존 관계를 재사용한다.
+
+
+## 프로필 팔로우 수 순서와 게시글 수정 버튼 (2026-10-11)
+
+내 활동·프로필의 수 표시는 게시글 → 팔로워 → 팔로잉으로 통일한다. 공개 프로필 게시글 수정 아이콘은 썸네일과 제목으로 된 카드 영역 안에 배치한다. 근거: `frontend/src/style/social.jsx` SocialStats, `frontend/src/style/creator-profile.jsx` CreatorProfile, `frontend/src/style/experience.css` `.rc-profile-post-edit`.
+
+## 모바일 공개 옷·카드 버튼 크기 (2026-10-11)
+
+`frontend/src/style/social.css` 759px 이하에서 공개 옷 재료 저장·프로필 게시글 수정 원형 버튼은 28px/아이콘16px로 통일. 프로필의 공개·팔로우 보조 버튼은 최소32px, 상품 상세 재료 담기는 다른 상세 행 보조 버튼과 같은 최소36px로 축소한다. 데스크톱·확대 화면의 버튼 크기는 유지한다.

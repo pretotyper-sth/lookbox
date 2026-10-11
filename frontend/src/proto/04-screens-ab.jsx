@@ -188,6 +188,11 @@ function matchesQuery(item, tokens) {
   });
 }
 
+const FEMALE_ONLY_CATEGORIES = new Set(['원피스', '스커트']);
+function categoriesForGender(gender) {
+  return LB_DATA.CATEGORIES.filter((category) => gender !== '남성' || !FEMALE_ONLY_CATEGORIES.has(category));
+}
+
 function sortWardrobe(list, sortId) {
   const cats = LB_DATA.CATEGORIES;
   const seasonIds = LB_DATA.SEASONS.map((s) => s.id);
@@ -220,7 +225,7 @@ function WardrobeScreen({ ctx }) {
     items, archived = [], openAdd, wide, openItem, requestRemove,
     bulkArchive, bulkRestore, bulkDelete,
     comboReady, comboGate, comboNeed, comboProgress, wardrobeLoading, wardrobeLoaded,
-    requestPickedOutfits, refreshLive,
+    requestPickedOutfits, refreshLive, prefs,
   } = ctx;
   const [cat, setCat] = useS('전체');
   const [seasonFilter, setSeasonFilter] = useS([]); // multi-select season ids, [] = 전체
@@ -232,9 +237,12 @@ function WardrobeScreen({ ctx }) {
   const [sortOpen, setSortOpen] = useS(false);
   const [coordGuide, setCoordGuide] = useS('');
   const [query, setQuery] = useS('');
-  const cats = LB_DATA.CATEGORIES;
+  const cats = categoriesForGender(prefs?.gender);
   const seasons = LB_DATA.SEASONS;
   const viewingArchive = cat === '보관';
+  useE(() => {
+    if (prefs?.gender === '남성' && FEMALE_ONLY_CATEGORIES.has(cat)) setCat('전체');
+  }, [prefs?.gender]);
   const toggleSeason = (id) => setSeasonFilter((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   // 보관함이 비어도 탭에 머문다 — 빈 상태 화면을 보여주는 편이, 마지막 옷을
   // 꺼낸 순간 전체 탭으로 튕겨 나가는 것보다 덜 어색하다.
@@ -1254,7 +1262,7 @@ function AddSheet({ ctx }) {
   const anchor = mode === 'anchor';
   const reextract = mode === 'reextract';
   const replaceItem = addSheet.replaceItem || null;
-  const CATS = LB_DATA.CATEGORIES.filter((c) => c !== '전체');
+  const CATS = categoriesForGender(prefs?.gender).filter((c) => c !== '전체');
   const isTouch = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
 
   // input
@@ -3516,7 +3524,6 @@ function AddSheet({ ctx }) {
               </div>
             </div>
 
-            {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
             {/* 상세 정보 — 아이템 상세 시트와 같은 구성·같은 순서로 둔다.
                 접지 않는 것도 상세 시트와 같다: 계절이 여기 들어가 있고, 접히면
                 AI가 넣은 값을 고칠 방법이 없어진다. */}
@@ -3543,6 +3550,8 @@ function AddSheet({ ctx }) {
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
               </div>
             </div>
+
+            {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
 
             <div style={{ marginTop: 'var(--s7)', display: 'flex', gap: 10 }}>
               <Btn variant="ghost" disabled={savingItems} onClick={() => advance(false)} style={{ flex: '0 0 auto' }}>

@@ -1,3 +1,5 @@
+import base64
+import unicodedata
 import hashlib
 import json
 import os
@@ -10,7 +12,8 @@ from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix='/api/studio')
@@ -20,9 +23,15 @@ _LOCK = threading.RLock()
 
 @contextmanager
 def db():
+    if os.environ.get('STYLE_STUDIO_LOCAL') != '1':
+        from .studio_database import production_db
+        with production_db() as conn:
+            yield conn
+        return
     _DB.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(_DB)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript('''
       CREATE TABLE IF NOT EXISTS looks(id TEXT PRIMARY KEY, owner TEXT NOT NULL, payload TEXT NOT NULL, share TEXT UNIQUE);
       CREATE TABLE IF NOT EXISTS profiles(owner TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -33,28 +42,133 @@ def db():
       CREATE TABLE IF NOT EXISTS public_items(id TEXT, owner TEXT, payload TEXT NOT NULL, PRIMARY KEY(id,owner));
       CREATE TABLE IF NOT EXISTS reactions(share TEXT, visitor TEXT, kind TEXT, value TEXT, PRIMARY KEY(share,visitor,kind));
       CREATE TABLE IF NOT EXISTS replies(id TEXT PRIMARY KEY, share TEXT, visitor TEXT, name TEXT, text TEXT);
+      CREATE TABLE IF NOT EXISTS search_posts(look_id TEXT PRIMARY KEY REFERENCES looks(id) ON DELETE CASCADE, owner TEXT NOT NULL, public INTEGER NOT NULL, published_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS search_posts_public_date ON search_posts(public,published_at DESC,look_id DESC);
+      CREATE TABLE IF NOT EXISTS look_tags(look_id TEXT REFERENCES looks(id) ON DELETE CASCADE, tag TEXT NOT NULL, PRIMARY KEY(look_id,tag));
+      CREATE INDEX IF NOT EXISTS look_tags_prefix ON look_tags(tag,look_id);
+      CREATE TABLE IF NOT EXISTS profile_search(owner TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS profile_search_prefix ON profile_search(name_key,owner);
+      CREATE INDEX IF NOT EXISTS looks_owner ON looks(owner);
+      CREATE TABLE IF NOT EXISTS studio_migrations(version TEXT PRIMARY KEY);
+
     ''')
     try:
         with conn:
             if 'created_at' not in {column['name'] for column in conn.execute('PRAGMA table_info(polls)')}:
                 conn.execute("ALTER TABLE polls ADD COLUMN created_at TEXT NOT NULL DEFAULT ''")
             conn.execute("UPDATE polls SET created_at=? WHERE created_at=''", (datetime.now(timezone.utc).isoformat(),))
+            if not conn.execute("SELECT 1 FROM studio_migrations WHERE version='media-v1'").fetchone():
+                for table, keys in (('looks', ('id',)), ('profiles', ('owner',)), ('state', ('owner',)), ('public_items', ('id', 'owner'))):
+                    for row in conn.execute('SELECT * FROM ' + table).fetchall():
+                        compacted = json.dumps(compact_media(json.loads(row['payload'])), ensure_ascii=False)
+                        if compacted != row['payload']:
+                            conn.execute('UPDATE ' + table + ' SET payload=? WHERE ' + ' AND '.join(key + '=?' for key in keys), (compacted, *(row[key] for key in keys)))
+                conn.execute("INSERT INTO studio_migrations VALUES('media-v1')")
+            if not conn.execute("SELECT 1 FROM studio_migrations WHERE version='search-v1'").fetchone():
+                for row in conn.execute('SELECT id,owner,payload FROM looks').fetchall():
+                    index_look(conn, row['id'], row['owner'], json.loads(row['payload']))
+                for row in conn.execute('SELECT owner,payload FROM profiles').fetchall():
+                    index_profile(conn, row['owner'], json.loads(row['payload']).get('author') or '나')
+                conn.execute("INSERT INTO studio_migrations VALUES('search-v1')")
             yield conn
     finally:
         conn.close()
 
 
+def search_key(value):
+    return unicodedata.normalize('NFKC', str(value)).strip().lstrip('#@').lower()
+
+
+def normalize_tags(values):
+    tags = []
+    for value in values:
+        tag = search_key(value)
+        if 1 <= len(tag) <= 24 and all(c.isalnum() or c == '_' for c in tag) and tag not in tags:
+            tags.append(tag)
+    if len(tags) > 10:
+        raise HTTPException(400, '해시태그는 10개까지 넣을 수 있어요.')
+    return tags
+
+
+def index_profile(conn, uid, name):
+    conn.execute('INSERT INTO profile_search VALUES(?,?,?) ON CONFLICT(owner) DO UPDATE SET name=excluded.name,name_key=excluded.name_key', (uid, name, search_key(name)))
+
+
+def index_look(conn, look_id, uid, data):
+    conn.execute('INSERT INTO search_posts VALUES(?,?,?,?) ON CONFLICT(look_id) DO UPDATE SET public=excluded.public', (look_id, uid, int(data.get('privacy') == 'public'), data.get('createdAt') or datetime.now(timezone.utc).isoformat()))
+    conn.execute('DELETE FROM look_tags WHERE look_id=?', (look_id,))
+    conn.executemany('INSERT INTO look_tags VALUES(?,?)', [(look_id, tag) for tag in normalize_tags(data.get('hashtags') or [])])
+    profile = conn.execute('SELECT payload FROM profiles WHERE owner=?', (uid,)).fetchone()
+    index_profile(conn, uid, json.loads(profile['payload']).get('author') or '나' if profile else data.get('author') or '나')
+
+
+def compact_media(value):
+    if isinstance(value, list):
+        return [compact_media(x) for x in value]
+    if not isinstance(value, dict):
+        return value
+    result = {}
+    for key, item in value.items():
+        if key in ('img', 'photo', 'feedAvatar') and isinstance(item, str) and item.startswith('data:image/'):
+            match = re.fullmatch(r'data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)', item)
+            if not match:
+                raise HTTPException(400, '이미지 파일 형식을 확인해 주세요.')
+            try:
+                raw = base64.b64decode(re.sub(r'\s', '', match[2]), validate=True)
+            except ValueError:
+                raise HTTPException(400, '이미지 파일을 다시 선택해 주세요.')
+            filename = hashlib.sha256(raw).hexdigest() + '.' + {'jpeg': 'jpg'}.get(match[1], match[1])
+            if os.environ.get('STYLE_STUDIO_LOCAL') != '1':
+                from .main import upload_bytes
+                result[key] = upload_bytes('studio-media/' + filename, raw, 'image/' + match[1])
+                continue
+            folder = _DB.parent / 'style-media'
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / filename
+            if not path.exists():
+                path.write_bytes(raw)
+            result[key] = '/api/studio/media/' + filename
+        else:
+            result[key] = compact_media(item)
+    return result
+
+
+@router.get('/media/{filename}')
+def media(filename: str):
+    if not re.fullmatch(r'[a-f0-9]{64}\.(png|jpg|webp|gif)', filename):
+        raise HTTPException(404, '이미지를 찾을 수 없어요.')
+    path = _DB.parent / 'style-media' / filename
+    if not path.is_file():
+        raise HTTPException(404, '이미지를 찾을 수 없어요.')
+    return FileResponse(path, headers={'Cache-Control': 'public, max-age=31536000, immutable'})
+
+
 def owner(request: Request, x_studio_owner: str = Header(default='')):
-    if request.client and request.client.host not in ('127.0.0.1', '::1', 'testclient'):
+    if os.environ.get('STYLE_STUDIO_LOCAL') != '1':
+        authorization = request.headers.get('authorization', '')
+        if authorization.lower().startswith('bearer '):
+            from .main import supabase_user
+            try:
+                user = supabase_user.auth.get_user(authorization.split(' ', 1)[1]).user
+            except Exception as exc:
+                raise HTTPException(401, '로그인이 만료됐어요. 다시 로그인해 주세요.') from exc
+            if not user:
+                raise HTTPException(401, '로그인이 필요해요.')
+            request.state.studio_user_id = user.id
+            return hashlib.sha256(user.id.encode()).hexdigest()
+        if request.method != 'GET' or not re.fullmatch(r'/api/studio/(shared|polls)/[^/]+', request.url.path):
+            raise HTTPException(401, '로그인이 필요해요.')
+    elif request.client and request.client.host not in ('127.0.0.1', '::1', 'testclient'):
         raise HTTPException(403, '이 체험은 로컬에서만 사용할 수 있어요.')
     if len(x_studio_owner) < 24 or len(x_studio_owner) > 160:
-        raise HTTPException(401, '체험 저장 정보가 없어요. 새로고침해 주세요.')
+        raise HTTPException(401, '저장 정보를 확인하지 못했어요. 새로고침해 주세요.')
     return hashlib.sha256(x_studio_owner.encode()).hexdigest()
 
 
 class LookBody(BaseModel):
     title: str = Field(default='나의 스타일', max_length=80)
     note: str = Field(default='', max_length=600)
+    hashtags: list[str] = Field(default_factory=list, max_length=10)
     author: str = Field(default='나', max_length=40)
     mood: str = Field(default='데일리', max_length=40)
     occasion: str = Field(default='일상', max_length=40)
@@ -72,7 +186,7 @@ class LookBody(BaseModel):
 
 def clean_item(it):
     img = str(it.get('img', ''))
-    if not (img.startswith('/prototype-assets/') or img.startswith('/studio-assets/feed-samples/') or img.startswith('https://') or img.startswith('data:image/jpeg;base64,') or img.startswith('data:image/png;base64,') or img.startswith('data:image/webp;base64,')):
+    if not (img.startswith('/prototype-assets/') or img.startswith('/studio-assets/feed-samples/') or img.startswith('https://') or re.fullmatch(r'/api/studio/media/[a-f0-9]{64}\.(png|jpg|webp|gif)', img) or img.startswith('data:image/jpeg;base64,') or img.startswith('data:image/png;base64,') or img.startswith('data:image/webp;base64,')):
         img = ''
     return {key: it.get(key) for key in ('id', 'name', 'category', 'kind', 'x', 'y', 'scale', 'rotation', 'z')} | {'img': img, 'brand': str(it.get('brand') or '')[:100], 'price': str(it.get('price') or '')[:40], 'showInfo': bool(it.get('showInfo')), **{key: str(it.get(key) or '')[:600 if key == 'note' else 100] for key in ('color', 'size', 'material', 'store', 'note')}, 'url': str(it.get('url') or '')[:2000] if str(it.get('url') or '').startswith('https://') else ''}
 
@@ -108,7 +222,7 @@ def clean_layer(layer):
         result['textStyle'] = layer.get('textStyle') if layer.get('textStyle') in ('plain', 'outline', 'label', 'shadow') else 'plain'
     elif kind == 'image':
         img = str(layer.get('img', ''))
-        allowed = img.startswith(('https://', 'data:image/png;base64,', 'data:image/jpeg;base64,', 'data:image/webp;base64,', 'data:image/gif;base64,')) or re.fullmatch(r'/studio-assets/[a-z0-9-]+\.svg', img) or re.fullmatch(r'/prototype-assets/style[A-Za-z0-9]+\.webp', img) or re.fullmatch(r'/studio-assets/feed-samples/[a-z0-9-]+\.png', img)
+        allowed = img.startswith(('https://', 'data:image/png;base64,', 'data:image/jpeg;base64,', 'data:image/webp;base64,', 'data:image/gif;base64,')) or re.fullmatch(r'/api/studio/media/[a-f0-9]{64}\.(png|jpg|webp|gif)', img) or re.fullmatch(r'/studio-assets/[a-z0-9-]+\.svg', img) or re.fullmatch(r'/prototype-assets/style[A-Za-z0-9]+\.webp', img) or re.fullmatch(r'/studio-assets/feed-samples/[a-z0-9-]+\.png', img)
         if not allowed or len(img) > 4100000: raise HTTPException(400, '콜라주 이미지 주소 또는 크기를 확인해 주세요.')
         result['img'] = img
     elif kind == 'giphy':
@@ -135,8 +249,11 @@ def clean_layer(layer):
 
 def payload(body):
     data = body.model_dump()
+    data['hashtags'] = normalize_tags(data['hashtags'])
+    if not data['note'].strip() and not data['hashtags']:
+        raise HTTPException(400, '글이나 해시태그를 입력해 주세요.')
     data['items'] = [clean_item(it) for it in data['items']]
-    if data['photo'] and not data['photo'].startswith(('data:image/jpeg;base64,', 'data:image/png;base64,', 'data:image/webp;base64,')):
+    if data['photo'] and not re.fullmatch(r'/api/studio/media/[a-f0-9]{64}\.(png|jpg|webp|gif)', data['photo']) and not data['photo'].startswith(('https://', 'data:image/jpeg;base64,', 'data:image/png;base64,', 'data:image/webp;base64,')):
         raise HTTPException(400, '사진 형식이 올바르지 않아요.')
     data['decorations'] = [clean_layer(it) for it in data['decorations']]
     if len(json.dumps(data)) > 16000000: raise HTTPException(413, '이미지가 많아요. 작은 파일로 바꿔 저장해 주세요.')
@@ -146,12 +263,16 @@ def payload(body):
         data['comparison'] = {k: data['comparison'].get(k) for k in ('id', 'title', 'background', 'items', 'decorations')}
         data['comparison']['items'] = [clean_item(it) for it in (data['comparison'].get('items') or [])[:20]]
         data['comparison']['decorations'] = [clean_layer(it) for it in (data['comparison'].get('decorations') or [])[:80]]
-    return data
+    return compact_media(data)
 
 
 def person(uid, conn):
     profile = conn.execute('SELECT payload FROM profiles WHERE owner=?', (uid,)).fetchone()
     data = json.loads(profile['payload']) if profile else {}
+    if not data.get('author'):
+        last = conn.execute('SELECT payload FROM looks WHERE owner=? ORDER BY rowid DESC LIMIT 1', (uid,)).fetchone()
+        if last:
+            data['author'] = json.loads(last['payload']).get('author')
     return {'creatorId': uid[:16], 'author': data.get('author') or '나', 'avatar': data.get('feedAvatar') or ''}
 
 
@@ -171,7 +292,9 @@ def social_counts(uid, conn):
 
 def public_look(row, conn):
     data = json.loads(row['payload'])
-    result = {k: data.get(k) for k in ('title', 'note', 'author', 'mood', 'occasion', 'background', 'items', 'decorations', 'allowRemix', 'origin', 'comparison', 'createdAt')}
+    result = {k: data.get(k) for k in ('title', 'note', 'hashtags', 'author', 'mood', 'occasion', 'background', 'items', 'decorations', 'allowRemix', 'origin', 'comparison', 'createdAt')}
+    result['hashtags'] = normalize_tags(data.get('hashtags') or [])
+    result['author'] = person(row['owner'], conn)['author']
     result.update(id=row['id'], share=row['share'], creatorId=row['owner'][:16], privacy=data['privacy'], avatar=person(row['owner'], conn)['avatar'])
     result['photo'] = data.get('photo', '') if data.get('includePhoto') else ''
     result['includePhoto'] = bool(data.get('includePhoto'))
@@ -202,7 +325,10 @@ def save_look(look_id: str, body: LookBody, request: Request, x_studio_owner: st
         if row and row['owner'] != uid: raise HTTPException(403, '내 스타일만 수정할 수 있어요.')
         share = (row['share'] if row else None) if data['privacy'] != 'private' else None
         if data['privacy'] != 'private' and not share: share = secrets.token_urlsafe(24)
-        conn.execute('INSERT INTO looks VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,share=excluded.share', (look_id, uid, json.dumps(data, ensure_ascii=False), share))
+        conn.execute('INSERT INTO looks VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,share=excluded.share WHERE looks.owner=excluded.owner', (look_id, uid, json.dumps(data, ensure_ascii=False), share))
+        saved = conn.execute('SELECT owner FROM looks WHERE id=?', (look_id,)).fetchone()
+        if not saved or saved['owner'] != uid: raise HTTPException(403, '내 스타일만 수정할 수 있어요.')
+        index_look(conn, look_id, uid, data)
         if data['privacy'] == 'public' and data.get('origin') and not data['origin'].get('sample'):
             original = conn.execute('SELECT * FROM looks WHERE share=? OR id=?', (data['origin']['id'], data['origin']['id'])).fetchone()
             if original and original['share'] and json.loads(original['payload']).get('allowRemix'):
@@ -233,6 +359,8 @@ def save_state(body: dict, request: Request, x_studio_owner: str = Header(defaul
     data = {k: body.get(k, [])[:200] for k in ('collections', 'diary', 'follows', 'hidden') if isinstance(body.get(k, []), list)}
     encoded = json.dumps(data, ensure_ascii=False)
     if len(encoded) > 6000000: raise HTTPException(413, '사진 저장 공간이 가득 찼어요. 기록을 정리해 주세요.')
+    data = compact_media(data)
+    encoded = json.dumps(data, ensure_ascii=False)
     with _LOCK, db() as conn:
         previous = conn.execute('SELECT payload FROM state WHERE owner=?', (uid,)).fetchone()
         old = json.loads(previous['payload']).get('follows', []) if previous else []
@@ -277,15 +405,53 @@ def profile(creator_id: str):
 def item_visibility(item_id: str, body: ItemVisibilityBody, request: Request, x_studio_owner: str = Header(default='')):
     uid = owner(request, x_studio_owner)
     if not item_id or len(item_id) > 100: raise HTTPException(400, '옷 주소를 확인해 주세요.')
+    source_item = body.item
+    if os.environ.get('STYLE_STUDIO_LOCAL') != '1' and body.public:
+        from .main import supabase_admin, live_item_payload
+        rows = supabase_admin.table('wardrobe_items').select('*').eq('id', item_id).eq('user_id', request.state.studio_user_id).eq('status', 'owned').limit(1).execute().data or []
+        if not rows: raise HTTPException(404, '내 옷장에서 공개할 옷을 찾지 못했어요.')
+        source_item = live_item_payload(rows[0])
     with _LOCK, db() as conn:
         if body.public:
-            data = clean_item(body.item | {'id': item_id, 'kind': 'owned'})
+            data = compact_media(clean_item(source_item | {'id': item_id, 'kind': 'owned'}))
             encoded = json.dumps(data, ensure_ascii=False)
             if len(encoded) > 2000000: raise HTTPException(413, '이미지가 너무 커요.')
             conn.execute('INSERT INTO public_items VALUES(?,?,?) ON CONFLICT(id,owner) DO UPDATE SET payload=excluded.payload', (item_id, uid, encoded))
         else:
             conn.execute('DELETE FROM public_items WHERE id=? AND owner=?', (item_id, uid))
         return creator_profile(uid[:16], conn)
+
+
+@router.get('/search')
+def search(q: str = Query(default='', max_length=80), tag: str = Query(default='', max_length=24), cursor: str = Query(default='', max_length=200), limit: int = Query(default=24, ge=1, le=24)):
+    key = search_key(q)
+    with db() as conn:
+        params = (key, key + '\uffff') if key else ('', '\uffff')
+        tags = [dict(row) for row in conn.execute('SELECT t.tag,COUNT(*) count FROM look_tags t JOIN search_posts p ON p.look_id=t.look_id WHERE p.public=1 AND t.tag>=? AND t.tag<? GROUP BY t.tag ORDER BY (t.tag=?) DESC, count DESC,t.tag LIMIT 12', (*params, key))]
+        people = []
+        if key and not q.startswith('#'):
+            matched = conn.execute('SELECT * FROM profile_search WHERE name_key>=? AND name_key<? ORDER BY (name_key=?) DESC,name_key LIMIT 12', (*params, key)).fetchall()
+            if len(matched) < 12:
+                escaped = key.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+                matched += conn.execute("SELECT * FROM profile_search WHERE name_key LIKE ? ESCAPE '\\' AND NOT(name_key>=? AND name_key<?) ORDER BY name_key LIMIT ?", ('%' + escaped + '%', *params, 12 - len(matched))).fetchall()
+            for row in matched:
+                people.append(person(row['owner'], conn))
+        posts, next_cursor = [], None
+        if tag:
+            normalized = search_key(tag)
+            where, args = '', [normalized]
+            if cursor:
+                parts = cursor.split('|', 1)
+                if len(parts) != 2:
+                    raise HTTPException(400, '검색 위치가 올바르지 않아요.')
+                where = ' AND (p.published_at<? OR (p.published_at=? AND p.look_id<?))'
+                args.extend([parts[0], parts[0], parts[1]])
+            rows = conn.execute('SELECT l.*,p.published_at FROM look_tags t JOIN search_posts p ON p.look_id=t.look_id JOIN looks l ON l.id=p.look_id WHERE t.tag=? AND p.public=1' + where + ' ORDER BY p.published_at DESC,p.look_id DESC LIMIT ?', (*args, limit + 1)).fetchall()
+            posts = [public_look(row, conn) for row in rows[:limit]]
+            if len(rows) > limit:
+                last = rows[limit - 1]
+                next_cursor = last['published_at'] + '|' + last['id']
+        return {'profiles': people, 'tags': tags, 'looks': posts, 'nextCursor': next_cursor}
 
 
 @router.get('/feed')
@@ -430,7 +596,7 @@ class ProfileBody(BaseModel):
 def update_profile(body: ProfileBody, request: Request, x_studio_owner: str = Header(default='')):
     uid = owner(request, x_studio_owner)
     avatar = body.avatar
-    if avatar and not avatar.startswith(('https://', '/prototype-assets/', 'data:image/jpeg;base64,', 'data:image/png;base64,', 'data:image/webp;base64,')):
+    if avatar and not re.fullmatch(r'/api/studio/media/[a-f0-9]{64}\.(png|jpg|webp|gif)', avatar) and not avatar.startswith(('https://', '/prototype-assets/', 'data:image/jpeg;base64,', 'data:image/png;base64,', 'data:image/webp;base64,')):
         raise HTTPException(400, '프로필 사진 형식을 확인해 주세요.')
     with db() as conn:
         row = conn.execute('SELECT payload FROM profiles WHERE owner=?', (uid,)).fetchone()
@@ -438,6 +604,8 @@ def update_profile(body: ProfileBody, request: Request, x_studio_owner: str = He
         data['author'] = body.author
         if avatar is not None:
             data['feedAvatar'] = avatar
+        data = compact_media(data)
+        index_profile(conn, uid, data['author'])
         conn.execute('INSERT INTO profiles VALUES(?,?) ON CONFLICT(owner) DO UPDATE SET payload=excluded.payload', (uid, json.dumps(data)))
         return creator_profile(uid[:16], conn)
 

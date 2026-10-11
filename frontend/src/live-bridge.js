@@ -215,7 +215,7 @@ function installFetchBridge() {
   const original = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : (input && input.url) || ''
-    if (!configured || !url.startsWith('/api/live')) {
+    if (!configured || (!url.startsWith('/api/live') && !(import.meta.env.PROD && url.startsWith('/api/studio')))) {
       return original(input, init)
     }
     const send = (token) => {

@@ -53,11 +53,8 @@ await import('./proto/08-mypage.jsx')
 // LB_DATA(03-data)를 채운 뒤, App이 마운트되는 09-app 앞에서 실행돼야 한다.
 if (import.meta.env.DEV && !['style','vote'].some(key=>new URLSearchParams(location.search).has(key))) await import('./dev/wardrobe-seed.js')
 
-let styleExperience
-if (import.meta.env.DEV) {
-  styleExperience = await import('./style/experience.jsx')
-  await import('./style/closet-studio.jsx')
-}
+const styleExperience = await import('./style/experience.jsx')
+if (import.meta.env.DEV) await import('./style/closet-studio.jsx')
 
 await import('./proto/10-tryon.jsx')
 if (styleExperience && new URLSearchParams(location.search).has('vote')) {

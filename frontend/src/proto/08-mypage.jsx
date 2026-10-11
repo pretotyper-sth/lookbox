@@ -505,7 +505,7 @@ function MyPageScreen({ ctx }) {
   );
 
   const pickedModelLookRow = import.meta.env.DEV && modelLook ? (
-    <ActionRow nested label="개별 아이템 코디 요청도 AI 착장 생성" hint="옷장에서 직접 고른 옷도 AI 착장으로 보여줘요" singleLine
+    <ActionRow nested label="개별 아이템 코디 요청도 AI 착장 생성" hint="옷장에서 개별 아이템으로 요청할 때도 적용돼요" singleLine
       right={<Switch on={!!pickedModelLook} onToggle={() => {
         if (!pickedModelLook && !pickedModelLookConfirmed) setPickedLookConfirm(true);
         else setPickedModelLook && setPickedModelLook(!pickedModelLook);
@@ -812,6 +812,7 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
   }, [open]);
   const set = (k) => (v) => setD((s) => ({ ...s, [k]: v }));
   const emailOk = /\S+@\S+\.\S+/.test(d.email);
+  const genderOk = !!d.gender;
 
   return (
     <>
@@ -825,8 +826,9 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <LabeledField label="이메일" value={d.email} onChange={set('email')} placeholder="you@example.com" />
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>성별 · 필수</div>
             <AccountChips options={['여성', '남성', '선택 안 함']} value={d.gender} onPick={set('gender')} />
+            {!genderOk && <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 7 }}>성별을 선택해 주세요.</div>}
           </div>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>연령대</div>
@@ -845,7 +847,7 @@ function AccountEditSheet({ open, prefs, onClose, onSave, onChangePassword }) {
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Btn full size="lg" icon="check" disabled={!emailOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
+          <Btn full size="lg" icon="check" disabled={!emailOk || !genderOk} onClick={() => onSave({ email: d.email, gender: d.gender, age: d.age, height: d.height, weight: d.weight })}>저장</Btn>
         </div>
         </div>}
       </BottomSheet>

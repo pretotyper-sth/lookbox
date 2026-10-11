@@ -561,7 +561,7 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
     render: () => (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>성별</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>성별 · 필수</div>
           <ChipRow options={['여성', '남성', '선택 안 함']} value={d.gender} onPick={set('gender')} />
         </div>
         <div>

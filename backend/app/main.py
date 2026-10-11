@@ -144,9 +144,8 @@ def _vision_client():
     return openai_client.with_options(timeout=OPENAI_VISION_TIMEOUT)
 
 app = FastAPI(title="RealCloset API")
-if os.environ.get("STYLE_STUDIO_LOCAL") == "1":
-    from .style_studio import router as style_studio_router
-    app.include_router(style_studio_router)
+from .style_studio import router as style_studio_router
+app.include_router(style_studio_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
