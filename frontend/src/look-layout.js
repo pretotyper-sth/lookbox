@@ -39,3 +39,7 @@ export function formatPriceInput(value) {
   const [integer, fraction] = numeric.split('.');
   return integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (fraction === undefined ? '' : '.' + fraction);
 }
+
+export function formatNumericPriceInput(value) {
+  return formatPriceInput(String(value ?? '').replace(/\D/g, ''));
+}

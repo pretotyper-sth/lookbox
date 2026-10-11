@@ -1,5 +1,5 @@
 /* @prototype-ported */
-import { formatPriceInput } from '../look-layout.js';
+import { formatNumericPriceInput } from '../look-layout.js';
 const React = window.React;
 
 /* global React */
@@ -794,7 +794,7 @@ function LabeledField({ label, value, onChange, placeholder, multiline, type = '
     const input = event.target;
     const raw = input.value;
     const next = formatValue ? formatValue(raw) : raw;
-    const position = raw.slice(0, input.selectionStart ?? raw.length).replace(/,/g, '').length;
+    const position = raw.slice(0, input.selectionStart ?? raw.length).replace(inputMode === 'numeric' ? /\D/g : /,/g, '').length;
     onChange(next);
     if (formatValue && next !== raw) requestAnimationFrame(() => {
       if (document.activeElement !== input || input.value !== next) return;
@@ -1100,7 +1100,7 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
-          <LabeledField label="가격" formatValue={formatPriceInput} inputMode="decimal" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
+          <LabeledField label="가격" formatValue={formatNumericPriceInput} inputMode="numeric" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
           <LabeledField label="재질" value={draft.material} onChange={set('material')} placeholder="예) 코튼 100%" />
           <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
