@@ -2982,47 +2982,52 @@ function App() {
   };
 
   const addItemsBatch = async (list, skippedIds = []) => {
-    closeAdd();
-    if (skippedIds && skippedIds.length) {
-      discardLiveItems(skippedIds);
+    if (!list || !list.length) {
+      if (skippedIds && skippedIds.length) discardLiveItems(skippedIds);
+      closeAdd();
+      return;
     }
-    if (!list || !list.length) return;
-    // 1) pending → owned
     try {
-      await liveJSON('/api/live/items/status', {
-        method: 'POST',
-        body: JSON.stringify({ ids: list.map((it) => it.id), status: 'owned' }),
-      });
-    } catch (e) {
-      showToast(e.message || '저장이 늦어지고 있어요');
-    }
-    // 2) 등록 화면에서 고친 이름·분류·상세를 서버에 반영 (status만 바꾸면 AI 초깃값으로 덮임)
-    const finalList = await Promise.all(list.map(async (it) => {
-      const id = it.serverId || it.id;
-      const patch = {
-        name: (it.name || '').trim() || '옷',
-        category: it.category || it.cat || '',
-        color: it.color || '',
-        brand: it.brand || '',
-        size: it.size || '',
-        store: it.store || '',
-        note: it.note || '',
-        seasons: it.seasons || [],
-        price: it.price || '',
-        material: it.material || '',
-        public: it.public!==false,
-      };
-      try {
+      const ids = list.map((it) => String(it.serverId || it.id));
+      const patches = await Promise.all(list.map(async (it) => {
+        const id = it.serverId || it.id;
+        const patch = {
+          name: (it.name || '').trim() || '옷',
+          category: it.category || it.cat || '',
+          color: it.color || '',
+          brand: it.brand || '',
+          size: it.size || '',
+          store: it.store || '',
+          note: it.note || '',
+          seasons: it.seasons || [],
+          price: it.price || '',
+          material: it.material || '',
+          public: it.public!==false,
+        };
         const res = await liveJSON('/api/live/items/' + id, {
           method: 'PATCH',
           body: JSON.stringify(patch),
         });
-        if (res && res.item) return liveRememberItem({ ...it, ...res.item });
-      } catch (e) { /* keep local edits */ }
-      return liveRememberItem({ ...it, ...patch });
-    }));
-    putLiveItems(finalList, true);
-    showToast(finalList.length + '개 담았어요', 'check');
+        if (!res || !res.item) throw new Error('상품 정보를 저장하지 못했어요. 다시 눌러 주세요.');
+        return { ...it, ...patch, ...res.item };
+      }));
+      const status = await liveJSON('/api/live/items/status', {
+        method: 'POST',
+        body: JSON.stringify({ ids, status: 'owned' }),
+      });
+      const savedById = new Map((status.items || []).map((item) => [String(item.id), item]));
+      const finalList = patches.map((item) => {
+        const saved = savedById.get(String(item.serverId || item.id));
+        if (!saved || saved.status !== 'owned') throw new Error('옷장 저장을 확인하지 못했어요. 다시 눌러 주세요.');
+        return liveRememberItem({ ...item, ...saved });
+      });
+      if (skippedIds && skippedIds.length) discardLiveItems(skippedIds);
+      putLiveItems(finalList, true);
+      closeAdd();
+      showToast(finalList.length + '개 담았어요', 'check');
+    } catch (e) {
+      showToast(e.message || '옷장에 저장하지 못했어요. 다시 눌러 주세요.');
+    }
   };
 
   const setItemVisibility=async(item,published)=>{

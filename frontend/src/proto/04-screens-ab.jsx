@@ -1025,6 +1025,11 @@ function makeItemDraft(d = {}) {
   };
 }
 
+function itemUrlHost(item) {
+  try { return new URL(item.sourceUrl || item.url).hostname.replace(/^www\./i, '').toLowerCase(); }
+  catch { return ''; }
+}
+
 function OrderDemoBrowser({ platform, phase, count, onLogin, demo = false, collectedItems = [] }) {
   const Icon = window.Icon;
   const items = demo ? fakeOrderItems(platform).slice(0, 4) : collectedItems;
@@ -2041,7 +2046,15 @@ function AddSheet({ ctx }) {
     }
     setDetected(collected);
     setSel(collected.map((d) => d.id));
-    setSteps(collected.map((d) => ({ ...d, cat: d.category, draft: makeItemDraft(d) })));
+    const brandsByHost = new Map();
+    collected.forEach((d) => {
+      const host = itemUrlHost(d);
+      if (host && d.brand && !brandsByHost.has(host)) brandsByHost.set(host, d.brand);
+    });
+    setSteps(collected.map((d) => {
+      const brand = d.brand || brandsByHost.get(itemUrlHost(d)) || '';
+      return { ...d, brand, cat: d.category, draft: makeItemDraft({ ...d, brand }) };
+    }));
     setStepIdx(0);
     setBulk(null);
     setBulkResult(null);
@@ -2268,11 +2281,11 @@ function AddSheet({ ctx }) {
     };
   };
   const advance = (keep) => {
+    if (keep) rememberStore(cur?.draft?.store);
     const updated = steps.map((x, i) => (i === stepIdx ? { ...x, added: keep } : x));
     setSteps(updated);
     if (stepIdx >= steps.length - 1) {
       const kept = updated.filter((s) => s.added).map(toItem);
-      kept.forEach((it) => rememberStore(it.store));
       if (updated.some((s) => s.demo)) {
         closeAdd();
         if (typeof showToast === 'function') showToast('미리보기 완료 · 저장되지 않았어요', 'check');
