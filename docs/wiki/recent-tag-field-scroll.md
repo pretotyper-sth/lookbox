@@ -20,3 +20,5 @@
 스크롤과 같이 움직인다. 칩 토글 스크롤 보정은 본문 `.lb-sheet-body`만 본다.
 
 관련: [[large-display-layout]]
+
+2026-10-11 라이브 후속 수정: 직접 입력 유지 판정에서 manualValue(원문)와 current(trim)를 비교하면 `무신사 ` 입력 시 공백 때문에 불일치해 입력창이 닫혔다. 입력 모드는 공백을 포함한 value 원문으로 비교하고, current는 기존 중복 태그 강조에만 사용한다. 목록에 없는 외부 draft는 자동으로 입력창을 표시한다. PC1440px/모바일390px에서 `무신사` 중복 태그 강조→스페이스바→`온라인/오프라인` 연속 입력·포커스 유지·blur 유지, 명시적 최근 태그 선택으로만 접힘 확인. 근거: `frontend/src/proto/02-shared.jsx` RecentTagField typing.
