@@ -1100,11 +1100,11 @@ function ItemDetailSheet({ open, item, onClose, onSave, onViewImage }) {
           </div>
           <LabeledField label="컬러" value={draft.color} onChange={set('color')} placeholder="예) 그레이시 그린" />
           <ChipMultiField label="계절" options={window.LB_DATA.SEASONS} value={draft.seasons} onChange={set('seasons')} />
-          {ClosetVisibility && <ClosetVisibility value={draft.public === true} onChange={set('public')} />}
           <LabeledField label="가격" formatValue={formatNumericPriceInput} inputMode="numeric" value={draft.price} onChange={set('price')} placeholder="예) 89,000" />
           <LabeledField label="재질" value={draft.material} onChange={set('material')} placeholder="예) 코튼 100%" />
           <RecentTagField label="구매처" value={draft.store} onChange={set('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
           <LabeledField label="메모" value={draft.note} onChange={set('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
+          {ClosetVisibility && <ClosetVisibility value={draft.public === true} onChange={set('public')} />}
           {formatDotDate(item.createdAt) && (
             <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
               생성 {formatDotDate(item.createdAt)} · 수정 {formatDotDate(item.updatedAt) || formatDotDate(item.createdAt)}

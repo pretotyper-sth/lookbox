@@ -3544,11 +3544,11 @@ function AddSheet({ ctx }) {
                   value={cur.seasons || []}
                   onChange={(next) => patchStep({ seasons: next })}
                 />
-                {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
                 <LabeledField label="가격" formatValue={formatNumericPriceInput} inputMode="numeric" value={cur.draft.price} onChange={setStepDraft('price')} placeholder="예) 89,000" />
                 <LabeledField label="재질" value={cur.draft.material} onChange={setStepDraft('material')} placeholder="예) 코튼 100%" />
                 <RecentTagField label="구매처" value={cur.draft.store} onChange={setStepDraft('store')} placeholder="구매처 이름을 입력해 주세요" storeKey={STORE_RECENT_KEY} />
                 <LabeledField label="메모" value={cur.draft.note} onChange={setStepDraft('note')} placeholder="코디 팁, 세탁 주의 등" multiline />
+                {ClosetVisibility&&<ClosetVisibility value={cur.public!==false} onChange={value=>patchStep({public:value})}/>}
               </div>
             </div>
 

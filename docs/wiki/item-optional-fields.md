@@ -4,7 +4,7 @@
 
 가격·재질은 문자열이고 비워도 된다. 스키마 없이 `wardrobe_items.metadata.price` / `metadata.material`에 둔다. 추천용 `metadata.style.material`(cotton|denim|…)과는 다른 칸이다. (`backend/app/main.py` `live_item_payload`, `LiveItemUpdate`)
 
-옷 공개 범위는 등록 입력과 기존 아이템 상세에서 모두 수정할 수 있다. 선택지는 공개/나만 보기이며, 짧은 안내는 제목 오른쪽에 나란히 둔다. 등록·상세 양쪽 모두 상세 입력 맨 아래에 배치한다. (`frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/02-shared.jsx`, `frontend/src/style/social.jsx` `ClosetVisibility`)
+옷 공개 범위는 등록 입력과 기존 아이템 상세에서 모두 수정할 수 있다. 선택지는 공개/나만 보기이며, 짧은 안내는 제목 오른쪽에 나란히 둔다. 등록·상세 양쪽 모두 메모 바로 아래, 상세 입력 맨 아래에 배치한다. (`frontend/src/proto/04-screens-ab.jsx`, `frontend/src/proto/02-shared.jsx`, `frontend/src/style/social.jsx` `ClosetVisibility`)
 
 URL로 담을 때는 브랜드와 같이 상품 HTML에서 미리 채운다. JSON-LD `offers.price`·`material`, `product:price:amount` 메타, 카페24 판매가/소재 표, 그리고 본문·숨은 상세 팝업·스크립트에 있는 `Outshell: Cotton 100%` / `면 60%` 같은 혼용률. 페이지(또는 초기 JS 페이로드)에 없으면 빈 칸. 클릭 뒤 AJAX로만 오는 상세는 서버에서 못 본다. (`backend/app/main.py` `_extract_price`, `_extract_material`, `_material_from_body`)
 
