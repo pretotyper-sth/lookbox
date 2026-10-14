@@ -174,6 +174,10 @@ class TryOnRetryTest(unittest.TestCase):
               'upload_bytes': upload, 'note_usage': lambda *args: calls['usage'].append(args),
               'note_fail': lambda *args: calls['failures'].append(args),
               'time': SimpleNamespace(sleep=noop), 'stream_with_keepalive': lambda work: work(noop)}
+        from backend.app.ai_usage import call_ai
+        from unittest.mock import MagicMock
+        ledger = MagicMock()
+        ns['call_ai'] = lambda *args, **kwargs: call_ai(*args, ledger=ledger, **kwargs)
         exec(compile(ast.Module(body=[node], type_ignores=[]), '<tryon-retry>', 'exec'), ns)
         try:
             result = ns['live_tryon_body'](SimpleNamespace(face_data_url='face', profile={}, request_id=None),

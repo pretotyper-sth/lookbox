@@ -25,6 +25,8 @@ import truststore
 
 from dotenv import load_dotenv
 
+from .ai_usage import call_ai, configure_usage, get_ledger, tokens_from_usage, usage_json, estimate_cost, PRICES
+
 # HTTPS 검증에 OS 신뢰 저장소를 쓴다. 사내 프록시가 TLS를 가로채는 망에서는 인증서
 # 체인에 사설 루트가 끼는데, certifi 번들만 보는 httpx는 이걸 모른다. 그러면 Supabase·
 # OpenAI 호출이 전부 CERTIFICATE_VERIFY_FAILED로 끊기고, 토큰 검증 실패로 이어져
@@ -69,8 +71,8 @@ _NO_TRANSPARENT_MODELS = ("gpt-image-2",)
 
 def _supports_transparent(model: str) -> bool:
     return not any(m in (model or "") for m in _NO_TRANSPARENT_MODELS)
-# 비용 설계: 첫 추출은 medium($0.063/장) — 단색 상품컷은 어차피 로컬 컷아웃($0)으로 빠짐.
-# 마음에 안 들어 다시 시도하는 재추출/이미지 변경만 high($0.25/장)로 올린다.
+# GPT Image 1 medium 1024x1536 출력은 약 $0.063이며 입력 이미지·텍스트 비용은 별도다.
+# 재추출/이미지 변경은 high(출력 약 $0.25 + 입력 비용). 로컬 컷아웃은 AI 미호출.
 OPENAI_IMAGE_QUALITY = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
 # gpt-image-2는 medium에서도 글자를 정확히 그리고 high(93초)보다 훨씬 빠르다(39초).
 OPENAI_IMAGE_QUALITY_TEXT = os.environ.get("OPENAI_IMAGE_QUALITY_TEXT", "medium")
@@ -106,6 +108,7 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY or not SUPABASE_SERVICE_ROLE_KEY:
 
 supabase_user: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+configure_usage(lambda row: supabase_admin.table("ai_usage_logs").upsert(row, on_conflict="id").execute())
 # 일반 추출은 60초 안에 끝내고, 실제 고난도 케이스만 120초 예산을 준다.
 # 에러 코드(상태코드·OpenAI 에러코드·request_id)를 사용자 화면에 붙일지. 라이브(production)에서는
 # 감추고 로그·ai_usage_logs에만 남긴다. 로컬·스테이징에서는 그대로 보여 디버깅에 쓴다.
@@ -1179,50 +1182,15 @@ def charge_credit(user_id: str, reason: str, metadata: dict[str, Any] | None = N
 
 
 # 1M 토큰당 USD. gpt-image-1은 입력 텍스트·입력 이미지·출력 이미지 단가가 다르다.
-_AI_PRICES: dict[str, dict[str, float]] = {
-    "gpt-image-1": {"text_in": 5.0, "image_in": 10.0, "out": 40.0},
-    "gpt-image-2": {"text_in": 5.0, "image_in": 10.0, "out": 40.0},
-    "gpt-4o": {"text_in": 2.5, "image_in": 2.5, "out": 10.0},
-    "gpt-4o-mini": {"text_in": 0.15, "image_in": 0.15, "out": 0.6},
-}
+_AI_PRICES = PRICES
 
 
-def _usage_dict(usage: Any) -> dict[str, int]:
-    """SDK usage 객체에서 토큰 수만 뽑는다. 필드 이름이 API마다 달라 둘 다 본다."""
-    if usage is None:
-        return {}
-    get = (lambda k: getattr(usage, k, None)) if not isinstance(usage, dict) else usage.get
-    total_in = get("input_tokens")
-    if total_in is None:
-        total_in = get("prompt_tokens")
-    out = get("output_tokens")
-    if out is None:
-        out = get("completion_tokens")
-    detail = get("input_tokens_details")
-    image_in = None
-    text_in = None
-    if detail is not None:
-        dget = (lambda k: getattr(detail, k, None)) if not isinstance(detail, dict) else detail.get
-        image_in = dget("image_tokens")
-        text_in = dget("text_tokens")
-    if image_in is None and text_in is None and total_in is not None:
-        text_in = total_in
-    return {
-        "text_in": int(text_in or 0),
-        "image_in": int(image_in or 0),
-        "out": int(out or 0),
-    }
+def _usage_dict(usage: Any) -> dict[str, int] | None:
+    return tokens_from_usage(usage_json(usage))
 
 
-def _ai_cost_usd(model: str, tokens: dict[str, int]) -> float:
-    """토큰 수 × 공개 단가. 모르는 모델은 0 — 추측한 값을 기록하지 않는다."""
-    price = _AI_PRICES.get(model)
-    if not price or not tokens:
-        return 0.0
-    return round(
-        sum(tokens.get(k, 0) * price[k] for k in ("text_in", "image_in", "out")) / 1_000_000,
-        6,
-    )
+def _ai_cost_usd(model: str, tokens: dict[str, int]) -> float | None:
+    return estimate_cost(model, tokens)
 
 
 def log_ai_usage(
@@ -1234,18 +1202,13 @@ def log_ai_usage(
     생성은 입력 이미지 토큰이 원본 크기와 input_fidelity에 따라 크게 달라져서
     추산 오차가 그대로 총액 오차가 됐다. 응답의 usage를 그대로 저장해 둔다.
     """
-    payload: dict[str, Any] = dict(metadata)
+    payload: dict[str, Any] = {**metadata, "event_type": "diagnostic"}
     if usage is not None:
         tokens = _usage_dict(usage)
-        payload["tokens"] = tokens
-        payload["cost_usd"] = _ai_cost_usd(model, tokens)
-    try:
-        supabase_admin.table("ai_usage_logs").insert(
-            {"user_id": user_id, "feature": feature, "model": model, "metadata": payload}
-        ).execute()
-    except Exception as exc:  # noqa: BLE001
-        # 기록 실패가 사용자 요청을 깨뜨리면 안 된다.
-        print(f"[ai-usage] log failed ({feature}): {exc}", flush=True)
+        payload.update(tokens=tokens, raw_usage=usage_json(usage), cost_usd=_ai_cost_usd(model, tokens))
+    get_ledger().save({"id": str(uuid.uuid4()), "user_id": user_id, "feature": feature,
+                       "model": model, "metadata": payload,
+                       "created_at": datetime.now(timezone.utc).isoformat()})
 
 
 _TIMING_EXTRA_OK = True
@@ -1466,7 +1429,7 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
 - details: 코디 판단에 영향을 주는 것만 (예: "카고 포켓", "크롭 기장", "광택 소재"). 없으면 [].
 """
     try:
-        response = _vision_client().chat.completions.create(
+        response = call_ai(user_id, "classify", _vision_client().chat.completions.create, metadata={"hint": bool(extract_hint)},
             model=OPENAI_CLASSIFY_MODEL,
             messages=[
                 {
@@ -1479,10 +1442,6 @@ def classify_item(path: str, extract_hint: str = "", user_id: str | None = None)
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
-        )
-        log_ai_usage(
-            user_id, "classify", OPENAI_CLASSIFY_MODEL, {"hint": bool(extract_hint)},
-            usage=getattr(response, "usage", None),
         )
         data = json.loads(response.choices[0].message.content or "{}")
         if data.get("category") not in CATEGORY_KO:
@@ -1568,7 +1527,7 @@ JSON만 응답:
 logo_text는 true일 때만 원문 철자, 아니면 "".
 """
     try:
-        response = _vision_client().chat.completions.create(
+        response = call_ai(user_id, "detect_text", _vision_client().chat.completions.create, metadata={},
             model=OPENAI_CLASSIFY_MODEL,
             messages=[
                 {
@@ -1581,10 +1540,6 @@ logo_text는 true일 때만 원문 철자, 아니면 "".
             ],
             response_format={"type": "json_object"},
             temperature=0,
-        )
-        log_ai_usage(
-            user_id, "detect_text", OPENAI_CLASSIFY_MODEL, {},
-            usage=getattr(response, "usage", None),
         )
         data = json.loads(response.choices[0].message.content or "{}")
         logo_text = str(data.get("logo_text") or "").strip()[:80]
@@ -2662,20 +2617,7 @@ def generate_product_image(
         # gpt-image-2는 이 파라미터를 안 받고 항상 고충실도로 처리하므로 gpt-image-1류에만 지정.
         if "gpt-image-2" not in use_model:
             kwargs["input_fidelity"] = "high"
-        result = openai_client.with_options(timeout=request_timeout).images.edit(**kwargs)
-        log_ai_usage(
-            user_id,
-            "product_image",
-            use_model,
-            {
-                "quality": quality,
-                "has_text_logo": has_text,
-                "logo_text": logo_text[:40],
-                "extract_hint": hint[:80],
-                "transparent": want_transparent,
-            },
-            usage=getattr(result, "usage", None),
-        )
+        result = call_ai(user_id, "product_image", openai_client.with_options(timeout=request_timeout).images.edit, metadata={"has_text_logo": has_text, "logo_text": logo_text[:40], "extract_hint": hint[:80], "transparent": want_transparent, "tier": policy.get("tier"), "attempt": attempt}, **kwargs)
         return base64.b64decode(result.data[0].b64_json), want_transparent
 
     # 투명 배경 요청 한 번만 사용한다. 과거의 불투명 재시도는 다시 플러드필을 타
@@ -3098,7 +3040,7 @@ JSON만 응답:
 - tone: 원단 색이 웜(아이보리·카멜·올리브)/쿨(애쉬·네이비·버건디)/뉴트럴(블랙·화이트·그레이) 중 어디인지.
 - 확신이 없는 필드는 비운다."""
     try:
-        response = _vision_client().chat.completions.create(
+        response = call_ai(user_id, "style_attrs_image", _vision_client().chat.completions.create, metadata={"backfill": True},
             model=OPENAI_CLASSIFY_MODEL,
             messages=[{"role": "user", "content": [
                 {"type": "text", "text": prompt},
@@ -3106,10 +3048,6 @@ JSON만 응답:
             ]}],
             response_format={"type": "json_object"},
             temperature=0.2,
-        )
-        log_ai_usage(
-            user_id, "style_attrs_image", OPENAI_CLASSIFY_MODEL, {"backfill": True},
-            usage=getattr(response, "usage", None),
         )
         return _clean_style_attrs(json.loads(response.choices[0].message.content or "{}"))
     except Exception as exc:  # noqa: BLE001
@@ -3130,17 +3068,13 @@ def _ensure_style_attrs(user_id: str, rows: list[dict[str, Any]], limit: int = 2
     if not missing or not openai_client or AI_TEST_MODE:
         return 0
     try:
-        response = openai_client.with_options(timeout=45).chat.completions.create(
+        response = call_ai(user_id, "style_attrs", openai_client.with_options(timeout=45).chat.completions.create, metadata={"count": len(missing)},
             model=OPENAI_VISION_MODEL,
             messages=[{"role": "user", "content": _style_attr_prompt(missing)}],
             response_format={"type": "json_object"},
             temperature=0.2,
         )
         data = json.loads(response.choices[0].message.content or "{}")
-        log_ai_usage(
-            user_id, "style_attrs", OPENAI_VISION_MODEL, {"count": len(missing)},
-            usage=getattr(response, "usage", None),
-        )
     except Exception as exc:  # noqa: BLE001
         print(f"[style-attrs] failed: {exc}", flush=True)
         return 0
@@ -3363,7 +3297,7 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
 """
     try:
         # 추천은 실패해도 fallback_combos가 있으니, Render 프록시(~100초)보다 짧게 제한
-        response = openai_client.with_options(timeout=60).chat.completions.create(
+        response = call_ai(user_id, "recommend_text", openai_client.with_options(timeout=60).chat.completions.create, metadata={"requested_count": max_combos},
             model=OPENAI_VISION_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
@@ -3423,10 +3357,6 @@ wish는 제안 아이템이 있는 코디에만 넣고, 나머지 코디에서�
             )
             if len(combos) >= max_combos:
                 break
-        log_ai_usage(
-            user_id, "recommend_text", OPENAI_VISION_MODEL, {"count": len(combos)},
-            usage=getattr(response, "usage", None),
-        )
         if not combos:
             print("[recommend] ai returned 0 usable combos — fallback", flush=True)
             combos = fallback_combos(items, anchor, max_combos, tone, exclude_keys, uniq_styles, profile, include_ids)
@@ -4610,7 +4540,7 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
             print("[look] TEST MODE — 로컬 콜라주만, AI 미호출 ($0)", flush=True)
             out = source.getvalue()  # 위에서 만든 콜라주 보드를 그대로 사용
         else:
-            result = openai_client.images.edit(
+            result = call_ai(user_id, "look_image", openai_client.images.edit, metadata={"cache_key": key},
                 model=OPENAI_IMAGE_MODEL,
                 image=source,
                 prompt=prompt,
@@ -4623,8 +4553,6 @@ def generate_look_image(user_id: str, combo: dict[str, Any], items: list[dict[st
         supabase_admin.table("generated_images").insert(
             {"user_id": user_id, "cache_key": key, "kind": "look", "storage_path": storage_path, "image_url": image_url}
         ).execute()
-        if not AI_TEST_MODE:
-            log_ai_usage(user_id, "look_image", OPENAI_IMAGE_MODEL, {"quality": OPENAI_IMAGE_QUALITY})
         return image_url
     except Exception:
         return None
@@ -5040,16 +4968,15 @@ def _generate_model_identity_png(user_id: str, gender: str | None) -> bytes | No
                 }
                 if "gpt-image-2" not in OPENAI_IMAGE_MODEL_LOOK:
                     kwargs["input_fidelity"] = "high"
-                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
+                result = call_ai(user_id, "model_identity", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit, metadata={}, **kwargs)
             else:
-                result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate(
+                result = call_ai(user_id, "model_identity", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate, metadata={},
                     model=OPENAI_IMAGE_MODEL_LOOK,
                     prompt=_model_identity_prompt(gender),
                     size="1024x1536",
                     quality=quality,
                 )
             out = base64.b64decode(result.data[0].b64_json)
-            log_ai_usage(user_id, "model_identity", OPENAI_IMAGE_MODEL_LOOK, {"quality": quality})
         _save_model_identity_png(user_id, gender, out)
         ms = int((time.perf_counter() - t0) * 1000)
         print(f"[timing] model-identity cache=0 duration_ms={ms}", flush=True)
@@ -5539,12 +5466,12 @@ def generate_model_look_image(
             }
             if "gpt-image-2" not in look_model:
                 kwargs["input_fidelity"] = "high"
-            result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(**kwargs)
+            result = call_ai(user_id, "model_look", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit, metadata={"reference_id": studio_reference["id"] if studio_reference else None, "reference_rev": REFERENCE_REV, "cache_key": key}, **kwargs)
             out = base64.b64decode(result.data[0].b64_json)
         else:
             board = _model_look_board(items)
             mark("dress")
-            result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit(
+            result = call_ai(user_id, "model_look", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.edit, metadata={"reference_id": studio_reference["id"] if studio_reference else None, "reference_rev": REFERENCE_REV, "cache_key": key},
                 model=look_model,
                 image=_png_named(board, "clothes.png"),
                 prompt=_model_look_prompt(gender) + "\n" + _model_look_outfit_rules(items)
@@ -5567,12 +5494,6 @@ def generate_model_look_image(
             {"user_id": user_id, "cache_key": key, "kind": "model_look", "storage_path": storage_path, "image_url": image_url}
         ).execute()
         ms = int((time.perf_counter() - t0) * 1000)
-        if not AI_TEST_MODE:
-            log_ai_usage(user_id, "model_look", look_model, {
-                "quality": quality,
-                "reference_id": studio_reference["id"] if studio_reference else None,
-                "reference_rev": REFERENCE_REV,
-            })
         print(
             f"[timing] model-look cache=0 quality={quality} identity={bool(identity)} "
             f"inputs={len(items)} duration_ms={ms} ({ms / 1000:.1f}s) {phases()}",
@@ -8034,38 +7955,56 @@ def live_admin_ai_cost(
         raise HTTPException(status_code=404, detail="not_found")
     require_supabase()
     span = max(1, min(int(days or 30), 365))
-    since = (datetime.now(timezone.utc) - timedelta(days=span - 1)).date().isoformat()
-    rows = (
-        supabase_admin.table("ai_usage_logs")
-        .select("created_at,feature,model,metadata")
-        .gte("created_at", since)
-        .order("created_at", desc=False)
-        .limit(20000)
-        .execute()
-        .data
-        or []
-    )
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
+    since = (now - timedelta(days=span - 1)).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+    get_ledger().flush()
+    rows = []
+    offset = 0
+    while True:
+        page = (supabase_admin.table("ai_usage_logs")
+                .select("id,created_at,feature,model,metadata")
+                .gte("created_at", since).order("created_at").order("id")
+                .range(offset, offset + 999).execute().data or [])
+        rows.extend(page)
+        if len(page) < 1000:
+            break
+        offset += len(page)
     by_day: dict[str, dict[str, float]] = {}
     by_feature: dict[str, dict[str, float]] = {}
     total = {"calls": 0, "cost_usd": 0.0, "priced_calls": 0}
+    statuses: dict[str, int] = {}
+    diagnostics = 0
     for r in rows:
         meta = r.get("metadata") or {}
+        if meta.get("event_type") == "diagnostic" or r.get("feature") in ("tryon_validation", "product_image_error"):
+            diagnostics += 1
+            continue
+        status = str(meta.get("status") or "legacy")
+        statuses[status] = statuses.get(status, 0) + 1
         cost = float(meta.get("cost_usd") or 0.0)
-        day = str(r.get("created_at") or "")[:10]
+        day = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(kst).date().isoformat()
         key = f"{r.get('feature') or 'unknown'} · {r.get('model') or '?'}"
         for bucket, name in ((by_day, day), (by_feature, key)):
-            slot = bucket.setdefault(name, {"calls": 0, "cost_usd": 0.0})
+            slot = bucket.setdefault(name, {"calls": 0, "cost_usd": 0.0, "priced_calls": 0})
             slot["calls"] += 1
+            slot["priced_calls"] += int(meta.get("cost_usd") is not None)
             slot["cost_usd"] = round(slot["cost_usd"] + cost, 6)
         total["calls"] += 1
         total["cost_usd"] = round(total["cost_usd"] + cost, 6)
         if meta.get("cost_usd") is not None:
             total["priced_calls"] += 1
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = now.date().isoformat()
     return {
         "days": span,
         "total": total,
-        # 토큰을 기록하기 전 호출은 cost_usd가 없어 0으로 잡힌다 — 몇 건인지 같이 준다.
+        "cost_complete": total["calls"] == total["priced_calls"],
+        "timezone": "Asia/Seoul",
+        "billing_basis": "public_standard_estimate_and_legacy_values_not_invoice",
+        "outcomes": statuses,
+        "diagnostic_events": diagnostics,
+        "unsynced_events": get_ledger().pending_count(),
+        # 누락액은 0원이 아니라 미확정이며 total.cost_usd는 기록된 금액의 부분합이다.
         "unpriced_calls": total["calls"] - total["priced_calls"],
         "today": by_day.get(today) or {"calls": 0, "cost_usd": 0.0},
         "by_day": [{"date": k, **v} for k, v in sorted(by_day.items())],
@@ -8601,7 +8540,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)):
                 try:
                     source = io.BytesIO(face)
                     source.name = "face.png"
-                    result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON, max_retries=0).images.edit(
+                    result = call_ai(uid, "tryon_body", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT_TRYON, max_retries=0).images.edit, metadata={"attempt": attempt, "key": key},
                         model=OPENAI_IMAGE_MODEL_TRYON,
                         image=source,
                         prompt=_TRYON_BODY_PROMPT + profile_note,
@@ -8609,11 +8548,6 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)):
                         quality=OPENAI_IMAGE_QUALITY_TRYON,
                     )
                     out = base64.b64decode(result.data[0].b64_json)
-                    log_ai_usage(
-                        uid, "tryon_body", OPENAI_IMAGE_MODEL_TRYON,
-                        {"quality": OPENAI_IMAGE_QUALITY_TRYON, "attempt": attempt, "key": key},
-                        usage=getattr(result, "usage", None),
-                    )
                 except Exception as exc:  # noqa: BLE001
                     last_info = _openai_error_info(exc)
                     print(f"[tryon] body failed: {_fail_log(last_info)}", flush=True)
@@ -9265,9 +9199,8 @@ def generate_wish_product_image(
         }
         if _supports_transparent(model):
             kwargs["background"] = "transparent"
-        result = openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate(**kwargs)
+        result = call_ai(user_id, "wish_product_image", openai_client.with_options(timeout=OPENAI_IMAGE_TIMEOUT).images.generate, metadata={"name": name[:40], "category": cat}, **kwargs)
         out = base64.b64decode(result.data[0].b64_json)
-        log_ai_usage(user_id, "wish_product_image", model, {"name": name[:40], "category": cat})
         out = finalize_cutout(
             out,
             already_transparent=_supports_transparent(model),

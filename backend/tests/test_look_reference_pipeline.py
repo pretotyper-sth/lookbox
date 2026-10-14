@@ -9,6 +9,7 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 from backend.tests.test_model_look import MAIN_PATH, load, studio_look
+from backend.app.ai_usage import call_ai
 
 
 def pipeline_namespace(cached=None):
@@ -20,6 +21,7 @@ def pipeline_namespace(cached=None):
     database = MagicMock()
     database.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = cached or []
     provider = MagicMock()
+    provider.with_options.return_value.images.edit.return_value.usage = None
     provider.with_options.return_value.images.edit.return_value.data = [type('Output', (), {'b64_json': base64.b64encode(png).decode()})()]
     reference_path = MagicMock()
     reference_path.read_bytes.return_value = png
@@ -39,6 +41,12 @@ def pipeline_namespace(cached=None):
         'upload_bytes': MagicMock(return_value='https://example.test/look.png'),
         'log_ai_usage': MagicMock(),
     })
+    ledger = MagicMock()
+    def save(row):
+        if row['metadata']['status'] == 'success':
+            ns['log_ai_usage'](row['user_id'], row['feature'], row['model'], row['metadata'])
+    ledger.save.side_effect = save
+    ns['call_ai'] = lambda *args, **kwargs: call_ai(*args, ledger=ledger, **kwargs)
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<model-look-pipeline>', 'exec'), ns)
     return ns
 

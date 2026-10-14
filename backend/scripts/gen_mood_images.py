@@ -14,6 +14,9 @@ from pathlib import Path
 
 from openai import OpenAI
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from backend.app.ai_usage import call_ai, configure_usage_from_env
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "frontend" / "public" / "prototype-assets"
 ENV = ROOT / ".env"
@@ -55,17 +58,18 @@ MOODS = [
 
 def main() -> int:
     load_env()
+    configure_usage_from_env()
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         print("OPENAI_API_KEY missing")
         return 1
     model = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
     quality = os.environ.get("OPENAI_IMAGE_QUALITY", "medium")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, max_retries=0)
     OUT.mkdir(parents=True, exist_ok=True)
 
     print(f"[mood] reference shot via {model} ({SIZE}, {quality})", flush=True)
-    ref = client.images.generate(model=model, prompt=REFERENCE_PROMPT, size=SIZE, quality=quality)
+    ref = call_ai(None, "mood_reference", client.images.generate, model=model, prompt=REFERENCE_PROMPT, size=SIZE, quality=quality)
     ref_bytes = base64.b64decode(ref.data[0].b64_json)
     (OUT / "mood-reference.png").write_bytes(ref_bytes)
 
@@ -80,7 +84,7 @@ def main() -> int:
             "no logo, no props. Vertical 4:5 framing."
         )
         print(f"[mood] {mood_id}", flush=True)
-        res = client.images.edit(model=model, image=buf, prompt=prompt, size=SIZE, quality=quality)
+        res = call_ai(None, "mood_variant", client.images.edit, metadata={"mood": mood_id}, model=model, image=buf, prompt=prompt, size=SIZE, quality=quality)
         data = base64.b64decode(res.data[0].b64_json)
         (OUT / f"mood-{mood_id}.png").write_bytes(data)
 

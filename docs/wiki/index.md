@@ -67,7 +67,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Operations
 - [mobile-editing-audit-2026-10](mobile-editing-audit-2026-10.md) — 모바일 문구/공개 설정/AI 배지/CTA/피드 오류/편집기 수정·DEV 라이브 누락 점검·직접 입혀보기 영구 작업 서버 필요·사용자 푸시 승인
-- [ai-usage-cost](ai-usage-cost.md) — 원가는 `ai_usage_logs.metadata.cost_usd`. 착장·기준인물은 usage 미기록. 관리자 `/api/live/admin/ai-cost`
+- [ai-usage-cost](ai-usage-cost.md) — 2026-10-14 감사: 417건 중 207건 비용 미기록·저장 $16.906021은 청구 총액 아님. 착장/기준인물/제안 이미지 누락·단가표 불일치
 - [chrome-extension-publish](chrome-extension-publish.md) — 웹스토어 게시자명·연락처는 공개. RealCloset 전용 Google 계정, 등록비·2FA·Privacy practices 필요
 - [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
 - [stale-vite-chunk](stale-vite-chunk.md) — 배포 후 열린 탭의 이전 해시 청크가 404면 Vite preload 오류에서 탭당 한 번 새로고침
@@ -76,3 +76,5 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [recent-tag-field-scroll](recent-tag-field-scroll.md) — 직접 입력은 공백 포함 원문 유지·중복 태그 강조/재정렬 없음·새 구매처는 다음 아이템에서 최근순. 구매처 칩 토글로 시트 높이가 바뀌면 scrollTop/gap을 잡아 `useLayoutEffect`에서 되돌림
 - [chiprow-sheet-scroll](chiprow-sheet-scroll.md) — `.lb-chiprow`의 pan-x가 상세 시트 세로 스크롤을 가로챘다. pan-x pan-y + 시트 fixed
 - [live-fetch-wake](live-fetch-wake.md) — 새로고침 토스트 '네트워크가 불안정해요'는 Render 첫 OPTIONS 실패. GET에 JSON 헤더를 붙이지 않고 재시도한다
+
+- [storage-cost-comparison](storage-cost-comparison.md) — Supabase Storage vs S3 서울 저장·전송 단가, Pro 기본료와 이전 판단

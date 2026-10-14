@@ -7,6 +7,7 @@ Landing:   http://localhost:8080
 Dashboard: http://localhost:8080/dashboard  (ID: admin / PW: lookbox2026)
 """
 import os, json, sqlite3, hashlib
+from backend.app.ai_usage import call_ai, configure_usage_from_env
 from datetime import datetime
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, Response, abort
@@ -115,6 +116,7 @@ if os.path.isfile(_env_path):
                 if _k and _k not in os.environ: os.environ[_k] = _v
     except Exception as _e:
         print(f'[env] .env load failed: {_e}', flush=True)
+configure_usage_from_env()
 GEMINI_KEY = os.environ.get('GEMINI_API_KEY')
 GEMINI_AVAILABLE = False
 _gemini_model = None
@@ -164,7 +166,7 @@ if OPENAI_KEY and os.environ.get('DISABLE_OPENAI'):
 elif OPENAI_KEY:
     try:
         from openai import OpenAI as _OpenAI
-        _openai_client = _OpenAI(api_key=OPENAI_KEY)
+        _openai_client = _OpenAI(api_key=OPENAI_KEY, max_retries=0)
         OPENAI_AVAILABLE = True
         OPENAI_IMAGE_AVAILABLE = True  # gpt-image-1: 조직 미인증이면 호출 시 자동 폴백
         print(f'[ai] OpenAI enabled (vision={OPENAI_VISION_MODEL}, image={OPENAI_IMAGE_MODEL})')
@@ -480,12 +482,13 @@ def generate_look_image(combo, item_lookup):
 - 참고 이미지에 없는 새 옷이나 장식은 추가하지 마세요.
 - 세로 4:5 비율."""
         print(f'[look-img] OpenAI 시작 ids={ids}', flush=True)
-        result = _openai_client.images.edit(
+        result = call_ai(None, "legacy_generate_look_image", _openai_client.images.edit,
             model=OPENAI_IMAGE_MODEL,
             image=buf,
             prompt=prompt,
             size='1024x1536',
             quality=OPENAI_IMAGE_QUALITY,
+            provider="openai", metadata={},
         )
         with open(output_path, 'wb') as fo:
             fo.write(base64.b64decode(result.data[0].b64_json))
@@ -623,7 +626,7 @@ def _vision_generate(prompt, image_path):
     if OPENAI_AVAILABLE:
         try:
             b64 = _img_to_jpeg_b64(image_path)
-            resp = _openai_client.chat.completions.create(
+            resp = call_ai(None, "legacy__vision_generate", _openai_client.chat.completions.create,
                 model=OPENAI_VISION_MODEL,
                 messages=[{'role': 'user', 'content': [
                     {'type': 'text', 'text': prompt},
@@ -631,6 +634,7 @@ def _vision_generate(prompt, image_path):
                 ]}],
                 response_format={'type': 'json_object'},
                 temperature=0.2,
+                provider="openai", metadata={},
             )
             return resp.choices[0].message.content or ''
         except Exception as e:
@@ -638,7 +642,7 @@ def _vision_generate(prompt, image_path):
     if GEMINI_AVAILABLE:
         from PIL import Image
         img = Image.open(image_path).convert('RGB')
-        resp = _gemini_model.generate_content([prompt, img], generation_config={'temperature': 0.2})
+        resp = call_ai(None, "legacy__vision_generate", _gemini_model.generate_content, [prompt, img], generation_config={'temperature': 0.2}, provider="gemini", metadata={"model": getattr(_gemini_model, "model_name", "unknown")})
         return resp.text or ''
     return None
 
@@ -646,18 +650,19 @@ def _text_generate_json(prompt):
     """텍스트 프롬프트 → JSON 텍스트. OpenAI 우선 → Gemini 폴백 → None."""
     if OPENAI_AVAILABLE:
         try:
-            resp = _openai_client.chat.completions.create(
+            resp = call_ai(None, "legacy__text_generate_json", _openai_client.chat.completions.create,
                 model=OPENAI_VISION_MODEL,
                 messages=[{'role': 'user', 'content': prompt}],
                 response_format={'type': 'json_object'},
                 temperature=0.5,
+                provider="openai", metadata={},
             )
             return resp.choices[0].message.content or ''
         except Exception as e:
             print(f'[ai] OpenAI text 실패 → Gemini 폴백: {type(e).__name__}: {str(e)[:160]}', flush=True)
     if GEMINI_AVAILABLE:
         try:
-            resp = _gemini_model.generate_content(prompt, generation_config={'temperature': 0.5})
+            resp = call_ai(None, "legacy__text_generate_json", _gemini_model.generate_content, prompt, generation_config={'temperature': 0.5}, provider="gemini", metadata={"model": getattr(_gemini_model, "model_name", "unknown")})
             return resp.text or ''
         except Exception as e:
             print(f'[ai] Gemini text 실패: {type(e).__name__}: {str(e)[:160]}', flush=True)
@@ -1150,9 +1155,10 @@ def ai_generate_clean_shot(input_path, output_path, meta):
             if max(img.size) > 1024: img.thumbnail((1024, 1024))  # 업로드 용량↓ → 속도↑
             buf = io.BytesIO(); img.save(buf, format='PNG'); buf.seek(0); buf.name = 'src.png'
             print(f'[img-gen] OpenAI {cat} 시작 (img={img.size}, q={OPENAI_IMAGE_QUALITY})', flush=True)
-            result = _openai_client.images.edit(
+            result = call_ai(None, "legacy_ai_generate_clean_shot", _openai_client.images.edit,
                 model=OPENAI_IMAGE_MODEL, image=buf, prompt=prompt,
                 size='1024x1536', quality=OPENAI_IMAGE_QUALITY,
+                provider="openai", metadata={},
             )
             with open(output_path, 'wb') as fo: fo.write(base64.b64decode(result.data[0].b64_json))
             print(f'[img-gen] OpenAI {cat} 성공 → {os.path.basename(output_path)}', flush=True)
@@ -1165,9 +1171,10 @@ def ai_generate_clean_shot(input_path, output_path, meta):
             from PIL import Image
             img = Image.open(input_path).convert('RGB')
             print(f'[img-gen] Gemini {cat} 시작 (img={img.size})', flush=True)
-            resp = _gemini_image_model.generate_content(
+            resp = call_ai(None, "legacy_ai_generate_clean_shot", _gemini_image_model.generate_content,
                 [prompt, img],
                 generation_config={'response_modalities': ['IMAGE'], 'temperature': 0.3},
+                provider="gemini", metadata={"model": getattr(_gemini_image_model, "model_name", "unknown")},
             )
             for cand in (resp.candidates or []):
                 for part in (cand.content.parts or []):
