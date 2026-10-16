@@ -78,3 +78,5 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [live-fetch-wake](live-fetch-wake.md) — 새로고침 토스트 '네트워크가 불안정해요'는 Render 첫 OPTIONS 실패. GET에 JSON 헤더를 붙이지 않고 재시도한다
 
 - [storage-cost-comparison](storage-cost-comparison.md) — Supabase Storage vs S3 서울 저장·전송 단가, Pro 기본료와 이전 판단
+
+- [outfit-settings-preservation](outfit-settings-preservation.md) — 기존 AI 착장 보존·다음 요청부터 설정 반영·최근 기록 3종 병렬 조회·개인화 품질 점검 한계

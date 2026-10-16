@@ -1,11 +1,13 @@
 """추천 카드 생성 순서를 고정한다."""
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 import contextlib
 import io
 import time
 import uuid
+import threading
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -22,6 +24,26 @@ class LiveCoordinatePipelineTest(unittest.TestCase):
         tree = ast.parse(source)
         fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "live_coordinate")
         self.source = ast.get_source_segment(source, fn) or ""
+
+    def test_history_reads_overlap_and_keep_all_results(self):
+        start = self.source.index("with ThreadPoolExecutor(max_workers=3)")
+        end = self.source.index("        exclusions =", start)
+        barrier = threading.Barrier(3)
+        def read(value):
+            def run(*args):
+                barrier.wait(timeout=2)
+                return value
+            return run
+        ns = {"ThreadPoolExecutor": ThreadPoolExecutor, "user": SimpleNamespace(id="user"),
+              "body": SimpleNamespace(for_date="2026-10-16"),
+              "_recent_daily_exclusions": read(["excluded"]),
+              "_recent_daily_feedback": read(["feedback"]),
+              "_recent_daily_wishes": read(["wish"])}
+        import textwrap
+        exec(textwrap.dedent("        " + self.source[start:end]), ns)
+        self.assertEqual(ns["recent_exclusions"], ["excluded"])
+        self.assertEqual(ns["feedback"], ["feedback"])
+        self.assertEqual(ns["recent_wishes"], ["wish"])
 
     def test_uses_product_cuts_without_text_recommendation(self):
         self.assertIn("combos = recommend_closet(", self.source)
@@ -89,7 +111,7 @@ class CoordinateGenerationOrderTest(unittest.TestCase):
         def wish(*args):
             events.append(('wish-start',))
             return None
-        ns = {'Any': Any, 'time': time, 'uuid': uuid, 'LiveCoordinate': object, 'UserContext': object, 'Depends': lambda x: None, 'current_user': None, 'HTTPException': HTTPException,
+        ns = {'ThreadPoolExecutor': ThreadPoolExecutor, 'Any': Any, 'time': time, 'uuid': uuid, 'LiveCoordinate': object, 'UserContext': object, 'Depends': lambda x: None, 'current_user': None, 'HTTPException': HTTPException,
               'ensure_credits': MagicMock(), 'supabase_admin': db, '_recent_daily_exclusions': lambda *a: [], '_recent_daily_feedback': lambda *a: [], '_recent_daily_wishes': lambda *a: [],
               '_validate_picked_outfit': MagicMock(), '_combo_has_top_and_bottom': lambda *a: True, '_combo_has_unique_garment_slots': lambda *a: True,
               '_wish_live_item': lambda id, wish: {'id': id}, 'live_item_payload': lambda row: row,

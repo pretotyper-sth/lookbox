@@ -9375,9 +9375,13 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
         _validate_picked_outfit(body.include_item_ids, by_id)
-        recent_exclusions = _recent_daily_exclusions(user.id, body.for_date)
-        feedback = _recent_daily_feedback(user.id)
-        recent_wishes = _recent_daily_wishes(user.id, body.for_date)
+        with ThreadPoolExecutor(max_workers=3) as history_pool:
+            exclusions_job = history_pool.submit(_recent_daily_exclusions, user.id, body.for_date)
+            feedback_job = history_pool.submit(_recent_daily_feedback, user.id)
+            wishes_job = history_pool.submit(_recent_daily_wishes, user.id, body.for_date)
+            recent_exclusions = exclusions_job.result()
+            feedback = feedback_job.result()
+            recent_wishes = wishes_job.result()
         exclusions = [*(body.exclude_item_ids or []), *recent_exclusions]
 
         outfits: list[dict[str, Any]] = []

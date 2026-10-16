@@ -1399,11 +1399,6 @@ function App() {
     setTryOnCamera(true);
   };
   const saveAccount = (draft) => { const np = { ...prefs, ...draft };
-    if (prefs.personalModelLook && ['avatar', 'height', 'weight'].some(key => np[key] !== prefs[key])) {
-      (LB_DATA.DAILY || []).forEach(o => { if (o) delete o.lookImg; });
-      writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-      bumpDaily();
-    }
     setPrefs(np); persistPrefs(np); setAccountSheet(false); showToast('개인 정보를 저장했어요', 'check'); };
   const logout = () => {
     prefsSynced.current = false;   // 다음 로그인에서 계정 설정을 읽기 전까지 계정에 쓰지 않는다
@@ -2077,29 +2072,13 @@ function App() {
     return true;
   };
 
-  useEffect(() => {
-    const revision = prefs.personalModelLook ? 'personal-body2' : '31';
-    if (!prefs.modelLook || prefs.modelLookRevision === revision) return;
-    (LB_DATA.DAILY || []).forEach((outfit) => { if (outfit) delete outfit.lookImg; });
-    writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-    const np = { ...prefs, modelLookRevision: revision };
-    setPrefs(np); persistPrefs(np); bumpDaily();
-  }, [prefs, dailyStyle, items, bumpDaily]);
-
   const onTogglePersonalModelLook = (on) => {
-    const clearDisplayedModelLooks = () => {
-      (LB_DATA.DAILY || []).forEach((o) => { if (o) delete o.lookImg; });
-      writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-      bumpDaily();
-    };
     if (!on) {
-      clearDisplayedModelLooks();
       const np = { ...prefs, personalModelLook: false };
       setPrefs(np); persistPrefs(np); showToast('내 얼굴·체형 맞춤 착장을 껐어요');
       return;
     }
     if (prefs.personalModelLookDontAsk) {
-      clearDisplayedModelLooks();
       const np = { ...prefs, personalModelLook: true };
       setPrefs(np); persistPrefs(np); return;
     }
@@ -2112,10 +2091,7 @@ function App() {
       personalModelLook: true, personalModelLookDontAsk: !!draft.dontAsk,
       ...(avatarChanged ? { tryOnBody: '', tryOnFrame: '', tryOnCut: '', tryOnRev: '', tryOnAssets: emptyTryOnAssets() } : {}),
     };
-    (LB_DATA.DAILY || []).forEach((o) => { if (o) delete o.lookImg; });
-    writeDailyCache({ style: dailyStyle, outfits: LB_DATA.DAILY.slice(), items: dailyCacheItemsFromOwned(items, LB_DATA.DAILY), wardrobeSig: wardrobeSigOf(items), wardrobeCount: items.length });
-    bumpDaily();
-    setPrefs(np); persistPrefs(np); setPersonalSetupOpen(false); showToast('내 정보로 AI 착장을 보여드려요', 'check');
+    setPrefs(np); persistPrefs(np); setPersonalSetupOpen(false); showToast('다음 AI 착장부터 내 정보를 반영해요', 'check');
   };
 
   const requestDailyOutfits = async (style = preferredDailyStyle, opts = {}) => {
