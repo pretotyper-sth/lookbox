@@ -47,3 +47,7 @@ and append to `docs/wiki/log.md` in the same pass. Cite `path:line` or a commit.
 
 `CLAUDE.md` in this directory applies to all agents, not just Claude: state assumptions,
 simplest solution that works, surgical diffs, verify against a stated success criterion.
+
+## Required design system
+
+For every UI change, read `docs/wiki/design-system.md` and reuse its shared components and tokens. This applies to all agents and all frontend UI work. Do not introduce page-specific raw inputs/buttons or a new UI kit where an existing primitive fits; add missing primitives to the shared DS and document them. See `.cursor/rules/design-system.mdc`.

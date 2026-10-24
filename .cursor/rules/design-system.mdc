@@ -1,0 +1,16 @@
+---
+description: All RealCloset UI changes must use the existing design system and shared components.
+alwaysApply: true
+---
+
+# RealCloset 디자인 시스템 필수
+
+- UI를 만들거나 수정할 때 먼저 `docs/wiki/design-system.md`를 읽는다.
+- 색상·글꼴·간격·테두리·반경은 `frontend/src/proto/proto.css`의 토큰을 사용한다.
+- `frontend/src/proto/02-shared.jsx`의 `Btn`, `LabeledField`, `RangeField`, `AuthPage`, `BottomSheet`, `Icon`을 먼저 재사용한다.
+- `className="lb-input"`만 붙인 기본 input이나 화면별 버튼/입력창 복제는 금지한다. 예: `<LabeledField label="새 비밀번호" type="password" ... />`.
+- 공통 컴포넌트가 없으면 해당 파일에 가장 작은 재사용 컴포넌트를 만들고 사용처와 DS 문서를 함께 갱신한다. 새 UI 라이브러리는 도입하지 않는다.
+- 로그인·비밀번호 찾기·재설정은 `AuthPage`와 공통 필드/폼 버튼을 사용한다.
+- 편집기 슬라이더는 `RangeField`, 순서 변경은 `layer-order.js`를 사용한다. 캔버스 선택 테두리와 패널/슬라이더 외곽선은 구분한다.
+- 재사용 컴포넌트 자체를 수정할 때 기존 호출부와 영향받는 모바일/데스크톱 화면을 확인한다.
+- 키보드 포커스, 라벨, 오류 안내, disabled/busy 상태를 유지하고 화면 폭 390px/데스크톱을 확인한다.

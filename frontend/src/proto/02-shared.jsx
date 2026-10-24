@@ -637,7 +637,7 @@ function Skeleton({ w = '100%', h = 16, radius = 'var(--r-sm)', style }) {
 /* ----------------------------------------------------------------
    Button
 ---------------------------------------------------------------- */
-function Btn({ children, variant = 'primary', size = 'md', icon, full, onClick, disabled, style }) {
+function Btn({ children, variant = 'primary', size = 'md', icon, full, onClick, disabled, style, type, form }) {
   const base = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     gap: 'var(--s2)', fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap',
@@ -654,7 +654,7 @@ function Btn({ children, variant = 'primary', size = 'md', icon, full, onClick, 
     soft:      { background: 'var(--surface)', color: 'var(--ink)', boxShadow: 'inset 0 0 0 1px var(--line)' },
   };
   return (
-    <button onClick={onClick} disabled={disabled} className="lb-btn"
+    <button type={type} form={form} onClick={onClick} disabled={disabled} className="lb-btn"
       style={{ ...base, ...variants[variant], ...style }}>
       {icon && <Icon name={icon} size={size === 'lg' ? 20 : 17} />}
       {children}
@@ -784,12 +784,41 @@ function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, d
    ItemDetailSheet — tap a garment → view large + add optional details
    (브랜드 / 사이즈 / 구매처 / 메모). All fields optional, saved optimistically.
 ---------------------------------------------------------------- */
-function LabeledField({ label, value, onChange, placeholder, multiline, type = 'text', autoComplete, formatValue, inputMode }) {
-  const common = {
-    width: '100%', padding: multiline ? '11px 14px' : '12px 14px', borderRadius: 'var(--r-md)',
-    fontSize: 14, background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
-    outline: 'none', resize: 'none', lineHeight: 1.5, boxSizing: 'border-box',
-  };
+function CheckField({ label, checked, onChange, disabled }) {
+  return <label className="lb-check-field"><input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} /><span>{label}</span></label>;
+}
+
+function RangeField({ label, ariaLabel, value, min, max, step = 1, unit = '', onChange }) {
+  const progress = Math.max(0, Math.min(100, (value - min) / (max - min) * 100));
+  return <label className="lb-range-field">
+    <span>{label}</span>
+    <input className="lb-range" type="range" aria-label={ariaLabel || label} min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} style={{ '--range-progress': `${progress}%` }} />
+    <output>{value}{unit}</output>
+  </label>;
+}
+
+function AuthPage({ eyebrow, title, description, children, footer, onClose }) {
+  const { Wordmark, Eyebrow } = window;
+  return <div className="lb-app lb-auth-page">
+    <div className="lb-page-cap lb-auth-shell">
+      <header className="lb-auth-header">
+        <Wordmark size={18} />
+        {onClose && <button type="button" onClick={onClose} aria-label="닫기" className="lb-iconbtn lb-auth-close"><Icon name="x" size={20} /></button>}
+      </header>
+      <main className="lb-scrollable lb-auth-body">
+        <Eyebrow>{eyebrow}</Eyebrow>
+        <h1 className="lb-auth-title">{title}</h1>
+        <p className="lb-auth-description" role="status">{description}</p>
+        {children}
+      </main>
+      <footer className="lb-auth-footer">{footer}</footer>
+    </div>
+  </div>;
+}
+
+function LabeledField({ label, value, onChange, placeholder, multiline, type = 'text', autoComplete, formatValue, inputMode, required, minLength, disabled, hint, error }) {
+  const messageId = React.useId();
+  const accessibility = { required, minLength, disabled, 'aria-invalid': error ? true : undefined, 'aria-describedby': error || hint ? messageId : undefined };
   const changeInput = (event) => {
     const input = event.target;
     const raw = input.value;
@@ -807,11 +836,12 @@ function LabeledField({ label, value, onChange, placeholder, multiline, type = '
     });
   };
   return (
-    <label style={{ display: 'block' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 9 }}>{label}</div>
+    <label className="lb-field">
+      <span className="lb-field-label">{label}</span>
       {multiline
-        ? <textarea className="lb-input" rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={common} />
-        : <input className="lb-input" type={type} inputMode={inputMode} autoComplete={autoComplete} value={formatValue ? formatValue(value) : value} placeholder={placeholder} onChange={changeInput} style={common} />}
+        ? <textarea {...accessibility} className="lb-input lb-field-control" rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+        : <input {...accessibility} className="lb-input lb-field-control" type={type} inputMode={inputMode} autoComplete={autoComplete} value={formatValue ? formatValue(value) : value} placeholder={placeholder} onChange={changeInput} />}
+      {(error || hint) && <span id={messageId} className={error ? 'lb-field-message lb-form-error' : 'lb-field-message'} role={error ? 'alert' : undefined}>{error || hint}</span>}
     </label>
   );
 }
@@ -1373,4 +1403,4 @@ function PullRefresh({ onRefresh, disabled, children, style, className, scrollRe
   );
 }
 
-Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, NumberSlider, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, WardrobeMilestoneBanner, SmartImg, PullRefresh });
+Object.assign(window, { useScrollTopOn, Icon, Silhouette, Thumb, ImageViewer, Skeleton, Btn, AuthPage, RangeField, CheckField, Chip, Badge, IconBtn, BottomSheet, ItemDetailSheet, ItemRemoveSheet, LabeledField, NumberSlider, ChipMultiField, RecentTagField, STORE_RECENT_KEY, rememberStore, useEscapeClose, EmptyState, WardrobeMilestoneBanner, SmartImg, PullRefresh });

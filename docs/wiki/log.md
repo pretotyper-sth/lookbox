@@ -1394,3 +1394,7 @@ Vite 동적 모듈 로드 실패를 감지하면 세션당 한 번만 페이지�
 2026-10-24: Supabase 복구 완료 Healthy·인증 HTTP200, Vercel/Render 자동 배포와 DB probe 성공 확인. GitHub keepalive 수동 실행 40068627271 성공. 기존 Redirect URL 허용 범위 확인. Brevo 로그인/Custom SMTP 연결과 실제 재설정 메일 수신은 미완료. 근거: [[auth-recovery-keepalive]].
 
 2026-10-24: 사용자 직접 SMTP 키 저장 후 라이브 비밀번호 재설정 메일 1회 검증. Brevo에서 15:19 KST Sent·Delivered·First opening 확인. 실제 비밀번호 변경은 하지 않음. Render Ungrouped Services 내 lookbox 위치 확인. 근거: [[auth-recovery-keepalive]].
+
+2026-10-24: 인증 화면 공통 AuthPage/LabeledField/Btn 적용, RangeField와 DS 문서·필수 규칙 추가. 편집기 새 옷 맨 위 삽입, 옷·장식 통합 순서/앞뒤 이동과 PNG 순서 통일, 속성 패널·슬라이더 외곽선 제거. 근거: [[design-system]].
+
+- 2026-10-24: 텍스트 선택/빈 텍스트 드래그, 재료 패널 단일 스크롤, 브랜드 표시 상태/위치, 팔로잉 빈 피드 분기, AI 버튼 75% 크기 반영. DS 규칙과 한국어 메일 원본 추가. 빌드·관련 테스트14개·모바일/데스크톱 UI 검증. [디자인 시스템](design-system.md), [인증 복구](auth-recovery-keepalive.md).

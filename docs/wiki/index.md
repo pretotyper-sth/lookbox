@@ -6,6 +6,7 @@ Conventions: one fact per page · cite `path:line` or commit · absolute dates �
 link with `[[page-name]]` · append every operation to [log.md](log.md).
 
 ## Architecture
+- [design-system](design-system.md) — 모든 UI 작업 필수: 공통 토큰·입력/버튼/인증 화면/슬라이더·편집기 통합 레이어 순서
 - [large-display-layout](large-display-layout.md) — 로그인 전 화면은 flex spacer로 세로를 나눠 쓴다; 큰 화면은 `.lb-page-cap`으로 상한+가운데 정렬. 메인 앱은 760px 브레이크포인트 셸이 이미 있음
 - [mobile-bottom-nav](mobile-bottom-nav.md) — 모바일 하단 메뉴에는 옷장·오늘 코디·룩북·마이만 표시하고 구매 검토는 두지 않는다
 - [mobile-ai-mark](mobile-ai-mark.md) — AI 착장 좌측 하단 표시. 작은 카드의 ✦ 크기·정렬 통일, AI 착장 옷 정보·아이콘 hover 설명

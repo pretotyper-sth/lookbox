@@ -1,6 +1,6 @@
 /* @prototype-ported */
 const React = window.React;
-const { Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, NumberSlider, PALETTE, PERSONAL_COLORS, SmartImg, useEscapeClose, WARDROBE, Wordmark } = window;
+const { AuthPage, Btn, Chip, Eyebrow, Icon, LB_DATA, LabeledField, NumberSlider, PALETTE, PERSONAL_COLORS, SmartImg, useEscapeClose, WARDROBE, Wordmark } = window;
 
 /* global React, Btn, Chip, Icon, Wordmark, Eyebrow, LabeledField, Thumb, LB_DATA */
 // RealCloset — 회원가입 / 선호 정보 온보딩. 단계별(step) 흐름.
@@ -331,72 +331,27 @@ function Login({ onDone, onCancel, onSignup }) {
     finally { setBusy(false); }
   };
 
-  const field = {
-    width: '100%', padding: '12px 14px', borderRadius: 'var(--r-md)', fontSize: 14,
-    background: 'var(--ivory)', border: '1px solid var(--line)', color: 'var(--ink)',
-    outline: 'none', boxSizing: 'border-box',
-  };
-
-  return (
-    <div className="lb-app" style={{ alignItems: 'center' }}>
-      {/* 랜딩과 같은 셸: 좌우 20px, 로고 상단 14px. 닫기 버튼은 absolute라 로고 위치를 밀지 않는다. */}
-      <div className="lb-page-cap" style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        minHeight: 0, padding: '0 20px',
-      }}>
-        <div style={{ flex: 'none', paddingTop: 14 }}>
-          <div style={{ position: 'relative' }}>
-            <Wordmark size={18} />
-            <button onClick={onCancel} aria-label="닫기" className="lb-iconbtn"
-              style={{
-                position: 'absolute', right: -8, top: '50%', transform: 'translateY(-50%)',
-                width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', color: 'var(--ink-2)',
-              }}>
-              <Icon name="x" size={20} />
-            </button>
-          </div>
-        </div>
-
-        <div className="lb-scrollable" style={{ flex: 1, minHeight: 0,  paddingTop: 27 }}>
-          <Eyebrow>{forgot ? '비밀번호 찾기' : '로그인'}</Eyebrow>
-          <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>{forgot ? (sent ? '메일함을 확인해 주세요' : '비밀번호를 잊으셨나요?') : '다시 만나서 반가워요'}</h1>
-          <p style={{ margin: '0 0 24px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-            {forgot ? (sent ? '가입된 이메일이라면 재설정 링크를 보내드려요. 스팸함도 확인해 주세요. 링크가 만료되면 다시 요청할 수 있어요.' : '가입한 이메일을 입력하면 비밀번호 재설정 링크를 보내드려요.') : '가입한 이메일로 로그인하면 내 옷장을 이어서 볼 수 있어요.'}
-          </p>
-          <form onSubmit={(e) => { e.preventDefault(); submit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>이메일</div>
-              <input className="lb-input" required type="email" autoComplete="email" value={email} placeholder="you@example.com"
-                onChange={(e) => setEmail(e.target.value)} style={field} />
-            </label>
-            {!forgot && <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>비밀번호</div>
-              <input className="lb-input" type="password" autoComplete="current-password" value={pw} placeholder="6자 이상"
-                onChange={(e) => setPw(e.target.value)} style={field} />
-            </label>}
-            {!forgot && <button type="button" className="lb-btn" style={{ alignSelf: 'flex-end', background: 'transparent', color: 'var(--ink-2)', fontSize: 13, padding: '8px 0', textDecoration: 'underline' }} onClick={() => { setForgot(true); setPw(''); setErr(''); }}>비밀번호를 잊으셨나요?</button>}
-            {/* 엔터로 제출되도록 하는 숨김 버튼 */}
-            <button type="submit" aria-hidden style={{ display: 'none' }} />
-          </form>
-          {err && (
-            <div role="alert" style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: '#B0573C', lineHeight: 1.45 }}>{err}</div>
-          )}
-        </div>
-
-        <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-          <Btn full size="lg" disabled={!valid || busy || (forgot && cooldown > 0)} onClick={submit}>{busy ? (forgot ? '보내는 중…' : '로그인 중…') : forgot ? (cooldown ? `${cooldown}초 후 다시 보내기` : sent ? '재설정 메일 다시 보내기' : '재설정 메일 보내기') : '로그인'}</Btn>
-          {forgot && <button className="lb-btn" style={{ width: '100%', padding: 14, background: 'transparent', textDecoration: 'underline' }} onClick={() => { setForgot(false); setErr(''); }}>로그인으로 돌아가기</button>}
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, fontSize: 13, color: 'var(--ink-2)' }}>
-            아직 계정이 없으신가요?
-            <button onClick={onSignup} className="lb-btn" style={{
-              background: 'transparent', color: 'var(--ink)', fontSize: 13, fontWeight: 700,
-              padding: '11px 12px', textDecoration: 'underline', textUnderlineOffset: 3,
-            }}>회원가입</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const formId = React.useId();
+  return <AuthPage
+    eyebrow={forgot ? '비밀번호 찾기' : '로그인'}
+    title={forgot ? (sent ? '메일함을 확인해 주세요' : '비밀번호를 잊으셨나요?') : '다시 만나서 반가워요'}
+    description={forgot ? (sent ? '가입된 이메일이라면 재설정 링크를 보내드려요. 스팸함도 확인해 주세요.' : '가입한 이메일로 비밀번호 재설정 링크를 보내드려요.') : '가입한 이메일로 로그인하면 내 옷장을 이어서 볼 수 있어요.'}
+    onClose={busy ? undefined : onCancel}
+    footer={<>
+      <Btn type="submit" form={formId} full size="lg" disabled={!valid || busy || (forgot && cooldown > 0)}>{busy ? (forgot ? '보내는 중…' : '로그인 중…') : forgot ? (cooldown ? `${cooldown}초 후 다시 보내기` : sent ? '재설정 메일 다시 보내기' : '재설정 메일 보내기') : '로그인'}</Btn>
+      {forgot ? <button type="button" className="lb-btn lb-auth-link lb-auth-back" disabled={busy} onClick={() => { setForgot(false); setErr(''); }}>로그인으로 돌아가기</button> : <div className="lb-auth-signup">
+        아직 계정이 없으신가요?
+        <button type="button" onClick={onSignup} className="lb-btn lb-auth-link">회원가입</button>
+      </div>}
+    </>}
+  >
+    <form id={formId} className="lb-auth-form" onSubmit={(e) => { e.preventDefault(); submit(); }} aria-busy={busy}>
+      <LabeledField label="이메일" type="email" autoComplete="email" required disabled={busy} value={email} placeholder="you@example.com" onChange={value => { setEmail(value); setSent(false); setErr(''); }} />
+      {!forgot && <LabeledField label="비밀번호" type="password" autoComplete="current-password" value={pw} placeholder="비밀번호 입력" required minLength={6} disabled={busy} onChange={value => { setPw(value); setErr(''); }} />}
+      {!forgot && <button type="button" className="lb-btn lb-auth-link lb-auth-forgot" disabled={busy} onClick={() => { setForgot(true); setPw(''); setErr(''); }}>비밀번호를 잊으셨나요?</button>}
+      {err && <p className="lb-form-error" role="alert">{err}</p>}
+    </form>
+  </AuthPage>;
 }
 
 function PasswordReset({ status, onFinish }) {
@@ -417,29 +372,21 @@ function PasswordReset({ status, onFinish }) {
     } catch { setError('비밀번호를 변경하지 못했어요. 다시 시도해 주세요.'); }
     finally { setBusy(false); }
   };
+  const formId = React.useId();
   const expired = status === 'expired';
-  return <div className="lb-app" style={{ alignItems: 'center' }}>
-    <div className="lb-page-cap" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 20px 24px' }}>
-      <Wordmark size={18} />
-      <div className="lb-scrollable" style={{ flex: 1, paddingTop: 36 }}>
-        <Eyebrow>비밀번호 재설정</Eyebrow>
-        <h1 style={{ fontSize: 24, margin: '12px 0' }}>{done ? '비밀번호를 변경했어요' : expired ? '링크를 다시 요청해 주세요' : '새 비밀번호를 설정해 주세요'}</h1>
-        <p role="status" style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.6 }}>{done ? '새 비밀번호로 로그인하면 내 옷장을 이어서 볼 수 있어요.' : expired ? '재설정 링크가 만료되었거나 유효하지 않아요. 로그인 화면에서 재설정 메일을 다시 요청해 주세요.' : status === 'loading' ? '재설정 링크를 확인하고 있어요…' : '6자 이상의 새 비밀번호를 입력해 주세요.'}</p>
-        {!done && status === 'ready' && <form onSubmit={submit} style={{ display: 'grid', gap: 16, marginTop: 24 }}>
-          <label style={{ display: 'grid', gap: 8 }}>새 비밀번호
-            <input className="lb-input" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: 14, boxSizing: 'border-box' }} />
-          </label>
-          <label style={{ display: 'grid', gap: 8 }}>새 비밀번호 확인
-            <input className="lb-input" type="password" autoComplete="new-password" required minLength={6} value={confirm} onChange={e => setConfirm(e.target.value)} style={{ width: '100%', padding: 14, boxSizing: 'border-box' }} />
-          </label>
-          {confirm && confirm !== password && <p role="status" style={{ color: '#B0573C', fontSize: 13 }}>비밀번호가 일치하지 않아요.</p>}
-          {error && <p role="alert" style={{ color: '#B0573C', fontSize: 13 }}>{error}</p>}
-          <Btn full size="lg" disabled={!valid || busy} onClick={submit}>{busy ? '변경 중…' : '비밀번호 변경'}</Btn>
-        </form>}
-      </div>
-      {(done || expired) && <Btn full size="lg" onClick={onFinish}>로그인으로 돌아가기</Btn>}
-    </div>
-  </div>;
+  const ready = !done && status === 'ready';
+  return <AuthPage
+    eyebrow="비밀번호 재설정"
+    title={done ? '비밀번호를 변경했어요' : expired ? '링크를 다시 요청해 주세요' : '새 비밀번호를 설정해 주세요'}
+    description={done ? '새 비밀번호로 로그인하면 내 옷장을 이어서 볼 수 있어요.' : expired ? '재설정 링크가 만료되었거나 유효하지 않아요. 로그인 화면에서 메일을 다시 요청해 주세요.' : status === 'loading' ? '재설정 링크를 확인하고 있어요…' : '다른 곳에서 사용하지 않는 비밀번호를 입력해 주세요.'}
+    footer={ready ? <Btn type="submit" form={formId} full size="lg" disabled={!valid || busy}>{busy ? '변경 중…' : '비밀번호 변경'}</Btn> : (done || expired) ? <Btn full size="lg" onClick={onFinish}>로그인으로 돌아가기</Btn> : null}
+  >
+    {ready && <form id={formId} className="lb-auth-form" onSubmit={submit} aria-busy={busy}>
+      <LabeledField label="새 비밀번호" type="password" autoComplete="new-password" required minLength={6} disabled={busy} value={password} onChange={value => { setPassword(value); setError(''); }} placeholder="6자 이상 입력" hint="비밀번호는 6자 이상이어야 해요." />
+      <LabeledField label="새 비밀번호 확인" type="password" autoComplete="new-password" required minLength={6} disabled={busy} value={confirm} onChange={value => { setConfirm(value); setError(''); }} placeholder="새 비밀번호를 한 번 더 입력" error={confirm && confirm !== password ? '비밀번호가 일치하지 않아요.' : ''} />
+      {error && <p className="lb-form-error" role="alert">{error}</p>}
+    </form>}
+  </AuthPage>;
 }
 
 /* ----------------------------------------------------------------

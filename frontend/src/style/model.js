@@ -1,3 +1,4 @@
+import { canvasElements } from './layer-order.js';
 import FEED_SOURCES from '../../public/studio-assets/feed-samples/sources.json';
 import { FONTS } from './collage.js';
 import { outfitPrice, editorialSlots } from '../look-layout.js';
@@ -139,7 +140,7 @@ export async function styleImageBlob(look) {
     c.save(); c.translate(x, y); c.rotate(rotation * Math.PI / 180); c.drawImage(img, -width / 2, -height / 2, width, height); c.restore();
   }
   if (look.includePhoto && look.photo) { const img=new Image();img.crossOrigin='anonymous';img.src=look.photo;await img.decode();const ratio=Math.max(1000/img.naturalWidth,1250/img.naturalHeight);c.globalAlpha=.28;c.drawImage(img,(1000-img.naturalWidth*ratio)/2,(1250-img.naturalHeight*ratio)/2,img.naturalWidth*ratio,img.naturalHeight*ratio);c.globalAlpha=1; }
-  const entries=[...look.items.map(x=>({...x,entry:'item'})),...(look.decorations||[]).map(x=>({...x,entry:'layer'}))].sort((a,b)=>(a.z??(a.entry==='item'?0:40))-(b.z??(b.entry==='item'?0:40)));
+  const entries=canvasElements(look).map(({value,collection})=>({...value,entry:collection==='items'?'item':'layer'}));
   for(const it of entries){
     c.save();c.globalAlpha=it.opacity??1;
     if(it.entry==='item'){
