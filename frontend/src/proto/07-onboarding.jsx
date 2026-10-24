@@ -98,9 +98,9 @@ const HERO_LOOKS = [
 
 // 코디 타일 — 옷 하나가 한 칸을 온전히 차지한다 (objectFit:contain, 잘림 없음).
 // 앵커는 링 + 강조 칩, 옷장 아이템은 중립 칩으로 '새 옷 1 + 내 옷 3' 구조를 즉시 읽힌다.
-function HeroTile({ img, name, anchor, swap }) {
+function HeroTile({ img, name, anchor }) {
   return (
-    <div className={swap ? 'lb-fade-swap' : undefined} style={{
+    <div style={{
       position: 'relative', aspectRatio: '1 / 1', borderRadius: 'var(--r-md)',
       background: 'var(--thumb-bg, var(--ivory))', overflow: 'hidden',
       boxShadow: anchor ? 'inset 0 0 0 2px var(--accent)' : 'inset 0 0 0 1px var(--line)',
@@ -136,17 +136,29 @@ function Landing({ onStart, onLogin }) {
 
   const [idx, setIdx] = useState(0);
   const [manual, setManual] = useState(false);
+  const [imagesReady, setImagesReady] = useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    const urls = [LB_DATA.IMG[HERO_ANCHOR.key], ...HERO_LOOKS.flatMap(lk => lk.items.map(it => LB_DATA.IMG[it.key]))].filter(Boolean);
+    Promise.all(urls.map(src => new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => image.decode().catch(() => {}).then(resolve);
+      image.onerror = resolve;
+      image.src = src;
+    }))).then(() => { if (alive) setImagesReady(true); });
+    return () => { alive = false; };
+  }, []);
   const touchX = React.useRef(null);
 
   // 4초마다 자동 슬라이드. 점 탭·스와이프로 한 번이라도 직접 옮기면 멈춘다.
   // prefers-reduced-motion이면 자동 전환만 끄고, 수동 전환은 그대로 둔다.
   React.useEffect(() => {
-    if (manual || looks.length < 2) return undefined;
+    if (manual || !imagesReady || looks.length < 2) return undefined;
     const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) return undefined;
     const t = setInterval(() => setIdx((i) => (i + 1) % looks.length), 4000);
     return () => clearInterval(t);
-  }, [manual, looks.length]);
+  }, [manual, imagesReady, looks.length]);
 
   const goTo = (i) => {
     setManual(true);
@@ -163,7 +175,6 @@ function Landing({ onStart, onLogin }) {
     setIdx((i) => (i + (dx < 0 ? 1 : -1) + looks.length) % looks.length);
   };
 
-  const look = looks[idx] || looks[0];
 
   return (
     <div className="lb-app" style={{ alignItems: 'center' }}>
@@ -228,10 +239,16 @@ function Landing({ onStart, onLogin }) {
               margin: '0 auto', alignSelf: 'center', touchAction: 'pan-y', userSelect: 'none',
             }}
           >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div className="lb-hero-images" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, opacity: imagesReady ? 1 : 0 }}>
               <HeroTile img={anchor.img} name={anchor.name} anchor />
-              {look.items.map((it) => (
-                <HeroTile key={look.id + it.id} img={it.img} name={it.name} swap />
+              {[0, 1, 2].map(slot => (
+                <div key={slot} style={{ position: 'relative', aspectRatio: '1 / 1' }}>
+                  {looks.map((lk, i) => lk.items[slot] && (
+                    <div key={lk.id} className="lb-hero-layer" aria-hidden={i !== idx} style={{ opacity: i === idx ? 1 : 0 }}>
+                      <HeroTile img={lk.items[slot].img} name={lk.items[slot].name} />
+                    </div>
+                  ))}
+                </div>
               ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: 4 }}>
@@ -285,16 +302,33 @@ function Landing({ onStart, onLogin }) {
    Login — 이미 계정이 있는 사용자. 가입 온보딩과 분리된 화면.
 ---------------------------------------------------------------- */
 function Login({ onDone, onCancel, onSignup }) {
+  const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (!cooldown) return undefined;
+    const timer = setTimeout(() => setCooldown(n => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const valid = /\S+@\S+\.\S+/.test(email) && pw.length >= 6;
+  const valid = /\S+@\S+\.\S+/.test(email) && (forgot || pw.length >= 6);
   const submit = async () => {
-    if (!valid || busy) return;
+    if (!valid || busy || (forgot && cooldown > 0)) return;
     setBusy(true); setErr('');
-    const msg = await onDone(email.trim(), pw);
-    if (msg) { setErr(msg); setBusy(false); }
+    try {
+      if (forgot) {
+        const result = await window.LB_AUTH?.requestPasswordReset(email.trim());
+        if (!result || result.error) setErr(result?.error || '서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        else { setSent(true); setCooldown(60); }
+      } else {
+        const msg = await onDone(email.trim(), pw);
+        if (msg) setErr(msg);
+      }
+    } catch { setErr('서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+    finally { setBusy(false); }
   };
 
   const field = {
@@ -324,32 +358,34 @@ function Login({ onDone, onCancel, onSignup }) {
         </div>
 
         <div className="lb-scrollable" style={{ flex: 1, minHeight: 0,  paddingTop: 27 }}>
-          <Eyebrow>로그인</Eyebrow>
-          <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>다시 만나서 반가워요</h1>
+          <Eyebrow>{forgot ? '비밀번호 찾기' : '로그인'}</Eyebrow>
+          <h1 style={{ margin: '10px 0 8px', fontSize: 24, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em' }}>{forgot ? (sent ? '메일함을 확인해 주세요' : '비밀번호를 잊으셨나요?') : '다시 만나서 반가워요'}</h1>
           <p style={{ margin: '0 0 24px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-            가입한 이메일로 로그인하면 옷장과 룩북을 이어서 볼 수 있어요.
+            {forgot ? (sent ? '가입된 이메일이라면 재설정 링크를 보내드려요. 스팸함도 확인해 주세요. 링크가 만료되면 다시 요청할 수 있어요.' : '가입한 이메일을 입력하면 비밀번호 재설정 링크를 보내드려요.') : '가입한 이메일로 로그인하면 내 옷장을 이어서 볼 수 있어요.'}
           </p>
           <form onSubmit={(e) => { e.preventDefault(); submit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <label style={{ display: 'block' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>이메일</div>
-              <input className="lb-input" type="email" autoComplete="email" value={email} placeholder="you@example.com"
+              <input className="lb-input" required type="email" autoComplete="email" value={email} placeholder="you@example.com"
                 onChange={(e) => setEmail(e.target.value)} style={field} />
             </label>
-            <label style={{ display: 'block' }}>
+            {!forgot && <label style={{ display: 'block' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>비밀번호</div>
               <input className="lb-input" type="password" autoComplete="current-password" value={pw} placeholder="6자 이상"
                 onChange={(e) => setPw(e.target.value)} style={field} />
-            </label>
+            </label>}
+            {!forgot && <button type="button" className="lb-btn" style={{ alignSelf: 'flex-end', background: 'transparent', color: 'var(--ink-2)', fontSize: 13, padding: '8px 0', textDecoration: 'underline' }} onClick={() => { setForgot(true); setPw(''); setErr(''); }}>비밀번호를 잊으셨나요?</button>}
             {/* 엔터로 제출되도록 하는 숨김 버튼 */}
             <button type="submit" aria-hidden style={{ display: 'none' }} />
           </form>
           {err && (
-            <div style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: '#B0573C', lineHeight: 1.45 }}>{err}</div>
+            <div role="alert" style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: '#B0573C', lineHeight: 1.45 }}>{err}</div>
           )}
         </div>
 
         <div style={{ flex: 'none', paddingTop: 6, paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-          <Btn full size="lg" disabled={!valid || busy} onClick={submit}>{busy ? '로그인 중…' : '로그인'}</Btn>
+          <Btn full size="lg" disabled={!valid || busy || (forgot && cooldown > 0)} onClick={submit}>{busy ? (forgot ? '보내는 중…' : '로그인 중…') : forgot ? (cooldown ? `${cooldown}초 후 다시 보내기` : sent ? '재설정 메일 다시 보내기' : '재설정 메일 보내기') : '로그인'}</Btn>
+          {forgot && <button className="lb-btn" style={{ width: '100%', padding: 14, background: 'transparent', textDecoration: 'underline' }} onClick={() => { setForgot(false); setErr(''); }}>로그인으로 돌아가기</button>}
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, fontSize: 13, color: 'var(--ink-2)' }}>
             아직 계정이 없으신가요?
             <button onClick={onSignup} className="lb-btn" style={{
@@ -361,6 +397,49 @@ function Login({ onDone, onCancel, onSignup }) {
       </div>
     </div>
   );
+}
+
+function PasswordReset({ status, onFinish }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+  const valid = password.length >= 6 && password === confirm;
+  const submit = async e => {
+    e.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true); setError('');
+    try {
+      const result = await window.LB_AUTH.updatePassword(password);
+      if (result.error) setError(result.error);
+      else { await window.LB_AUTH.signOut(); setPassword(''); setConfirm(''); setDone(true); }
+    } catch { setError('비밀번호를 변경하지 못했어요. 다시 시도해 주세요.'); }
+    finally { setBusy(false); }
+  };
+  const expired = status === 'expired';
+  return <div className="lb-app" style={{ alignItems: 'center' }}>
+    <div className="lb-page-cap" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 20px 24px' }}>
+      <Wordmark size={18} />
+      <div className="lb-scrollable" style={{ flex: 1, paddingTop: 36 }}>
+        <Eyebrow>비밀번호 재설정</Eyebrow>
+        <h1 style={{ fontSize: 24, margin: '12px 0' }}>{done ? '비밀번호를 변경했어요' : expired ? '링크를 다시 요청해 주세요' : '새 비밀번호를 설정해 주세요'}</h1>
+        <p role="status" style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.6 }}>{done ? '새 비밀번호로 로그인하면 내 옷장을 이어서 볼 수 있어요.' : expired ? '재설정 링크가 만료되었거나 유효하지 않아요. 로그인 화면에서 재설정 메일을 다시 요청해 주세요.' : status === 'loading' ? '재설정 링크를 확인하고 있어요…' : '6자 이상의 새 비밀번호를 입력해 주세요.'}</p>
+        {!done && status === 'ready' && <form onSubmit={submit} style={{ display: 'grid', gap: 16, marginTop: 24 }}>
+          <label style={{ display: 'grid', gap: 8 }}>새 비밀번호
+            <input className="lb-input" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: 14, boxSizing: 'border-box' }} />
+          </label>
+          <label style={{ display: 'grid', gap: 8 }}>새 비밀번호 확인
+            <input className="lb-input" type="password" autoComplete="new-password" required minLength={6} value={confirm} onChange={e => setConfirm(e.target.value)} style={{ width: '100%', padding: 14, boxSizing: 'border-box' }} />
+          </label>
+          {confirm && confirm !== password && <p role="status" style={{ color: '#B0573C', fontSize: 13 }}>비밀번호가 일치하지 않아요.</p>}
+          {error && <p role="alert" style={{ color: '#B0573C', fontSize: 13 }}>{error}</p>}
+          <Btn full size="lg" disabled={!valid || busy} onClick={submit}>{busy ? '변경 중…' : '비밀번호 변경'}</Btn>
+        </form>}
+      </div>
+      {(done || expired) && <Btn full size="lg" onClick={onFinish}>로그인으로 돌아가기</Btn>}
+    </div>
+  </div>;
 }
 
 /* ----------------------------------------------------------------
@@ -858,4 +937,4 @@ function Onboarding({ mode = 'signup', initial, onDone, onCancel, onAccount }) {
 }
 
 // 프로필·AI 착장도 같은 얼굴 판정·문구를 쓰도록 공유한다.
-Object.assign(window, { Onboarding, Landing, Login, countFacesInImage, faceCountError });
+Object.assign(window, { Onboarding, Landing, Login, PasswordReset, countFacesInImage, faceCountError });

@@ -1061,3 +1061,10 @@ html, body { height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior
   .lb-look-info-label { width: 26%; padding: clamp(1.5px,1.2cqw,6px); font-size: clamp(5.8px,2.3cqw,10px); }
   .lb-look-info-label span { margin: clamp(1px,.7cqw,2px) 0; }
 }
+
+/* Keep decoded landing images mounted so one outfit dissolves into the next. */
+.lb-hero-images { transition: opacity 900ms ease; }
+.lb-hero-layer { position: absolute; inset: 0; transition: opacity 1000ms ease-in-out; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .lb-hero-images, .lb-hero-layer { transition: none; }
+}

@@ -5621,13 +5621,20 @@ def _weather_for_location(latitude: float | None = None, longitude: float | None
 
 
 @app.get("/health")
-def health() -> dict[str, Any]:
+def health(db: bool = False) -> dict[str, Any]:
+    if db:
+        try:
+            require_supabase()
+            supabase_admin.table("profiles").select("id").limit(1).execute()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Database unavailable") from exc
     return {
         "ok": True,
         "openai": bool(openai_client),
         "supabase": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
         "rev": (DEPLOY_REV or "")[:12],
         "look_test_limit": LOOK_TEST_LIMIT,
+        **({"database": True} if db else {}),
     }
 
 

@@ -11,12 +11,29 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 const configured = Boolean(API_BASE && SUPABASE_URL && SUPABASE_ANON_KEY)
 
+const recoveryParams = new URLSearchParams(window.location.hash.slice(1))
+const recoveryRequested = new URLSearchParams(window.location.search).get('reset') === '1' || recoveryParams.get('type') === 'recovery'
+let recoveryUser = ''
+try { recoveryUser = sessionStorage.getItem('lb-password-recovery') || '' } catch { /* storage unavailable */ }
+let recoveryActive = recoveryRequested || Boolean(recoveryUser)
+let recoveryReady = false
+
 let supabase = null
 if (configured) {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   })
 }
+
+// Register before session initialization completes; do not await Supabase calls here.
+if (supabase) supabase.auth.onAuthStateChange((event, session) => {
+  if (event !== 'PASSWORD_RECOVERY') return
+  recoveryActive = true
+  recoveryReady = true
+  recoveryUser = session?.user?.id || ''
+  try { sessionStorage.setItem('lb-password-recovery', recoveryUser) } catch { /* storage unavailable */ }
+  window.dispatchEvent(new Event('lb-password-recovery'))
+})
 
 // De-dupe concurrent token fetches (background warm-up + first request) so we
 // don't kick off two anonymous sign-ins. Reset after settle so later calls can
@@ -55,6 +72,9 @@ async function ensureToken() {
 // 프로토타입 화면(window 전역만 씀)에서 부를 수 있게 인증 API를 노출한다.
 function authError(error) {
   const msg = String(error?.message || '')
+  if (/failed to fetch|fetch failed|network|load failed/i.test(msg)) return '인증 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.'
+  if (/same_password/i.test(error?.code || '') || /different from the old password/i.test(msg)) return '기존 비밀번호와 다른 비밀번호를 입력해 주세요.'
+  if (/otp_expired|session_not_found/i.test(error?.code || '')) return '재설정 링크가 만료되었어요. 메일을 다시 요청해 주세요.'
   if (/already registered|already been registered/i.test(msg)) return '이미 가입된 이메일이에요. 로그인해 주세요.'
   if (/Invalid login credentials/i.test(msg)) return '이메일 또는 비밀번호가 맞지 않아요.'
   if (/Email not confirmed/i.test(msg)) return '이메일 인증이 필요해요. 메일함을 확인해 주세요.'
@@ -65,6 +85,33 @@ function authError(error) {
 
 const auth = {
   configured,
+  get recoveryActive() { return recoveryActive },
+  async recoveryStatus() {
+    if (!supabase) return 'expired'
+    try {
+      const { data, error } = await supabase.auth.getSession()
+      return !error && data.session && (recoveryReady || recoveryUser === data.session.user.id) ? 'ready' : 'expired'
+    } catch { return 'expired' }
+  },
+  finishRecovery() {
+    recoveryActive = false
+    recoveryReady = false
+    recoveryUser = ''
+    try { sessionStorage.removeItem('lb-password-recovery') } catch { /* storage unavailable */ }
+    const url = new URL(window.location.href)
+    url.searchParams.delete('reset')
+    url.hash = ''
+    window.history.replaceState(null, '', url.pathname + url.search)
+  },
+  async requestPasswordReset(email) {
+    if (!supabase) return { error: '서버 설정이 없어요.' }
+    try {
+      const redirect = new URL(window.location.pathname, window.location.origin)
+      redirect.searchParams.set('reset', '1')
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirect.href })
+      return { error: error ? authError(error) : '' }
+    } catch (error) { return { error: authError(error) } }
+  },
   async current() {
     if (!supabase) return null
     const { data } = await supabase.auth.getSession()
@@ -132,16 +179,18 @@ const auth = {
   },
   async signIn(email, password) {
     if (!supabase) return { error: '서버 설정이 없어요.' }
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (error) return { error: authError(error) }
-    allowAnonymous = false
-    return {
-      user: {
-        id: data.user.id,
-        email: data.user.email || '',
-        prefs: (data.user.user_metadata && data.user.user_metadata.prefs) || null,
-      },
-    }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (error) return { error: authError(error) }
+      allowAnonymous = false
+      return {
+        user: {
+          id: data.user.id,
+          email: data.user.email || '',
+          prefs: (data.user.user_metadata && data.user.user_metadata.prefs) || null,
+        },
+      }
+    } catch (error) { return { error: authError(error) } }
   },
   async signOut() {
     if (!supabase) return

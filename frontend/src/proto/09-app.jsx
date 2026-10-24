@@ -3,7 +3,7 @@ import { loadCurrentWeather, validWeather } from '../weather.js';
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, ClosetJobStatus, DecisionScreen, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, FeedScreen, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, ClosetJobStatus, DecisionScreen, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, PasswordReset, FeedScreen, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -1033,6 +1033,23 @@ function App() {
   const [accountSheet, setAccountSheet] = useState(false);
   const [personalSetupOpen, setPersonalSetupOpen] = useState(false);
   const [, setWeatherRev] = useState(0);
+  const [recovery, setRecovery] = useState(() => window.LB_AUTH?.recoveryActive ? 'loading' : '');
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      if (!window.LB_AUTH?.recoveryActive) return;
+      setRecovery('loading');
+      const status = await window.LB_AUTH.recoveryStatus();
+      if (alive) setRecovery(status);
+    };
+    check();
+    window.addEventListener('lb-password-recovery', check);
+    return () => { alive = false; window.removeEventListener('lb-password-recovery', check); };
+  }, []);
+  const finishRecovery = () => {
+    window.LB_AUTH.finishRecovery();
+    setRecovery(''); setOnboarded(false); setAuthUid(null); setPhase('login');
+  };
   const [phase, setPhase] = useState('landing');   // landing → onboarding | login → (app)
   const weatherRequestRef = useRef(null);
 
@@ -1047,7 +1064,7 @@ function App() {
     (async () => {
       if (!window.LB_AUTH) return;
       const me = await window.LB_AUTH.current();
-      if (!alive) return;
+      if (!alive || window.LB_AUTH.recoveryActive) return;
       if (me) setAuthUid(me.id);
       if (me && !me.anonymous) {
         setPrefs((prev) => {
@@ -3065,6 +3082,8 @@ function App() {
     liveReplaceItemImage, liveConfirmReplaceImage, applyReextractItem,
     startComboOrWardrobe: () => comboReady ? startCombo() : (go('wardrobe'), openAdd('wardrobe')),
   };
+
+  if (recovery) return <PasswordReset status={recovery} onFinish={finishRecovery} />;
 
   // ---- 온보딩 게이트: 가입 전이면 홈(랜딩) → 회원가입 단계 ----
   if (!onboarded) {

@@ -1,0 +1,22 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '23 1,7,13,19 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake API and query Supabase database
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-all-errors \
+            --retry-delay 10 --connect-timeout 15 --max-time 60 \
+            'https://lookbox-w1st.onrender.com/health?db=true' \
+            | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data.get("ok") is True and data.get("database") is True, "Database check failed"; print("API and Supabase database are reachable")'
