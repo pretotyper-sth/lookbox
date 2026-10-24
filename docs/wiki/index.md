@@ -82,3 +82,5 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [storage-cost-comparison](storage-cost-comparison.md) — Supabase Storage vs S3 서울 저장·전송 단가, Pro 기본료와 이전 판단
 
 - [outfit-settings-preservation](outfit-settings-preservation.md) — 기존 AI 착장 보존·다음 요청부터 설정 반영·최근 기록 3종 병렬 조회·개인화 품질 점검 한계
+
+- [concise-outfit-ux](concise-outfit-ux.md) — 짧은 선택 오류·부족 카테고리 목록·외부 제안 코디·공통 체크박스·직접 드래그·정수 표시·UX 문구 검토 스킬

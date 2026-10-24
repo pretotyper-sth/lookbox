@@ -393,12 +393,15 @@ function WardrobeScreen({ ctx }) {
     </div>
   );
 
-  const runPickedCoord = () => {
-    const guide = window.pickedOutfitGuide(sel.map(id => LB_DATA.ALL[id]).filter(Boolean));
+  const runPickedCoord = (externalOnly = false) => {
+    const picked = sel.map(id => LB_DATA.ALL[id]).filter(Boolean);
+    const missing = window.pickedMissingCategories(picked);
+    const guide = [window.pickedOutfitGuide(picked), !externalOnly && missing.length ? `${missing.join('·')}를 골라 주세요` : ''].filter(Boolean).join('\n\n');
     if (guide) { setCoordGuide(guide); return; }
     const ids = sel.slice();
     exitSelectMode();
-    if (requestPickedOutfits) requestPickedOutfits(ids);
+    setCoordGuide('');
+    if (requestPickedOutfits) requestPickedOutfits(ids, { externalOnly });
   };
 
   // 계절은 카테고리와 AND로 겹치는 부가 필터. 구분선 없이 '그리고' 라벨 + 살짝 옅은 글자색으로만 구분.
@@ -695,7 +698,7 @@ function WardrobeScreen({ ctx }) {
             </Btn>
             <Btn size="sm" icon={wide ? "trash" : undefined} onClick={() => setBulkDelAsk(true)}
               style={{ background: '#B0573C', color: '#fff', fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none' }}>삭제</Btn>
-            {!viewingArchive && <Btn size="sm" variant="soft" icon={wide ? 'sparkle' : undefined} onClick={runPickedCoord}
+            {!viewingArchive && <Btn size="sm" variant="soft" icon={wide ? 'sparkle' : undefined} onClick={() => runPickedCoord()}
               style={{ fontSize: 12, padding: wide ? '7px 12px' : '6px 10px', flex: 'none', whiteSpace: 'nowrap' }}>코디</Btn>}
           </div>
         </div>
@@ -703,8 +706,9 @@ function WardrobeScreen({ ctx }) {
 
       <BottomSheet open={!!coordGuide} onClose={() => setCoordGuide('')}>
         <div className="lb-sheet-body" style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>함께 입을 옷을 골라 주세요</h3>
-          <p style={{ margin: '10px 0 22px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6, whiteSpace: 'pre-line', maxHeight: '45dvh', overflowY: 'auto' }}>{coordGuide}</p>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 아이템을 확인해 주세요</h3>
+          <ul style={{ margin: '14px 0 20px', paddingLeft: 20, textAlign: 'left', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5, maxHeight: '45dvh', overflowY: 'auto' }}>{coordGuide.split('\n\n').map(issue => <li key={issue} style={{ marginBottom: 8 }}>{issue}</li>)}</ul>
+          {!window.pickedOutfitGuide(sel.map(id => LB_DATA.ALL[id]).filter(Boolean)) && <Btn full onClick={() => runPickedCoord(true)} style={{ marginBottom: 10 }}>나머지는 외부 아이템으로 추천받기</Btn>}
           <Btn full variant="soft" onClick={() => setCoordGuide('')}>선택 수정하기</Btn>
         </div>
       </BottomSheet>
@@ -3335,7 +3339,7 @@ function AddSheet({ ctx }) {
               <div style={{ marginTop: 'var(--s4)', height: 28, display: 'flex', alignItems: 'center', gap: 7, color: 'var(--ink-3)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
                 {tab === 'orders' ? (
                   mobileOrderTab
-                    ? <>PC에서 주문내역 옷을 골라 담아요</>
+                    ? null
                     : <><Icon name="bag" size={15} /> 주문내역에서 옷을 골라 담아요</>
                 ) : (
                   tab === 'url'

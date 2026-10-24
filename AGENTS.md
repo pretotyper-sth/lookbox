@@ -51,3 +51,7 @@ simplest solution that works, surgical diffs, verify against a stated success cr
 ## Required design system
 
 For every UI change, read `docs/wiki/design-system.md` and reuse its shared components and tokens. This applies to all agents and all frontend UI work. Do not introduce page-specific raw inputs/buttons or a new UI kit where an existing primitive fits; add missing primitives to the shared DS and document them. See `.cursor/rules/design-system.mdc`.
+
+## UX writing final review
+
+UI 문구를 작성하거나 수정할 때 `.agents/skills/concise-ux-writing/SKILL.md`를 마지막 검토에 자동 적용한다.

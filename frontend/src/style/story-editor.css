@@ -122,8 +122,6 @@
 
 .rc-wardrobe-options { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin-block: var(--s3); }
 .rc-wardrobe-options .rc-lab-options { margin: 0; }
-.rc-text-move-handle { position: absolute; top: -18px; left: -18px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--surface-2); color: var(--ink); box-shadow: 0 1px 6px #0002; cursor: grab; touch-action: none; font-size: 20px; }
-.rc-text-move-handle:focus-visible { outline: 2px solid var(--ink-2); }
 /* One vertical scroll owner per breakpoint; avoid trapped nested material grids. */
 .rc-story .rc-lab-panel :is(.rc-sticker-grid,.rc-photo-picks,.rc-item-picker,.rc-giphy-results,.rc-meme-grid,.rc-word-grid) { max-height: none; overflow: visible; overscroll-behavior: auto; }
 .rc-story .rc-lab-panel, .rc-story .rc-editor-controls { touch-action: pan-x pan-y; }

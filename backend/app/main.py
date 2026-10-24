@@ -3439,8 +3439,7 @@ def _validate_picked_outfit(ids: list[str], by_id: dict[str, Any]) -> None:
         groups.setdefault(_category_key(item.get("category")), []).append(item)
     for category, rows in groups.items():
         if len(rows) > 1:
-            names = " · ".join(row.get("name") or "아이템" for row in rows)
-            issues.append(f"{_category_display(category)} {len(rows)}개 중 1개만 남겨 주세요: {names}")
+            issues.append(f"{_category_display(category)} {len(rows)}개 중 1개만 남겨 주세요")
     if "bottom" in groups and "skirt" in groups:
         issues.append("하의와 스커트 중 하나를 선택 해제해 주세요.")
     if "dress" in groups and any(category in groups for category in ("top", "bottom", "skirt")):
@@ -5925,6 +5924,7 @@ class LiveCoordinate(BaseModel):
     include_item_ids: list[str] = []
     # 옷장에 없는 아이템 하나를 제안으로 끼운 코디 수 (0이면 옷장 안에서만)
     wish_combos: int = 0
+    external_only: bool = False
     # 마이페이지 프로필 — 퍼스널 컬러·선호 실루엣·색 계열까지 코디에 반영한다
     personal_color: str | None = None
     fit: str | None = None
@@ -6241,7 +6241,8 @@ def live_item_payload(row: dict[str, Any]) -> dict[str, Any]:
     raw_color = (row.get("color") or "").strip()
     return {
         "id": row["id"],
-        "serverId": row["id"],
+        "serverId": None if row.get("status") == "wish" else row["id"],
+        **({"wish": True, "reason": row.get("reason") or ""} if row.get("status") == "wish" else {}),
         "name": row.get("name") or "옷",
         "category": _category_display(row.get("category")),
         "color": _canonicalize_color(raw_color) if raw_color else "",
@@ -9335,6 +9336,23 @@ def _recent_daily_wishes(user_id: str, for_date: str | None) -> list[dict[str, A
     return out
 
 
+def _external_coordinate_items(user_id: str, picked: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+    slots = {_garment_slot(row) for row in picked}
+    needed = [] if "dress" in slots else [category for category in ("top", "bottom") if category not in slots and not (category == "top" and "outer" in slots) and not (category == "bottom" and "skirt" in slots)]
+    if "shoes" not in slots:
+        needed.append("shoes")
+    suggestions = [dict(item) for item in _WISH_GAP_ITEMS if item["category"] in needed]
+    # External suggestions remain outfit metadata; never add them to the user's closet.
+    def external_row(wish):
+        png = generate_wish_product_image(user_id, wish, picked, profile, None, "")
+        if not png:
+            raise HTTPException(status_code=502, detail="외부 아이템을 만들지 못했어요. 다시 시도해 주세요.")
+        path, url, thumb = save_product_image_set(user_id, png)
+        return {**wish, "id": f"external-{uuid.uuid4().hex}", "status": "wish", "image_url": url, "storage_path": path, "metadata": {"thumb_url": thumb}}
+    with ThreadPoolExecutor(max_workers=3) as external_pool:
+        return list(external_pool.map(external_row, suggestions))
+
+
 @app.post("/api/live/coordinate")
 def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_user)):
     t0 = time.perf_counter()
@@ -9366,7 +9384,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             anchor = anchor_rows[0] if anchor_rows else None
         pool = [anchor, *owned] if anchor else owned[:]
         pool = [row for row in pool if row]
-        if len(pool) < 2:
+        if len(pool) < 2 and not body.external_only:
             raise HTTPException(status_code=400, detail="코디를 만들려면 옷장에 옷이 2개 이상 필요해요.")
         profile = {
             "personal_color": body.personal_color,
@@ -9382,6 +9400,15 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
         wish_combos = max(0, min(int(body.wish_combos or 0), max_combos))
         by_id = {row["id"]: row for row in pool}
         _validate_picked_outfit(body.include_item_ids, by_id)
+        external_ids: set[str] = set()
+        if body.external_only:
+            if not body.include_item_ids:
+                raise HTTPException(status_code=400, detail="함께 코디할 아이템을 골라 주세요.")
+            pool = [by_id[item_id] for item_id in dict.fromkeys(body.include_item_ids)]
+            external = _external_coordinate_items(user.id, pool, profile)
+            external_ids = {row["id"] for row in external}
+            pool = [*pool, *external]
+            by_id = {row["id"]: row for row in pool}
         with ThreadPoolExecutor(max_workers=3) as history_pool:
             exclusions_job = history_pool.submit(_recent_daily_exclusions, user.id, body.for_date)
             feedback_job = history_pool.submit(_recent_daily_feedback, user.id)
@@ -9426,10 +9453,11 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
                         "label": outfit["label"],
                         "mood": outfit["mood"],
                         "type": "daily",
-                        "item_ids": [i for i in outfit["itemIds"] if not str(i).startswith("wish-")],
+                        "item_ids": [i for i in outfit["itemIds"] if not str(i).startswith("wish-") and i not in external_ids],
                         "look_image_url": outfit["lookImg"],
                         "metadata": {
                             "styles": outfit["styles"],
+                            "studio_items": [{**live_item_payload(by_id[i]), "storage_path": by_id[i].get("storage_path")} for i in ids if i in external_ids],
                             "for_date": body.for_date or None,
                             **({"wish": outfit["wish"]} if outfit.get("wish") else {}),
                         },
@@ -9463,7 +9491,7 @@ def live_coordinate(body: LiveCoordinate, user: UserContext = Depends(current_us
             exclusions, body.styles or None, profile,
             body.include_item_ids or None, feedback,
         )
-        wish_n = min(wish_combos, max(0, len(combos) - 1) if body.model_look else len(combos))
+        wish_n = 0 if body.external_only else min(wish_combos, max(0, len(combos) - 1) if body.model_look else len(combos))
         used_wishes = {_wish_key(wish) for wish in recent_wishes if _wish_key(wish) != ("", "", "")}
         for offset in range(wish_n):
             combo = combos[len(combos) - wish_n + offset]
@@ -9573,6 +9601,13 @@ def live_coordinate_looks(body: LiveLooks, user: UserContext = Depends(current_u
         or []
     )
     by_id = {row["id"]: row for row in owned}
+    if any(str(item_id).startswith("external-") for row in body.outfits for item_id in row.item_ids):
+        saved = (supabase_admin.table("outfits").select("metadata").eq("user_id", user.id)
+                 .in_("id", [row.id for row in body.outfits]).execute().data or [])
+        for row in saved:
+            for item in (row.get("metadata") or {}).get("studio_items", []):
+                if isinstance(item, dict) and str(item.get("id", "")).startswith("external-"):
+                    by_id[item["id"]] = {**item, "image_url": item.get("img"), "metadata": {"thumb_url": item.get("thumb")}}
     outfits = [
         {
             "id": row.id,
@@ -9709,7 +9744,7 @@ def _outfit_row_payload(
         "mood": r.get("mood") or "",
         "styles": meta.get("styles") or [],
         "feedback": meta.get("feedback") if meta.get("feedback") in (-1, 1) else 0,
-        "itemIds": ids,
+        "itemIds": list(dict.fromkeys([*ids, *[item["id"] for item in meta.get("studio_items", []) if isinstance(item, dict) and item.get("id")]])),
         "lookImg": r.get("look_image_url"),
         "wish": wish,
         "saved": bool(r.get("saved")),
@@ -9725,7 +9760,9 @@ def _outfits_with_items(rows: list[dict[str, Any]], items: list[dict[str, Any]])
     out: list[dict[str, Any]] = []
     wish_items: list[dict[str, Any]] = []
     for r in rows:
-        ids = [i for i in (r.get("item_ids") or []) if i in alive]
+        studio = [item for item in (r.get("metadata") or {}).get("studio_items", []) if isinstance(item, dict) and item.get("id")]
+        wish_items.extend(studio)
+        ids = list(dict.fromkeys([*[i for i in (r.get("item_ids") or []) if i in alive], *[item["id"] for item in studio]]))
         wish = _clean_wish((r.get("metadata") or {}).get("wish"))
         if wish:
             wish_id = f"wish-{r['id'][:8]}"

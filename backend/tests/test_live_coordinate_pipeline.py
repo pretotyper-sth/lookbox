@@ -87,6 +87,7 @@ class PickedCoordinateValidationTest(unittest.TestCase):
             with self.subTest(categories=categories), self.assertRaises(HTTPException) as raised:
                 self.validate(categories)
             self.assertIn(message, raised.exception.detail)
+            self.assertNotIn('옷0', raised.exception.detail)
 
     def test_unknown_or_archived_item_rejected(self):
         with self.assertRaises(HTTPException):
@@ -118,7 +119,7 @@ class CoordinateGenerationOrderTest(unittest.TestCase):
               'recommend_closet': lambda *a: [{'item_ids': ['shirt','pants']}, {'item_ids': ['shirt','pants']}], '_wish_key': lambda wish: ('outer', 'coat', 'beige'), '_gap_wish': lambda *a: {'category': 'outer', 'name': 'coat'}, '_apply_wish_slot': lambda *a: None,
               '_apply_model_looks': looks, '_face_image_bytes': lambda value: b'face', 'generate_wish_product_image': wish, '_record_recommendation_timing': MagicMock(), 'spend_credits': MagicMock(), 'stream_with_keepalive': lambda work: work(events.append)}
         exec(compile(ast.Module(body=[node], type_ignores=[]), '<coordinate>', 'exec'), ns)
-        body = SimpleNamespace(anchor_id=None, personal_color='',fit='',palettes=[],gender='남성',age='',height='178',weight='72',weather=None,max_combos=2,wish_combos=1,for_date=None,exclude_item_ids=[],style='minimal',styles=[],include_item_ids=['pants'],model_look=model_look,personal_model_look=personal,face_data_url='face')
+        body = SimpleNamespace(external_only=False,anchor_id=None, personal_color='',fit='',palettes=[],gender='남성',age='',height='178',weight='72',weather=None,max_combos=2,wish_combos=1,for_date=None,exclude_item_ids=[],style='minimal',styles=[],include_item_ids=['pants'],model_look=model_look,personal_model_look=personal,face_data_url='face')
         with contextlib.redirect_stdout(io.StringIO()):
             result = ns['live_coordinate'](body, SimpleNamespace(id='user'))
         return events, looks, result
@@ -136,6 +137,68 @@ class CoordinateGenerationOrderTest(unittest.TestCase):
         events, looks, result = self.run_pipeline(False)
         looks.assert_not_called()
         self.assertEqual(len(result['outfits']), 2)
+
+
+class ExternalCoordinateItemsTest(unittest.TestCase):
+    def setUp(self):
+        node = next(n for n in ast.parse(MAIN_PATH.read_text()).body if isinstance(n, ast.FunctionDef) and n.name == '_external_coordinate_items')
+        self.generated = []
+        def generate(user_id, wish, mates, *args):
+            self.generated.append((wish['category'], [row['id'] for row in mates]))
+            return b'image'
+        self.ns = {'Any': Any, 'uuid': uuid, 'HTTPException': HTTPException, 'ThreadPoolExecutor': ThreadPoolExecutor,
+                   '_garment_slot': lambda row: row['category'],
+                   '_WISH_GAP_ITEMS': [{'name': cat, 'category': cat} for cat in ('top','bottom','shoes','bag')],
+                   'generate_wish_product_image': generate, 'save_product_image_set': lambda *args: ('path','image.png','thumb.png')}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), '<external>', 'exec'), self.ns)
+
+    def test_hat_only_gets_complete_external_base_without_other_closet_items(self):
+        picked = [{'id': 'hat', 'category': 'hat'}]
+        result = self.ns['_external_coordinate_items']('user', picked, {})
+        self.assertEqual({row['category'] for row in result}, {'top','bottom','shoes'})
+        self.assertTrue(all(mates == ['hat'] for _, mates in self.generated))
+        self.assertTrue(all(row['status'] == 'wish' and row['image_url'] == 'image.png' for row in result))
+        self.assertEqual(picked, [{'id': 'hat', 'category': 'hat'}])
+
+    def test_dress_and_shoes_need_no_external_base(self):
+        result = self.ns['_external_coordinate_items']('user', [{'id':'dress','category':'dress'}, {'id':'shoes','category':'shoes'}], {})
+        self.assertEqual(result, [])
+        self.assertEqual(self.generated, [])
+
+    def test_image_failure_does_not_return_unfinished_items(self):
+        self.ns['generate_wish_product_image'] = lambda *args: None
+        with self.assertRaises(HTTPException):
+            self.ns['_external_coordinate_items']('user', [{'id':'hat','category':'hat'}], {})
+
+    def test_saved_external_items_restore_without_becoming_closet_items(self):
+        names = {'_outfits_with_items', '_outfit_row_payload'}
+        nodes = [n for n in ast.parse(MAIN_PATH.read_text()).body if isinstance(n, ast.FunctionDef) and n.name in names]
+        ns = {'Any': Any, '_clean_wish': lambda value: None, '_outfit_for_date': lambda row: None, 'live_item_payload': lambda row: row}
+        exec(compile(ast.Module(body=nodes, type_ignores=[]), '<restore>', 'exec'), ns)
+        row = {'id':'look', 'item_ids':['hat'], 'metadata':{'studio_items':[{'id':'external-top','wish':True}, {'id':'external-bottom','wish':True}]}}
+        result = ns['_outfits_with_items']([row], [{'id':'hat'}])
+        self.assertEqual(result['outfits'][0]['itemIds'], ['hat','external-top','external-bottom'])
+        self.assertEqual(len(result['items']), 3)
+        self.assertEqual(row['item_ids'], ['hat'])
+        row['look_image_url'] = 'look.png'
+        restored = ns['_outfit_row_payload'](row, ['hat'], None)
+        self.assertEqual(restored['itemIds'], ['hat','external-top','external-bottom'])
+
+    def test_later_model_generation_loads_saved_external_references(self):
+        node = next(n for n in ast.parse(MAIN_PATH.read_text()).body if isinstance(n, ast.FunctionDef) and n.name == 'live_coordinate_looks')
+        node.decorator_list = []
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [{'id':'hat'}]
+        db.table.return_value.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = [{'metadata':{'studio_items':[{'id':'external-top','img':'shirt.png','storage_path':'user/shirt.png'}]}}]
+        apply = MagicMock()
+        ns = {'Any':Any, 'LiveLooks':object, 'UserContext':object, 'Depends':lambda x:None, 'current_user':None, 'require_supabase':lambda:None,
+              'supabase_admin':db, '_apply_model_looks':apply, 'stream_with_keepalive':lambda work:work(lambda message:None)}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), '<looks>', 'exec'), ns)
+        body = SimpleNamespace(outfits=[SimpleNamespace(id='look',item_ids=['hat','external-top'],label='',mood='',styles=[],wish=None)],personal_model_look=False,gender='',height='',weight='',explicit=True)
+        ns['live_coordinate_looks'](body,SimpleNamespace(id='user'))
+        refs = apply.call_args.args[2]
+        self.assertEqual(refs['external-top']['image_url'], 'shirt.png')
+        self.assertEqual(refs['external-top']['storage_path'], 'user/shirt.png')
 
 
 if __name__ == "__main__":

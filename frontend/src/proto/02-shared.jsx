@@ -793,7 +793,7 @@ function RangeField({ label, ariaLabel, value, min, max, step = 1, unit = '', on
   return <label className="lb-range-field">
     <span>{label}</span>
     <input className="lb-range" type="range" aria-label={ariaLabel || label} min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} style={{ '--range-progress': `${progress}%` }} />
-    <output>{value}{unit}</output>
+    <output>{unit === '%' || unit === '°' ? Math.trunc(value) : value}{unit}</output>
   </label>;
 }
 

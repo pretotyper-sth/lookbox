@@ -3,7 +3,7 @@ import { loadCurrentWeather, validWeather } from '../weather.js';
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { BottomSheet, useEscapeClose } = window;
-const { AccountEditSheet, AddSheet, BottomNav, Btn, ClosetJobStatus, DecisionScreen, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, PasswordReset, FeedScreen, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
+const { AccountEditSheet, AddSheet, BottomNav, Btn, CheckField, ClosetJobStatus, DecisionScreen, DetailScreen, PickedOutfitsModal, Eyebrow, Icon, ImageViewer, ItemDetailSheet, ItemRemoveSheet, LB_DATA, Landing, Login, PasswordReset, FeedScreen, LookbookScreen, MyPageScreen, Onboarding, ResultsScreen, SAVED, TodayScreen, TryOnCameraOverlay, TryOnDesktopSheet, TryOnSetupOverlay, TweakColor, TweakRadio, TweakSection, TweaksPanel, WARDROBE, WardrobeScreen, Wordmark, useTweaks } = window;
 
 /* global React, ReactDOM, LB_DATA, useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle,
    Wordmark, BottomNav, WardrobeScreen, AddSheet, ResultsScreen, LookbookScreen, DetailScreen, Btn, Icon, ItemDetailSheet */
@@ -224,13 +224,19 @@ function pickedOutfitGuide(picked) {
     groups.set(category, [...(groups.get(category) || []), item]);
   }
   for (const [category, rows] of groups) {
-    if (rows.length > 1) issues.push(`${category} ${rows.length}개 중 1개만 남겨 주세요: ${rows.map(item => item.name).join(' · ')}`);
+    if (rows.length > 1) issues.push(`${category} ${rows.length}개 중 1개만 남겨 주세요`);
   }
   if (groups.has('하의') && groups.has('스커트')) issues.push('하의와 스커트 중 하나를 선택 해제해 주세요.');
   if (groups.has('원피스') && ['상의', '하의', '스커트'].some(category => groups.has(category))) issues.push('원피스로 만들려면 상의·하의·스커트를 선택 해제해 주세요.');
   return issues.join('\n\n');
 }
 window.pickedOutfitGuide = pickedOutfitGuide;
+function pickedMissingCategories(picked) {
+  const categories = new Set(picked.map(item => ({ top: '상의', outer: '아우터', bottom: '하의', skirt: '스커트', dress: '원피스' }[item.category] || item.category)));
+  if (categories.has('원피스')) return [];
+  return [!categories.has('상의') && !categories.has('아우터') && '상의', !categories.has('하의') && !categories.has('스커트') && '하의'].filter(Boolean);
+}
+window.pickedMissingCategories = pickedMissingCategories;
 function readPickedLookSettings(owner) {
   try { return JSON.parse(localStorage.getItem(`lb_picked_model_look_${owner || 'guest'}`)) || { enabled: false, confirmed: false }; }
   catch { return { enabled: false, confirmed: false }; }
@@ -2806,7 +2812,7 @@ function App() {
     if (!picked.length) return;
     const requestedCount = import.meta.env.DEV ? dailyCount : (opts.append ? 2 : dailyCount);
     const settingsKey = import.meta.env.DEV ? JSON.stringify({ revision: prefs.personalModelLook ? 'personal-body2' : 'gender-reviewed-v2', count: dailyCount, profile: coordProfile(prefs), styles: preferredStyles, style: preferredDailyStyle, ai: !!prefs.modelLook && pickedLookSettings.enabled, personal: !!prefs.personalModelLook, avatar: prefs.personalModelLook ? prefs.avatar : '', wardrobe: wardrobeSigOf(items) }) : prefs.personalModelLook ? JSON.stringify({ revision: 'personal-body2', profile: coordProfile(prefs), avatar: prefs.avatar || '' }) : '';
-    const jobKey = String(authUid || '') + ':' + picked.slice().sort().join('|') + settingsKey;
+    const jobKey = String(authUid || '') + ':' + picked.slice().sort().join('|') + settingsKey + (opts.externalOnly ? ':external' : ':closet');
     const previous = pickJobs.current.get(jobKey);
     const inlineItemId = opts.inlineItemId || (opts.append && pickSheet && pickSheet.inlineItemId) || '';
     if (previous && (previous.loading || (!opts.append && !previous.error))) {
@@ -2815,7 +2821,7 @@ function App() {
       return;
     }
     const prev = opts.append && previous ? previous.outfits : [];
-    const job = { jobKey, ids: picked, inlineItemId, loading: true, targetCount: prev.length + requestedCount, requestedCount, outfits: prev.slice(), error: '' };
+    const job = { jobKey, ids: picked, externalOnly: !!opts.externalOnly, inlineItemId, loading: true, targetCount: prev.length + requestedCount, requestedCount, outfits: prev.slice(), error: '' };
     pickJobs.current.set(jobKey, job);
     setPickSheet({ ...job });
     const publish = () => setPickSheet(cur => cur && cur.jobKey === jobKey ? { ...job, outfits: job.outfits.slice() } : cur);
@@ -2861,6 +2867,7 @@ function App() {
         },
         body: JSON.stringify({
           include_item_ids: picked,
+          external_only: !!opts.externalOnly,
           max_combos: requestedCount,
           style: preferredDailyStyle,
           styles: preferredStyles,
@@ -3223,7 +3230,7 @@ function App() {
         onDelete={deleteItem}
         onReextract={requestReextract}
         onRecommend={item => startPickedOutfits([item.id], { inlineItemId: item.id })}
-        recommendation={pickSheet && pickSheet.inlineItemId === (removeSheet.item && removeSheet.item.id) ? <PickedOutfitsModal embedded state={pickSheet} wide={false} onClose={closePickSheet} onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })} savedOutfitIds={savedOutfitIds} onSave={toggleSaveOutfit} onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))} onOpen={look => { const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId]; if (outfit) openOutfitViewer(window.LOOK_IMAGE_MODES[outfit.id] === false ? { ...outfit, lookImg: null } : outfit, (outfit.itemIds || []).map(id => LB_DATA.ALL[id]).filter(Boolean)); }} /> : null}
+        recommendation={pickSheet && pickSheet.inlineItemId === (removeSheet.item && removeSheet.item.id) ? <PickedOutfitsModal embedded state={pickSheet} wide={false} onClose={closePickSheet} onMore={() => requestPickedOutfits(pickSheet.ids, { append: true, externalOnly: pickSheet.externalOnly })} savedOutfitIds={savedOutfitIds} onSave={toggleSaveOutfit} onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))} onOpen={look => { const outfit = LB_DATA.OUTFIT_BY_ID[look.outfitId]; if (outfit) openOutfitViewer(window.LOOK_IMAGE_MODES[outfit.id] === false ? { ...outfit, lookImg: null } : outfit, (outfit.itemIds || []).map(id => LB_DATA.ALL[id]).filter(Boolean)); }} /> : null}
         onExpand={() => {
           const t = removeSheet.item;
           closeRemove();
@@ -3315,10 +3322,10 @@ function App() {
 
       {<BottomSheet open={!!pickedConfirm} centered desktopMaxW={420} onClose={() => setPickedConfirm(null)}>
         <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
-          <h2 style={{ margin: '0 0 16px', fontSize: 18, whiteSpace: 'nowrap' }}>코디 {dailyCount}개를 만들까요?</h2>
-          <p style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>새 추천은 크레딧이 차감돼요.</p>
-          {prefs.modelLook && pickedLookSettings.enabled && <p style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--ink-2)' }}>AI 착장 생성은 추가 차감돼요.</p>}
-          <button aria-pressed={skipPickedConfirm} onClick={() => setSkipPickedConfirm(v => !v)} style={{ border: 0, background: 'none', color: 'var(--ink-2)', fontSize: 12, padding: '10px 0 20px', cursor: 'pointer' }}>{skipPickedConfirm ? '✓ ' : ''}다시 보지 않기</button>
+          <h2 style={{ margin: '0 0 8px', fontSize: 18, lineHeight: 1.4, wordBreak: 'keep-all' }}>선택한 아이템으로 코디를 만들까요?</h2>
+          <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)', wordBreak: 'keep-all' }}>새 추천은 크레딧이 차감되고, 총 {dailyCount}개의 코디를 만들어요.{prefs.modelLook && pickedLookSettings.enabled ? ' AI 착장 생성은 추가 차감돼요.' : ''}</p>
+          <div style={{ display: 'grid', margin: '4px 0 16px' }}><CheckField label="나머지는 외부 아이템으로 추천받기" checked={!!pickedConfirm?.opts.externalOnly} onChange={externalOnly => setPickedConfirm(cur => ({ ...cur, opts: { ...cur.opts, externalOnly } }))} />
+          <CheckField label="다시 보지 않기" checked={skipPickedConfirm} onChange={setSkipPickedConfirm} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn full variant="soft" onClick={() => setPickedConfirm(null)}>취소</Btn>
             <Btn full onClick={() => {
@@ -3335,7 +3342,7 @@ function App() {
         <PickedOutfitsModal
           state={pickSheet}
           onClose={closePickSheet}
-          onMore={() => requestPickedOutfits(pickSheet.ids, { append: true })}
+          onMore={() => requestPickedOutfits(pickSheet.ids, { append: true, externalOnly: pickSheet.externalOnly })}
           savedOutfitIds={savedOutfitIds}
           onSave={toggleSaveOutfit}
           onMakeModelLook={outfit => applyModelLooks(outfit, true).then(() => setPickSheet(cur => cur ? { ...cur, outfits: cur.outfits.slice() } : cur)).catch(e => showToast(e.message))}

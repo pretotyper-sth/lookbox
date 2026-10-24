@@ -4,11 +4,11 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/proto/09-app.jsx',import.meta.url),'utf8');
 const settingsChunk=source.slice(source.indexOf('function coordinateLookSettings'),source.indexOf('function wardrobeSigOf'));
 const coordinateLookSettings=new Function(settingsChunk+';return coordinateLookSettings;')();
-const chunk=source.slice(source.indexOf('  const [pickSheet, setPickSheet]'),source.indexOf('  // 쇼핑몰 구매내역',source.indexOf('  const [pickSheet, setPickSheet]')));
+const chunk=source.slice(source.indexOf('  const [pickSheet, setPickSheet]'),source.indexOf('  // 쇼핑몰 구매내역',source.indexOf('  const [pickSheet, setPickSheet]'))).replaceAll('import.meta.env.DEV','false');
 function harness(modelLook=true){
  let state=null,resolve,options,requests=0,looks=0;
  const outfits={};
- const deps={useState:()=>[null,value=>{state=typeof value==='function'?value(state):value;}],useRef:value=>({current:value}),authUid:'account-a',dailyCount:4,preferredDailyStyle:'minimal',preferredStyles:['minimal','casual'],wishCount:1,prefs:{modelLook,personalModelLook:true,avatar:'face.png'},coordinateLookSettings,removeSheet:{open:true},LB_DATA:{OUTFIT_BY_ID:outfits,WISH_STAGE:{},LOOK_STAGE:{}},liveJSON:async(url,opts)=>{requests++;options=opts;return new Promise(r=>{resolve=r;});},liveRememberItem:()=>{},stampOutfitStyle:()=>{},coordProfile:()=>({height:'178',weight:'72',personal_model_look:true}),reloadBilling:()=>{},showToast:()=>{},applyModelLooks:async list=>{looks++;list[0].lookImg='ai.png';}};
+ const deps={pickedLookSettings:{enabled:true},useState:()=>[null,value=>{state=typeof value==='function'?value(state):value;}],useRef:value=>({current:value}),authUid:'account-a',dailyCount:4,preferredDailyStyle:'minimal',preferredStyles:['minimal','casual'],wishCount:1,prefs:{modelLook,personalModelLook:true,avatar:'face.png'},coordinateLookSettings,removeSheet:{open:true},LB_DATA:{OUTFIT_BY_ID:outfits,WISH_STAGE:{},LOOK_STAGE:{}},liveJSON:async(url,opts)=>{requests++;options=opts;return new Promise(r=>{resolve=r;});},liveRememberItem:()=>{},stampOutfitStyle:()=>{},coordProfile:()=>({height:'178',weight:'72',personal_model_look:true}),reloadBilling:()=>{},showToast:()=>{},applyModelLooks:async list=>{looks++;list[0].lookImg='ai.png';}};
  const setup=new Function('deps',`const {${Object.keys(deps).join(',')}}=deps;${chunk};return {requestPickedOutfits,closePickSheet};`)(deps);
  return {...setup,state:()=>state,options:()=>options,finish:payload=>resolve(payload),requests:()=>requests,looks:()=>looks};
 }
@@ -46,9 +46,18 @@ test('incompatible selections identify the items to remove while valid selection
  const guide=new Function(helper+';return pickedOutfitGuide;')();
  const item=(category,name)=>({category,name});
  assert.equal(guide([item('상의','티'),item('하의','청바지'),item('신발','스니커')]),'');
- assert.match(guide([item('아우터','코트'),item('outer','재킷')]),/아우터 2개 중 1개.*코트 · 재킷/);
+ assert.match(guide([item('아우터','코트'),item('outer','재킷')]),/^아우터 2개 중 1개만 남겨 주세요$/);
  assert.match(guide([item('원피스','드레스'),item('하의','바지')]),/상의·하의·스커트/);
  assert.match(guide([item('스커트','치마'),item('하의','바지')]),/하의와 스커트/);
  assert.match(guide(Array.from({length:8},(_,i)=>item('소품','벨트'+i))),/2개를 선택 해제/);
  const wardrobe=readFileSync(new URL('../src/proto/04-screens-ab.jsx',import.meta.url),'utf8');assert.ok(wardrobe.includes('>코디</Btn>'));assert.ok(!wardrobe.includes('moreOpen'));assert.ok(wardrobe.includes('선택 수정하기'));
+});
+
+test('external-only requests use a separate cache and send the selected mode', async()=>{
+ const h=harness(false);
+ const normal=h.requestPickedOutfits(['hat']);h.finish({outfits:[{id:'closet',itemIds:['hat','pants']}]});await normal;
+ const external=h.requestPickedOutfits(['hat'],{externalOnly:true});
+ assert.equal(h.requests(),2);assert.equal(JSON.parse(h.options().body).external_only,true);assert.equal(h.state().externalOnly,true);
+ h.finish({outfits:[{id:'external',itemIds:['hat','external-shirt']}]});await external;
+ await h.requestPickedOutfits(['hat'],{externalOnly:true});assert.equal(h.requests(),2);
 });
