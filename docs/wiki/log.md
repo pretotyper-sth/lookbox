@@ -1390,3 +1390,5 @@ Vite 동적 모듈 로드 실패를 감지하면 세션당 한 번만 페이지�
 2026-10-16 — 기존 AI 착장을 지우던 설정 저장/토글/revision 경로 제거. 추천 이력 3종 조회 병렬화, 품질 설정 유지. 실제 계정 기반 미배포 스타일 예시와 메타데이터 한계 기록: [outfit-settings-preservation](outfit-settings-preservation.md).
 
 2026-10-24: 사용자 요청으로 Supabase realcloset paused 상태 확인 후 Resume. 랜딩 레이어 크로스페이드·로그인 룩북 문구 제거·비밀번호 복구 화면/인증 브리지·실제 DB health probe와 6시간 GitHub keepalive 추가. 근거: [[auth-recovery-keepalive]].
+
+2026-10-24: Supabase 복구 완료 Healthy·인증 HTTP200, Vercel/Render 자동 배포와 DB probe 성공 확인. GitHub keepalive 수동 실행 40068627271 성공. 기존 Redirect URL 허용 범위 확인. Brevo 로그인/Custom SMTP 연결과 실제 재설정 메일 수신은 미완료. 근거: [[auth-recovery-keepalive]].

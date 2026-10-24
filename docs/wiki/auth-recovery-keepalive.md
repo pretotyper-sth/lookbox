@@ -11,10 +11,20 @@
 
 ## 운영 설정
 
-Supabase Authentication → URL Configuration에 `https://realcloset.vercel.app/?reset=1`을 Redirect URL로 허용해야 한다. 이메일의 링크는 SDK 기본 implicit 복구 세션으로 처리한다. Supabase 기본 SMTP는 프로젝트 팀 외 수신자가 제한되므로 일반 사용자 비밀번호 재설정에는 Brevo 등의 Custom SMTP가 필요하다. API 키·SMTP 비밀번호는 소스/브라우저 번들에 넣지 않는다.
+Supabase Authentication → URL Configuration에서 Site URL `https://realcloset.vercel.app`과 기존 Redirect URL `https://realcloset.vercel.app/**`를 확인했다. 이 허용 범위가 재설정 반환 주소 `https://realcloset.vercel.app/?reset=1`을 포함한다. 이메일의 링크는 SDK 기본 implicit 복구 세션으로 처리한다. Supabase 기본 SMTP는 프로젝트 팀 외 수신자가 제한되므로 일반 사용자 비밀번호 재설정에는 Brevo 등의 Custom SMTP가 필요하다. API 키·SMTP 비밀번호는 소스/브라우저 번들에 넣지 않는다.
 
 공식 문서: https://supabase.com/docs/reference/javascript/auth-resetpasswordforemail · https://supabase.com/docs/guides/auth/auth-smtp
 
 ## 검증
 
 새 인증 테스트 5개, DB probe 테스트 3개 통과. 프런트 전체 45개 중 39개 통과, 6개 실패는 변경 전 40개 중 동일 6개 실패와 일치(아이템 추천 4·AI 표시 2). 실제 메일 수신/비밀번호 변경은 SMTP 설정 후 별도 확인이 필요하다.
+
+## 라이브 확인 결과 (2026-10-24)
+
+- Supabase 복구 완료·Healthy 확인, 공개 anon 키를 이용한 `/auth/v1/health` HTTP 200.
+- 프런트 Vercel 배포 성공. 라이브 로그인 문구·비밀번호 찾기 화면 확인. 샘플 이미지 10개 디코딩 완료와 유지되는 9개 레이어 확인.
+- Render 자동 배포 완료: `/health?db=true`의 rev `01095a0c0926`, `database: true`.
+- GitHub 정기 작업 active, 수동 실행 성공: https://github.com/pretotyper-sth/lookbox/actions/runs/40068627271
+- Supabase Custom SMTP 꺼짐 확인. Brevo는 로그인 화면으로 이동하며 현재 계정 접근/발신자 설정이 없어 실제 메일 발송은 미검증. SMTP 비밀번호를 대화에 붙여넣지 않고 대시보드에서 연결해야 한다.
+- Render는 GitHub 계정이 배포용으로만 연결돼 있었고, 기존 `pretotyper.sth@gmail.com` Google 로그인으로 workspace 접근 성공. 별도 서버 설정 변경은 하지 않았다.
+- 프로젝트 package-lock 기준 Vite 8.1.3 빌드 통과. lint 오류 없음(기존 경고와 프로토타입 전역 컴포넌트 패턴 경고 있음).
