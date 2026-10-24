@@ -3324,14 +3324,14 @@ function App() {
         <div className="lb-sheet-body" style={{ padding: '16px 24px 24px' }}>
           <h2 style={{ margin: '0 0 8px', fontSize: 18, lineHeight: 1.4, wordBreak: 'keep-all' }}>선택한 아이템으로 코디를 만들까요?</h2>
           <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)', wordBreak: 'keep-all' }}>새 추천은 크레딧이 차감되고, 총 {dailyCount}개의 코디를 만들어요.{prefs.modelLook && pickedLookSettings.enabled ? ' AI 착장 생성은 추가 차감돼요.' : ''}</p>
-          <div style={{ display: 'grid', margin: '4px 0 16px' }}><CheckField label="나머지는 외부 아이템으로 추천받기" checked={!!pickedConfirm?.opts.externalOnly} onChange={externalOnly => setPickedConfirm(cur => ({ ...cur, opts: { ...cur.opts, externalOnly } }))} />
-          <CheckField label="다시 보지 않기" checked={skipPickedConfirm} onChange={setSkipPickedConfirm} /></div>
+          <div style={{ display: 'grid', margin: '4px 0 16px' }}><CheckField compact label="나머지는 외부 아이템으로 추천받기" checked={!!pickedConfirm?.opts.externalOnly} onChange={externalOnly => setPickedConfirm(cur => ({ ...cur, opts: { ...cur.opts, externalOnly } }))} />
+          <CheckField compact label="다시 보지 않기" checked={skipPickedConfirm} onChange={setSkipPickedConfirm} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn full variant="soft" onClick={() => setPickedConfirm(null)}>취소</Btn>
             <Btn full onClick={() => {
               const pending = pickedConfirm;
               if (!pending) return;
-              if (skipPickedConfirm) localStorage.setItem(`lb_picked_coord_confirm_${authUid || 'guest'}`, 'skip');
+              localStorage.setItem(`lb_picked_coord_confirm_${authUid || 'guest'}`, skipPickedConfirm ? 'skip' : 'show');
               setPickedConfirm(null);
               requestPickedOutfits(pending.ids, pending.opts);
             }}>만들기</Btn>

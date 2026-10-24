@@ -55,7 +55,7 @@ async function ensureToken() {
       if (!allowAnonymous) return null
       const { data: signed, error } = await supabase.auth.signInAnonymously()
       if (error) {
-        console.error('[RealCloset] Anonymous sign-in failed:', error.status, error.message, error)
+        console.error('[REALCLOSET] Anonymous sign-in failed:', error.status, error.message, error)
         return null
       }
       session = signed.session
@@ -254,7 +254,7 @@ async function renewAnonymousSession() {
       const hint = error.status === 429
         ? ' — 익명 로그인 횟수 제한입니다. 잠시 뒤 다시 시도하세요.'
         : ''
-      console.error(`[RealCloset] Anonymous re-sign-in failed: ${error.status} ${error.message}${hint}`)
+      console.error(`[REALCLOSET] Anonymous re-sign-in failed: ${error.status} ${error.message}${hint}`)
       return null
     }
     return data.session?.access_token || null
@@ -301,7 +301,7 @@ export function initLiveBridge() {
       !SUPABASE_ANON_KEY && 'VITE_SUPABASE_ANON_KEY',
     ].filter(Boolean)
     console.warn(
-      `[RealCloset] Backend not connected — missing build-time env: ${missing.join(', ')}. ` +
+      `[REALCLOSET] Backend not connected — missing build-time env: ${missing.join(', ')}. ` +
         'Set these in Vercel and redeploy to enable the real service.',
     )
     return

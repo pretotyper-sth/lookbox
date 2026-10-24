@@ -25,7 +25,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 680,
     backgroundColor: '#EFEDE8',
-    title: 'RealCloset',
+    title: 'REALCLOSET',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

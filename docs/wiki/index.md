@@ -70,7 +70,7 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [auth-recovery-keepalive](auth-recovery-keepalive.md) — Supabase 중지 복구·로그인 네트워크 오류·비밀번호 재설정·랜딩 이미지 전환·6시간 DB 연결 확인
 - [mobile-editing-audit-2026-10](mobile-editing-audit-2026-10.md) — 모바일 문구/공개 설정/AI 배지/CTA/피드 오류/편집기 수정·DEV 라이브 누락 점검·직접 입혀보기 영구 작업 서버 필요·사용자 푸시 승인
 - [ai-usage-cost](ai-usage-cost.md) — 2026-10-14 감사: 417건 중 207건 비용 미기록·저장 $16.906021은 청구 총액 아님. 착장/기준인물/제안 이미지 누락·단가표 불일치
-- [chrome-extension-publish](chrome-extension-publish.md) — 웹스토어 게시자명·연락처는 공개. RealCloset 전용 Google 계정, 등록비·2FA·Privacy practices 필요
+- [chrome-extension-publish](chrome-extension-publish.md) — 웹스토어 게시자명·연락처는 공개. REALCLOSET 전용 Google 계정, 등록비·2FA·Privacy practices 필요
 - [vercel-github-silent](vercel-github-silent.md) — 푸시 메일은 vercel[bot] 댓글. `github.silent`로 댓글만 끈다
 - [stale-vite-chunk](stale-vite-chunk.md) — 배포 후 열린 탭의 이전 해시 청크가 404면 Vite preload 오류에서 탭당 한 번 새로고침
 
@@ -84,3 +84,5 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [outfit-settings-preservation](outfit-settings-preservation.md) — 기존 AI 착장 보존·다음 요청부터 설정 반영·최근 기록 3종 병렬 조회·개인화 품질 점검 한계
 
 - [concise-outfit-ux](concise-outfit-ux.md) — 짧은 선택 오류·부족 카테고리 목록·외부 제안 코디·공통 체크박스·직접 드래그·정수 표시·UX 문구 검토 스킬
+
+- [design-system](design-system.md) — 제품명은 REALCLOSET 대문자 표기, 도메인·내부 ID는 유지

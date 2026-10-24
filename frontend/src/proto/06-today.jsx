@@ -4,7 +4,7 @@ const React = window.React;
 const { useScrollTopOn, BottomSheet, Btn, Chip, EmptyState, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, PullRefresh, Silhouette, Skeleton, Thumb, WardrobeMilestoneBanner } = window;
 
 /* global React, Thumb, Silhouette, Skeleton, Btn, Chip, Icon, IconBtn, LB_DATA, LookComposite, LookExpandBadge, BottomSheet, EmptyState */
-// RealCloset — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
+// REALCLOSET — 오늘의 코디 (데일리 추천). 옷장에 이미 있는 옷만으로 매일 N개를 추천.
 // 구매 흐름과 달리 앵커(고민 중인 옷)가 없고, '오늘 입기'로 착장을 기록한다.
 
 const { useState: useTd, useEffect: useTe } = React;

@@ -1118,6 +1118,7 @@ textarea.lb-field-control { padding-block: 11px; }
 .lb-range-field .lb-range:focus-visible { outline: 2px solid var(--ink-2); outline-offset: var(--s1); border-radius: var(--r-sm); }
 
 .lb-check-field { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; color: var(--ink-2); font-size: var(--fs-xs); cursor: pointer; white-space: nowrap; }
+.lb-check-field.compact { min-height: 28px; }
 .lb-check-field input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .lb-check-field input:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 3px; }
 .lb-fab::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; }

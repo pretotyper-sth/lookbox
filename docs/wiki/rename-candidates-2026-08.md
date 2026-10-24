@@ -132,6 +132,6 @@ lookstack / wearrack / wearfold / stylenook / fitstack / styleport / lookhall / 
 |------|------|------|
 | LookPocket | **탈락** | App Store 실앱(시네마 컬러그레이딩). lookpocket.com·도쿄팀 운영 |
 | PocketLook | **고위험** | 패션 가상피팅 Android `com.pocketlook.android` 이력. PocketCloset·Pocket Wardrobe 포화. pocketlook.com 매물 |
-| RealCloset | **보류·약함** | 동명 옷장앱은 약함. 다만 DigitalCloset형 설명적 명칭 + 실물 옷장가구 Realcloset 이력 + 상표 식별력 약함 |
+| REALCLOSET | **보류·약함** | 동명 옷장앱은 약함. 다만 DigitalCloset형 설명적 명칭 + 실물 옷장가구 Realcloset 이력 + 상표 식별력 약함 |
 
 법률 클리어 아님. KIPRIS 미조회.

@@ -6,7 +6,7 @@ const React = window.React;
 const { useScrollTopOn, Badge, BottomSheet, Btn, CATEGORIES, Chip, ChipMultiField, EmptyState, Icon, IconBtn, LB_DATA, LabeledField, PullRefresh, WardrobeMilestoneBanner, RecentTagField, STORE_RECENT_KEY, rememberStore, Skeleton, Thumb } = window;
 
 /* global React, Thumb, Skeleton, Btn, Chip, Badge, IconBtn, Icon, BottomSheet, LB_DATA, EmptyState */
-// RealCloset — screens A–E + layout chrome. Exported to window.
+// REALCLOSET — screens A–E + layout chrome. Exported to window.
 
 const { useState: useS, useEffect: useE, useRef: useR } = React;
 
@@ -707,7 +707,7 @@ function WardrobeScreen({ ctx }) {
       <BottomSheet open={!!coordGuide} onClose={() => setCoordGuide('')}>
         <div className="lb-sheet-body" style={{ padding: '10px 24px 26px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>선택한 아이템을 확인해 주세요</h3>
-          <ul style={{ margin: '14px 0 20px', paddingLeft: 20, textAlign: 'left', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5, maxHeight: '45dvh', overflowY: 'auto' }}>{coordGuide.split('\n\n').map(issue => <li key={issue} style={{ marginBottom: 8 }}>{issue}</li>)}</ul>
+          <ul style={{ margin: '21px 0 20px', paddingLeft: 20, textAlign: 'left', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5, maxHeight: '45dvh', overflowY: 'auto' }}>{coordGuide.split('\n\n').map(issue => <li key={issue} style={{ marginBottom: 8 }}>{issue}</li>)}</ul>
           {!window.pickedOutfitGuide(sel.map(id => LB_DATA.ALL[id]).filter(Boolean)) && <Btn full onClick={() => runPickedCoord(true)} style={{ marginBottom: 10 }}>나머지는 외부 아이템으로 추천받기</Btn>}
           <Btn full variant="soft" onClick={() => setCoordGuide('')}>선택 수정하기</Btn>
         </div>
@@ -1153,9 +1153,9 @@ function OrderStorePreview({ step, onClose, onAdd }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18, marginTop: 36 }}>
             <div style={{ width: 72, height: 72, borderRadius: 16, background: '#1A1A1A', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 26, fontWeight: 800 }}>R</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, letterSpacing: '-.03em' }}>RealCloset 구매내역</h2>
-              <p style={{ margin: '7px 0 0', color: '#5f6368', fontSize: 14 }}>RealCloset 제공 · 쇼핑</p>
-              <p style={{ margin: '18px 0 0', color: '#3c4043', fontSize: 14, lineHeight: 1.6 }}>로그인된 쇼핑몰의 주문내역에서 고른 옷을 RealCloset 옷장에 담습니다.</p>
+              <h2 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, letterSpacing: '-.03em' }}>REALCLOSET 구매내역</h2>
+              <p style={{ margin: '7px 0 0', color: '#5f6368', fontSize: 14 }}>REALCLOSET 제공 · 쇼핑</p>
+              <p style={{ margin: '18px 0 0', color: '#3c4043', fontSize: 14, lineHeight: 1.6 }}>로그인된 쇼핑몰의 주문내역에서 고른 옷을 REALCLOSET 옷장에 담습니다.</p>
             </div>
           </div>
           <div style={{ marginTop: 30, borderTop: '1px solid #E0E3E7', paddingTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -1168,7 +1168,7 @@ function OrderStorePreview({ step, onClose, onAdd }) {
         {step === 'confirm' ? (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.24)', padding: 24 }}>
             <div style={{ width: 'min(382px, 100%)', borderRadius: 14, background: '#fff', padding: 22, boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
-              <div style={{ fontSize: 17, fontWeight: 750 }}>‘RealCloset 구매내역’을 추가하시겠어요?</div>
+              <div style={{ fontSize: 17, fontWeight: 750 }}>‘REALCLOSET 구매내역’을 추가하시겠어요?</div>
               <p style={{ margin: '12px 0 0', fontSize: 13.5, lineHeight: 1.55, color: '#5f6368' }}>선택한 쇼핑몰 주문내역에서 상품 정보와 이미지를 읽을 수 있어요.</p>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
                 <button type="button" onClick={() => onAdd('store')} style={{ height: 38, padding: '0 13px', color: '#1A73E8', fontWeight: 700 }}>취소</button>

@@ -165,7 +165,7 @@ export async function styleImageBlob(look) {
   c.fillStyle=look.background==='ink'?'#F7F5F0':'#1A1A1A';c.textBaseline='alphabetic';
 
   if((look.decorations||[]).some(x=>x.type==='giphy')){c.textAlign='left';c.font='12px sans-serif';c.fillText('Powered by GIPHY',45,1214);}
-  c.textAlign = 'right'; c.font = '18px Pretendard, sans-serif'; c.fillText('RealCloset', 955, 1200);
+  c.textAlign = 'right'; c.font = '18px Pretendard, sans-serif'; c.fillText('REALCLOSET', 955, 1200);
   if((look.decorations||[]).some(x=>x.img?.startsWith('/studio-assets/openmoji-'))){c.textAlign='left';c.font='12px sans-serif';c.fillText('OpenMoji · CC BY-SA 4.0 · openmoji.org',45,1232);}
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('이미지를 만들지 못했어요. 다시 시도해 주세요.')),'image/png'));
 }

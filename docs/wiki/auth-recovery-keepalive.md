@@ -31,13 +31,15 @@ Supabase Authentication → URL Configuration에서 Site URL `https://realcloset
 
 ## SMTP 연결 완료 (2026-10-24 15:19 KST)
 
-사용자가 Brevo 전용 SMTP 키를 직접 생성하고 Supabase에 저장했다. 저장된 Custom SMTP 활성화, RealCloset 발신자명, smtp-relay.brevo.com:587, 암호 저장 상태 확인. 라이브 비밀번호 찾기에서 사용자가 지정한 기존 가입 이메일로 1회 요청했고 Brevo Transactional → Email → Logs에서 `Reset your password`의 Sent → Delivered → First opening 기록을 확인했다. 실제 비밀번호는 변경하지 않았다. 가입되지 않은 이메일은 계정 열거 방지를 위해 같은 완료 안내를 보이지만 메일을 보내지 않는다.
+사용자가 Brevo 전용 SMTP 키를 직접 생성하고 Supabase에 저장했다. 저장된 Custom SMTP 활성화, REALCLOSET 발신자명, smtp-relay.brevo.com:587, 암호 저장 상태 확인. 라이브 비밀번호 찾기에서 사용자가 지정한 기존 가입 이메일로 1회 요청했고 Brevo Transactional → Email → Logs에서 `Reset your password`의 Sent → Delivered → First opening 기록을 확인했다. 실제 비밀번호는 변경하지 않았다. 가입되지 않은 이메일은 계정 열거 방지를 위해 같은 완료 안내를 보이지만 메일을 보내지 않는다.
 
 Render 서비스는 pretotyper workspace의 Ungrouped Services → lookbox이며 https://dashboard.render.com/web/srv-d94vrk7lk1mc73c061h0 에서 확인한다. My project 안에 속하지 않아 프로젝트 목록만 보면 놓칠 수 있다.
 
 
 ## 한국어 메일 및 인증 DS (2026-10-24)
 
-Supabase realcloset의 Authentication → Emails → Reset password에서 제목을 `[RealCloset] 비밀번호를 재설정해 주세요`로, 본문을 한국어로 저장했다. 새 대시보드 탭에서 제목·미리보기 및 저장 버튼 비활성 상태를 재확인했다. 원본은 `supabase/templates/recovery.html`이며 `{{ .ConfirmationURL }}`를 유지한다. 이 파일을 배포하는 것만으로 Supabase 설정이 자동 변경되지는 않는다. 로그인/찾기/재설정 화면은 `AuthPage`와 공통 필드/버튼으로 통일했다. 실제 계정 비밀번호를 바꾸는 검증은 하지 않는다.
+Supabase realcloset의 Authentication → Emails → Reset password에서 제목을 `[REALCLOSET] 비밀번호를 재설정해 주세요`로, 본문을 한국어로 저장했다. 새 대시보드 탭에서 제목·미리보기 및 저장 버튼 비활성 상태를 재확인했다. 원본은 `supabase/templates/recovery.html`이며 `{{ .ConfirmationURL }}`를 유지한다. 이 파일을 배포하는 것만으로 Supabase 설정이 자동 변경되지는 않는다. 로그인/찾기/재설정 화면은 `AuthPage`와 공통 필드/버튼으로 통일했다. 실제 계정 비밀번호를 바꾸는 검증은 하지 않는다.
 
 2026-10-24 15:47 KST: 배포된 찾기 화면에서 사용자 지정 계정으로 한 번 발송. Brevo 로그에서 한국어 제목의 Sent/Delivered/First opening 확인. Vercel `4619cd0` 배포 성공 및 라이브 공통 인증 화면 확인.
+
+2026-10-25: 소스 메일 템플릿의 제품 표기를 REALCLOSET으로 통일했다. 현재 브라우저는 다른 Supabase 계정(g-s-s-g-1-0-0)에 로그인되어 xxaghgxyppkceobvtcyl 프로젝트 접근이 불가능했다. 운영 Custom SMTP 발신자명과 비밀번호 재설정 메일 제목/본문은 아직 변경하지 못했으며, 소스 배포만으로 운영 메일 설정이 바뀌지는 않는다.

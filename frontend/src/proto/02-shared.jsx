@@ -784,8 +784,8 @@ function BottomSheet({ open, onClose, children, maxW = 460, desktopMaxW = 420, d
    ItemDetailSheet — tap a garment → view large + add optional details
    (브랜드 / 사이즈 / 구매처 / 메모). All fields optional, saved optimistically.
 ---------------------------------------------------------------- */
-function CheckField({ label, checked, onChange, disabled }) {
-  return <label className="lb-check-field"><input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} /><span>{label}</span></label>;
+function CheckField({ label, checked, onChange, disabled, compact = false }) {
+  return <label className={'lb-check-field' + (compact ? ' compact' : '')}><input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} /><span>{label}</span></label>;
 }
 
 function RangeField({ label, ariaLabel, value, min, max, step = 1, unit = '', onChange }) {
