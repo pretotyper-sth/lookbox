@@ -39,3 +39,5 @@ Render 서비스는 pretotyper workspace의 Ungrouped Services → lookbox이며
 ## 한국어 메일 및 인증 DS (2026-10-24)
 
 Supabase realcloset의 Authentication → Emails → Reset password에서 제목을 `[RealCloset] 비밀번호를 재설정해 주세요`로, 본문을 한국어로 저장했다. 새 대시보드 탭에서 제목·미리보기 및 저장 버튼 비활성 상태를 재확인했다. 원본은 `supabase/templates/recovery.html`이며 `{{ .ConfirmationURL }}`를 유지한다. 이 파일을 배포하는 것만으로 Supabase 설정이 자동 변경되지는 않는다. 로그인/찾기/재설정 화면은 `AuthPage`와 공통 필드/버튼으로 통일했다. 실제 계정 비밀번호를 바꾸는 검증은 하지 않는다.
+
+2026-10-24 15:47 KST: 배포된 찾기 화면에서 사용자 지정 계정으로 한 번 발송. Brevo 로그에서 한국어 제목의 Sent/Delivered/First opening 확인. Vercel `4619cd0` 배포 성공 및 라이브 공통 인증 화면 확인.
