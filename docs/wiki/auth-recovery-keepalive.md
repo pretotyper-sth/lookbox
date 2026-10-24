@@ -28,3 +28,9 @@ Supabase Authentication → URL Configuration에서 Site URL `https://realcloset
 - Supabase Custom SMTP 꺼짐 확인. Brevo는 로그인 화면으로 이동하며 현재 계정 접근/발신자 설정이 없어 실제 메일 발송은 미검증. SMTP 비밀번호를 대화에 붙여넣지 않고 대시보드에서 연결해야 한다.
 - Render는 GitHub 계정이 배포용으로만 연결돼 있었고, 기존 `pretotyper.sth@gmail.com` Google 로그인으로 workspace 접근 성공. 별도 서버 설정 변경은 하지 않았다.
 - 프로젝트 package-lock 기준 Vite 8.1.3 빌드 통과. lint 오류 없음(기존 경고와 프로토타입 전역 컴포넌트 패턴 경고 있음).
+
+## SMTP 연결 완료 (2026-10-24 15:19 KST)
+
+사용자가 Brevo 전용 SMTP 키를 직접 생성하고 Supabase에 저장했다. 저장된 Custom SMTP 활성화, RealCloset 발신자명, smtp-relay.brevo.com:587, 암호 저장 상태 확인. 라이브 비밀번호 찾기에서 사용자가 지정한 기존 가입 이메일로 1회 요청했고 Brevo Transactional → Email → Logs에서 `Reset your password`의 Sent → Delivered → First opening 기록을 확인했다. 실제 비밀번호는 변경하지 않았다. 가입되지 않은 이메일은 계정 열거 방지를 위해 같은 완료 안내를 보이지만 메일을 보내지 않는다.
+
+Render 서비스는 pretotyper workspace의 Ungrouped Services → lookbox이며 https://dashboard.render.com/web/srv-d94vrk7lk1mc73c061h0 에서 확인한다. My project 안에 속하지 않아 프로젝트 목록만 보면 놓칠 수 있다.

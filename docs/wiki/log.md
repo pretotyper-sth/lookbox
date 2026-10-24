@@ -1392,3 +1392,5 @@ Vite 동적 모듈 로드 실패를 감지하면 세션당 한 번만 페이지�
 2026-10-24: 사용자 요청으로 Supabase realcloset paused 상태 확인 후 Resume. 랜딩 레이어 크로스페이드·로그인 룩북 문구 제거·비밀번호 복구 화면/인증 브리지·실제 DB health probe와 6시간 GitHub keepalive 추가. 근거: [[auth-recovery-keepalive]].
 
 2026-10-24: Supabase 복구 완료 Healthy·인증 HTTP200, Vercel/Render 자동 배포와 DB probe 성공 확인. GitHub keepalive 수동 실행 40068627271 성공. 기존 Redirect URL 허용 범위 확인. Brevo 로그인/Custom SMTP 연결과 실제 재설정 메일 수신은 미완료. 근거: [[auth-recovery-keepalive]].
+
+2026-10-24: 사용자 직접 SMTP 키 저장 후 라이브 비밀번호 재설정 메일 1회 검증. Brevo에서 15:19 KST Sent·Delivered·First opening 확인. 실제 비밀번호 변경은 하지 않음. Render Ungrouped Services 내 lookbox 위치 확인. 근거: [[auth-recovery-keepalive]].
