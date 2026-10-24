@@ -43,3 +43,13 @@ Supabase realcloset의 Authentication → Emails → Reset password에서 제목
 2026-10-24 15:47 KST: 배포된 찾기 화면에서 사용자 지정 계정으로 한 번 발송. Brevo 로그에서 한국어 제목의 Sent/Delivered/First opening 확인. Vercel `4619cd0` 배포 성공 및 라이브 공통 인증 화면 확인.
 
 2026-10-25: 소스 메일 템플릿의 제품 표기를 REALCLOSET으로 통일했다. 현재 브라우저는 다른 Supabase 계정(g-s-s-g-1-0-0)에 로그인되어 xxaghgxyppkceobvtcyl 프로젝트 접근이 불가능했다. 운영 Custom SMTP 발신자명과 비밀번호 재설정 메일 제목/본문은 아직 변경하지 못했으며, 소스 배포만으로 운영 메일 설정이 바뀌지는 않는다.
+
+## 운영 메일 대문자 표기 완료 (2026-10-25)
+
+사용자가 Supabase 계정을 전환한 뒤 `pretotyper-sth` 계정의 `pretotyper` 조직에서 해당 프로젝트 접근을 확인했다. 앞선 계정 접근 제한은 해결됐다.
+
+- Authentication → Emails → SMTP Settings의 Sender name을 `REALCLOSET`으로 저장하고 재조회해 확인했다.
+- Reset password 제목을 `[REALCLOSET] 비밀번호를 재설정해 주세요`, 본문의 제품명을 `REALCLOSET`으로 저장했다. 기존 한국어 문구와 `{{ .ConfirmationURL }}`는 유지했다.
+- 다른 화면으로 이동한 뒤 템플릿을 다시 열어 제목·본문·저장 버튼 비활성 상태와 미리보기를 확인했다. 운영 본문은 `supabase/templates/recovery.html`, 제목은 `supabase/templates/recovery.subject.txt`와 일치한다. 이 파일들은 운영 설정을 복원할 원본이며 Git 푸시만으로 Supabase 설정에 자동 반영되지는 않는다.
+- Confirm sign up, Invite user, Magic link or OTP, Change email address, Reauthentication의 로드된 제목/본문에 혼합 대소문자 제품명이 없는 것을 확인했다. 메일 기능 활성화 설정은 변경하지 않았다.
+- 실제 메일 발송과 비밀번호 변경은 수행하지 않았다.
