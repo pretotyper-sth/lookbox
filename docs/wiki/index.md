@@ -86,3 +86,5 @@ link with `[[page-name]]` · append every operation to [log.md](log.md).
 - [concise-outfit-ux](concise-outfit-ux.md) — 짧은 선택 오류·부족 카테고리 목록·외부 제안 코디·공통 체크박스·직접 드래그·정수 표시·UX 문구 검토 스킬
 
 - [design-system](design-system.md) — 제품명은 REALCLOSET 대문자 표기, 도메인·내부 ID는 유지
+
+- [profile-face-pose-2026-10](profile-face-pose-2026-10.md) — 프로필 얼굴 특징·촬영 각도 분리, 자연스러운 전신 포즈 참조, 바로보기 마스크 보호 및 롤백 기준

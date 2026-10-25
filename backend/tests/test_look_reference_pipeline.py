@@ -78,14 +78,18 @@ class StudioLookPipelineTest(unittest.TestCase):
         self.assertEqual(request['image'][0], ('01-profile.png', b'profile-photo'))
         self.assertEqual(request['image'][1][0], '02-default-look-reference.png')
         self.assertEqual(len(request['image']), 3)
-        self.assertIn('Image 1 is the person. Image 2 is the look framing.', request['prompt'])
+        self.assertEqual(request['image'][1][1], ns['choose_studio_reference'].return_value['path'].read_bytes.return_value)
+        ns['_personal_look_framing_reference'].assert_not_called()
+        self.assertIn('Do not copy its head yaw, roll, pitch', request['prompt'])
+        self.assertIn('same relaxed, varied fashion-snapshot quality', request['prompt'])
+        self.assertIn('Image 1 is facial-identity evidence only. Image 2 is the pose and look framing.', request['prompt'])
         self.assertIn('175 cm', request['prompt'])
         self.assertIn('70 kg', request['prompt'])
         self.assertIn('average build', request['prompt'])
         self.assertIn('not body shape', request['prompt'])
         self.assertEqual(ns['_garment_edit_images'].call_args.kwargs['start_at'], 3)
         cache_key = ns['supabase_admin'].table.return_value.select.return_value.eq.return_value.eq.call_args.args[1]
-        self.assertIn('-personal-body2-', cache_key)
+        self.assertIn('-personal-body2-facepose1-', cache_key)
 
     def test_body_only_personalization_uses_measurements_and_separate_cache(self):
         keys = []

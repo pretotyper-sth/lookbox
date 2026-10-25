@@ -4736,9 +4736,14 @@ def _model_look_outfit_rules(items: list[dict[str, Any]]) -> str:
 
 def _personal_look_body_note(height: str | None, weight: str | None) -> str:
     identity = (
-        "Image 1 supplies the user's face, hair and identity; preserve them faithfully. "
-        "Ignore its clothes, background and portrait crop when building the body. "
+        "Image 1 supplies the user's facial features, hair and identity only. "
+        "Preserve recognizable likeness, not the source photograph's geometry or pose. "
+        "Independently reconstruct the same face in a level, near-frontal view, looking toward the camera. "
+        "Infer the less-visible cheek and eye naturally from the visible facial features. "
+        "Do not copy its head yaw, roll, pitch, camera perspective, raised shoulder, hand near the face, clothes, background or portrait crop. "
+        "Render the face, neck and body together as one coherent photograph, never a pasted face or a rigid head on a posed body. "
         "Image 2 supplies only pose, expression, gaze, lighting and framing, not body shape. "
+        "Use Image 2 for the body's relaxed weight shift, shoulders, arms and hands, while keeping the user's face naturally level and near-frontal. "
     )
     try:
         h, w = float(height or ""), float(weight or "")
@@ -4785,7 +4790,7 @@ def _model_look_prompt_with_reference(
     weight: str | None = None,
 ) -> str:
     if personal:
-        reference_lines = "Image 1 is the person. Image 2 is the look framing."
+        reference_lines = "Image 1 is facial-identity evidence only. Image 2 is the pose and look framing."
         anatomy_reference = "Image 2"
         body_lines = _personal_look_body_note(height, weight)
     else:
@@ -4802,10 +4807,13 @@ def _model_look_prompt_with_reference(
         + ({"m": "The wearer must be an adult man, matching the user gender setting. Never change the wearer to a woman. ", "f": "The wearer must be an adult woman, matching the user gender setting. Never change the wearer to a man. "}.get(_look_gender_key(gender), ""))
         +
         "Return one photorealistic full-body image of the same person wearing every supplied piece. "
-        + ("Preserve facial identity only; construct a new full body from the recorded measurements. " if personal and height and weight else "Keep the person's identity and full body. ")
-        + ("The references are cropped to head and shoulders so their body silhouette cannot override measurements. "
-           "Use their expression, gaze and lighting; build a relaxed natural full-body pose from scratch. "
-           if personal and height and weight else
+        + (("Preserve facial identity only; construct a new full body from the recorded measurements. " if height and weight else
+            "Preserve facial identity only; construct a naturally proportioned full body independently of the profile portrait. ")
+           if personal else "Keep the person's identity and full body. ")
+        + ("Pose the body with the same relaxed, varied fashion-snapshot quality as a non-personalized look. "
+           "Follow Image 2's full-body pose when available; let the torso, arms and legs move naturally rather than locking them to Image 1. "
+           "A front-facing face does not require a stiff, symmetric body; keep the head, neck and shoulders anatomically connected. "
+           if personal else
            f"Follow {anatomy_reference}'s relaxed pose, expression, gaze and camera angle; do not reset every outfit to a straight-on neutral standing pose. ") +
         "Replace the reference background with a simple seamless warm greige studio backdrop "
         "and matching matte floor in the #D8D2C9 color family, smooth and visually quiet. "
@@ -5404,7 +5412,7 @@ def generate_model_look_image(
     composition_tag = hashlib.sha256(composition_reference_png or reference_png or b'').hexdigest()[:12]
     if personal:
         identity_tag = hashlib.sha256(reference_png or b'').hexdigest()[:12]
-        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body2-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
+        key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-personal-body2-facepose1-{identity_tag}-{composition_tag}-{str(height or '').strip()}-{str(weight or '').strip()}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     else:
         key = f"model-greige-gender2-{hem_seed}-{_look_gender_key(gender)}-{composition_tag}-{OPENAI_IMAGE_MODEL_LOOK}-{quality}-{REFERENCE_REV}"
     t0 = time.perf_counter()
@@ -5436,11 +5444,9 @@ def generate_model_look_image(
                 composition = _image_bytes_to_png(studio_reference["path"].read_bytes())
         composition = composition or reference_png or _ensure_model_identity_png(user_id, gender)
         identity = reference_png or composition
-        if personal and height and weight and composition:
-            framing = _personal_look_framing_reference(composition)
-            if identity == composition:
-                identity = framing
-            composition = framing
+        if personal and height and weight and composition and identity == composition:
+            # Body-only personalization keeps the existing cropped default identity path.
+            identity = composition = _personal_look_framing_reference(composition)
         prompt = _model_look_prompt_with_reference(
             gender, items, wish, hem_seed,
             mood=mood, occasion=occasion, styles=styles, user_request=user_request,
@@ -8278,15 +8284,18 @@ def _tryon_cached_assets_valid(assets: dict[str, str]) -> bool:
         return False
 
 
-_TRYON_BODY_PROMPT = """This is an identity lock, not a new person.
-Image 1 is a photograph of the actual user. Reconstruct that exact face at photographic fidelity:
-same eyes, nose, lips, jawline, hairline, hair part, hair color, skin tone, moles, and apparent age.
+_TRYON_BODY_PROMPT = """This is a facial identity lock, not a photograph or pose lock.
+Image 1 supplies facial-identity evidence of the actual user. Reconstruct that exact face identity in a NEW front view:
+preserve distinctive eye shape, nose, lips, jawline, hairline, hair part, hair color, skin tone, moles, and apparent age.
+Preserve recognizable likeness rather than copying the reference's two-dimensional placement of features.
+Infer the less-visible cheek and eye consistently; do not rotate, stretch, trace or paste the original portrait.
+Render the face, neck and body together as one natural photograph, with a relaxed expression and anatomically connected head and shoulders.
 Do not replace them with a similar-looking or generic person. Do not beautify into someone else.
-If Image 1 is a head-and-shoulders crop, extend the body downward but keep the head as the same person.
+A cropped or tilted portrait supplies identity only; create the head anew at the required front-facing angle.
 
 NON-NEGOTIABLE:
-The result is a straight-on passport-like standing portrait. Both ears equally visible, both eyes equally visible,
-facial midline vertical, no three-quarter view. Completely ignore Image 1's camera angle, head yaw, tilt, and crop.
+The result is a straight-on passport-like standing portrait. Both eyes face the camera naturally,
+facial midline vertical and eyes level, no three-quarter view. Hair may cover the ears naturally. Completely ignore Image 1's camera angle, head yaw, tilt, and crop.
 Even if the selfie is diagonal or looking aside, the output face looks directly at the lens.
 Adult 8-head proportion is mandatory: crown at 6%, chin at 17%, shoulders at 21%, waist at 44%,
 crotch at 53%, ankles at 88%, soles at 94% of image height. Long full legs. Never a large head, never short legs, never a distant tiny figure.
@@ -8505,7 +8514,7 @@ def live_tryon_body(body: TryOnBody, user: UserContext = Depends(current_user)):
     sig = hashlib.sha256(face).hexdigest()[:10]
     profile_note = _tryon_body_profile_note(uid, body.profile)
     profile_sig = hashlib.sha256(profile_note.encode()).hexdigest()[:8]
-    key = f"tryon22-{sig}-{profile_sig}"
+    key = f"tryon22-{sig}-{profile_sig}-facepose1"
 
     def work(report: Callable[[str], None]) -> dict[str, Any]:
         report("tryon_profile")

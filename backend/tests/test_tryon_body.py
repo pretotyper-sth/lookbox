@@ -129,6 +129,19 @@ class TryOnBodyTest(unittest.TestCase):
         self.assertIn("Forbidden shirt colors", prompt)
         self.assertIn("three-quarter", prompt)
 
+    def test_frontal_reconstruction_does_not_lock_the_source_photo_geometry(self):
+        tree = ast.parse(self.src)
+        value = next(n.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(target,'id','') == '_TRYON_BODY_PROMPT' for target in n.targets))
+        prompt = ast.literal_eval(value)
+        self.assertIn('not a photograph or pose lock', prompt)
+        self.assertIn('NEW front view', prompt)
+        self.assertIn('do not rotate, stretch, trace or paste', prompt)
+        self.assertIn('relaxed expression', prompt)
+        self.assertIn('same symmetric neutral stance', prompt)
+        self.assertIn('balanced 2:3 portrait', prompt)
+        self.assertIn('infer', prompt.lower())
+        self.assertIn('tryon22-{sig}-{profile_sig}-facepose1', self.src)
+
     def test_model_quality_cache_and_timeout_are_tryon_specific(self):
         self.assertIn('OPENAI_IMAGE_MODEL_TRYON = os.environ.get("OPENAI_IMAGE_MODEL_TRYON", "gpt-image-2")', self.src)
         self.assertIn('OPENAI_IMAGE_QUALITY_TRYON = os.environ.get("OPENAI_IMAGE_QUALITY_TRYON", "high")', self.src)

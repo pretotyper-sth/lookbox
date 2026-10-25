@@ -131,13 +131,25 @@ class ModelLookPromptTest(unittest.TestCase):
         prompt = self.ns['_model_look_prompt_with_reference'](
             "여성", [{"category": "top", "name": "니트"}], personal=True, height="165", weight="52",
         )
-        self.assertIn("Image 1 is the person. Image 2 is the look framing", prompt)
+        self.assertIn("Image 1 is facial-identity evidence only. Image 2 is the pose and look framing", prompt)
         self.assertIn("165 cm", prompt)
         self.assertIn("52 kg", prompt)
         self.assertIn("Images after that are the outfit pieces", prompt)
         self.assertIn("slim build", prompt)
         self.assertIn("not body shape", prompt)
         self.assertNotIn("Use Image 2 as the body-proportion baseline", prompt)
+
+    def test_profile_pose_is_not_inherited_even_without_measurements(self):
+        for measurements in ({}, {'height':'174','weight':'70'}):
+            prompt = self.ns['_model_look_prompt_with_reference']('남성', [], personal=True, **measurements)
+            self.assertIn('facial-identity evidence only', prompt)
+            self.assertIn('level, near-frontal view', prompt)
+            self.assertIn('Do not copy its head yaw, roll, pitch', prompt)
+            self.assertIn('not the source photograph', prompt)
+            self.assertIn('same relaxed, varied fashion-snapshot quality', prompt)
+            self.assertIn('Follow Image 2', prompt)
+            self.assertNotIn("Keep the person's identity and full body", prompt)
+            self.assertNotIn('The references are cropped to head and shoulders', prompt)
 
     def test_personal_body_has_four_restrained_visual_presets(self):
         note = self.ns['_personal_look_body_note']
@@ -419,7 +431,8 @@ class ModelLookPromptTest(unittest.TestCase):
         self.assertIn("live_reset_daily", looks_src)
         self.assertIn("/api/live/outfits/daily/reset", looks_src)
         self.assertIn("body.ids", looks_src)
-        apply_src = looks_src[looks_src.index("def _apply_model_looks"):start]
+        apply_node = next(n for n in ast.parse(looks_src).body if isinstance(n, ast.FunctionDef) and n.name == "_apply_model_looks")
+        apply_src = ast.get_source_segment(looks_src, apply_node)
         self.assertIn('"_look"', apply_src)
         self.assertIn("LOOK_TEST_LIMIT", apply_src)
         self.assertIn("sequential skip", apply_src)
