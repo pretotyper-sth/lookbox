@@ -6,6 +6,7 @@ import { SAMPLE_LOOKS, newLook, outfitLook, remix, canRemix, safeDraft, uid, api
 import './experience.css';
 import Editor from './story-editor.jsx';
 import ProductSheet from './product-sheet.jsx';
+import FeedItems from './feed-items.jsx';
 import ShareSheet from './share-sheet.jsx';
 import CreatorProfile from './creator-profile.jsx';
 import {identity,useSocialProfile,NotificationMenu,NotificationPage,RestyleIcon,socialChanged,StudioSheet} from './social.jsx';
@@ -34,7 +35,7 @@ function PostActions({look,onLike,onBookmark,onCreate,onItems,onShare,saved=fals
 }
 
 function LookCard({look,onTag,onOpen,onCreate,onLike,onBookmark,onItems,onShare,saved=false}) {
- return <article className="rc-look-card"><button className="rc-card-image" onClick={onOpen} aria-label={`${look.title} 보기`}><StyleCanvas look={look}/></button><PostActions look={look} onLike={onLike} onBookmark={onBookmark} onCreate={onCreate} onItems={onItems} onShare={onShare} saved={saved}/><div className="rc-post-caption">{(look.stats?.likes||0)>0&&<b>좋아요 {look.stats.likes}개</b>}<p><strong>{look.author}</strong> <CaptionText text={look.note||look.title} onTag={onTag}/></p><PostTags look={look} onTag={onTag}/>{look.origin&&<small>↻ {look.origin.author}의 스타일을 리스타일</small>}</div></article>;
+ return <article className="rc-look-card"><button className="rc-card-image" onClick={onOpen} aria-label={`${look.title} 보기`}><StyleCanvas look={look}/></button><FeedItems look={look} onOpen={onItems}/><PostActions look={look} onLike={onLike} onBookmark={onBookmark} onCreate={onCreate} onItems={onItems} onShare={onShare} saved={saved}/><div className="rc-post-caption">{(look.stats?.likes||0)>0&&<b>좋아요 {look.stats.likes}개</b>}<p><strong>{look.author}</strong> <CaptionText text={look.note||look.title} onTag={onTag}/></p><PostTags look={look} onTag={onTag}/>{look.origin&&<small>↻ {look.origin.author}의 스타일을 리스타일</small>}</div></article>;
 }
 
 function PostDate({value}) {
@@ -119,6 +120,7 @@ export function StyleExperience({ ctx }) {
       <div className="rc-stream">{visibleFeed.map(look=><article className="rc-post" key={look.id}>
         <FeedPostHeader look={look} onProfile={post=>setProfile({author:post.author,avatar:post.avatar,sample:post.sample,creatorId:post.creatorId,own:isOwnPost(post)})} onFollow={follow} followed={state.follows.includes(followId(look))} own={isOwnPost(look)} followDisabled={followBusy||!social?.creatorId}/>
         <div className="rc-post-art" onDoubleClick={()=>likePost(look)}><StyleCanvas look={look} showCredits={false}/><button className="rc-post-expand" aria-label={`${look.title} 이미지 크게 보기`} title="이미지 크게 보기" onClick={()=>openLook(look)}><Icon name="expand" size={18}/><span>크게 보기</span></button></div>
+        <FeedItems look={look} onOpen={()=>setProductLook(look)}/>
         <PostActions look={look} onShare={()=>setFeedSharing(look)} onItems={()=>setProductLook(look)} onLike={()=>likePost(look)} onBookmark={()=>bookmark(look)} saved={state.collections.some(x=>x.type==='look'&&x.look.id===look.id)} onCreate={canRemix(look)?()=>beginRemix(look):undefined}/>
         <div className="rc-post-caption">{(look.stats?.likes||0)>0&&<b>좋아요 {look.stats?.likes||0}개</b>}<p><strong>{look.author}</strong> <CaptionText text={look.note||look.title} onTag={searchByTag}/></p><PostTags look={look} onTag={searchByTag}/></div>
 

@@ -54,8 +54,9 @@
   .rc-feed-social .rc-post{min-width:0;display:flex;flex-direction:column}
   .rc-feed-social .rc-post-head{padding:8px 0 12px;min-height:48px;order:0}
   .rc-feed-social .rc-post-art{order:1;overflow:hidden;border-radius:10px;background:var(--thumb-bg)}
-  .rc-feed-social .rc-post-actions{order:2;padding:0;gap:4px}
-  .rc-feed-social .rc-post-caption{order:3;padding:4px 0 0}
+  .rc-feed-social .rc-feed-items{order:2}
+  .rc-feed-social .rc-post-actions{order:3;padding:0;gap:4px}
+  .rc-feed-social .rc-post-caption{order:4;padding:4px 0 0}
   .rc-feed-social .rc-post-caption p{font-size:13px;margin:0}
   .rc-feed-social .rc-post-avatar{width:28px;height:28px}
   .rc-feed-social .rc-post-person{font-size:12px;gap:8px}

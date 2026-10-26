@@ -1,0 +1,83 @@
+.rc-feed-items {
+  display: flex;
+  gap: var(--s3);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--s3) var(--s1);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--s1);
+  scrollbar-width: thin;
+  touch-action: pan-x pan-y;
+}
+
+.rc-feed-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: 0 0 76%;
+  max-width: 280px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.rc-feed-item:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.rc-feed-item-image {
+  display: grid;
+  place-items: center;
+  flex: 0 0 56px;
+  height: 64px;
+  color: var(--ink-3);
+}
+
+.rc-feed-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rc-feed-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rc-feed-item-copy small,
+.rc-feed-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-feed-item-copy small {
+  color: var(--ink-3);
+  font-size: 10px;
+}
+
+.rc-feed-item-copy strong {
+  font-weight: 650;
+}
+
+@media (max-width: 759px) {
+  .rc-feed-items {
+    padding-inline: var(--s4);
+    scroll-padding-inline: var(--s4);
+    scrollbar-width: none;
+  }
+}
